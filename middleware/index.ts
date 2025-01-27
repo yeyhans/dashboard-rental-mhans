@@ -1,6 +1,6 @@
 import { defineMiddleware } from "astro:middleware";
-import { supabase } from "../lib/supabase";
-import micromatch from "micromatch";
+import { supabase } from "../src/lib/supabase";
+import * as micromatch from "micromatch";
 
 const protectedRoutes = ["/dashboard(|/)"];
 const redirectRoutes = ["/signin(|/)", "/register(|/)"];

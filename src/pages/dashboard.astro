@@ -1,14 +1,22 @@
 ---
 import Base from "../layout/Base.astro";
 import { supabase } from "../lib/supabase";
-import { Reviews, type GuestbookEntry } from "../components/Reviews";
 
-const { email } = Astro.locals;
+// Obtener el token de acceso de las cookies
+const accessToken = Astro.cookies.get("sb-access-token")?.value;
 
-const { data } = (await supabase
-  .from("guestbook")
-  .select("name, message")
-  .order("created_at", { ascending: false })) as { data: GuestbookEntry[] };
+if (!accessToken) {
+  return Astro.redirect("/signin");
+}
+
+// Verificar la sesión del usuario con Supabase
+const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+
+if (error || !user) {
+  return Astro.redirect("/signin");
+}
+
+const { email } = user;
 ---
 
 <Base title="Dashboard">
@@ -26,6 +34,5 @@ const { data } = (await supabase
       class="mb-10 bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-900 px-3 py-1 rounded-md"
       >Sign out</a
     >
-    <Reviews reviews={data} client:idle />
   </section>
 </Base>
