@@ -2,37 +2,27 @@
 import Base from "../layout/Base.astro";
 import { supabase } from "../lib/supabase";
 
-// Obtener el token de acceso de las cookies
-const accessToken = Astro.cookies.get("sb-access-token")?.value;
+export const prerender = false;
 
-if (!accessToken) {
-  return Astro.redirect("/signin");
+const { data: { session } } = await supabase.auth.getSession();
+
+if (!session) {
+  return Astro.redirect("/");
 }
 
-// Verificar la sesión del usuario con Supabase
-const { data: { user }, error } = await supabase.auth.getUser(accessToken);
-
-if (error || !user) {
-  return Astro.redirect("/signin");
-}
-
-const { email } = user;
+const title = "Dashboard - Rental Mhans";
 ---
 
-<Base title="Dashboard">
-  <section class="py-24 px-4 w-full flex flex-col items-center gap-2">
-    <p
-      class="max-w-prose text-xl text-indigo-600 dark:text-indigo-400 font-semibold"
-    >
-      {email}
-    </p>
-    <p class="max-w-prose text-lg mb-2 dark:text-zinc-100">
-      This is a protected page. You can only see this if you are logged in.
-    </p>
-    <a
-      href="/api/auth/signout"
-      class="mb-10 bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-900 px-3 py-1 rounded-md"
-      >Sign out</a
-    >
-  </section>
+<Base title={title}>
+  <main class="flex-1 p-6 bg-background">
+    <div class="max-w-7xl mx-auto">
+      <div class="flex justify-between items-center mb-8">
+        <h1 class="text-2xl font-bold text-black">Dashboard</h1>
+        
+
+      </div>
+
+
+    </div>
+  </main>
 </Base>

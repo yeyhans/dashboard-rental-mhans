@@ -1,34 +1,58 @@
 ---
 import Base from "../layout/Base.astro";
-import Supabase from "../icons/Supabase.astro";
-import AstroIcon from "../icons/AstroIcon.astro";
 export const prerender = true;
-const title = "Supabase and Astro Demo";
+const title = "Rental Mhans - Iniciar Sesión";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 
 ---
 
 <Base title={title}>
-  <main class="flex-1 flex flex-col gap-4 items-center p-4 justify-center">
-    <h1 class="text-2xl sm:text-4xl font-bold text-center">{title}</h1>
-    <ul class="flex gap-6 items-center font-bold text-2xl mt-6">
-      <li
-        class="dark:bg-zinc-800 bg-white border-t dark:border-zinc-700 h-20 w-20 border-transparent rounded-lg shadow dark:shadow-none flex items-center justify-center"
-      >
-        <AstroIcon />
-      </li>
-       &plus;
-      <li
-        class="dark:bg-zinc-800 bg-white border-t dark:border-zinc-700 h-20 w-20 border-transparent rounded-lg shadow dark:shadow-none flex items-center justify-center"
-      >
-        <Supabase />
-      </li>
-    </ul>
-    <p class="mt-6 max-w-prose">This page was pre-rendered at build time</p>
-    <a
-      href="https://github.com/kevinzunigacuellar/astro-supabase"
-      class="font-mono max-w-prose underline underline-offset-2 hover:text-blue-700 text-blue-600 dark:text-blue-500 dark:hover:text-blue-400"
-      >Source code on GitHub</a
-    >
+  <main class="flex-1 flex flex-col gap-8 items-center p-4 justify-center bg-background">
+    <div class="w-full max-w-md space-y-6 p-8 bg-card rounded-lg shadow-lg border">
+      <div class="text-center space-y-2">
+        <h1 class="text-2xl font-bold text-black">Bienvenido a Rental Mhans</h1>
+        <p class="text-sm text-muted-foreground">Ingresa tus credenciales para continuar</p>
+      </div>
+      
+      <form action="/api/signin" method="post" class="space-y-4">
+        <div class="space-y-2">
+          <Label htmlFor="email" className="text-black">
+            Correo electrónico
+          </Label>
+          <Input
+            type="email"
+            name="email"
+            id="email"
+            className="text-black"
+            required
+            value="rental.mariohans@gmail.com"
+          />
+        </div>
+        
+        <div class="space-y-2">
+          <Label htmlFor="password" className="text-black">
+            Contraseña
+          </Label>
+          <Input
+            type="password"
+            name="password"
+            id="password"
+            className="text-black"
+            required
+            placeholder="••••••••"
+          />
+        </div>
+
+        <Button
+          type="submit" >
+          Iniciar sesión
+        </Button>
+      </form>
+
+    </div>
   </main>
 </Base>
