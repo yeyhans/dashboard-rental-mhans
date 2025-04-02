@@ -15,6 +15,10 @@ if (!session) {
 const response = await fetch(`${Astro.url.origin}/api/woo/get-orders`);
 const ordersData = await response.json();
 
+// Fetch users data from the API
+const usersResponse = await fetch(`${Astro.url.origin}/api/wp/get-users`);
+const usersData = await usersResponse.json();
+
 // Verificar que ordersData tenga la estructura correcta
 if (!ordersData.data?.orders) {
   ordersData.data = {
@@ -33,6 +37,7 @@ const title = "Dashboard - Rental Mhans";
       client:load
       orders={ordersData.data.orders || []}
       totalOrders={ordersData.data.total || "0"}
+      users={usersData.users || []}
     />
     
   </div>

@@ -1,0 +1,36 @@
+---
+import Base from "../layout/Base.astro";
+import UsersDashboard from "../components/UsersDashboard";
+import { supabase } from "../lib/supabase";
+export const prerender = false;
+
+const { data: { session } } = await supabase.auth.getSession();
+
+if (!session) {
+  return Astro.redirect("/");
+}
+
+// Fetch users data from the API
+const response = await fetch(`${Astro.url.origin}/api/wp/get-users`);
+const usersData = await response.json();
+
+// Verificar que usersData tenga la estructura correcta
+if (!usersData.users) {
+  usersData.users = [];
+  usersData.total = "0";
+  usersData.totalPages = "0";
+}
+
+const title = "Gestión de Usuarios";
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    <UsersDashboard 
+      client:load
+      initialUsers={usersData.users}
+      initialTotal={usersData.total}
+      initialTotalPages={usersData.totalPages}
+    />
+  </div>
+</Base>

@@ -6,7 +6,7 @@ export const GET: APIRoute = async ({ request }) => {
     const url = new URL(request.url);
     const page = url.searchParams.get('page') || '1';
     const per_page = url.searchParams.get('per_page') || '10';
-    const role = url.searchParams.get('role') || ''; // Permite filtrar por rol: subscriber, administrator, etc.
+    const status = url.searchParams.get('status') || ''; // Filter by order status
 
     // WordPress admin credentials
     const username = import.meta.env.WORDPRESS_USERNAME;
@@ -17,20 +17,20 @@ export const GET: APIRoute = async ({ request }) => {
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
     console.log(`Intentando autenticar con usuario: ${username}`);
 
-    // Build the WordPress API URL with parameters - USANDO ENDPOINT ESTÁNDAR
-    const wpApiUrl = new URL('https://rental.mariohans.cl/wp-json/custom/v1/users');
+    // Build the WordPress API URL with parameters
+    const wpApiUrl = new URL('https://rental.mariohans.cl/wp-json/custom/v1/orders');
     wpApiUrl.searchParams.set('page', page);
     wpApiUrl.searchParams.set('per_page', per_page);
     
-    // Si se solicita un rol específico (como 'subscriber' o 'administrator')
-    if (role) {
-      wpApiUrl.searchParams.set('roles', role);
+    // Si se solicita un estado específico
+    if (status) {
+      wpApiUrl.searchParams.set('status', status);
     }
 
-    console.log(`Consultando usuarios con rol: ${role || 'todos'}`);
+    console.log(`Consultando órdenes con estado: ${status || 'todas'}`);
     console.log(`URL de consulta: ${wpApiUrl.toString()}`);
 
-    // Fetch users from WordPress API with authentication
+    // Fetch orders from WordPress API with authentication
     const response = await fetch(wpApiUrl.toString(), {
       headers: {
         'Authorization': `Basic ${auth}`
@@ -77,11 +77,11 @@ export const GET: APIRoute = async ({ request }) => {
       }
     }
 
-    const users = await response.json();
+    const orders = await response.json();
 
-    // Return all user data without filtering
+    // Return all order data
     return new Response(JSON.stringify({
-      users: users,
+      orders: orders,
       total: response.headers.get('X-WP-Total'),
       totalPages: response.headers.get('X-WP-TotalPages')
     }), {
@@ -92,9 +92,9 @@ export const GET: APIRoute = async ({ request }) => {
     });
 
   } catch (error) {
-    console.error('Error fetching WordPress users:', error);
+    console.error('Error fetching WordPress orders:', error);
     return new Response(JSON.stringify({
-      error: 'Failed to fetch users',
+      error: 'Failed to fetch orders',
       message: error instanceof Error ? error.message : 'Unknown error occurred'
     }), {
       status: 500,

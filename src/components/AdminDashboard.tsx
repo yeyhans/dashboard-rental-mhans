@@ -31,6 +31,9 @@ interface AdminDashboardProps {
   initialOrders: Order[];
   initialTotal: string;
   initialTotalPages: string;
+  initialPage?: string;
+  initialStatus?: string;
+  initialPerPage?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -48,22 +51,27 @@ const statusColors: Record<string, string> = {
 const AdminDashboard = ({ 
   initialOrders,
   initialTotal,
-  initialTotalPages 
+  initialTotalPages,
+  initialPage = '1',
+  initialStatus = '',
+  initialPerPage = '10'
 }: AdminDashboardProps) => {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [loading, setLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
+  const [currentPage, setCurrentPage] = useState(parseInt(initialPage));
   const [totalPages, setTotalPages] = useState(parseInt(initialTotalPages));
   const [total, setTotal] = useState(parseInt(initialTotal));
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const perPage = 10;
+  const perPage = parseInt(initialPerPage);
 
   // Función para cargar los datos con filtros
   const loadOrders = async (page: number, status: string = '') => {
     try {
+      setIsInitialLoad(false);
       setLoading(true);
       const params = new URLSearchParams({
         page: page.toString(),
@@ -94,7 +102,9 @@ const AdminDashboard = ({
 
   // Efecto para cargar datos cuando cambian los filtros o la página
   useEffect(() => {
-    loadOrders(currentPage, statusFilter);
+    if (!isInitialLoad) {
+      loadOrders(currentPage, statusFilter);
+    }
   }, [currentPage, statusFilter]);
 
   // Función para recargar los datos
@@ -304,7 +314,7 @@ const AdminDashboard = ({
     </DialogContent>
   );
 
-  if (loading) {
+  if (loading && !isInitialLoad) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">

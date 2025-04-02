@@ -1,0 +1,28 @@
+export type User = {
+  id: number;
+  username: string;
+  email: string;
+  registered_date: string;
+  first_name: string;
+  last_name: string;
+  rut: string;
+  birth_date: string;
+  billing_phone: string;
+  instagram: string;
+  billing_address_1: string;
+  billing_city: string;
+  billing_country: string;
+  customer_type: string;
+  billing_company: string;
+  company_rut: string;
+  company_city: string;
+  company_address: string;
+  company_erut: string;
+  image_direccion: string;
+  image_rut: string;
+  image_rut_: string;
+  user_signature: string;
+  url_user_contrato: string;
+  terms_accepted: string;
+  pdf_preview_path: string;
+}; 

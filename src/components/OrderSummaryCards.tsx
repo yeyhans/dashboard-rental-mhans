@@ -65,12 +65,33 @@ type Order = {
   }>;
 };
 
+type User = {
+  id: number;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  rut: string;
+  billing_phone: string;
+  instagram: string;
+  billing_company: string;
+  company_rut: string;
+  customer_type: string;
+};
+
 interface OrderSummaryCardsProps {
   orders: Order[];
   totalOrders: string;
+  users: User[];
 }
 
-const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
+const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProps) => {
+  // Find user by customer_id
+  const findUserById = (customerId?: number) => {
+    if (!customerId || !users) return null;
+    return users.find(user => user.id === customerId);
+  };
+  
   // Calculate totals and metrics
   const totalSales = orders.reduce((sum, order) => {
     return sum + (parseFloat(order.metadata.calculated_total) || 0);
@@ -233,7 +254,9 @@ const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
           <CardContent>
             {weeklyDeliveries.length > 0 ? (
               <div className="space-y-3">
-                {weeklyDeliveries.map((order, index) => (
+                {weeklyDeliveries.map((order, index) => {
+                  const user = findUserById(order.customer_id);
+                  return (
                   <Dialog key={index}>
                     <DialogTrigger asChild>
                       <div className="border rounded-md p-3 cursor-pointer hover:bg-accent">
@@ -251,7 +274,13 @@ const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
                           </span>
                         </div>
                         <p className="font-semibold text-sm mt-1">{order.metadata.order_proyecto || 'Sin proyecto'}</p>
-                        <p className="text-sm truncate">{order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}</p>
+                        <p className="text-sm truncate">
+                          {user ? (user.customer_type === 'empresa' ? user.billing_company : `${user.first_name} ${user.last_name}`) : 
+                                 (order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`)}
+                        </p>
+                        {user && user.instagram && (
+                          <p className="text-xs text-muted-foreground mt-1">{user.instagram}</p>
+                        )}
                       </div>
                     </DialogTrigger>
                     <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -287,16 +316,41 @@ const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg">
                             <div>
                               <Label className="text-foreground">Nombre</Label>
-                              <div className="mt-1 text-foreground">{order.billing?.first_name} {order.billing?.last_name}</div>
+                              <div className="mt-1 text-foreground">
+                                {user ? `${user.first_name} ${user.last_name}` : 
+                                       `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}
+                              </div>
                             </div>
                             <div>
                               <Label className="text-foreground">Empresa</Label>
-                              <div className="mt-1 text-foreground">{order.billing?.company || '-'}</div>
+                              <div className="mt-1 text-foreground">
+                                {user ? user.billing_company || '-' : order.billing?.company || '-'}
+                              </div>
                             </div>
                             <div>
                               <Label className="text-foreground">Email</Label>
-                              <div className="mt-1 text-foreground">{order.billing?.email}</div>
+                              <div className="mt-1 text-foreground">
+                                {user ? user.email : order.billing?.email || ''}
+                              </div>
                             </div>
+                            {user && user.rut && (
+                              <div>
+                                <Label className="text-foreground">RUT</Label>
+                                <div className="mt-1 text-foreground">{user.rut}</div>
+                              </div>
+                            )}
+                            {user && user.billing_phone && (
+                              <div>
+                                <Label className="text-foreground">Teléfono</Label>
+                                <div className="mt-1 text-foreground">{user.billing_phone}</div>
+                              </div>
+                            )}
+                            {user && user.instagram && (
+                              <div>
+                                <Label className="text-foreground">Instagram</Label>
+                                <div className="mt-1 text-foreground">{user.instagram}</div>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -388,7 +442,7 @@ const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
                       </div>
                     </DialogContent>
                   </Dialog>
-                ))}
+                )})}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">No hay entregas programadas para esta semana.</p>
@@ -404,7 +458,9 @@ const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
           <CardContent>
             {weeklyReturns.length > 0 ? (
               <div className="space-y-3">
-                {weeklyReturns.map((order, index) => (
+                {weeklyReturns.map((order, index) => {
+                  const user = findUserById(order.customer_id);
+                  return (
                   <Dialog key={index}>
                     <DialogTrigger asChild>
                       <div className="border rounded-md p-3 cursor-pointer hover:bg-accent">
@@ -422,7 +478,13 @@ const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
                           </span>
                         </div>
                         <p className="font-semibold text-sm mt-1">{order.metadata.order_proyecto || 'Sin proyecto'}</p>
-                        <p className="text-sm truncate">{order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}</p>
+                        <p className="text-sm truncate">
+                          {user ? (user.customer_type === 'empresa' ? user.billing_company : `${user.first_name} ${user.last_name}`) : 
+                                 (order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`)}
+                        </p>
+                        {user && user.instagram && (
+                          <p className="text-xs text-muted-foreground mt-1">{user.instagram}</p>
+                        )}
                       </div>
                     </DialogTrigger>
                     <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -458,16 +520,41 @@ const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg">
                             <div>
                               <Label className="text-foreground">Nombre</Label>
-                              <div className="mt-1 text-foreground">{order.billing?.first_name} {order.billing?.last_name}</div>
+                              <div className="mt-1 text-foreground">
+                                {user ? `${user.first_name} ${user.last_name}` : 
+                                       `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}
+                              </div>
                             </div>
                             <div>
                               <Label className="text-foreground">Empresa</Label>
-                              <div className="mt-1 text-foreground">{order.billing?.company || '-'}</div>
+                              <div className="mt-1 text-foreground">
+                                {user ? user.billing_company || '-' : order.billing?.company || '-'}
+                              </div>
                             </div>
                             <div>
                               <Label className="text-foreground">Email</Label>
-                              <div className="mt-1 text-foreground">{order.billing?.email}</div>
+                              <div className="mt-1 text-foreground">
+                                {user ? user.email : order.billing?.email || ''}
+                              </div>
                             </div>
+                            {user && user.rut && (
+                              <div>
+                                <Label className="text-foreground">RUT</Label>
+                                <div className="mt-1 text-foreground">{user.rut}</div>
+                              </div>
+                            )}
+                            {user && user.billing_phone && (
+                              <div>
+                                <Label className="text-foreground">Teléfono</Label>
+                                <div className="mt-1 text-foreground">{user.billing_phone}</div>
+                              </div>
+                            )}
+                            {user && user.instagram && (
+                              <div>
+                                <Label className="text-foreground">Instagram</Label>
+                                <div className="mt-1 text-foreground">{user.instagram}</div>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -559,7 +646,7 @@ const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
                       </div>
                     </DialogContent>
                   </Dialog>
-                ))}
+                )})}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">No hay devoluciones programadas para esta semana.</p>
