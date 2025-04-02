@@ -3,7 +3,7 @@ import { supabase } from "../src/lib/supabase";
 import * as micromatch from "micromatch";
 
 const protectedRoutes = ["/dashboard(|/)"];
-const redirectRoutes = ["/signin(|/)", "/register(|/)"];
+const redirectRoutes = ["/signin(|/)", "/register(|/)", "/(|/)"];
 const proptectedAPIRoutes = ["/api/guestbook(|/)"];
 
 export const onRequest = defineMiddleware(

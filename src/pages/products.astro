@@ -1,0 +1,48 @@
+---
+import Base from "../layout/Base.astro";
+import ProductsDashboard from "../components/ProductsDashboard";
+import { supabase } from "../lib/supabase";
+export const prerender = false;
+
+const { data: { session } } = await supabase.auth.getSession();
+
+if (!session) {
+  return Astro.redirect("/");
+}
+
+// Fetch products data from the API
+const response = await fetch(`${Astro.url.origin}/api/woo/get-products`);
+const productsData = await response.json();
+
+// Fetch categories data from the API
+const categoriesResponse = await fetch(`${Astro.url.origin}/api/woo/get-categories`);
+const categoriesData = await categoriesResponse.json();
+
+// Verify that productsData has the correct structure
+if (!productsData.data) {
+  productsData.data = {
+    products: [],
+    total: 0
+  };
+}
+
+// Verify that categoriesData has the correct structure
+if (!categoriesData.data) {
+  categoriesData.data = {
+    categories: []
+  };
+}
+
+const title = "Gestión de Productos";
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    <ProductsDashboard 
+      client:load
+      initialProducts={productsData.data.products}
+      initialTotal={productsData.data.total}
+      initialCategories={categoriesData.data.categories}
+    />
+  </div>
+</Base>

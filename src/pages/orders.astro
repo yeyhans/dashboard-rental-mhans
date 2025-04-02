@@ -1,6 +1,6 @@
 ---
 import Base from "../layout/Base.astro";
-import AdminDashboard from "../components/AdminDashboard";
+import OrdersDashboard from "../components/OrdersDashboard";
 import { supabase } from "../lib/supabase";
 export const prerender = false;
 
@@ -44,7 +44,7 @@ const title = "Test Dashboard";
 
 <Base title={title}>
   <div class="container py-6">
-    <AdminDashboard 
+    <OrdersDashboard 
       client:load
       initialOrders={ordersData.data.orders}
       initialTotal={ordersData.data.total}

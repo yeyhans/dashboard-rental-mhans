@@ -1,59 +1,15 @@
 ---
 import Base from "../layout/Base.astro";
+import { LoginForm } from "@/components/login-form";
 
 export const prerender = true;
 const title = "Rental Mhans - Iniciar Sesión";
-
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-
-
 ---
 
 <Base title={title}>
-  <main class="flex-1 flex flex-col items-center justify-center min-h-screen bg-background dark:bg-zinc-900">
-    <div class="w-full max-w-md mx-auto space-y-6 p-8 bg-card rounded-lg shadow-lg border">
-      <div class="text-center space-y-2">
-        <h1 class="text-2xl font-bold text-black">Bienvenido a Rental Mhans</h1>
-        <p class="text-sm text-muted-foreground">Ingresa tus credenciales para continuar</p>
-      </div>
-      
-      <form action="/api/signin" method="post" class="space-y-4">
-        <div class="space-y-2">
-          <Label htmlFor="email" className="text-black">
-            Correo electrónico
-          </Label>
-          <Input
-            type="email"
-            name="email"
-            id="email"
-            className="text-black"
-            required
-            value="rental.mariohans@gmail.com"
-          />
-        </div>
-        
-        <div class="space-y-2">
-          <Label htmlFor="password" className="text-black">
-            Contraseña
-          </Label>
-          <Input
-            type="password"
-            name="password"
-            id="password"
-            className="text-black"
-            required
-            placeholder="••••••••"
-          />
-        </div>
-
-        <Button
-          type="submit" >
-          Iniciar sesión
-        </Button>
-      </form>
-
+  <main class="flex-1 flex flex-col items-center justify-center min-h-screen bg-background">
+    <div class="w-full max-w-md mx-auto p-8">
+      <LoginForm client:load />
     </div>
   </main>
 </Base>

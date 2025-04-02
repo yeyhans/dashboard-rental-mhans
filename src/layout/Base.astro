@@ -1,6 +1,7 @@
 ---
 import "../styles/globals.css";
 import { supabase } from "../lib/supabase";
+import { ModeToggle } from "../components/ModeToggle";
 interface Props {
   title: string;
 }
@@ -30,58 +31,51 @@ const { data: { session } } = await supabase.auth.getSession();
     <meta property="og:url" content={canonicalURL} />
   </head>
   <body class="flex flex-col h-full w-full dark:bg-zinc-900 bg-zinc-50 dark:text-zinc-100">
-    {session && (
-      <nav class="bg-white shadow dark:bg-zinc-800">
-        <div class="container mx-auto px-6 py-3">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center">
-              <a href="/" class="text-xl font-bold text-gray-800 dark:text-white">
-                Rental Mhans
-              </a>
-            </div>
-            <div class="flex items-center space-x-4">
-              <a href="/dashboard" class="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white">
-                Dashboard
-              </a>
-              <a href="/pedidos" class="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white">
-                Pedidos
-              </a>
-              <form action="/api/signout" method="post">
-                <button type="submit" class="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white">
-                  Cerrar sesión
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-      </nav>
-    )}
+
+    <!-- Theme Toggle Button -->
+    <div class="fixed top-4 right-4 z-30">
+      <ModeToggle client:load />
+    </div>
 
     <main id="main-content" class="flex-1 transition-all duration-300 ease-in-out ml-0">
       <slot />
     </main>
 
+    <!-- Footer -->
+    <footer class="py-4 text-center border-t dark:border-zinc-800 border-zinc-200 dark:bg-zinc-900 bg-zinc-50 dark:text-zinc-100 text-zinc-800 transition-all duration-300 ease-in-out ml-0" id="footer">
+      <div class="container mx-auto px-4">
+        <p class="text-sm">
+          Hecho con amor por su hermanito <a href="https://instagram.com/chocolohans" target="_blank" rel="noopener noreferrer" class="font-bold hover:underline">Yey</a> ❤️
+        </p>
+      </div>
+    </footer>
+
     {session && (
-      <aside class="fixed left-0 top-[73px] h-[calc(100vh-73px)] transition-all duration-300" id="sidebar">
+      <aside class="fixed left-0 top-0 h-screen transition-all duration-300" id="sidebar">
         <button 
           onclick="toggleSidebar()"
-          class="absolute sidebar-toggle-btn transition-all duration-300 bg-white dark:bg-zinc-800 p-2 rounded-lg shadow border dark:border-zinc-700 z-10"
+          class="fixed sidebar-toggle-btn transition-all duration-300 dark:bg-black bg-white p-2 rounded-lg shadow border dark:border-zinc-700 border-zinc-300 z-30 top-4 dark:text-white text-black"
+          style="left: 240px"
           aria-label="Toggle Sidebar"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-600 dark:text-gray-300 sidebar-icon-collapse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-300 sidebar-icon-collapse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-600 dark:text-gray-300 sidebar-icon-expand hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-300 sidebar-icon-expand hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
         </button>
         
-        <div class="w-64 h-full bg-white shadow dark:bg-zinc-800 border-r dark:border-zinc-700 transition-all duration-300" id="sidebar-content">
+        <div class="w-64 h-full dark:bg-black bg-white dark:text-white text-black shadow border-r dark:border-zinc-700 border-zinc-300 transition-all duration-300" id="sidebar-content">
           <div class="p-4">
+            <div class="flex justify-center items-center py-4 mb-4 border-b dark:border-zinc-700 border-zinc-300">
+              <img src="/logo-black.png" alt="Logo" class="h-12 w-auto logo-image" data-dark-src="/logo-black.png" data-light-src="/logo-black.png" onerror="this.src='/placeholder-logo.svg'; this.onerror=null;">
+
+            </div>
             <nav class="space-y-2">
               <a 
                 href="/dashboard" 
-                class="flex items-center px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg dark:text-gray-300 dark:hover:bg-zinc-700"
+                class="flex items-center px-4 py-2 dark:text-gray-300 text-gray-700 dark:hover:bg-zinc-800 hover:bg-zinc-200 rounded-lg"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -89,8 +83,8 @@ const { data: { session } } = await supabase.auth.getSession();
                 <span class="sidebar-text ml-3">Dashboard</span>
               </a>
               <a 
-                href="/pedidos" 
-                class="flex items-center px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg dark:text-gray-300 dark:hover:bg-zinc-700"
+                href="/orders" 
+                class="flex items-center px-4 py-2 dark:text-gray-300 text-gray-700 dark:hover:bg-zinc-800 hover:bg-zinc-200 rounded-lg"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
@@ -99,31 +93,45 @@ const { data: { session } } = await supabase.auth.getSession();
               </a>
               <a 
                 href="/users" 
-                class="flex items-center px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg dark:text-gray-300 dark:hover:bg-zinc-700"
+                class="flex items-center px-4 py-2 dark:text-gray-300 text-gray-700 dark:hover:bg-zinc-800 hover:bg-zinc-200 rounded-lg"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
                 <span class="sidebar-text ml-3">Usuarios</span>
               </a>
+              <a 
+                href="/products" 
+                class="flex items-center px-4 py-2 dark:text-gray-300 text-gray-700 dark:hover:bg-zinc-800 hover:bg-zinc-200 rounded-lg"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                <span class="sidebar-text ml-3">Productos</span>
+              </a>
             </nav>
           </div>
         </div>
 
-        <div class="fixed left-0 top-[73px] h-[calc(100vh-73px)] transition-all duration-300 hidden" id="icon-only-sidebar">
-          <div class="h-full bg-white shadow dark:bg-zinc-800 border-r dark:border-zinc-700 w-16 p-4">
-            <nav class="space-y-6 flex flex-col items-center pt-8">
+        <div class="fixed left-0 top-0 h-screen transition-all duration-300 hidden" id="icon-only-sidebar">
+          <div class="h-full dark:bg-black bg-white shadow border-r dark:border-zinc-700 border-zinc-300 w-16 p-4">
+            <div class="flex justify-center items-center py-4 mb-8 border-b dark:border-zinc-700 border-zinc-300">
+              <a href="/" class="flex items-center justify-center">
+                <img src="/toggle-button-black.png" alt="Logo" class="h-18 w-18 logo-icon-image" data-dark-src="/logo-black.png" data-light-src="/logo-black.png" onerror="this.src='/placeholder-icon.svg'; this.onerror=null;">
+              </a>
+            </div>
+            <nav class="space-y-6 flex flex-col items-center pt-2">
               <a 
                 href="/dashboard" 
-                class="text-gray-600 hover:bg-gray-100 p-2 rounded-lg dark:text-gray-300 dark:hover:bg-zinc-700"
+                class="dark:text-gray-300 text-gray-700 dark:hover:bg-zinc-800 hover:bg-zinc-200 p-2 rounded-lg"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                 </svg>
               </a>
               <a 
-                href="/pedidos" 
-                class="text-gray-600 hover:bg-gray-100 p-2 rounded-lg dark:text-gray-300 dark:hover:bg-zinc-700"
+                href="/orders" 
+                class="dark:text-gray-300 text-gray-700 dark:hover:bg-zinc-800 hover:bg-zinc-200 p-2 rounded-lg"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
@@ -131,10 +139,18 @@ const { data: { session } } = await supabase.auth.getSession();
               </a>
               <a 
                 href="/users" 
-                class="text-gray-600 hover:bg-gray-100 p-2 rounded-lg dark:text-gray-300 dark:hover:bg-zinc-700"
+                class="dark:text-gray-300 text-gray-700 dark:hover:bg-zinc-800 hover:bg-zinc-200 p-2 rounded-lg"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              </a>
+              <a 
+                href="/products" 
+                class="dark:text-gray-300 text-gray-700 dark:hover:bg-zinc-800 hover:bg-zinc-200 p-2 rounded-lg"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
               </a>
             </nav>
@@ -145,6 +161,7 @@ const { data: { session } } = await supabase.auth.getSession();
 
     
 <script is:inline>
+  // Simplified JavaScript for sidebar toggle
   function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     const sidebarContent = document.getElementById('sidebar-content');
@@ -153,33 +170,51 @@ const { data: { session } } = await supabase.auth.getSession();
     const expandIcon = document.querySelector('.sidebar-icon-expand');
     const toggleBtn = document.querySelector('.sidebar-toggle-btn');
     const mainContent = document.getElementById('main-content');
+    const footer = document.getElementById('footer');
+    const isMobile = window.innerWidth < 768;
     
-    if (sidebar.classList.contains('collapsed')) {
-      // Expand sidebar
-      sidebar.classList.remove('collapsed');
+    const isCollapsed = sidebar.classList.contains('collapsed');
+    
+    // Toggle collapse state
+    sidebar.classList.toggle('collapsed');
+    
+    if (isCollapsed) {
+      // Expanding
       sidebarContent.classList.remove('transform', '-translate-x-64');
       iconOnlySidebar.classList.add('hidden');
       collapseIcon.classList.remove('hidden');
       expandIcon.classList.add('hidden');
-      toggleBtn.classList.remove('left-[60px]');
-      toggleBtn.classList.add('right-3');
-      mainContent.classList.remove('ml-16');
+      toggleBtn.style.left = '240px'; // Ajuste para posición expandida
+      mainContent.classList.remove('ml-0', 'ml-16');
       mainContent.classList.add('ml-64');
+      footer.classList.remove('ml-0', 'ml-16');
+      footer.classList.add('ml-64');
     } else {
-      // Collapse sidebar
-      sidebar.classList.add('collapsed');
+      // Collapsing
       sidebarContent.classList.add('transform', '-translate-x-64');
-      iconOnlySidebar.classList.remove('hidden');
+      if (!isMobile) {
+        iconOnlySidebar.classList.remove('hidden');
+      }
       collapseIcon.classList.add('hidden');
       expandIcon.classList.remove('hidden');
-      toggleBtn.classList.remove('right-3');
-      toggleBtn.classList.add('left-[60px]');
-      mainContent.classList.remove('ml-64');
-      mainContent.classList.add('ml-16');
+      
+      if (isMobile) {
+        toggleBtn.style.left = '16px';
+        mainContent.classList.remove('ml-64');
+        mainContent.classList.add('ml-0');
+        footer.classList.remove('ml-64');
+        footer.classList.add('ml-0');
+      } else {
+        toggleBtn.style.left = '60px'; // Ajuste para posición colapsada
+        mainContent.classList.remove('ml-64');
+        mainContent.classList.add('ml-16');
+        footer.classList.remove('ml-64');
+        footer.classList.add('ml-16');
+      }
     }
   }
 
-  // Initialize sidebar state on page load
+  // Initialize sidebar on page load with simplified logic
   document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');
     const sidebarContent = document.getElementById('sidebar-content');
@@ -188,17 +223,102 @@ const { data: { session } } = await supabase.auth.getSession();
     const expandIcon = document.querySelector('.sidebar-icon-expand');
     const toggleBtn = document.querySelector('.sidebar-toggle-btn');
     const mainContent = document.getElementById('main-content');
+    const footer = document.getElementById('footer');
+    const isMobile = window.innerWidth < 768;
     
     // Start with collapsed sidebar
     sidebar.classList.add('collapsed');
     sidebarContent.classList.add('transform', '-translate-x-64');
-    iconOnlySidebar.classList.remove('hidden');
+    
+    if (!isMobile) {
+      iconOnlySidebar.classList.remove('hidden');
+      toggleBtn.style.left = '60px'; // Posición inicial del botón
+      mainContent.classList.add('ml-16');
+      footer.classList.add('ml-16');
+    } else {
+      iconOnlySidebar.classList.add('hidden');
+      toggleBtn.style.left = '16px'; // Posición inicial del botón en móvil
+      mainContent.classList.add('ml-0');
+      footer.classList.add('ml-0');
+    }
+    
     collapseIcon.classList.add('hidden');
     expandIcon.classList.remove('hidden');
-    toggleBtn.classList.remove('right-3');
-    toggleBtn.classList.add('left-[60px]');
-    mainContent.classList.add('ml-16');
+    
+    // Create simple placeholders if needed
+    if (!document.querySelector('[data-placeholder-created="true"]')) {
+      const styles = document.createElement('style');
+      styles.textContent = `
+        .placeholder-logo {
+          background: #4F46E5;
+          color: white;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        /* Asegurar que el botón toggle siempre sea visible */
+        .sidebar-toggle-btn {
+          box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+      `;
+      document.head.appendChild(styles);
+      document.body.setAttribute('data-placeholder-created', 'true');
+    }
   });
+  
+  // Simplified resize handler
+  window.addEventListener('resize', function() {
+    const sidebar = document.getElementById('sidebar');
+    const iconOnlySidebar = document.getElementById('icon-only-sidebar');
+    const toggleBtn = document.querySelector('.sidebar-toggle-btn');
+    const mainContent = document.getElementById('main-content');
+    const footer = document.getElementById('footer');
+    const isMobile = window.innerWidth < 768;
+    
+    if (sidebar.classList.contains('collapsed')) {
+      if (isMobile) {
+        iconOnlySidebar.classList.add('hidden');
+        toggleBtn.style.left = '16px';
+        mainContent.classList.remove('ml-16');
+        mainContent.classList.add('ml-0');
+        footer.classList.remove('ml-16');
+        footer.classList.add('ml-0');
+      } else {
+        iconOnlySidebar.classList.remove('hidden');
+        toggleBtn.style.left = '60px';
+        mainContent.classList.remove('ml-0');
+        mainContent.classList.add('ml-16');
+        footer.classList.remove('ml-0');
+        footer.classList.add('ml-16');
+      }
+    } else {
+      // Cuando el sidebar está expandido
+      iconOnlySidebar.classList.add('hidden');
+      toggleBtn.style.left = '240px';
+      footer.classList.add('ml-64');
+    }
+  });
+</script>
+
+<script is:inline>
+	const getThemePreference = () => {
+		if (typeof localStorage !== 'undefined' && localStorage.getItem('theme')) {
+			return localStorage.getItem('theme');
+		}
+		return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+	};
+	const isDark = getThemePreference() === 'dark';
+	document.documentElement.classList[isDark ? 'add' : 'remove']('dark');
+ 
+	if (typeof localStorage !== 'undefined') {
+		const observer = new MutationObserver(() => {
+			const isDark = document.documentElement.classList.contains('dark');
+			localStorage.setItem('theme', isDark ? 'dark' : 'light');
+		});
+		observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+	}
 </script>
 
   </body>
