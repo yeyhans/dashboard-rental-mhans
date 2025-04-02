@@ -10,7 +10,30 @@ import { ChartTooltip } from './ui/chart';
 import * as Recharts from 'recharts';
 import { ChartTooltipContent } from './ui/chart';
 import { ChartLegendContent } from './ui/chart';
+import { DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Dialog } from './ui/dialog';
+import { Label } from './ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 
+// Helper function to format dates
+const formatDate = (dateString: string): string => {
+  if (!dateString) return '';
+  return new Date(dateString).toLocaleDateString('es-CL', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+};
+
+// Status color mapping
+const statusColors: Record<string, string> = {
+  'completed': 'bg-green-100 text-green-800',
+  'processing': 'bg-blue-100 text-blue-800',
+  'pending': 'bg-yellow-100 text-yellow-800',
+  'cancelled': 'bg-red-100 text-red-800',
+  'failed': 'bg-red-100 text-red-800',
+  'refunded': 'bg-purple-100 text-purple-800'
+};
 
 type Order = {
   id?: string;
@@ -28,12 +51,17 @@ type Order = {
     order_proyecto?: string;
     order_fecha_inicio?: string;
     order_fecha_termino?: string;
+    calculated_subtotal?: string;
+    calculated_discount?: string;
+    calculated_iva?: string;
+    num_jornadas?: string;
   };
   line_items?: Array<{
     name: string;
     product_id: number;
     price: number;
     quantity: number;
+    image?: string;
   }>;
 };
 
@@ -137,33 +165,59 @@ const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
           </CardContent>
         </Card>
         
-        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-200">
+        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-200 col-span-2">
           <CardContent className="pt-6 pb-4">
-            <div className="flex flex-col">
-              <div className="flex justify-between items-baseline">
-                <p className="text-sm font-medium text-muted-foreground">En Proceso</p>
-                <p className="text-2xl font-bold text-blue-600">{countByStatus.processing}</p>
-              </div>
-              <div className="flex justify-between items-baseline mt-4">
-                <p className="text-sm font-medium text-muted-foreground">Completados</p>
-                <p className="text-2xl font-bold text-green-600">{countByStatus.completed}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-200">
-          <CardContent className="pt-6 pb-4">
-            <div className="flex flex-col">
-              <div className="flex justify-between items-baseline">
-                <p className="text-sm font-medium text-muted-foreground">Pendientes</p>
-                <p className="text-2xl font-bold text-yellow-600">{countByStatus.pending}</p>
-              </div>
-              <div className="flex justify-between items-baseline mt-4">
-                <p className="text-sm font-medium text-muted-foreground">Cancelados</p>
-                <p className="text-2xl font-bold text-red-600">{countByStatus.cancelled}</p>
-              </div>
-            </div>
+            <ChartContainer
+              config={{
+                completed: {
+                  label: "Completados",
+                  theme: {
+                    light: "#22c55e",
+                    dark: "#4ade80"
+                  }
+                },
+                processing: {
+                  label: "En Proceso", 
+                  theme: {
+                    light: "#3b82f6",
+                    dark: "#60a5fa"
+                  }
+                },
+                pending: {
+                  label: "Pendientes",
+                  theme: {
+                    light: "#eab308", 
+                    dark: "#facc15"
+                  }
+                },
+                cancelled: {
+                  label: "Cancelados",
+                  theme: {
+                    light: "#ef4444",
+                    dark: "#f87171"
+                  }
+                }
+              }}
+            >
+              <Recharts.PieChart>
+                <Recharts.Pie
+                  data={[
+                    { name: 'completed', value: countByStatus.completed },
+                    { name: 'processing', value: countByStatus.processing },
+                    { name: 'pending', value: countByStatus.pending },
+                    { name: 'cancelled', value: countByStatus.cancelled }
+                  ]}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={40}
+                  outerRadius={60}
+                />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <ChartLegend content={<ChartLegendContent />} />
+              </Recharts.PieChart>
+            </ChartContainer>
           </CardContent>
         </Card>
       </div>
@@ -180,23 +234,160 @@ const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
             {weeklyDeliveries.length > 0 ? (
               <div className="space-y-3">
                 {weeklyDeliveries.map((order, index) => (
-                  <div key={index} className="border rounded-md p-3">
-                    <div className="flex justify-between items-start">
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        order.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                        order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {order.status}
-                      </span>
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Entrega: {order.metadata.order_fecha_inicio}
-                      </span>
-                    </div>
-                    <p className="font-semibold text-sm mt-1">{order.metadata.order_proyecto || 'Sin proyecto'}</p>
-                    <p className="text-sm truncate">{order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}</p>
-                  </div>
+                  <Dialog key={index}>
+                    <DialogTrigger asChild>
+                      <div className="border rounded-md p-3 cursor-pointer hover:bg-accent">
+                        <div className="flex justify-between items-start">
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
+                            order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {order.status}
+                          </span>
+                          <span className="text-xs font-medium text-muted-foreground">
+                            Entrega: {order.metadata.order_fecha_inicio}
+                          </span>
+                        </div>
+                        <p className="font-semibold text-sm mt-1">{order.metadata.order_proyecto || 'Sin proyecto'}</p>
+                        <p className="text-sm truncate">{order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}</p>
+                      </div>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle className="text-foreground">Detalles del Pedido</DialogTitle>
+                        <DialogDescription>
+                          Información completa del pedido realizado el {formatDate(order.date_created || '')}
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-6 py-4">
+                        {/* Estado y Fechas */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <Label className="text-foreground">Estado</Label>
+                            <div className={`mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
+                              {order.status}
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-foreground">Fecha de Inicio</Label>
+                            <div className="mt-1 text-foreground">{order.metadata.order_fecha_inicio}</div>
+                          </div>
+                          <div>
+                            <Label className="text-foreground">Fecha de Término</Label>
+                            <div className="mt-1 text-foreground">{order.metadata.order_fecha_termino}</div>
+                          </div>
+                        </div>
+
+                        {/* Información del Cliente */}
+                        <div>
+                          <h4 className="text-sm font-medium mb-2 text-foreground">Información del Cliente</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg">
+                            <div>
+                              <Label className="text-foreground">Nombre</Label>
+                              <div className="mt-1 text-foreground">{order.billing?.first_name} {order.billing?.last_name}</div>
+                            </div>
+                            <div>
+                              <Label className="text-foreground">Empresa</Label>
+                              <div className="mt-1 text-foreground">{order.billing?.company || '-'}</div>
+                            </div>
+                            <div>
+                              <Label className="text-foreground">Email</Label>
+                              <div className="mt-1 text-foreground">{order.billing?.email}</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Productos */}
+                        {order.line_items && (
+                          <div>
+                            <h4 className="text-sm font-medium mb-2 text-foreground">Productos</h4>
+                            <div className="bg-card p-4 rounded-lg">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="text-foreground w-16">Imagen</TableHead>
+                                    <TableHead className="text-foreground">Producto</TableHead>
+                                    <TableHead className="text-foreground">Cantidad</TableHead>
+                                    <TableHead className="text-foreground">Precio</TableHead>
+                                    <TableHead className="text-foreground">Total</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {order.line_items.map((item, index) => (
+                                    <TableRow key={index}>
+                                      <TableCell className="text-foreground">
+                                        {item.image && (
+                                          <img 
+                                            src={item.image} 
+                                            alt={item.name} 
+                                            className="w-12 h-12 object-cover rounded-md"
+                                          />
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="text-foreground">{item.name}</TableCell>
+                                      <TableCell className="text-foreground">{item.quantity}</TableCell>
+                                      <TableCell className="text-foreground">${item.price.toLocaleString('es-CL')}</TableCell>
+                                      <TableCell className="text-foreground">${(item.price * item.quantity).toLocaleString('es-CL')}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Detalles adicionales */}
+                        <div>
+                          <h4 className="text-sm font-medium mb-2 text-foreground">Detalles del proyecto</h4>
+                          <div className="bg-card p-4 rounded-lg space-y-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-foreground">Proyecto</Label>
+                                <div className="mt-1 text-foreground font-semibold">{order.metadata.order_proyecto || 'Sin nombre'}</div>
+                              </div>
+                              <div>
+                                <Label className="text-foreground">Número de jornadas</Label>
+                                <div className="mt-1 text-foreground font-semibold">{order.metadata.num_jornadas || '1'}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Resumen financiero */}
+                        <div>
+                          <h4 className="text-sm font-medium mb-2 text-foreground">Resumen financiero</h4>
+                          <div className="bg-card p-4 rounded-lg">
+                            <div className="space-y-2">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Subtotal:</span>
+                                <span className="text-foreground">${parseInt(order.metadata.calculated_subtotal || '0').toLocaleString('es-CL')}</span>
+                              </div>
+                              
+                              {order.metadata.calculated_discount && parseInt(order.metadata.calculated_discount) > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Descuento:</span>
+                                  <span className="text-green-600">-${parseInt(order.metadata.calculated_discount).toLocaleString('es-CL')}</span>
+                                </div>
+                              )}
+                              
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">IVA (19%):</span>
+                                <span className="text-foreground">${parseInt(order.metadata.calculated_iva || '0').toLocaleString('es-CL')}</span>
+                              </div>
+                              
+                              <div className="flex justify-between border-t pt-2 mt-2">
+                                <span className="font-medium">Total:</span>
+                                <span className="text-xl font-bold text-primary">${parseInt(order.metadata.calculated_total).toLocaleString('es-CL')}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 ))}
               </div>
             ) : (
@@ -214,23 +405,160 @@ const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
             {weeklyReturns.length > 0 ? (
               <div className="space-y-3">
                 {weeklyReturns.map((order, index) => (
-                  <div key={index} className="border rounded-md p-3">
-                    <div className="flex justify-between items-start">
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        order.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                        order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {order.status}
-                      </span>
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Devolución: {order.metadata.order_fecha_termino}
-                      </span>
-                    </div>
-                    <p className="font-semibold text-sm mt-1">{order.metadata.order_proyecto || 'Sin proyecto'}</p>
-                    <p className="text-sm truncate">{order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}</p>
-                  </div>
+                  <Dialog key={index}>
+                    <DialogTrigger asChild>
+                      <div className="border rounded-md p-3 cursor-pointer hover:bg-accent">
+                        <div className="flex justify-between items-start">
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
+                            order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {order.status}
+                          </span>
+                          <span className="text-xs font-medium text-muted-foreground">
+                            Devolución: {order.metadata.order_fecha_termino}
+                          </span>
+                        </div>
+                        <p className="font-semibold text-sm mt-1">{order.metadata.order_proyecto || 'Sin proyecto'}</p>
+                        <p className="text-sm truncate">{order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}</p>
+                      </div>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle className="text-foreground">Detalles del Pedido</DialogTitle>
+                        <DialogDescription>
+                          Información completa del pedido realizado el {formatDate(order.date_created || '')}
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-6 py-4">
+                        {/* Estado y Fechas */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <Label className="text-foreground">Estado</Label>
+                            <div className={`mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
+                              {order.status}
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-foreground">Fecha de Inicio</Label>
+                            <div className="mt-1 text-foreground">{order.metadata.order_fecha_inicio}</div>
+                          </div>
+                          <div>
+                            <Label className="text-foreground">Fecha de Término</Label>
+                            <div className="mt-1 text-foreground">{order.metadata.order_fecha_termino}</div>
+                          </div>
+                        </div>
+
+                        {/* Información del Cliente */}
+                        <div>
+                          <h4 className="text-sm font-medium mb-2 text-foreground">Información del Cliente</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg">
+                            <div>
+                              <Label className="text-foreground">Nombre</Label>
+                              <div className="mt-1 text-foreground">{order.billing?.first_name} {order.billing?.last_name}</div>
+                            </div>
+                            <div>
+                              <Label className="text-foreground">Empresa</Label>
+                              <div className="mt-1 text-foreground">{order.billing?.company || '-'}</div>
+                            </div>
+                            <div>
+                              <Label className="text-foreground">Email</Label>
+                              <div className="mt-1 text-foreground">{order.billing?.email}</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Productos */}
+                        {order.line_items && (
+                          <div>
+                            <h4 className="text-sm font-medium mb-2 text-foreground">Productos</h4>
+                            <div className="bg-card p-4 rounded-lg">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="text-foreground w-16">Imagen</TableHead>
+                                    <TableHead className="text-foreground">Producto</TableHead>
+                                    <TableHead className="text-foreground">Cantidad</TableHead>
+                                    <TableHead className="text-foreground">Precio</TableHead>
+                                    <TableHead className="text-foreground">Total</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {order.line_items.map((item, index) => (
+                                    <TableRow key={index}>
+                                      <TableCell className="text-foreground">
+                                        {item.image && (
+                                          <img 
+                                            src={item.image} 
+                                            alt={item.name} 
+                                            className="w-12 h-12 object-cover rounded-md"
+                                          />
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="text-foreground">{item.name}</TableCell>
+                                      <TableCell className="text-foreground">{item.quantity}</TableCell>
+                                      <TableCell className="text-foreground">${item.price.toLocaleString('es-CL')}</TableCell>
+                                      <TableCell className="text-foreground">${(item.price * item.quantity).toLocaleString('es-CL')}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Detalles adicionales */}
+                        <div>
+                          <h4 className="text-sm font-medium mb-2 text-foreground">Detalles del proyecto</h4>
+                          <div className="bg-card p-4 rounded-lg space-y-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-foreground">Proyecto</Label>
+                                <div className="mt-1 text-foreground font-semibold">{order.metadata.order_proyecto || 'Sin nombre'}</div>
+                              </div>
+                              <div>
+                                <Label className="text-foreground">Número de jornadas</Label>
+                                <div className="mt-1 text-foreground font-semibold">{order.metadata.num_jornadas || '1'}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Resumen financiero */}
+                        <div>
+                          <h4 className="text-sm font-medium mb-2 text-foreground">Resumen financiero</h4>
+                          <div className="bg-card p-4 rounded-lg">
+                            <div className="space-y-2">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Subtotal:</span>
+                                <span className="text-foreground">${parseInt(order.metadata.calculated_subtotal || '0').toLocaleString('es-CL')}</span>
+                              </div>
+                              
+                              {order.metadata.calculated_discount && parseInt(order.metadata.calculated_discount) > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Descuento:</span>
+                                  <span className="text-green-600">-${parseInt(order.metadata.calculated_discount).toLocaleString('es-CL')}</span>
+                                </div>
+                              )}
+                              
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">IVA (19%):</span>
+                                <span className="text-foreground">${parseInt(order.metadata.calculated_iva || '0').toLocaleString('es-CL')}</span>
+                              </div>
+                              
+                              <div className="flex justify-between border-t pt-2 mt-2">
+                                <span className="font-medium">Total:</span>
+                                <span className="text-xl font-bold text-primary">${parseInt(order.metadata.calculated_total).toLocaleString('es-CL')}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 ))}
               </div>
             ) : (
@@ -238,6 +566,7 @@ const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
             )}
           </CardContent>
         </Card>
+      </div>
 
 
       {/* Revenue Chart */}
@@ -309,59 +638,9 @@ const OrderSummaryCards = ({ orders, totalOrders }: OrderSummaryCardsProps) => {
         </CardContent>
       </Card>
 
-      {/* Orders Status Chart */}
-      <Card className="shadow-sm col-span-2">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-md">Estado de Pedidos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer
-            config={{
-              completed: {
-                label: "Completados",
-                theme: {
-                  light: "#22c55e",
-                  dark: "#4ade80"
-                }
-              },
-              processing: {
-                label: "En Proceso",
-                theme: {
-                  light: "#3b82f6",
-                  dark: "#60a5fa"
-                }
-              },
-              pending: {
-                label: "Pendientes",
-                theme: {
-                  light: "#eab308",
-                  dark: "#facc15"
-                }
-              }
-            }}
-          >
-            <Recharts.PieChart>
-              <Recharts.Pie
-                data={[
-                  { name: 'completed', value: orders.filter(o => o.status === 'completed').length },
-                  { name: 'processing', value: orders.filter(o => o.status === 'processing').length },
-                  { name: 'pending', value: orders.filter(o => o.status === 'pending').length }
-                ]}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={80}
-              />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <ChartLegend content={<ChartLegendContent />} />
-            </Recharts.PieChart>
-          </ChartContainer>
-        </CardContent>
-      </Card>
+      
       </div>
-    </div>
+
   );
 };
 

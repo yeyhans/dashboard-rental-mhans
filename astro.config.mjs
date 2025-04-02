@@ -15,6 +15,10 @@ export default defineConfig({
     schema: {
       SUPABASE_ANON_KEY: envField.string({ context: "server", access: "secret" }),
       SUPABASE_URL: envField.string({ context: "server", access: "secret" }),
+      WORDPRESS_USERNAME: envField.string({ context: "server", access: "secret" }),
+      WORDPRESS_PASSWORD: envField.string({ context: "server", access: "secret" }),
+      WOOCOMMERCE_CONSUMER_KEY: envField.string({ context: "server", access: "secret" }),
+      WOOCOMMERCE_CONSUMER_SECRET: envField.string({ context: "server", access: "secret" }),
     }
   }
 });
