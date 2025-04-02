@@ -1,0 +1,456 @@
+{
+    "success": true,
+    "message": "Órdenes obtenidas exitosamente",
+    "data": {
+      "orders": [
+        {
+          "status": "processing",
+          "date_created": "2025-04-01T15:03:34",
+          "date_modified": "2025-04-01T15:09:22",
+          "customer_id": 80,
+          "billing": {
+            "first_name": "Diego",
+            "last_name": "Palma",
+            "company": "productora celeste spa",
+            "address_1": "quirihue 59d",
+            "city": "santiago",
+            "email": "diegopalmera@gmail.com",
+            "phone": "990898874"
+          },
+          "metadata": {
+            "order_fecha_inicio": "03/04/2025",
+            "order_fecha_termino": "03/04/2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "88000",
+            "calculated_discount": "0",
+            "calculated_iva": "16720",
+            "calculated_total": "104720",
+            "company_rut": "76256956-6\t",
+            "order_proyecto": "fotos matta",
+            "pdf_on_hold_url": "",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/contrato_pedido_5947_2025-04-01_18-09-19.pdf"
+          },
+          "line_items": [
+            {
+              "name": "KIT 04 Profoto D2 1000/500/500W",
+              "product_id": 4714,
+              "sku": "L04",
+              "price": 88000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/01/kit-4714-03.webp"
+            }
+          ]
+        },
+        {
+          "status": "completed",
+          "date_created": "2025-03-29T17:24:41",
+          "date_modified": "2025-04-01T13:50:48",
+          "customer_id": 68,
+          "billing": {
+            "first_name": "Javier",
+            "last_name": "Briceño",
+            "company": "",
+            "address_1": "Monte Alegre 1050",
+            "city": "Santiago",
+            "email": "brialfotos@gmail.com",
+            "phone": "978806779"
+          },
+          "metadata": {
+            "order_fecha_inicio": "31-03-2025",
+            "order_fecha_termino": "31-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "160000",
+            "calculated_discount": "0",
+            "calculated_iva": "30400",
+            "calculated_total": "190400",
+            "company_rut": "20.165.810-1",
+            "order_proyecto": "Shooting Asics",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5938_29-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5938_2025-03-30_15-23-35.pdf"
+          },
+          "line_items": [
+            {
+              "name": "Profoto Olla Magnum",
+              "product_id": 3133,
+              "sku": "M18",
+              "price": 25000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3133_01.webp"
+            },
+            {
+              "name": "KIT Profoto B1X 500/500W",
+              "product_id": 5269,
+              "sku": "L25",
+              "price": 135000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5269_01.webp"
+            }
+          ]
+        },
+        {
+          "status": "completed",
+          "date_created": "2025-03-28T22:45:29",
+          "date_modified": "2025-03-30T12:24:24",
+          "customer_id": 79,
+          "billing": {
+            "first_name": "Melisa",
+            "last_name": "González",
+            "company": "",
+            "address_1": "Francisco Antonio Encina 1781",
+            "city": "Santiago",
+            "email": "louvacquie@gmail.com",
+            "phone": "+56976157871"
+          },
+          "metadata": {
+            "order_fecha_inicio": "29-03-2025",
+            "order_fecha_termino": "29-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "12000",
+            "calculated_discount": "0",
+            "calculated_iva": "2280",
+            "calculated_total": "14280",
+            "company_rut": "197606479",
+            "order_proyecto": "Himura",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5937_29-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5937_2025-03-29_01-49-15.pdf"
+          },
+          "line_items": [
+            {
+              "name": "Profoto Air Remote generico",
+              "product_id": 3100,
+              "sku": "L15",
+              "price": 12000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3100_01.webp"
+            }
+          ]
+        },
+        {
+          "status": "processing",
+          "date_created": "2025-03-27T13:20:15",
+          "date_modified": "2025-03-28T22:02:32",
+          "customer_id": 64,
+          "billing": {
+            "first_name": "Bolivar",
+            "last_name": "Vega González",
+            "company": "SF CHILE SPA",
+            "address_1": "Miguel Claro 1750",
+            "city": "Providencia",
+            "email": "bolivar.vega.g@gmail.com",
+            "phone": "942561593"
+          },
+          "metadata": {
+            "order_fecha_inicio": "",
+            "order_fecha_termino": "",
+            "num_jornadas": "1",
+            "calculated_subtotal": "190000",
+            "calculated_discount": "0",
+            "calculated_iva": "36100",
+            "calculated_total": "226100",
+            "company_rut": "77.504.606-6",
+            "order_proyecto": "the maestros",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5935_27-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5935_2025-03-29_01-02-31.pdf"
+          },
+          "line_items": [
+            {
+              "name": "KIT Profoto B10X Plus 500/500w",
+              "product_id": 4715,
+              "sku": "L20",
+              "price": 130000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/01/4715.webp"
+            },
+            {
+              "name": "Maleta laptops 17”",
+              "product_id": 3183,
+              "sku": "P05",
+              "price": 25000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/1354526447_902932.webp"
+            },
+            {
+              "name": "Profoto Paraguas Deep White M",
+              "product_id": 4705,
+              "sku": "M29",
+              "price": 20000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/01/3107_01.webp"
+            },
+            {
+              "name": "Profoto Difusor 1.5 Paraguas M",
+              "product_id": 3114,
+              "sku": "M34",
+              "price": 7000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3114_01.webp"
+            },
+            {
+              "name": "Batería Profoto B1",
+              "product_id": 3102,
+              "sku": "L17",
+              "price": 8000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3102_01.webp"
+            }
+          ]
+        },
+        {
+          "status": "completed",
+          "date_created": "2025-03-26T13:14:53",
+          "date_modified": "2025-03-31T14:50:40",
+          "customer_id": 73,
+          "billing": {
+            "first_name": "Estudio Fe y Compañia Ltda",
+            "last_name": "Estudio Fe y Compañia Ltda",
+            "company": "Estudio fe y compañia ltda",
+            "address_1": "Monseñor Eyzaguirre 649",
+            "city": "Ñuñoa",
+            "email": "muralvarezcamila@gmail.com",
+            "phone": "997902709"
+          },
+          "metadata": {
+            "order_fecha_inicio": "28-03-2025",
+            "order_fecha_termino": "28-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "63000",
+            "calculated_discount": "0",
+            "calculated_iva": "11970",
+            "calculated_total": "74970",
+            "company_rut": "761255851",
+            "order_proyecto": "Ripley.com",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5914_26-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5914_2025-03-27_15-47-05.pdf"
+          },
+          "line_items": [
+            {
+              "name": "Profoto Pro-B3 750W",
+              "product_id": 5644,
+              "sku": "",
+              "price": 63000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5280_1.webp"
+            }
+          ]
+        },
+        {
+          "status": "completed",
+          "date_created": "2025-03-26T11:10:46",
+          "date_modified": "2025-03-28T14:08:28",
+          "customer_id": 76,
+          "billing": {
+            "first_name": "Paula",
+            "last_name": "Muñoz",
+            "company": "JOIA SPA",
+            "address_1": "Domingo Faustino Sarmiento 250, depto 202 B, ñuñoa",
+            "city": "Ñuñoa",
+            "email": "paula@joiamagazine.com",
+            "phone": "957566863"
+          },
+          "metadata": {
+            "order_fecha_inicio": "27-03-2025",
+            "order_fecha_termino": "27-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "16000",
+            "calculated_discount": "0",
+            "calculated_iva": "3040",
+            "calculated_total": "19040",
+            "company_rut": "77.708.162-4",
+            "order_proyecto": "Bold shooting asics",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5912_26-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5912_2025-03-26_15-05-35.pdf"
+          },
+          "line_items": [
+            {
+              "name": "Avenger C-Stand",
+              "product_id": 5241,
+              "sku": "S04",
+              "price": 8000,
+              "quantity": 2,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5241_01.webp"
+            }
+          ]
+        },
+        {
+          "status": "completed",
+          "date_created": "2025-03-25T12:36:53",
+          "date_modified": "2025-03-31T14:52:41",
+          "customer_id": 75,
+          "billing": {
+            "first_name": "Victor",
+            "last_name": "GANDOLFO",
+            "company": "ESTUDIO FE Y COMPANIA LTDA.",
+            "address_1": "Eucaliptus diez #18865, Maipu",
+            "city": "Santiago",
+            "email": "victorgandolfob@gmail.com",
+            "phone": "978767002"
+          },
+          "metadata": {
+            "order_fecha_inicio": "28-03-2025",
+            "order_fecha_termino": "28-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "184000",
+            "calculated_discount": "0",
+            "calculated_iva": "34960",
+            "calculated_total": "218960",
+            "company_rut": "76125585-1",
+            "order_proyecto": "FE _RIPLEY.COM",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5905_25-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5905_2025-03-27_15-37-54.pdf"
+          },
+          "line_items": [
+            {
+              "name": "Canon EF 24-70MM F/2.8L II USM",
+              "product_id": 3077,
+              "sku": "C03",
+              "price": 35000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3077_01.webp"
+            },
+            {
+              "name": "Profoto Air Remote Air TTL canon",
+              "product_id": 3099,
+              "sku": "L14",
+              "price": 14000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3099_01-1.webp"
+            },
+            {
+              "name": "Profoto D2 1000W +  tripode",
+              "product_id": 3095,
+              "sku": "L11",
+              "price": 45000,
+              "quantity": 3,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3095_01.webp"
+            }
+          ]
+        },
+        {
+          "status": "completed",
+          "date_created": "2025-03-24T11:45:59",
+          "date_modified": "2025-03-31T00:54:45",
+          "customer_id": 73,
+          "billing": {
+            "first_name": "Estudio Fe y Compañia Ltda",
+            "last_name": "Estudio Fe y Compañia Ltda",
+            "company": "Estudio fe y compañia ltda",
+            "address_1": "Monseñor Eyzaguirre 649",
+            "city": "Ñuñoa",
+            "email": "muralvarezcamila@gmail.com",
+            "phone": "997902709"
+          },
+          "metadata": {
+            "order_fecha_inicio": "26-03-2025",
+            "order_fecha_termino": "26-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "163000",
+            "calculated_discount": "0",
+            "calculated_iva": "30970",
+            "calculated_total": "193970",
+            "company_rut": "76125585-1",
+            "order_proyecto": "Umbrale x Paz Vasquez",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5901_24-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5901_2025-03-24_15-06-17.pdf"
+          },
+          "line_items": [
+            {
+              "name": "Canon EF 50mm f/1.2",
+              "product_id": 5166,
+              "sku": "C13",
+              "price": 35000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5166_01.webp"
+            },
+            {
+              "name": "Tether Tools CUC15-ORG cable USB-C A USB-C",
+              "product_id": 3075,
+              "sku": "C12",
+              "price": 8000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3075_01.webp"
+            },
+            {
+              "name": "Canon EOS R5 + Lente EF",
+              "product_id": 5630,
+              "sku": "",
+              "price": 120000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/C10.webp"
+            }
+          ]
+        },
+        {
+          "status": "completed",
+          "date_created": "2025-03-15T14:11:24",
+          "date_modified": "2025-03-24T10:14:32",
+          "customer_id": 68,
+          "billing": {
+            "first_name": "Javier",
+            "last_name": "Briceño",
+            "company": "",
+            "address_1": "Monte Alegre 1050",
+            "city": "Santiago",
+            "email": "brialfotos@gmail.com",
+            "phone": "978806779"
+          },
+          "metadata": {
+            "order_fecha_inicio": "20-03-2025",
+            "order_fecha_termino": "20-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "168500",
+            "calculated_discount": "0",
+            "calculated_iva": "32015",
+            "calculated_total": "200515",
+            "company_rut": "20.165.810-1",
+            "order_proyecto": "Shooting Pisco 3R",
+            "pdf_on_hold_url": "",
+            "pdf_processing_url": ""
+          },
+          "line_items": [
+            {
+              "name": "KIT 04 Profoto D2 1000/500/500W",
+              "product_id": 4714,
+              "sku": "L04",
+              "price": 88000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/01/kit-4714-03.webp"
+            },
+            {
+              "name": "Brazo D520 40\"",
+              "product_id": 5815,
+              "sku": "",
+              "price": 5500,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5251_01-1.webp"
+            },
+            {
+              "name": "Avenger Rotula D200 2 1/2",
+              "product_id": 5250,
+              "sku": "S14",
+              "price": 3500,
+              "quantity": 2,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5250_01.webp"
+            },
+            {
+              "name": "KIT banderas 91x61cm",
+              "product_id": 3140,
+              "sku": "M46",
+              "price": 28000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3140_01.webp"
+            },
+            {
+              "name": "Multispot (efecto sombras)",
+              "product_id": 3128,
+              "sku": "M08",
+              "price": 40000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3128_01.webp"
+            }
+          ]
+        }
+      ],
+      "total": "9",
+      "totalPages": "1"
+    }
+  }

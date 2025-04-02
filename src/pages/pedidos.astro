@@ -1,8 +1,7 @@
 ---
 import Base from "../layout/Base.astro";
+import AdminDashboard from "../components/AdminDashboard";
 import { supabase } from "../lib/supabase";
-import OrderSummaryCards from "../components/OrderSummaryCards";
-
 export const prerender = false;
 
 const { data: { session } } = await supabase.auth.getSession();
@@ -24,16 +23,16 @@ if (!ordersData.data?.orders) {
   };
 }
 
-const title = "Dashboard - Rental Mhans";
+const title = "Test Dashboard";
 ---
 
 <Base title={title}>
   <div class="container py-6">
-    <OrderSummaryCards 
+    <AdminDashboard 
       client:load
-      orders={ordersData.data.orders || []}
-      totalOrders={ordersData.data.total || "0"}
+      initialOrders={ordersData.data.orders}
+      initialTotal={ordersData.data.total}
+      initialTotalPages={ordersData.data.totalPages}
     />
-    
   </div>
 </Base>

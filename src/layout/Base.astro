@@ -1,6 +1,6 @@
 ---
 import "../styles/globals.css";
-
+import { supabase } from "../lib/supabase";
 interface Props {
   title: string;
 }
@@ -9,6 +9,7 @@ const description = "Astro and Supabase demo app";
 const { title } = Astro.props;
 const ogImageURL = new URL("hero.png", Astro.site).href;
 const canonicalURL = new URL(Astro.url).href;
+const { data: { session } } = await supabase.auth.getSession();
 ---
 
 <html lang="en" class="h-full w-full">
@@ -28,38 +29,160 @@ const canonicalURL = new URL(Astro.url).href;
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalURL} />
   </head>
-  <body
-    class="flex flex-col h-full w-full dark:bg-zinc-900 bg-zinc-50 dark:text-zinc-100"
-  >
-    <nav class="border-b bg-white dark:bg-zinc-800 dark:border-zinc-700">
-      <div
-        class="flex items-baseline justify-end sm:justify-between p-4 max-w-screen-xl mx-auto"
-      >
-        <a href="/" class="hidden sm:block font-semibold dark:text-white"
-          >Astro</a
-        >
-        <div>
-          <ul class="font-medium flex items-baseline gap-8">
-            <li>
-              <a
-                href="/dashboard"
-                class="block text-zinc-900 dark:text-gray-200">Dashboard</a
-              >
-            </li>
-            <li>
+  <body class="flex flex-col h-full w-full dark:bg-zinc-900 bg-zinc-50 dark:text-zinc-100">
+    {session && (
+      <nav class="bg-white shadow dark:bg-zinc-800">
+        <div class="container mx-auto px-6 py-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <a href="/" class="text-xl font-bold text-gray-800 dark:text-white">
+                Rental Mhans
+              </a>
+            </div>
+            <div class="flex items-center space-x-4">
+              <a href="/dashboard" class="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white">
+                Dashboard
+              </a>
+              <a href="/pedidos" class="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white">
+                Pedidos
+              </a>
               <form action="/api/signout" method="post">
-                <button
-                  type="submit"
-                  class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-destructive text-destructive-foreground hover:bg-destructive/90 h-10 px-4 py-2"
-                >
+                <button type="submit" class="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white">
                   Cerrar sesión
                 </button>
               </form>
-            </li>
-          </ul>
+            </div>
+          </div>
         </div>
-      </div>
-    </nav>
-    <slot />
+      </nav>
+    )}
+
+    <main id="main-content" class="flex-1 transition-all duration-300 ease-in-out ml-0">
+      <slot />
+    </main>
+
+    {session && (
+      <aside class="fixed left-0 top-[73px] h-[calc(100vh-73px)] transition-all duration-300" id="sidebar">
+        <button 
+          onclick="toggleSidebar()"
+          class="absolute sidebar-toggle-btn transition-all duration-300 bg-white dark:bg-zinc-800 p-2 rounded-lg shadow border dark:border-zinc-700 z-10"
+          aria-label="Toggle Sidebar"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-600 dark:text-gray-300 sidebar-icon-collapse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+          </svg>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-600 dark:text-gray-300 sidebar-icon-expand hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+          </svg>
+        </button>
+        
+        <div class="w-64 h-full bg-white shadow dark:bg-zinc-800 border-r dark:border-zinc-700 transition-all duration-300" id="sidebar-content">
+          <div class="p-4">
+            <nav class="space-y-2">
+              <a 
+                href="/dashboard" 
+                class="flex items-center px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg dark:text-gray-300 dark:hover:bg-zinc-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                <span class="sidebar-text ml-3">Dashboard</span>
+              </a>
+              <a 
+                href="/pedidos" 
+                class="flex items-center px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg dark:text-gray-300 dark:hover:bg-zinc-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                </svg>
+                <span class="sidebar-text ml-3">Pedidos</span>
+              </a>
+            </nav>
+          </div>
+        </div>
+
+        <div class="fixed left-0 top-[73px] h-[calc(100vh-73px)] transition-all duration-300 hidden" id="icon-only-sidebar">
+          <div class="h-full bg-white shadow dark:bg-zinc-800 border-r dark:border-zinc-700 w-16 p-4">
+            <nav class="space-y-6 flex flex-col items-center pt-8">
+              <a 
+                href="/dashboard" 
+                class="text-gray-600 hover:bg-gray-100 p-2 rounded-lg dark:text-gray-300 dark:hover:bg-zinc-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+              </a>
+              <a 
+                href="/pedidos" 
+                class="text-gray-600 hover:bg-gray-100 p-2 rounded-lg dark:text-gray-300 dark:hover:bg-zinc-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                </svg>
+              </a>
+            </nav>
+          </div>
+        </div>
+      </aside>
+    )}
+
+    
+<script is:inline>
+  function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const sidebarContent = document.getElementById('sidebar-content');
+    const iconOnlySidebar = document.getElementById('icon-only-sidebar');
+    const collapseIcon = document.querySelector('.sidebar-icon-collapse');
+    const expandIcon = document.querySelector('.sidebar-icon-expand');
+    const toggleBtn = document.querySelector('.sidebar-toggle-btn');
+    const mainContent = document.getElementById('main-content');
+    
+    if (sidebar.classList.contains('collapsed')) {
+      // Expand sidebar
+      sidebar.classList.remove('collapsed');
+      sidebarContent.classList.remove('transform', '-translate-x-64');
+      iconOnlySidebar.classList.add('hidden');
+      collapseIcon.classList.remove('hidden');
+      expandIcon.classList.add('hidden');
+      toggleBtn.classList.remove('left-[60px]');
+      toggleBtn.classList.add('right-3');
+      mainContent.classList.remove('ml-16');
+      mainContent.classList.add('ml-64');
+    } else {
+      // Collapse sidebar
+      sidebar.classList.add('collapsed');
+      sidebarContent.classList.add('transform', '-translate-x-64');
+      iconOnlySidebar.classList.remove('hidden');
+      collapseIcon.classList.add('hidden');
+      expandIcon.classList.remove('hidden');
+      toggleBtn.classList.remove('right-3');
+      toggleBtn.classList.add('left-[60px]');
+      mainContent.classList.remove('ml-64');
+      mainContent.classList.add('ml-16');
+    }
+  }
+
+  // Initialize sidebar state on page load
+  document.addEventListener('DOMContentLoaded', function() {
+    const sidebar = document.getElementById('sidebar');
+    const sidebarContent = document.getElementById('sidebar-content');
+    const iconOnlySidebar = document.getElementById('icon-only-sidebar');
+    const collapseIcon = document.querySelector('.sidebar-icon-collapse');
+    const expandIcon = document.querySelector('.sidebar-icon-expand');
+    const toggleBtn = document.querySelector('.sidebar-toggle-btn');
+    const mainContent = document.getElementById('main-content');
+    
+    // Start with collapsed sidebar
+    sidebar.classList.add('collapsed');
+    sidebarContent.classList.add('transform', '-translate-x-64');
+    iconOnlySidebar.classList.remove('hidden');
+    collapseIcon.classList.add('hidden');
+    expandIcon.classList.remove('hidden');
+    toggleBtn.classList.remove('right-3');
+    toggleBtn.classList.add('left-[60px]');
+    mainContent.classList.add('ml-16');
+  });
+</script>
+
   </body>
 </html>
