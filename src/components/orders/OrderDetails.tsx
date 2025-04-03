@@ -14,6 +14,7 @@ import { Input } from '../ui/input';
 import { FileText, FileCheck, ChevronLeft, Edit2, Save, X, Edit, Plus } from 'lucide-react';
 import { ProductSelector } from './ProductSelector';
 import { OrderCostSummary } from './OrderCostSummary';
+import { OrderNotes } from './OrderNotes';
 
 // Status translations and colors based on WooCommerce
 const statusTranslations: { [key: string]: string } = {
@@ -986,7 +987,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                 <select
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   value={order.status}
-                  onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
+                  onChange={(e) => handleStatusUpdate(parseInt(order.id), e.target.value)}
                   disabled={loading}
                 >
                   {Object.entries(statusTranslations).map(([value, label]) => (
@@ -1030,6 +1031,12 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                 Ver PDF de Contrato
               </Button>
             )}
+          </div>
+
+          {/* Notas */}
+          <div className="space-y-2">
+            <Label className="font-medium">Notas</Label>
+            <OrderNotes orderId={transformedOrder.id} />
           </div>
         </CardContent>
       </Card>
