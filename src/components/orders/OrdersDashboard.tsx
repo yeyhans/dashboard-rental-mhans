@@ -5,7 +5,7 @@ import {
   CardDescription, 
   CardHeader, 
   CardTitle 
-} from './ui/card';
+} from '../ui/card';
 import { 
   Table, 
   TableBody, 
@@ -13,7 +13,7 @@ import {
   TableHead, 
   TableHeader, 
   TableRow 
-} from './ui/table';
+} from '../ui/table';
 import {
   Dialog,
   DialogContent,
@@ -21,17 +21,60 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from './ui/dialog';
-import { Label } from './ui/label';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import type { Order } from '../types/order';
-import { ChevronRight, RefreshCw, Search, FileText, FileCheck } from 'lucide-react';
+} from '../ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+} from '../ui/sheet';
+import { Label } from '../ui/label';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import type { Order, LineItem } from '../../types/order';
+import type { Product } from '../../types/product';
+import { ChevronRight, RefreshCw, Search, FileText, FileCheck, Plus, Trash2 } from 'lucide-react';
+import CreateOrderForm from './CreateOrderForm';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 // Helper function to format currency with thousands separator
 const formatCurrency = (value: string | number) => {
   const numValue = typeof value === 'string' ? parseFloat(value) : value;
   return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
+// Status translations and colors based on WooCommerce
+const statusTranslations: { [key: string]: string } = {
+  'pending': 'Pendiente',
+  'processing': 'En proceso',
+  'on-hold': 'En espera',
+  'completed': 'Completado',
+  'cancelled': 'Cancelado',
+  'refunded': 'Reembolsado',
+  'failed': 'Fallido',
+  'trash': 'Papelera',
+  'auto-draft': 'Borrador'
+};
+
+const statusColors: { [key: string]: string } = {
+  'pending': 'bg-[#f8dda7] text-[#94660c]',
+  'processing': 'bg-[#c6e1c6] text-[#5b841b]', 
+  'on-hold': 'bg-[#e5e5e5] text-[#777777]',
+  'completed': 'bg-[#c8d7e1] text-[#2e4453]',
+  'cancelled': 'bg-[#eba3a3] text-[#761919]',
+  'refunded': 'bg-[#e5e5e5] text-[#777777]',
+  'failed': 'bg-[#eba3a3] text-[#761919]',
+  'trash': 'bg-[#e5e5e5] text-[#777777]',
+  'auto-draft': 'bg-[#e5e5e5] text-[#777777]'
 };
 
 interface OrdersDashboardProps {
@@ -43,17 +86,37 @@ interface OrdersDashboardProps {
   initialPerPage?: string;
 }
 
-const statusColors: Record<string, string> = {
-  'pending': 'bg-yellow-200 text-yellow-900',
-  'processing': 'bg-blue-200 text-blue-900',
-  'on-hold': 'bg-purple-200 text-purple-900',
-  'completed': 'bg-green-200 text-green-900',
-  'cancelled': 'bg-red-200 text-red-900',
-  'refunded': 'bg-gray-200 text-gray-900',
-  'failed': 'bg-red-200 text-red-900',
-  'trash': 'bg-gray-200 text-gray-900',
-  'auto-draft': 'bg-gray-200 text-gray-900'
-};
+// Interface for new order form
+interface NewOrderForm {
+  customer_id: string;
+  billing: {
+    first_name: string;
+    last_name: string;
+    company: string;
+    email: string;
+    phone: string;
+    address_1: string;
+    city: string;
+  };
+  metadata: {
+    order_proyecto: string;
+    order_fecha_inicio: string;
+    order_fecha_termino: string;
+    num_jornadas: string;
+    company_rut: string;
+    calculated_subtotal: string;
+    calculated_discount: string;
+    calculated_iva: string;
+    calculated_total: string;
+  };
+  line_items: Array<{
+    product_id: string;
+    quantity: number;
+    sku: string;
+    price: string;
+    name: string;
+  }>;
+}
 
 const OrdersDashboard = ({ 
   initialOrders,
@@ -72,8 +135,32 @@ const OrdersDashboard = ({
   const [currentPage, setCurrentPage] = useState(parseInt(initialPage));
   const [totalPages, setTotalPages] = useState(parseInt(initialTotalPages));
   const [total, setTotal] = useState(parseInt(initialTotal));
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isMobileView, setIsMobileView] = useState(false);
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [newOrderForm, setNewOrderForm] = useState<NewOrderForm>({
+    customer_id: '',
+    billing: {
+      first_name: '',
+      last_name: '',
+      company: '',
+      email: '',
+      phone: '',
+      address_1: '',
+      city: ''
+    },
+    metadata: {
+      order_proyecto: '',
+      order_fecha_inicio: '',
+      order_fecha_termino: '',
+      num_jornadas: '',
+      company_rut: '',
+      calculated_subtotal: '0',
+      calculated_discount: '0',
+      calculated_iva: '0',
+      calculated_total: '0'
+    },
+    line_items: []
+  });
   const perPage = parseInt(initialPerPage);
 
   // Detect mobile view
@@ -160,175 +247,235 @@ const OrdersDashboard = ({
     });
   };
 
-  const OrderDetailsDialog = ({ order }: { order: Order }) => (
-    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw] md:w-auto p-4 md:p-6">
-      <DialogHeader>
-        <DialogTitle className="text-xl">Detalles del Pedido</DialogTitle>
-        <DialogDescription>
-          Información completa del pedido realizado el {formatDate(order.date_created)}
-        </DialogDescription>
-      </DialogHeader>
+  // Add new function to handle order status updates
+  const handleStatusUpdate = async (orderId: number, newStatus: string) => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/woo/update-orders`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: orderId,
+          status: newStatus
+        })
+      });
 
-      <div className="space-y-6 py-4">
-        {/* Estado y Fechas */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update the order in the local state
+        setOrders(orders.map(order => 
+          order.id === orderId ? { ...order, status: newStatus } : order
+        ));
+      } else {
+        setError(data.message);
+      }
+    } catch (err) {
+      setError('Error al actualizar el estado del pedido');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const OrderDetailsDialog = ({ order }: { order: Order }) => {
+    return (
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw] md:w-auto p-4 md:p-6">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Detalles del Pedido</DialogTitle>
+          <DialogDescription>
+            Información completa del pedido realizado el {formatDate(order.date_created)}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 py-4">
+          {/* Estado y Fechas */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label className="font-medium">Estado</Label>
+              <div className="mt-1 flex items-center gap-2">
+                <select
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  value={order.status}
+                  onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
+                  disabled={loading}
+                >
+                  {Object.entries(statusTranslations).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                {loading && (
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                )}
+              </div>
+            </div>
+            <div>
+              <Label className="font-medium">Fecha de Creación</Label>
+              <div className="mt-1">{formatDate(order.date_created)}</div>
+            </div>
+            <div>
+              <Label className="font-medium">Última Modificación</Label>
+              <div className="mt-1">{formatDate(order.date_modified)}</div>
+            </div>
+          </div>
+
+          {/* Información del Cliente */}
           <div>
-            <Label className="font-medium">Estado</Label>
-            <div className={`mt-1 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
-              {order.status}
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="text-sm font-medium">Información del Cliente</h4>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
+              <div>
+                <Label className="font-medium">Nombre</Label>
+                <div className="mt-1">{order.billing.first_name} {order.billing.last_name}</div>
+              </div>
+              <div>
+                <Label className="font-medium">Empresa</Label>
+                <div className="mt-1">{order.billing.company || '-'}</div>
+              </div>
+              <div>
+                <Label className="font-medium">Email</Label>
+                <div className="mt-1 break-words">{order.billing.email}</div>
+              </div>
+              <div>
+                <Label className="font-medium">Teléfono</Label>
+                <div className="mt-1">{order.billing.phone}</div>
+              </div>
+              <div>
+                <Label className="font-medium">Dirección</Label>
+                <div className="mt-1">{order.billing.address_1}</div>
+              </div>
+              <div>
+                <Label className="font-medium">Ciudad</Label>
+                <div className="mt-1">{order.billing.city}</div>
+              </div>
             </div>
           </div>
+
+          {/* Información del Proyecto */}
           <div>
-            <Label className="font-medium">Fecha de Creación</Label>
-            <div className="mt-1">{formatDate(order.date_created)}</div>
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="text-sm font-medium">Información del Proyecto</h4>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
+              <div>
+                <Label className="font-medium">Proyecto</Label>
+                <div className="mt-1">{order.metadata.order_proyecto}</div>
+              </div>
+              <div>
+                <Label className="font-medium">RUT Empresa</Label>
+                <div className="mt-1">{order.metadata.company_rut}</div>
+              </div>
+              <div>
+                <Label className="font-medium">Fecha Inicio</Label>
+                <div className="mt-1">{order.metadata.order_fecha_inicio}</div>
+              </div>
+              <div>
+                <Label className="font-medium">Fecha Término</Label>
+                <div className="mt-1">{order.metadata.order_fecha_termino}</div>
+              </div>
+              <div>
+                <Label className="font-medium">Número de Jornadas</Label>
+                <div className="mt-1">{order.metadata.num_jornadas}</div>
+              </div>
+            </div>
           </div>
+
+          {/* Productos */}
           <div>
-            <Label className="font-medium">Última Modificación</Label>
-            <div className="mt-1">{formatDate(order.date_modified)}</div>
-          </div>
-        </div>
-
-        {/* Información del Cliente */}
-        <div>
-          <h4 className="text-sm font-medium mb-2">Información del Cliente</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
-            <div>
-              <Label className="font-medium">Nombre</Label>
-              <div className="mt-1">{order.billing.first_name} {order.billing.last_name}</div>
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="text-sm font-medium">Productos</h4>
             </div>
-            <div>
-              <Label className="font-medium">Empresa</Label>
-              <div className="mt-1">{order.billing.company || '-'}</div>
-            </div>
-            <div>
-              <Label className="font-medium">Email</Label>
-              <div className="mt-1 break-words">{order.billing.email}</div>
-            </div>
-            <div>
-              <Label className="font-medium">Teléfono</Label>
-              <div className="mt-1">{order.billing.phone}</div>
-            </div>
-            <div>
-              <Label className="font-medium">Dirección</Label>
-              <div className="mt-1">{order.billing.address_1}</div>
-            </div>
-            <div>
-              <Label className="font-medium">Ciudad</Label>
-              <div className="mt-1">{order.billing.city}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Información del Proyecto */}
-        <div>
-          <h4 className="text-sm font-medium mb-2">Información del Proyecto</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
-            <div>
-              <Label className="font-medium">Proyecto</Label>
-              <div className="mt-1">{order.metadata.order_proyecto}</div>
-            </div>
-            <div>
-              <Label className="font-medium">RUT Empresa</Label>
-              <div className="mt-1">{order.metadata.company_rut}</div>
-            </div>
-            <div>
-              <Label className="font-medium">Fecha Inicio</Label>
-              <div className="mt-1">{order.metadata.order_fecha_inicio}</div>
-            </div>
-            <div>
-              <Label className="font-medium">Fecha Término</Label>
-              <div className="mt-1">{order.metadata.order_fecha_termino}</div>
-            </div>
-            <div>
-              <Label className="font-medium">Número de Jornadas</Label>
-              <div className="mt-1">{order.metadata.num_jornadas}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Productos */}
-        <div>
-          <h4 className="text-sm font-medium mb-2">Productos</h4>
-          <div className="bg-card p-4 rounded-lg border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="font-semibold">Producto</TableHead>
-                  <TableHead className="font-semibold">SKU</TableHead>
-                  <TableHead className="font-semibold text-center">Cant.</TableHead>
-                  <TableHead className="font-semibold text-right">Precio</TableHead>
-                  <TableHead className="font-semibold text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {order.line_items.map((item, index) => (
-                  <TableRow key={`${item.product_id}-${index}`}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {item.image && (
-                          <img src={item.image} alt={item.name} className="w-10 h-10 object-cover rounded" />
-                        )}
-                        <span>{item.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{item.sku}</TableCell>
-                    <TableCell className="text-center">{item.quantity}</TableCell>
-                    <TableCell className="text-right">${formatCurrency(item.price)}</TableCell>
-                    <TableCell className="text-right font-medium">${formatCurrency(parseFloat(item.price.toString()) * item.quantity)}</TableCell>
+            <div className="bg-card p-4 rounded-lg border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="font-semibold">Producto</TableHead>
+                    <TableHead className="font-semibold">SKU</TableHead>
+                    <TableHead className="font-semibold text-center">Cant.</TableHead>
+                    <TableHead className="font-semibold text-right">Precio</TableHead>
+                    <TableHead className="font-semibold text-right">Total</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-
-        {/* Resumen de Costos */}
-        <div>
-          <h4 className="text-sm font-medium mb-2">Resumen de Costos</h4>
-          <div className="bg-card p-4 rounded-lg border space-y-2">
-            <div className="flex justify-between">
-              <span>Subtotal</span>
-              <span>${formatCurrency(order.metadata.calculated_subtotal)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Descuento</span>
-              <span>${formatCurrency(order.metadata.calculated_discount)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>IVA</span>
-              <span>${formatCurrency(order.metadata.calculated_iva)}</span>
-            </div>
-            <div className="flex justify-between font-bold text-lg">
-              <span>Total</span>
-              <span>${formatCurrency(order.metadata.calculated_total)}</span>
+                </TableHeader>
+                <TableBody>
+                  {order.line_items.map((item, index) => (
+                    <TableRow key={`${item.product_id}-${index}`}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {item.image && (
+                            <img src={item.image} alt={item.name} className="w-10 h-10 object-cover rounded" />
+                          )}
+                          <span>{item.name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>{item.sku}</TableCell>
+                      <TableCell className="text-center">{item.quantity}</TableCell>
+                      <TableCell className="text-right">${formatCurrency(item.price)}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        ${formatCurrency(parseFloat(item.price) * item.quantity)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           </div>
-        </div>
 
-        {/* Enlaces a PDFs */}
-        <div className="space-y-2">
-          {order.metadata.pdf_on_hold_url && (
-            <Button 
-              variant="outline" 
-              className="w-full justify-start"
-              onClick={() => window.open(order.metadata.pdf_on_hold_url, '_blank')}
-            >
-              Ver PDF de Presupuesto
-            </Button>
-          )}
-          {order.metadata.pdf_processing_url && (
-            <Button 
-              variant="outline" 
-              className="w-full justify-start"
-              onClick={() => window.open(order.metadata.pdf_processing_url, '_blank')}
-            >
-              Ver PDF de Contrato
-            </Button>
-          )}
+          {/* Resumen de Costos */}
+          <div>
+            <h4 className="text-sm font-medium mb-2">Resumen de Costos</h4>
+            <div className="bg-card p-4 rounded-lg border space-y-2">
+              <div className="flex justify-between">
+                <span>Subtotal</span>
+                <span>${formatCurrency(order.metadata.calculated_subtotal)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Descuento</span>
+                <span>${formatCurrency(order.metadata.calculated_discount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>IVA</span>
+                <span>${formatCurrency(order.metadata.calculated_iva)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-lg">
+                <span>Total</span>
+                <span>${formatCurrency(order.metadata.calculated_total)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Enlaces a PDFs */}
+          <div className="space-y-2">
+            {order.metadata.pdf_on_hold_url && (
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => window.open(order.metadata.pdf_on_hold_url, '_blank')}
+              >
+                Ver PDF de Presupuesto
+              </Button>
+            )}
+            {order.metadata.pdf_processing_url && (
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => window.open(order.metadata.pdf_processing_url, '_blank')}
+              >
+                Ver PDF de Contrato
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
-    </DialogContent>
-  );
+      </DialogContent>
+    );
+  };
+
+  const handleOrderCreated = (newOrder: Order) => {
+    setOrders([newOrder, ...orders]);
+    setTotal(total + 1);
+  };
 
   // Render loading state
   if (loading && !isInitialLoad) {
@@ -370,7 +517,7 @@ const OrdersDashboard = ({
               <CardContent className="p-4">
                 <div className="flex justify-between items-start mb-3">
                   <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
-                    {order.status}
+                    {statusTranslations[order.status] || order.status}
                   </span>
                   <div className="text-right">
                     <div className="text-sm text-muted-foreground">{formatDate(order.date_created)}</div>
@@ -413,14 +560,15 @@ const OrdersDashboard = ({
                     </Button>
                   )}
                 </div>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setSelectedOrder(order)}>
-                      Ver detalles <ChevronRight className="h-4 w-4 ml-2" />
-                    </Button>
-                  </DialogTrigger>
-                  {selectedOrder && <OrderDetailsDialog order={selectedOrder} />}
-                </Dialog>
+                <a href={`/orders/${order.id}`} className="no-underline w-full block mt-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full"
+                  >
+                    Ver detalles <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </a>
               </CardContent>
             </Card>
           ))}
@@ -447,7 +595,7 @@ const OrdersDashboard = ({
               <TableRow key={`${order.customer_id}-${order.date_created}`}>
                 <TableCell>
                   <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
-                    {order.status}
+                    {statusTranslations[order.status] || order.status}
                   </span>
                 </TableCell>
                 <TableCell className="text-foreground">
@@ -479,14 +627,14 @@ const OrdersDashboard = ({
                         <FileCheck className="h-4 w-4" />
                       </Button>
                     )}
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" onClick={() => setSelectedOrder(order)}>
-                          Ver detalles
-                        </Button>
-                      </DialogTrigger>
-                      {selectedOrder && <OrderDetailsDialog order={selectedOrder} />}
-                    </Dialog>
+                    <a href={`/orders/${order.id}`} className="no-underline">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                      >
+                        Ver detalles
+                      </Button>
+                    </a>
                   </div>
                 </TableCell>
               </TableRow>
@@ -509,31 +657,31 @@ const OrdersDashboard = ({
         </CardHeader>
         <CardContent>
           <div className="space-y-4 mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input 
-                id="search" 
-                placeholder="Buscar por cliente, proyecto, email..." 
-                value={searchTerm} 
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="text-foreground pl-10"
-              />
-            </div>
-            
             <div className="flex flex-col sm:flex-row gap-3">
-              <div className="w-full sm:flex-1">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  id="search" 
+                  placeholder="Buscar por cliente, proyecto, email..." 
+                  value={searchTerm} 
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="text-foreground pl-10"
+                />
+              </div>
+              
+              <div className="w-full sm:w-48">
                 <select
                   id="status"
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
                   value={statusFilter}
                   onChange={(e) => {
                     setStatusFilter(e.target.value);
-                    setCurrentPage(1); // Reset to first page when filter changes
+                    setCurrentPage(1);
                   }}
                 >
                   <option value="">Todos los estados</option>
                   {uniqueStatuses.map(status => (
-                    <option key={status} value={status}>{status}</option>
+                    <option key={status} value={status}>{statusTranslations[status] || status}</option>
                   ))}
                 </select>
               </div>
@@ -542,10 +690,13 @@ const OrdersDashboard = ({
                 className="w-full sm:w-auto" 
                 onClick={refreshData}
                 disabled={loading}
+                variant="outline"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 {loading ? 'Actualizando...' : 'Actualizar'}
               </Button>
+
+              <CreateOrderForm onOrderCreated={handleOrderCreated} />
             </div>
           </div>
 

@@ -1,7 +1,7 @@
 ---
-import Base from "../layout/Base.astro";
-import OrdersDashboard from "../components/OrdersDashboard";
-import { supabase } from "../lib/supabase";
+import Base from "../../layout/Base.astro";
+import OrdersDashboard from "../../components/orders/OrdersDashboard";
+import { supabase } from "../../lib/supabase";
 export const prerender = false;
 
 const { data: { session } } = await supabase.auth.getSession();

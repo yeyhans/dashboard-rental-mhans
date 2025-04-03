@@ -1,4 +1,5 @@
 export type LineItem = {
+  id?: number;
   name: string;
   product_id: number;
   sku: string;
@@ -32,6 +33,7 @@ export type Metadata = {
 };
 
 export type Order = {
+  id: number;
   status: string;
   date_created: string;
   date_modified: string;

@@ -12,10 +12,7 @@ export const GET: APIRoute = async ({ request }) => {
     const username = import.meta.env.WORDPRESS_USERNAME;
     const password = import.meta.env.WORDPRESS_PASSWORD;
 
-    console.log(`Variables de entorno disponibles: ${Boolean(username)} / ${Boolean(password)}`);
-    
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
-    console.log(`Intentando autenticar con usuario: ${username}`);
 
     // Build the WordPress API URL with parameters - USANDO ENDPOINT ESTÁNDAR
     const wpApiUrl = new URL('https://rental.mariohans.cl/wp-json/custom/v1/users');
@@ -26,9 +23,6 @@ export const GET: APIRoute = async ({ request }) => {
     if (role) {
       wpApiUrl.searchParams.set('roles', role);
     }
-
-    console.log(`Consultando usuarios con rol: ${role || 'todos'}`);
-    console.log(`URL de consulta: ${wpApiUrl.toString()}`);
 
     // Fetch users from WordPress API with authentication
     const response = await fetch(wpApiUrl.toString(), {

@@ -4,17 +4,35 @@ import {
   CardHeader, 
   CardTitle 
 } from './ui/card';
-import { ChartLegend } from './ui/chart';
-import { ChartContainer } from './ui/chart';
-import { ChartTooltip } from './ui/chart';
-import * as Recharts from 'recharts';
-import { ChartTooltipContent } from './ui/chart';
-import { ChartLegendContent } from './ui/chart';
+
 import { DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Dialog } from './ui/dialog';
 import { Label } from './ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { ScrollArea } from './ui/scroll-area';
+
+// Status translations and colors based on WooCommerce
+const statusTranslations: { [key: string]: string } = {
+  'pending': 'Pendiente',
+  'processing': 'En proceso',
+  'on-hold': 'En espera',
+  'completed': 'Completado',
+  'cancelled': 'Cancelado',
+  'refunded': 'Reembolsado',
+  'failed': 'Fallido'
+};
+
+const statusColors: { [key: string]: string } = {
+  'pending': 'bg-[#f8dda7] text-[#94660c]',
+  'processing': 'bg-[#c6e1c6] text-[#5b841b]', 
+  'on-hold': 'bg-[#e5e5e5] text-[#777777]',
+  'completed': 'bg-[#c8d7e1] text-[#2e4453]',
+  'cancelled': 'bg-[#eba3a3] text-[#761919]',
+  'refunded': 'bg-[#e5e5e5] text-[#777777]',
+  'failed': 'bg-[#eba3a3] text-[#761919]',
+  'trash': 'bg-[#e5e5e5] text-[#777777]',
+  'auto-draft': 'bg-[#e5e5e5] text-[#777777]'
+};
 
 // Helper function to format dates
 const formatDate = (dateString: string): string => {
@@ -26,15 +44,6 @@ const formatDate = (dateString: string): string => {
   });
 };
 
-// Status color mapping
-const statusColors: Record<string, string> = {
-  'completed': 'bg-green-100 text-green-800',
-  'processing': 'bg-blue-100 text-blue-800',
-  'pending': 'bg-yellow-100 text-yellow-800',
-  'cancelled': 'bg-red-100 text-red-800',
-  'failed': 'bg-red-100 text-red-800',
-  'refunded': 'bg-purple-100 text-purple-800'
-};
 
 type Order = {
   id?: string;
@@ -98,19 +107,6 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
     return sum + (parseFloat(order.metadata.calculated_total) || 0);
   }, 0);
 
-  // Calculate averages and percentages
-  const averageOrderValue = orders.length > 0 ? totalSales / orders.length : 0;
-  const completionRate = orders.length > 0 
-    ? (orders.filter(order => order.status === 'completed').length / orders.length) * 100 
-    : 0;
-
-  // Count orders by status
-  const countByStatus = {
-    processing: orders.filter(order => order.status === 'processing').length,
-    completed: orders.filter(order => order.status === 'completed').length,
-    pending: orders.filter(order => order.status === 'pending').length,
-    cancelled: orders.filter(order => ['cancelled', 'failed', 'refunded'].includes(order.status)).length
-  };
 
   // Filter orders for current week deliveries and returns
   const now = new Date();
@@ -155,97 +151,6 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
 
   return (
     <div className="space-y-4">
-      {/* Main Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
-          <CardContent className="pt-4 pb-3 px-3 sm:px-6">
-            <div className="flex flex-col">
-              <div className="flex justify-between items-baseline">
-                <p className="text-xs sm:text-sm font-medium text-muted-foreground">Total Pedidos</p>
-                <p className="text-xl sm:text-2xl font-bold text-primary">{totalOrders}</p>
-              </div>
-              <div className="flex justify-between items-baseline mt-3">
-                <p className="text-xs sm:text-sm font-medium text-muted-foreground">Ventas Totales</p>
-                <p className="text-xl sm:text-2xl font-bold text-primary">${totalSales.toLocaleString('es-CL')}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
-          <CardContent className="pt-4 pb-3 px-3 sm:px-6">
-            <div className="flex flex-col">
-              <div className="flex justify-between items-baseline">
-                <p className="text-xs sm:text-sm font-medium text-muted-foreground">Valor Promedio</p>
-                <p className="text-xl sm:text-2xl font-bold text-primary">${averageOrderValue.toLocaleString('es-CL', { maximumFractionDigits: 0 })}</p>
-              </div>
-              <div className="flex justify-between items-baseline mt-3">
-                <p className="text-xs sm:text-sm font-medium text-muted-foreground">Tasa Completados</p>
-                <p className="text-xl sm:text-2xl font-bold text-primary">{completionRate.toFixed(1)}%</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="shadow-sm hover:shadow-md transition-shadow duration-200 col-span-1 sm:col-span-2">
-          <CardContent className="pt-4 pb-3 h-[180px] sm:h-[120px] flex items-center justify-center">
-            <ChartContainer
-              config={{
-                completed: {
-                  label: "Completados",
-                  theme: {
-                    light: "#22c55e",
-                    dark: "#4ade80"
-                  }
-                },
-                processing: {
-                  label: "En Proceso", 
-                  theme: {
-                    light: "#3b82f6",
-                    dark: "#60a5fa"
-                  }
-                },
-                pending: {
-                  label: "Pendientes",
-                  theme: {
-                    light: "#eab308", 
-                    dark: "#facc15"
-                  }
-                },
-                cancelled: {
-                  label: "Cancelados",
-                  theme: {
-                    light: "#ef4444",
-                    dark: "#f87171"
-                  }
-                }
-              }}
-            >
-              <Recharts.ResponsiveContainer width="100%" height="100%">
-                <Recharts.PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                  <Recharts.Pie
-                    data={[
-                      { name: 'completed', value: countByStatus.completed },
-                      { name: 'processing', value: countByStatus.processing },
-                      { name: 'pending', value: countByStatus.pending },
-                      { name: 'cancelled', value: countByStatus.cancelled }
-                    ]}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={30}
-                    outerRadius={50}
-                    paddingAngle={2}
-                  />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <ChartLegend layout="horizontal" verticalAlign="bottom" align="center" content={<ChartLegendContent />} />
-                </Recharts.PieChart>
-              </Recharts.ResponsiveContainer>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Weekly Deliveries and Returns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -264,13 +169,8 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                     <DialogTrigger asChild>
                       <div className="border rounded-md p-2 cursor-pointer hover:bg-accent active:bg-accent/90 touch-manipulation">
                         <div className="flex justify-between items-start">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            order.status === 'completed' ? 'bg-green-100 text-green-800' :
-                            order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                            order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {order.status}
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
+                            {statusTranslations[order.status] || order.status}
                           </span>
                           <span className="text-xs font-medium text-muted-foreground whitespace-nowrap ml-1">
                             {order.metadata.order_fecha_inicio}
@@ -300,7 +200,7 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                           <div>
                             <Label className="text-xs sm:text-sm">Estado</Label>
                             <div className={`mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
-                              {order.status}
+                              {statusTranslations[order.status] || order.status}
                             </div>
                           </div>
                           <div>
@@ -472,13 +372,8 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                     <DialogTrigger asChild>
                       <div className="border rounded-md p-2 cursor-pointer hover:bg-accent active:bg-accent/90 touch-manipulation">
                         <div className="flex justify-between items-start">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            order.status === 'completed' ? 'bg-green-100 text-green-800' :
-                            order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                            order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {order.status}
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
+                            {statusTranslations[order.status] || order.status}
                           </span>
                           <span className="text-xs font-medium text-muted-foreground whitespace-nowrap ml-1">
                             {order.metadata.order_fecha_termino}
@@ -508,7 +403,7 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                           <div>
                             <Label className="text-xs sm:text-sm">Estado</Label>
                             <div className={`mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
-                              {order.status}
+                              {statusTranslations[order.status] || order.status}
                             </div>
                           </div>
                           <div>
@@ -667,100 +562,6 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
         </Card>
       </div>
 
-
-      {/* Revenue Chart */}
-      <Card className="shadow-sm">
-        <CardHeader className="pb-1 pt-3 px-3 sm:px-6">
-          <CardTitle className="text-base">Ingresos por Semana</CardTitle>
-        </CardHeader>
-        <CardContent className="px-3 sm:px-6 h-[300px] sm:h-[400px] relative">
-          <ChartContainer
-            config={{
-              revenue: {
-                label: "Ingresos",
-                theme: {
-                  light: "#0ea5e9",
-                  dark: "#38bdf8"
-                }
-              }
-            }}
-          >
-            <Recharts.ResponsiveContainer width="100%" height="100%">
-              <Recharts.BarChart
-                data={orders.reduce((acc: Array<{week: string, revenue: number}>, order) => {
-                  if (!order.date_created) return acc;
-                  
-                  const date = new Date(order.date_created);
-                  // Get year and week number
-                  const year = date.getFullYear();
-                  // Calculate week number (ISO week: starts on Monday, first week with majority of days in the year)
-                  const firstDayOfYear = new Date(year, 0, 1);
-                  const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
-                  const weekNum = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
-                  
-                  // Format as shorter week label for mobile
-                  const weekLabel = `S${weekNum}`;
-                  const revenue = parseInt(order.metadata.calculated_total);
-                  
-                  const existingWeek = acc.find(item => item.week === weekLabel);
-                  if (existingWeek) {
-                    existingWeek.revenue += revenue;
-                  } else {
-                    acc.push({ week: weekLabel, revenue });
-                  }
-                  return acc;
-                }, []).slice(-6).sort((a, b) => {
-                  // Sort weeks chronologically - only show last 6 weeks on mobile
-                  const aWeek = parseInt(a.week.substring(1)) || 0;
-                  const bWeek = parseInt(b.week.substring(1)) || 0;
-                  return aWeek - bWeek;
-                })}
-                margin={{ top: 30, right: 30, bottom: 30, left: 20 }}
-              >
-                <Recharts.CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.5} />
-                <Recharts.XAxis 
-                  dataKey="week" 
-                  tick={{ fontSize: 13, fontWeight: 'bold' }} 
-                  axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
-                  tickLine={false}
-                />
-                <Recharts.YAxis 
-                  tick={{ fontSize: 12 }} 
-                  width={50}
-                  axisLine={{ stroke: '#e2e8f0', strokeWidth: 1 }}
-                  tickLine={false}
-                  tickFormatter={(value) => `${value / 1000}k`}
-                />
-                <Recharts.Tooltip content={<ChartTooltipContent />} />
-                <defs>
-                  <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0ea5e9" stopOpacity={1} />
-                    <stop offset="100%" stopColor="#38bdf8" stopOpacity={0.8} />
-                  </linearGradient>
-                </defs>
-                <Recharts.Bar
-                  dataKey="revenue"
-                  fill="url(#revenueGradient)"
-                  radius={[6, 6, 0, 0]}
-                  maxBarSize={80}
-                  animationDuration={1200}
-                >
-                  <Recharts.LabelList 
-                    dataKey="revenue" 
-                    position="top" 
-                    formatter={(value: number) => `$${value.toLocaleString('es-CL')}`}
-                    style={{ 
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      fill: '#64748b'
-                    }}
-                  />
-                </Recharts.Bar>
-              </Recharts.BarChart>
-            </Recharts.ResponsiveContainer>
-          </ChartContainer>
-        </CardContent>
-      </Card>
     </div>
   );
 };

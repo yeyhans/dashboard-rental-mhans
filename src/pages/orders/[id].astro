@@ -1,0 +1,36 @@
+---
+import Base from "../../layout/Base.astro";
+import OrderDetails from "../../components/orders/OrderDetails";
+import { supabase } from "../../lib/supabase";
+export const prerender = false;
+
+const { data: { session } } = await supabase.auth.getSession();
+
+if (!session) {
+  return Astro.redirect("/");
+}
+
+// Get the order ID from the URL parameter
+const { id } = Astro.params;
+
+// Fetch the order data for this specific ID
+const response = await fetch(`${Astro.url.origin}/api/woo/get-order/${id}`);
+const orderData = await response.json();
+
+const title = `Orden #${id}`;
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    {orderData.success ? (
+      <OrderDetails 
+        client:load
+        order={orderData.data} 
+      />
+    ) : (
+      <div class="p-4 bg-destructive/10 text-destructive rounded-md">
+        <p>Error al cargar el pedido: {orderData.message}</p>
+      </div>
+    )}
+  </div>
+</Base>
