@@ -22,12 +22,12 @@ export const GET: APIRoute = async ({ request }) => {
     const page = url.searchParams.get('page') || '1';
     const per_page = url.searchParams.get('per_page') || '10';
     const status = url.searchParams.get('status') || '';
-    const customer = url.searchParams.get('customer') || '';
+    const search = url.searchParams.get('search') || '';
 
     // Build query parameters
     const params: any = {
-      page,
-      per_page
+      page: parseInt(page),
+      per_page: parseInt(per_page)
     };
 
     // Add status filter if provided and valid
@@ -35,13 +35,20 @@ export const GET: APIRoute = async ({ request }) => {
       params.status = status;
     }
 
-    // Add customer filter if provided
-    if (customer) {
-      params.customer = customer;
+    // Add search filter if provided
+    if (search) {
+      params.search = search;
     }
+
+    console.log('WooCommerce API request params:', params);
 
     // Fetch orders from WooCommerce
     const response = await WooCommerce.get('orders', params);
+
+    console.log('WooCommerce API response headers:', {
+      total: response.headers['x-wp-total'],
+      totalPages: response.headers['x-wp-totalpages']
+    });
 
     // Transform the orders data to include only specified fields
     const transformedOrders = response.data.map((order: any) => ({
@@ -120,4 +127,4 @@ export const GET: APIRoute = async ({ request }) => {
       }
     });
   }
-}
+};

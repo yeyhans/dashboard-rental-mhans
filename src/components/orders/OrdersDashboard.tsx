@@ -178,9 +178,8 @@ const OrdersDashboard = ({
   }, []);
 
   // Función para cargar los datos con filtros
-  const loadOrders = async (page: number, status: string = '') => {
+  const loadOrders = async (page: number, status: string = '', search: string = '') => {
     try {
-      setIsInitialLoad(false);
       setLoading(true);
       const params = new URLSearchParams({
         page: page.toString(),
@@ -191,10 +190,19 @@ const OrdersDashboard = ({
         params.append('status', status);
       }
 
+      if (search) {
+        params.append('search', search);
+      }
+
+      console.log('Fetching orders with params:', params.toString());
       const response = await fetch(`/api/woo/get-orders?${params}`);
       const data = await response.json();
       
       if (data.success) {
+        console.log('Orders received:', data.data.orders.length);
+        console.log('Total pages:', data.data.totalPages);
+        console.log('Total orders:', data.data.total);
+        
         setOrders(data.data.orders);
         setTotal(parseInt(data.data.total));
         setTotalPages(parseInt(data.data.totalPages));
@@ -209,30 +217,42 @@ const OrdersDashboard = ({
     }
   };
 
+  // Función para actualizar la URL con los parámetros actuales
+  const updateURL = (page: number, status: string = '', search: string = '') => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('page', page.toString());
+    
+    if (status) {
+      url.searchParams.set('status', status);
+    } else {
+      url.searchParams.delete('status');
+    }
+    
+    if (search) {
+      url.searchParams.set('search', search);
+    } else {
+      url.searchParams.delete('search');
+    }
+    
+    window.history.pushState({}, '', url.toString());
+  };
+
   // Efecto para cargar datos cuando cambian los filtros o la página
   useEffect(() => {
     if (!isInitialLoad) {
-      loadOrders(currentPage, statusFilter);
+      loadOrders(currentPage, statusFilter, searchTerm);
+      updateURL(currentPage, statusFilter, searchTerm);
     }
-  }, [currentPage, statusFilter]);
+    setIsInitialLoad(false);
+  }, [currentPage, statusFilter, searchTerm]);
 
   // Función para recargar los datos
   const refreshData = () => {
-    loadOrders(currentPage, statusFilter);
+    loadOrders(currentPage, statusFilter, searchTerm);
   };
 
-  // Filter orders based on search term and status
-  const filteredOrders = orders.filter(order => {
-    const searchMatch = 
-      order.billing.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.billing.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.metadata.order_proyecto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.billing.email.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const statusMatch = statusFilter ? order.status === statusFilter : true;
-    
-    return searchMatch && statusMatch;
-  });
+  // No need to filter orders locally as they are filtered on the server
+  const filteredOrders = orders;
 
   // Get unique statuses from orders
   const uniqueStatuses = [...new Set(orders.map(order => order.status))];
@@ -713,7 +733,10 @@ const OrdersDashboard = ({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                onClick={() => {
+                  const newPage = Math.max(1, currentPage - 1);
+                  setCurrentPage(newPage);
+                }}
                 disabled={currentPage === 1 || loading}
               >
                 Anterior
@@ -728,7 +751,10 @@ const OrdersDashboard = ({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                onClick={() => {
+                  const newPage = Math.min(totalPages, currentPage + 1);
+                  setCurrentPage(newPage);
+                }}
                 disabled={currentPage === totalPages || loading}
               >
                 Siguiente

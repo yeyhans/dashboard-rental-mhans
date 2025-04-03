@@ -22,6 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { ProductSelector } from './ProductSelector';
+import { OrderCostSummary } from './OrderCostSummary';
 
 // Helper function to format currency
 const formatCurrency = (value: string | number) => {
@@ -54,6 +56,7 @@ interface NewOrderForm {
     calculated_discount: string;
     calculated_iva: string;
     calculated_total: string;
+    apply_iva: boolean;
   };
   line_items: Array<{
     product_id: string;
@@ -61,6 +64,7 @@ interface NewOrderForm {
     sku: string;
     price: string;
     name: string;
+    image: string;
   }>;
 }
 
@@ -84,9 +88,17 @@ const initialFormState: NewOrderForm = {
     calculated_subtotal: '0',
     calculated_discount: '0',
     calculated_iva: '0',
-    calculated_total: '0'
+    calculated_total: '0',
+    apply_iva: true
   },
-  line_items: []
+  line_items: [] as Array<{
+    product_id: string;
+    quantity: number;
+    sku: string;
+    price: string;
+    name: string;
+    image: string;
+  }>
 };
 
 const CreateOrderForm = ({ onOrderCreated }: CreateOrderFormProps) => {
@@ -97,8 +109,7 @@ const CreateOrderForm = ({ onOrderCreated }: CreateOrderFormProps) => {
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState<string>('');
-  const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
+
 
   // Cargar usuarios y productos cuando se abre el formulario
   useEffect(() => {
@@ -153,15 +164,17 @@ const CreateOrderForm = ({ onOrderCreated }: CreateOrderFormProps) => {
   };
 
   // Funciones de cálculo actualizadas
-  const calculateSubtotal = (lineItems: NewOrderForm['line_items'], numDays: number) => {
-    const baseSubtotal = lineItems.reduce((sum, item) => {
-      return sum + (parseFloat(item.price) * item.quantity);
-    }, 0);
-    return baseSubtotal * numDays;
+  const calculateBaseSubtotal = (lineItems: NewOrderForm['line_items']) => {
+    return lineItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
   };
 
-  const calculateIVA = (subtotal: number) => {
-    return subtotal * 0.19; // 19% IVA
+  const calculateSubtotal = (lineItems: NewOrderForm['line_items'], numDays: number) => {
+    const subtotalBeforeDays = calculateBaseSubtotal(lineItems);
+    return subtotalBeforeDays * numDays;
+  };
+
+  const calculateIVA = (subtotal: number, applyIva: boolean) => {
+    return applyIva ? subtotal * 0.19 : 0; // 19% IVA solo si apply_iva es true
   };
 
   const calculateTotal = (subtotal: number, iva: number, discount: string) => {
@@ -176,7 +189,7 @@ const CreateOrderForm = ({ onOrderCreated }: CreateOrderFormProps) => {
     discount: string
   ) => {
     const subtotal = calculateSubtotal(lineItems, numDays);
-    const iva = calculateIVA(subtotal);
+    const iva = calculateIVA(subtotal, formData.metadata.apply_iva);
     const total = calculateTotal(subtotal, iva, discount);
 
     return {
@@ -240,63 +253,6 @@ const CreateOrderForm = ({ onOrderCreated }: CreateOrderFormProps) => {
     });
   };
 
-  // Función para añadir un producto al pedido
-  const handleAddProduct = () => {
-    const product = products.find(p => p.id.toString() === selectedProductId);
-    if (product) {
-      const newLineItem = {
-        product_id: product.id.toString(),
-        quantity: selectedQuantity,
-        sku: product.sku,
-        price: product.price,
-        name: product.name
-      };
-
-      setFormData(prev => {
-        const updatedLineItems = [...prev.line_items, newLineItem];
-        const numDays = parseInt(prev.metadata.num_jornadas) || 1;
-        const calculations = updateAllCalculations(
-          updatedLineItems,
-          numDays,
-          prev.metadata.calculated_discount
-        );
-
-        return {
-          ...prev,
-          line_items: updatedLineItems,
-          metadata: {
-            ...prev.metadata,
-            ...calculations
-          }
-        };
-      });
-
-      setSelectedProductId('');
-      setSelectedQuantity(1);
-    }
-  };
-
-  // Función para remover un producto del pedido
-  const handleRemoveProduct = (index: number) => {
-    setFormData(prev => {
-      const updatedLineItems = prev.line_items.filter((_, i) => i !== index);
-      const numDays = parseInt(prev.metadata.num_jornadas) || 1;
-      const calculations = updateAllCalculations(
-        updatedLineItems,
-        numDays,
-        prev.metadata.calculated_discount
-      );
-
-      return {
-        ...prev,
-        line_items: updatedLineItems,
-        metadata: {
-          ...prev.metadata,
-          ...calculations
-        }
-      };
-    });
-  };
 
   // Actualizar totales cuando cambia el descuento
   const handleDiscountChange = (value: string) => {
@@ -446,63 +402,62 @@ const CreateOrderForm = ({ onOrderCreated }: CreateOrderFormProps) => {
           {/* Selector de Productos */}
           <div className="space-y-4">
             <h4 className="font-medium text-sm">Productos</h4>
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <Select value={selectedProductId} onValueChange={setSelectedProductId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccione un producto" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {products.map(product => (
-                      <SelectItem key={product.id} value={product.id.toString()}>
-                        {product.name} - ${formatCurrency(product.price)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="w-24">
-                <Input
-                  type="number"
-                  min="1"
-                  value={selectedQuantity}
-                  onChange={(e) => setSelectedQuantity(parseInt(e.target.value) || 1)}
-                />
-              </div>
-              <Button 
-                onClick={handleAddProduct}
-                disabled={!selectedProductId}
-                variant="secondary"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
+            <ProductSelector
+              products={products}
+              lineItems={formData.line_items}
+              numDays={parseInt(formData.metadata.num_jornadas) || 0}
+              onAddProduct={(product, quantity) => {
+                const newLineItem = {
+                  product_id: product.id.toString(),
+                  quantity: quantity,
+                  sku: product.sku,
+                  price: product.price,
+                  name: product.name,
+                  image: product.images?.[0]?.src || ''
+                };
 
-            {/* Lista de productos seleccionados */}
-            <div className="space-y-2">
-              {formData.line_items.map((item, index) => (
-                <div key={index} className="flex items-center justify-between p-2 border rounded-md">
-                  <div className="flex-1">
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {item.quantity} x ${formatCurrency(item.price)} = ${formatCurrency(parseFloat(item.price) * item.quantity)}
-                      {formData.metadata.num_jornadas && parseInt(formData.metadata.num_jornadas) > 0 && (
-                        <span className="ml-1">
-                          × {formData.metadata.num_jornadas} días = ${formatCurrency(parseFloat(item.price) * item.quantity * parseInt(formData.metadata.num_jornadas))}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleRemoveProduct(index)}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              ))}
-            </div>
+                setFormData(prev => {
+                  const updatedLineItems = [...prev.line_items, newLineItem];
+                  const numDays = parseInt(prev.metadata.num_jornadas) || 1;
+                  const calculations = updateAllCalculations(
+                    updatedLineItems,
+                    numDays,
+                    prev.metadata.calculated_discount
+                  );
+
+                  return {
+                    ...prev,
+                    line_items: updatedLineItems,
+                    metadata: {
+                      ...prev.metadata,
+                      ...calculations
+                    }
+                  };
+                });
+              }}
+              onRemoveProduct={(index) => {
+                setFormData(prev => {
+                  const updatedLineItems = prev.line_items.filter((_, i) => i !== index);
+                  const numDays = parseInt(prev.metadata.num_jornadas) || 1;
+                  const calculations = updateAllCalculations(
+                    updatedLineItems,
+                    numDays,
+                    prev.metadata.calculated_discount
+                  );
+
+                  return {
+                    ...prev,
+                    line_items: updatedLineItems,
+                    metadata: {
+                      ...prev.metadata,
+                      ...calculations
+                    }
+                  };
+                });
+              }}
+              loading={loading}
+              mode="create"
+            />
           </div>
 
           {/* Información del Proyecto */}
@@ -560,38 +515,27 @@ const CreateOrderForm = ({ onOrderCreated }: CreateOrderFormProps) => {
           </div>
 
           {/* Resumen de Costos */}
-          <div className="space-y-4">
-            <h4 className="font-medium text-sm">Resumen de Costos</h4>
-            <div className="space-y-2 bg-muted/50 p-4 rounded-lg">
-              <div className="flex justify-between items-center">
-                <span>Subtotal por día</span>
-                <span>${formatCurrency(calculateSubtotal(formData.line_items, 1))}</span>
-              </div>
-              {formData.metadata.num_jornadas && parseInt(formData.metadata.num_jornadas) > 0 && (
-                <div className="flex justify-between items-center text-muted-foreground">
-                  <span>× {formData.metadata.num_jornadas} días</span>
-                  <span>${formatCurrency(formData.metadata.calculated_subtotal)}</span>
-                </div>
-              )}
-              <div className="flex justify-between items-center gap-2">
-                <span>Descuento</span>
-                <Input
-                  type="number"
-                  className="w-32 text-right"
-                  value={formData.metadata.calculated_discount}
-                  onChange={(e) => handleDiscountChange(e.target.value)}
-                />
-              </div>
-              <div className="flex justify-between">
-                <span>IVA (19%)</span>
-                <span>${formatCurrency(formData.metadata.calculated_iva)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-lg border-t pt-2 mt-2">
-                <span>Total</span>
-                <span>${formatCurrency(formData.metadata.calculated_total)}</span>
-              </div>
-            </div>
-          </div>
+          <OrderCostSummary
+            baseSubtotal={calculateBaseSubtotal(formData.line_items).toString()}
+            subtotal={formData.metadata.calculated_subtotal}
+            discount={formData.metadata.calculated_discount}
+            iva={formData.metadata.calculated_iva}
+            total={formData.metadata.calculated_total}
+            onDiscountChange={handleDiscountChange}
+            onTotalChange={(newTotal, newIva) => {
+              setFormData(prev => ({
+                ...prev,
+                metadata: {
+                  ...prev.metadata,
+                  calculated_total: newTotal,
+                  calculated_iva: newIva
+                }
+              }));
+            }}
+            mode="create"
+            loading={loading}
+          />
+
         </div>
 
         <SheetFooter className="mt-4">

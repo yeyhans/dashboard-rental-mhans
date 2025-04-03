@@ -7,17 +7,12 @@ import {
   CardTitle,
   CardDescription 
 } from '../ui/card';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '../ui/table';
+
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
-import { FileText, FileCheck, ChevronLeft } from 'lucide-react';
+import { Input } from '../ui/input';
+import { FileText, FileCheck, ChevronLeft, Edit2, Save, X, Edit } from 'lucide-react';
+
 
 
 // Status translations and colors based on WooCommerce
@@ -45,11 +40,7 @@ const statusColors: { [key: string]: string } = {
   'auto-draft': 'bg-[#e5e5e5] text-[#777777]'
 };
 
-// Helper function to format currency with thousands separator
-const formatCurrency = (value: string | number) => {
-  const numValue = typeof value === 'string' ? parseFloat(value) : value;
-  return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-};
+
 
 // Format date
 const formatDate = (dateString: string) => {
@@ -61,13 +52,41 @@ const formatDate = (dateString: string) => {
   });
 };
 
+// Add this helper function at the top with other helper functions
+const calculateDaysBetweenDates = (startDate: string, endDate: string): number => {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffTime = Math.abs(end.getTime() - start.getTime());
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end days
+};
+
 interface OrderDetailsProps {
   order: any; // Raw WooCommerce API response
+}
+
+interface EditedItemsState {
+  [key: string]: LineItem;
+}
+
+interface EditableOrderData {
+  billing: {
+    first_name: string;
+    last_name: string;
+    company: string;
+    address_1: string;
+    city: string;
+    email: string;
+    phone: string;
+  };
+  metadata: Metadata;
 }
 
 const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
   const [loading, setLoading] = useState(false);
   const [transformedOrder, setTransformedOrder] = useState<Order | null>(null);
+  const [editedItems, setEditedItems] = useState<EditedItemsState>({});
+  const [isEditingOrder, setIsEditingOrder] = useState(false);
+  const [editedOrderData, setEditedOrderData] = useState<EditableOrderData | null>(null);
 
   // Transform the raw WooCommerce order data to match our Order type
   useEffect(() => {
@@ -157,6 +176,108 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
     }
   };
 
+
+
+  // Update the handleOrderDataChange function
+  const handleOrderDataChange = (
+    section: keyof EditableOrderData,
+    field: string,
+    value: string
+  ) => {
+    if (!editedOrderData) return;
+
+    if (section === 'metadata' && (field === 'order_fecha_inicio' || field === 'order_fecha_termino')) {
+      const startDate = field === 'order_fecha_inicio' ? value : editedOrderData.metadata.order_fecha_inicio;
+      const endDate = field === 'order_fecha_termino' ? value : editedOrderData.metadata.order_fecha_termino;
+      
+      // Only calculate if both dates are valid
+      if (startDate && endDate) {
+        const numDays = calculateDaysBetweenDates(startDate, endDate);
+        setEditedOrderData({
+          ...editedOrderData,
+          metadata: {
+            ...editedOrderData.metadata,
+            [field]: value,
+            num_jornadas: numDays.toString()
+          }
+        });
+        return;
+      }
+    }
+
+    setEditedOrderData({
+      ...editedOrderData,
+      [section]: {
+        ...editedOrderData[section],
+        [field]: value
+      }
+    });
+  };
+
+  // Add this function to save all order changes
+  const handleSaveOrderChanges = async () => {
+    if (!transformedOrder || !editedOrderData) return;
+
+    try {
+      setLoading(true);
+
+      const updatePayload = {
+        billing: editedOrderData.billing,
+        meta_data: Object.entries(editedOrderData.metadata).map(([key, value]) => ({
+          key,
+          value
+        }))
+      };
+
+      const response = await fetch(`/api/woo/update-order/${transformedOrder.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatePayload)
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update the local state with new data
+        setTransformedOrder({
+          ...transformedOrder,
+          billing: editedOrderData.billing,
+          metadata: editedOrderData.metadata
+        });
+        setIsEditingOrder(false);
+        setEditedOrderData(null);
+      } else {
+        alert(`Error: ${data.message}`);
+      }
+    } catch (err) {
+      console.error('Error al actualizar el pedido', err);
+      alert('Error al actualizar el pedido');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add this effect to initialize editable order data
+  useEffect(() => {
+    if (transformedOrder && isEditingOrder && !editedOrderData) {
+      setEditedOrderData({
+        billing: { ...transformedOrder.billing },
+        metadata: { 
+          ...transformedOrder.metadata,
+          // Preserve the calculated fields
+          calculated_subtotal: transformedOrder.metadata.calculated_subtotal,
+          calculated_discount: transformedOrder.metadata.calculated_discount,
+          calculated_iva: transformedOrder.metadata.calculated_iva,
+          calculated_total: transformedOrder.metadata.calculated_total,
+          pdf_on_hold_url: transformedOrder.metadata.pdf_on_hold_url,
+          pdf_processing_url: transformedOrder.metadata.pdf_processing_url
+        }
+      });
+    }
+  }, [transformedOrder, isEditingOrder]);
+
   if (!transformedOrder) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -169,6 +290,200 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
   }
 
   const order = transformedOrder;
+
+  // Update the render section for client information
+  const renderClientInfo = () => (
+    <div>
+      <div className="flex justify-between items-center mb-2">
+        <h4 className="text-sm font-medium">Información del Cliente</h4>
+        {!isEditingOrder && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsEditingOrder(true)}
+            disabled={loading}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
+        {isEditingOrder && editedOrderData ? (
+          <>
+            <div>
+              <Label className="font-medium">Nombre</Label>
+              <Input
+                value={editedOrderData.billing.first_name}
+                onChange={(e) => handleOrderDataChange('billing', 'first_name', e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="font-medium">Apellido</Label>
+              <Input
+                value={editedOrderData.billing.last_name}
+                onChange={(e) => handleOrderDataChange('billing', 'last_name', e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="font-medium">Empresa</Label>
+              <Input
+                value={editedOrderData.billing.company}
+                onChange={(e) => handleOrderDataChange('billing', 'company', e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="font-medium">Email</Label>
+              <Input
+                type="email"
+                value={editedOrderData.billing.email}
+                onChange={(e) => handleOrderDataChange('billing', 'email', e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="font-medium">Teléfono</Label>
+              <Input
+                value={editedOrderData.billing.phone}
+                onChange={(e) => handleOrderDataChange('billing', 'phone', e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="font-medium">Dirección</Label>
+              <Input
+                value={editedOrderData.billing.address_1}
+                onChange={(e) => handleOrderDataChange('billing', 'address_1', e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="font-medium">Ciudad</Label>
+              <Input
+                value={editedOrderData.billing.city}
+                onChange={(e) => handleOrderDataChange('billing', 'city', e.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <Label className="font-medium">Nombre</Label>
+              <div className="mt-1">{order.billing.first_name} {order.billing.last_name}</div>
+            </div>
+            <div>
+              <Label className="font-medium">Empresa</Label>
+              <div className="mt-1">{order.billing.company || '-'}</div>
+            </div>
+            <div>
+              <Label className="font-medium">Email</Label>
+              <div className="mt-1 break-words">{order.billing.email}</div>
+            </div>
+            <div>
+              <Label className="font-medium">Teléfono</Label>
+              <div className="mt-1">{order.billing.phone}</div>
+            </div>
+            <div>
+              <Label className="font-medium">Dirección</Label>
+              <div className="mt-1">{order.billing.address_1}</div>
+            </div>
+            <div>
+              <Label className="font-medium">Ciudad</Label>
+              <div className="mt-1">{order.billing.city}</div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  // Update the render section for project information
+  const renderProjectInfo = () => (
+    <div>
+      <div className="flex justify-between items-center mb-2">
+        <h4 className="text-sm font-medium">Información del Proyecto</h4>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
+        {isEditingOrder && editedOrderData ? (
+          <>
+            <div>
+              <Label className="font-medium">Proyecto</Label>
+              <Input
+                value={editedOrderData.metadata.order_proyecto}
+                onChange={(e) => handleOrderDataChange('metadata', 'order_proyecto', e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="font-medium">RUT Empresa</Label>
+              <Input
+                value={editedOrderData.metadata.company_rut}
+                onChange={(e) => handleOrderDataChange('metadata', 'company_rut', e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="font-medium">Fecha Inicio</Label>
+              <Input
+                type="date"
+                value={editedOrderData.metadata.order_fecha_inicio}
+                onChange={(e) => handleOrderDataChange('metadata', 'order_fecha_inicio', e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="font-medium">Fecha Término</Label>
+              <Input
+                type="date"
+                value={editedOrderData.metadata.order_fecha_termino}
+                onChange={(e) => handleOrderDataChange('metadata', 'order_fecha_termino', e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label className="font-medium">Número de Jornadas</Label>
+              <Input
+                type="number"
+                value={editedOrderData.metadata.num_jornadas}
+                className="mt-1 bg-muted"
+                disabled
+                title="Este valor se calcula automáticamente basado en las fechas de inicio y término"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Calculado automáticamente basado en las fechas
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <Label className="font-medium">Proyecto</Label>
+              <div className="mt-1">{order.metadata.order_proyecto}</div>
+            </div>
+            <div>
+              <Label className="font-medium">RUT Empresa</Label>
+              <div className="mt-1">{order.metadata.company_rut}</div>
+            </div>
+            <div>
+              <Label className="font-medium">Fecha Inicio</Label>
+              <div className="mt-1">{order.metadata.order_fecha_inicio}</div>
+            </div>
+            <div>
+              <Label className="font-medium">Fecha Término</Label>
+              <div className="mt-1">{order.metadata.order_fecha_termino}</div>
+            </div>
+            <div>
+              <Label className="font-medium">Número de Jornadas</Label>
+              <div className="mt-1">{order.metadata.num_jornadas}</div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -184,6 +499,31 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
               Volver a pedidos
             </Button>
             <div className="flex items-center gap-2">
+              {isEditingOrder && (
+                <>
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={handleSaveOrderChanges}
+                    disabled={loading}
+                  >
+                    <Save className="h-4 w-4" />
+                    Guardar Cambios
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => {
+                      setIsEditingOrder(false);
+                      setEditedOrderData(null);
+                    }}
+                    disabled={loading}
+                  >
+                    <X className="h-4 w-4" />
+                    Cancelar
+                  </Button>
+                </>
+              )}
               <div className={`px-3 py-1 rounded-md text-sm font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
                 {statusTranslations[order.status] || order.status}
               </div>
@@ -195,6 +535,8 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {renderClientInfo()}
+          {renderProjectInfo()}
           {/* Estado y Fechas */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
@@ -225,130 +567,9 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
             </div>
           </div>
 
-          {/* Información del Cliente */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="text-sm font-medium">Información del Cliente</h4>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
-              <div>
-                <Label className="font-medium">Nombre</Label>
-                <div className="mt-1">{order.billing.first_name} {order.billing.last_name}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Empresa</Label>
-                <div className="mt-1">{order.billing.company || '-'}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Email</Label>
-                <div className="mt-1 break-words">{order.billing.email}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Teléfono</Label>
-                <div className="mt-1">{order.billing.phone}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Dirección</Label>
-                <div className="mt-1">{order.billing.address_1}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Ciudad</Label>
-                <div className="mt-1">{order.billing.city}</div>
-              </div>
-            </div>
-          </div>
+          
 
-          {/* Información del Proyecto */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="text-sm font-medium">Información del Proyecto</h4>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
-              <div>
-                <Label className="font-medium">Proyecto</Label>
-                <div className="mt-1">{order.metadata.order_proyecto}</div>
-              </div>
-              <div>
-                <Label className="font-medium">RUT Empresa</Label>
-                <div className="mt-1">{order.metadata.company_rut}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Fecha Inicio</Label>
-                <div className="mt-1">{order.metadata.order_fecha_inicio}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Fecha Término</Label>
-                <div className="mt-1">{order.metadata.order_fecha_termino}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Número de Jornadas</Label>
-                <div className="mt-1">{order.metadata.num_jornadas}</div>
-              </div>
-            </div>
-          </div>
 
-          {/* Productos */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="text-sm font-medium">Productos</h4>
-            </div>
-            <div className="bg-card p-4 rounded-lg border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="font-semibold">Producto</TableHead>
-                    <TableHead className="font-semibold">SKU</TableHead>
-                    <TableHead className="font-semibold text-center">Cant.</TableHead>
-                    <TableHead className="font-semibold text-right">Precio</TableHead>
-                    <TableHead className="font-semibold text-right">Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {order.line_items.map((item, index) => (
-                    <TableRow key={`${item.product_id}-${index}`}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {item.image && (
-                            <img src={item.image} alt={item.name} className="w-10 h-10 object-cover rounded" />
-                          )}
-                          <span>{item.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{item.sku}</TableCell>
-                      <TableCell className="text-center">{item.quantity}</TableCell>
-                      <TableCell className="text-right">${formatCurrency(item.price)}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        ${formatCurrency(parseFloat(item.price) * item.quantity)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-
-          {/* Resumen de Costos */}
-          <div>
-            <h4 className="text-sm font-medium mb-2">Resumen de Costos</h4>
-            <div className="bg-card p-4 rounded-lg border space-y-2">
-              <div className="flex justify-between">
-                <span>Subtotal</span>
-                <span>${formatCurrency(order.metadata.calculated_subtotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Descuento</span>
-                <span>${formatCurrency(order.metadata.calculated_discount)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>IVA</span>
-                <span>${formatCurrency(order.metadata.calculated_iva)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-lg">
-                <span>Total</span>
-                <span>${formatCurrency(order.metadata.calculated_total)}</span>
-              </div>
-            </div>
-          </div>
 
           {/* Enlaces a PDFs */}
           <div className="space-y-2">

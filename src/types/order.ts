@@ -1,11 +1,11 @@
 export type LineItem = {
   id?: number;
   name: string;
-  product_id: number;
+  product_id: number | string;
   sku: string;
   price: string;
   quantity: number;
-  image: string;
+  image?: string;
 };
 
 export type Billing = {
