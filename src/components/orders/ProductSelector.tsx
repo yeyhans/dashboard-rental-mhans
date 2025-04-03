@@ -124,39 +124,37 @@ export const ProductSelector = ({
 
   return (
     <div className="space-y-4">
-      {mode === 'create' && (
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <Select value={selectedProductId} onValueChange={setSelectedProductId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione un producto" />
-              </SelectTrigger>
-              <SelectContent>
-                {products.map(product => (
-                  <SelectItem key={product.id} value={product.id.toString()}>
-                    {product.name} - ${formatCurrency(product.price)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="w-24">
-            <Input
-              type="number"
-              min="1"
-              value={selectedQuantity}
-              onChange={(e) => setSelectedQuantity(parseInt(e.target.value) || 1)}
-            />
-          </div>
-          <Button 
-            onClick={handleAddProduct}
-            disabled={!selectedProductId || loading}
-            variant="secondary"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Seleccione un producto" />
+            </SelectTrigger>
+            <SelectContent>
+              {products.map(product => (
+                <SelectItem key={product.id} value={product.id.toString()}>
+                  {product.name} - ${formatCurrency(product.price)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      )}
+        <div className="w-24">
+          <Input
+            type="number"
+            min="1"
+            value={selectedQuantity}
+            onChange={(e) => setSelectedQuantity(parseInt(e.target.value) || 1)}
+          />
+        </div>
+        <Button 
+          onClick={handleAddProduct}
+          disabled={!selectedProductId || loading}
+          variant="secondary"
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
 
       <div className="bg-card p-4 rounded-lg border overflow-x-auto">
         <Table>
@@ -248,14 +246,24 @@ export const ProductSelector = ({
                           </Button>
                         </>
                       ) : mode === 'edit' && onUpdateProduct ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditItem(item)}
-                          disabled={loading || editingItem !== null}
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditItem(item)}
+                            disabled={loading || editingItem !== null}
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onRemoveProduct(index)}
+                            disabled={loading}
+                          >
+                            <X className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
                       ) : mode === 'create' && (
                         <Button
                           variant="ghost"

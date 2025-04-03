@@ -11,9 +11,9 @@ import {
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
-import { FileText, FileCheck, ChevronLeft, Edit2, Save, X, Edit } from 'lucide-react';
-
-
+import { FileText, FileCheck, ChevronLeft, Edit2, Save, X, Edit, Plus } from 'lucide-react';
+import { ProductSelector } from './ProductSelector';
+import { OrderCostSummary } from './OrderCostSummary';
 
 // Status translations and colors based on WooCommerce
 const statusTranslations: { [key: string]: string } = {
@@ -39,8 +39,6 @@ const statusColors: { [key: string]: string } = {
   'trash': 'bg-[#e5e5e5] text-[#777777]',
   'auto-draft': 'bg-[#e5e5e5] text-[#777777]'
 };
-
-
 
 // Format date
 const formatDate = (dateString: string) => {
@@ -87,6 +85,8 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
   const [editedItems, setEditedItems] = useState<EditedItemsState>({});
   const [isEditingOrder, setIsEditingOrder] = useState(false);
   const [editedOrderData, setEditedOrderData] = useState<EditableOrderData | null>(null);
+  const [products, setProducts] = useState<any[]>([]); // Added for product selection
+  const [isEditingProducts, setIsEditingProducts] = useState(false); // Added for product editing
 
   // Transform the raw WooCommerce order data to match our Order type
   useEffect(() => {
@@ -176,9 +176,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
     }
   };
 
-
-
-  // Update the handleOrderDataChange function
+  // Update the handleOrderDataChange function for dates
   const handleOrderDataChange = (
     section: keyof EditableOrderData,
     field: string,
@@ -186,30 +184,304 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
   ) => {
     if (!editedOrderData) return;
 
+    console.log(`Cambiando ${section}.${field} a: ${value}`);
+
+    // Handle date changes to recalculate number of days and all totals
     if (section === 'metadata' && (field === 'order_fecha_inicio' || field === 'order_fecha_termino')) {
+      // En este punto, vale la pena validar el formato de fecha
+      if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        console.warn(`Formato de fecha potencialmente inválido: ${value}`);
+      }
+
+      // Calcular con los valores actualizados
       const startDate = field === 'order_fecha_inicio' ? value : editedOrderData.metadata.order_fecha_inicio;
       const endDate = field === 'order_fecha_termino' ? value : editedOrderData.metadata.order_fecha_termino;
       
-      // Only calculate if both dates are valid
+      // Solo calcular si ambas fechas son válidas
       if (startDate && endDate) {
-        const numDays = calculateDaysBetweenDates(startDate, endDate);
-        setEditedOrderData({
-          ...editedOrderData,
-          metadata: {
-            ...editedOrderData.metadata,
-            [field]: value,
-            num_jornadas: numDays.toString()
-          }
-        });
-        return;
+        console.log(`Recalculando con fechas actualizadas: inicio=${startDate}, termino=${endDate}`);
+        const numDays = calculateDays(startDate, endDate);
+        
+        // Calcular todos los valores financieros con las líneas actuales
+        if (transformedOrder) {
+          // Calcular base subtotal (antes de multiplicar por días)
+          const baseSubtotal = transformedOrder.line_items.reduce((sum, item) => 
+            sum + (parseFloat(item.price) * item.quantity), 0);
+          
+          // Calcular subtotal (después de multiplicar por días) con precisión
+          const subtotal = Math.round((baseSubtotal * numDays) * 100) / 100;
+          
+          // Obtener valores actuales con precisión
+          const discount = Math.round((parseFloat(editedOrderData.metadata.calculated_discount) || 0) * 100) / 100;
+          const currentIva = parseFloat(editedOrderData.metadata.calculated_iva) || 0;
+          const applyIva = currentIva > 0;
+          
+          // Calcular IVA con precisión
+          const iva = applyIva ? Math.round((subtotal * 0.19) * 100) / 100 : 0;
+          
+          // Calcular total con precisión
+          const total = Math.round((subtotal - discount + iva) * 100) / 100;
+          
+          console.log(`Nuevos valores con fechas actualizadas:`, {
+            numDays,
+            baseSubtotal,
+            subtotal,
+            discount,
+            applyIva,
+            iva,
+            total
+          });
+          
+          // Actualizar el estado con todos los valores calculados de una vez
+          setEditedOrderData({
+            ...editedOrderData,
+            metadata: {
+              ...editedOrderData.metadata,
+              [field]: value,
+              num_jornadas: numDays.toString(),
+              calculated_subtotal: subtotal.toString(),
+              calculated_iva: iva.toString(),
+              calculated_total: total.toString()
+            }
+          });
+          
+          return;
+        }
       }
+      
+      // Si no podemos calcular (faltan fechas o productos), solo actualizar la fecha
+      setEditedOrderData({
+        ...editedOrderData,
+        metadata: {
+          ...editedOrderData.metadata,
+          [field]: value
+        }
+      });
+      
+      return;
     }
 
+    // For all other fields
     setEditedOrderData({
       ...editedOrderData,
       [section]: {
         ...editedOrderData[section],
         [field]: value
+      }
+    });
+  };
+
+  // Load products data for editing
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const response = await fetch('/api/woo/get-products');
+        const data = await response.json();
+        if (data.success) {
+          setProducts(data.data.products);
+        }
+      } catch (err) {
+        console.error('Error al cargar productos:', err);
+      }
+    };
+
+    if (isEditingProducts) {
+      loadProducts();
+    }
+  }, [isEditingProducts]);
+
+  // Handle adding a product to the order
+  const handleAddProduct = (product: any, quantity: number) => {
+    if (!transformedOrder || !editedOrderData) return;
+
+    const newItem: LineItem = {
+      product_id: product.id.toString(),
+      quantity: quantity,
+      sku: product.sku,
+      price: product.price,
+      name: product.name,
+      image: product.images?.[0]?.src || ''
+    };
+
+    const updatedItems = [...transformedOrder.line_items, newItem];
+    setTransformedOrder({
+      ...transformedOrder,
+      line_items: updatedItems
+    });
+
+    // Update calculations
+    updateCalculations(updatedItems);
+  };
+
+  // Handle removing a product from the order
+  const handleRemoveProduct = (index: number) => {
+    if (!transformedOrder || !editedOrderData) return;
+
+    const updatedItems = transformedOrder.line_items.filter((_, i) => i !== index);
+    setTransformedOrder({
+      ...transformedOrder,
+      line_items: updatedItems
+    });
+
+    // Update calculations
+    updateCalculations(updatedItems);
+  };
+
+  // Handle updating a product in the order
+  const handleUpdateProduct = (itemId: number, updates: Partial<LineItem>) => {
+    if (!transformedOrder || !editedOrderData) return;
+
+    const updatedItems = transformedOrder.line_items.map(item => {
+      if (item.id === itemId) {
+        return { ...item, ...updates };
+      }
+      return item;
+    });
+
+    setTransformedOrder({
+      ...transformedOrder,
+      line_items: updatedItems
+    });
+
+    // Update calculations
+    updateCalculations(updatedItems);
+  };
+
+  // Calculate days between dates
+  const calculateDays = (startDate: string, endDate: string) => {
+    if (!startDate || !endDate) return 0;
+    
+    try {
+      console.log(`Calculando días entre ${startDate} y ${endDate}`);
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      // Verificar que las fechas sean válidas
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        console.error('Fechas inválidas al calcular días', { startDate, endDate });
+        return 0;
+      }
+      
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both days
+      console.log(`Días calculados: ${days}`);
+      return days;
+    } catch (error) {
+      console.error('Error al calcular días', error);
+      return 0;
+    }
+  };
+
+  // Update all calculations
+  const updateCalculations = (lineItems: LineItem[]) => {
+    if (!editedOrderData) return;
+    
+    console.log('Actualizando cálculos con fechas:', {
+      inicio: editedOrderData.metadata.order_fecha_inicio,
+      termino: editedOrderData.metadata.order_fecha_termino
+    });
+
+    const numDays = calculateDays(
+      editedOrderData.metadata.order_fecha_inicio,
+      editedOrderData.metadata.order_fecha_termino
+    );
+
+    // Calculate base subtotal (before multiplying by days)
+    const baseSubtotal = lineItems.reduce((sum, item) => 
+      sum + (parseFloat(item.price) * item.quantity), 0);
+
+    console.log(`Base subtotal: ${baseSubtotal}, Días: ${numDays}`);
+
+    // Calculate subtotal (after multiplying by days) - round to 2 decimals
+    const subtotal = Math.round((baseSubtotal * numDays) * 100) / 100;
+
+    // Get current discount value - round to 2 decimals
+    const discount = Math.round((parseFloat(editedOrderData.metadata.calculated_discount) || 0) * 100) / 100;
+    
+    // Check if IVA should be applied - this could come from metadata or checkbox state
+    const currentIva = parseFloat(editedOrderData.metadata.calculated_iva) || 0;
+    const applyIva = currentIva > 0;
+    
+    // Calculate IVA - round to 2 decimals
+    const iva = applyIva ? Math.round((subtotal * 0.19) * 100) / 100 : 0;
+
+    // Calculate total - round to 2 decimals
+    const total = Math.round((subtotal - discount + iva) * 100) / 100;
+
+    console.log('Nuevos valores calculados:', {
+      numDays,
+      baseSubtotal,
+      subtotal,
+      discount,
+      applyIva,
+      iva,
+      total
+    });
+
+    // Update state with properly formatted values
+    setEditedOrderData({
+      ...editedOrderData,
+      metadata: {
+        ...editedOrderData.metadata,
+        calculated_subtotal: subtotal.toString(),
+        calculated_iva: iva.toString(),
+        calculated_total: total.toString(),
+        num_jornadas: numDays.toString()
+      }
+    });
+  };
+
+  // Handle discount change
+  const handleDiscountChange = (value: string) => {
+    if (!editedOrderData) return;
+
+    console.log(`Actualizando descuento a: ${value}`);
+
+    // Convertir valores a números con precisión de 2 decimales
+    const subtotal = Math.round((parseFloat(editedOrderData.metadata.calculated_subtotal) || 0) * 100) / 100;
+    const discount = Math.round((parseFloat(value) || 0) * 100) / 100;
+    const iva = Math.round((parseFloat(editedOrderData.metadata.calculated_iva) || 0) * 100) / 100;
+    
+    // Calcular nuevo total
+    const total = Math.round((subtotal - discount + iva) * 100) / 100;
+
+    console.log('Nuevos valores con descuento:', {
+      subtotal,
+      discount,
+      iva,
+      total
+    });
+
+    // Actualizar state con los nuevos valores
+    setEditedOrderData({
+      ...editedOrderData,
+      metadata: {
+        ...editedOrderData.metadata,
+        calculated_discount: discount.toString(),
+        calculated_total: total.toString()
+      }
+    });
+  };
+
+  // Handle IVA changes
+  const handleIvaChange = (newTotal: string, newIva: string) => {
+    if (!editedOrderData) return;
+
+    console.log(`Actualizando IVA en OrderDetails:`, {
+      newIva: newIva,
+      newTotal: newTotal
+    });
+
+    // Asegurar valores numéricos válidos con 2 decimales
+    const ivaValue = Math.round((parseFloat(newIva) || 0) * 100) / 100;
+    const totalValue = Math.round((parseFloat(newTotal) || 0) * 100) / 100;
+
+    setEditedOrderData({
+      ...editedOrderData,
+      metadata: {
+        ...editedOrderData.metadata,
+        calculated_iva: ivaValue.toString(),
+        calculated_total: totalValue.toString()
       }
     });
   };
@@ -221,11 +493,21 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
     try {
       setLoading(true);
 
+      // Log pre-update data for debugging
+      console.log('Datos a actualizar:', {
+        billing: editedOrderData.billing,
+        metadata: editedOrderData.metadata,
+        line_items: transformedOrder.line_items
+      });
+
       const updatePayload = {
         billing: editedOrderData.billing,
-        meta_data: Object.entries(editedOrderData.metadata).map(([key, value]) => ({
-          key,
-          value
+        metadata: editedOrderData.metadata, // Enviar directamente como objeto
+        line_items: transformedOrder.line_items.map(item => ({
+          id: item.id,
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price: item.price
         }))
       };
 
@@ -241,14 +523,14 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       
       if (data.success) {
         // Update the local state with new data
-        setTransformedOrder({
-          ...transformedOrder,
-          billing: editedOrderData.billing,
-          metadata: editedOrderData.metadata
-        });
+        setTransformedOrder(data.data);
         setIsEditingOrder(false);
+        setIsEditingProducts(false);
         setEditedOrderData(null);
+        // Mostrar un mensaje de éxito
+        alert('Pedido actualizado correctamente');
       } else {
+        console.error('Error en respuesta:', data);
         alert(`Error: ${data.message}`);
       }
     } catch (err) {
@@ -259,7 +541,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
     }
   };
 
-  // Add this effect to initialize editable order data
+  // Update the useEffect to initialize editable order data
   useEffect(() => {
     if (transformedOrder && isEditingOrder && !editedOrderData) {
       setEditedOrderData({
@@ -275,6 +557,9 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
           pdf_processing_url: transformedOrder.metadata.pdf_processing_url
         }
       });
+      
+      // Also enable product editing when we're editing the order
+      setIsEditingProducts(true);
     }
   }, [transformedOrder, isEditingOrder]);
 
@@ -300,7 +585,12 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setIsEditingOrder(true)}
+            onClick={() => {
+              setIsEditingOrder(true);
+              // Also enable product editing
+              setIsEditingProducts(true);
+              // This will trigger the useEffect to initialize the form data
+            }}
             disabled={loading}
           >
             <Edit className="h-4 w-4" />
@@ -485,6 +775,153 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
     </div>
   );
 
+  const renderProductInfo = () => (
+    <div>
+      <div className="flex justify-between items-center mb-2">
+        <h4 className="text-sm font-medium">Productos</h4>
+        {!isEditingProducts && !isEditingOrder && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setIsEditingProducts(true);
+              if (!isEditingOrder) {
+                setIsEditingOrder(true);
+              }
+            }}
+            disabled={loading}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+      <div className="bg-card rounded-lg border">
+        {isEditingProducts && transformedOrder && editedOrderData ? (
+          <ProductSelector
+            products={products}
+            lineItems={transformedOrder.line_items}
+            numDays={parseInt(editedOrderData.metadata.num_jornadas) || 0}
+            onAddProduct={handleAddProduct}
+            onRemoveProduct={handleRemoveProduct}
+            onUpdateProduct={handleUpdateProduct}
+            loading={loading}
+            mode="edit"
+          />
+        ) : (
+          <div className="p-4">
+            <table className="w-full">
+              <thead>
+                <tr className="text-sm text-muted-foreground">
+                  <th className="text-left font-medium pb-2">Producto</th>
+                  <th className="text-left font-medium pb-2">SKU</th>
+                  <th className="text-center font-medium pb-2">Cantidad</th>
+                  <th className="text-right font-medium pb-2">Precio</th>
+                  <th className="text-right font-medium pb-2">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transformedOrder?.line_items.map((item, index) => {
+                  const itemTotal = parseFloat(item.price) * item.quantity;
+                  const numDays = parseInt(transformedOrder.metadata.num_jornadas) || 0;
+                  const totalWithDays = numDays > 0 ? itemTotal * numDays : itemTotal;
+                  
+                  return (
+                    <tr key={index} className="border-t">
+                      <td className="py-3">
+                        <div className="flex items-center gap-2">
+                          {item.image && (
+                            <img src={item.image} alt={item.name} className="w-10 h-10 object-cover rounded" />
+                          )}
+                          <span>{item.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-3">{item.sku}</td>
+                      <td className="py-3 text-center">{item.quantity}</td>
+                      <td className="py-3 text-right">${(parseFloat(item.price)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')}</td>
+                      <td className="py-3 text-right">
+                        <div className="flex flex-col items-end">
+                          <span>${(itemTotal).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')}</span>
+                          {numDays > 0 && (
+                            <span className="text-sm text-muted-foreground">
+                              × {numDays} días = ${(totalWithDays).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {transformedOrder?.line_items.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-3 text-center text-muted-foreground">
+                      No hay productos en este pedido
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderCostSummary = () => {
+    if (!transformedOrder) return null;
+
+    const baseSubtotal = transformedOrder.line_items.reduce(
+      (sum, item) => sum + (parseFloat(item.price) * item.quantity), 0
+    ).toString();
+
+    if (isEditingOrder && editedOrderData) {
+      return (
+        <OrderCostSummary
+          baseSubtotal={baseSubtotal}
+          subtotal={editedOrderData.metadata.calculated_subtotal}
+          discount={editedOrderData.metadata.calculated_discount}
+          iva={editedOrderData.metadata.calculated_iva}
+          total={editedOrderData.metadata.calculated_total}
+          numDays={editedOrderData.metadata.num_jornadas}
+          onDiscountChange={handleDiscountChange}
+          onTotalChange={handleIvaChange}
+          mode="edit"
+          loading={loading}
+        />
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <h4 className="text-sm font-medium mb-2">Resumen de Costos</h4>
+        <div className="space-y-2 bg-muted/50 p-4 rounded-lg">
+          <div className="flex justify-between items-center">
+            <span>Valor Base</span>
+            <span>${baseSubtotal.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span>Subtotal con Jornadas</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">x {transformedOrder.metadata.num_jornadas} jornadas</span>
+              <span>${transformedOrder.metadata.calculated_subtotal.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}</span>
+            </div>
+          </div>
+          <div className="flex justify-between items-center">
+            <span>Descuento</span>
+            <span>${transformedOrder.metadata.calculated_discount.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>IVA (19%)</span>
+            <span>${transformedOrder.metadata.calculated_iva.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}</span>
+          </div>
+          <div className="flex justify-between font-bold text-lg border-t pt-2 mt-2">
+            <span>Total</span>
+            <span>${transformedOrder.metadata.calculated_total.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -499,7 +936,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
               Volver a pedidos
             </Button>
             <div className="flex items-center gap-2">
-              {isEditingOrder && (
+              {(isEditingOrder || isEditingProducts) && (
                 <>
                   <Button
                     variant="outline"
@@ -515,6 +952,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                     className="gap-2"
                     onClick={() => {
                       setIsEditingOrder(false);
+                      setIsEditingProducts(false);
                       setEditedOrderData(null);
                     }}
                     disabled={loading}
@@ -537,6 +975,9 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
         <CardContent className="space-y-6">
           {renderClientInfo()}
           {renderProjectInfo()}
+          {renderProductInfo()}
+          {renderCostSummary()}
+          
           {/* Estado y Fechas */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
@@ -566,10 +1007,6 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
               <div className="mt-1">{formatDate(order.date_modified)}</div>
             </div>
           </div>
-
-          
-
-
 
           {/* Enlaces a PDFs */}
           <div className="space-y-2">
