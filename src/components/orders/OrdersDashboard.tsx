@@ -22,29 +22,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../ui/dialog';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-  SheetFooter,
-} from '../ui/sheet';
+
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import type { Order, LineItem } from '../../types/order';
-import type { Product } from '../../types/product';
 import { ChevronRight, RefreshCw, Search, FileText, FileCheck, Plus, Trash2 } from 'lucide-react';
 import CreateOrderForm from './CreateOrderForm';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select';
+import ProcessOrder from "./ProcessOrder";
+
 
 // Helper function to format currency with thousands separator
 const formatCurrency = (value: string | number) => {
@@ -136,31 +122,9 @@ const OrdersDashboard = ({
   const [totalPages, setTotalPages] = useState(parseInt(initialTotalPages));
   const [total, setTotal] = useState(parseInt(initialTotal));
   const [isMobileView, setIsMobileView] = useState(false);
-  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
-  const [newOrderForm, setNewOrderForm] = useState<NewOrderForm>({
-    customer_id: '',
-    billing: {
-      first_name: '',
-      last_name: '',
-      company: '',
-      email: '',
-      phone: '',
-      address_1: '',
-      city: ''
-    },
-    metadata: {
-      order_proyecto: '',
-      order_fecha_inicio: '',
-      order_fecha_termino: '',
-      num_jornadas: '',
-      company_rut: '',
-      calculated_subtotal: '0',
-      calculated_discount: '0',
-      calculated_iva: '0',
-      calculated_total: '0'
-    },
-    line_items: []
-  });
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
   const perPage = parseInt(initialPerPage);
 
   // Detect mobile view
@@ -300,197 +264,7 @@ const OrdersDashboard = ({
     }
   };
 
-  const OrderDetailsDialog = ({ order }: { order: Order }) => {
-    return (
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw] md:w-auto p-4 md:p-6">
-        <DialogHeader>
-          <DialogTitle className="text-xl">Detalles del Pedido</DialogTitle>
-          <DialogDescription>
-            Información completa del pedido realizado el {formatDate(order.date_created)}
-          </DialogDescription>
-        </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {/* Estado y Fechas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label className="font-medium">Estado</Label>
-              <div className="mt-1 flex items-center gap-2">
-                <select
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                  value={order.status}
-                  onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
-                  disabled={loading}
-                >
-                  {Object.entries(statusTranslations).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
-                {loading && (
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
-                )}
-              </div>
-            </div>
-            <div>
-              <Label className="font-medium">Fecha de Creación</Label>
-              <div className="mt-1">{formatDate(order.date_created)}</div>
-            </div>
-            <div>
-              <Label className="font-medium">Última Modificación</Label>
-              <div className="mt-1">{formatDate(order.date_modified)}</div>
-            </div>
-          </div>
-
-          {/* Información del Cliente */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="text-sm font-medium">Información del Cliente</h4>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
-              <div>
-                <Label className="font-medium">Nombre</Label>
-                <div className="mt-1">{order.billing.first_name} {order.billing.last_name}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Empresa</Label>
-                <div className="mt-1">{order.billing.company || '-'}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Email</Label>
-                <div className="mt-1 break-words">{order.billing.email}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Teléfono</Label>
-                <div className="mt-1">{order.billing.phone}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Dirección</Label>
-                <div className="mt-1">{order.billing.address_1}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Ciudad</Label>
-                <div className="mt-1">{order.billing.city}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Información del Proyecto */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="text-sm font-medium">Información del Proyecto</h4>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
-              <div>
-                <Label className="font-medium">Proyecto</Label>
-                <div className="mt-1">{order.metadata.order_proyecto}</div>
-              </div>
-              <div>
-                <Label className="font-medium">RUT Empresa</Label>
-                <div className="mt-1">{order.metadata.company_rut}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Fecha Inicio</Label>
-                <div className="mt-1">{order.metadata.order_fecha_inicio}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Fecha Término</Label>
-                <div className="mt-1">{order.metadata.order_fecha_termino}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Número de Jornadas</Label>
-                <div className="mt-1">{order.metadata.num_jornadas}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Productos */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="text-sm font-medium">Productos</h4>
-            </div>
-            <div className="bg-card p-4 rounded-lg border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="font-semibold">Producto</TableHead>
-                    <TableHead className="font-semibold">SKU</TableHead>
-                    <TableHead className="font-semibold text-center">Cant.</TableHead>
-                    <TableHead className="font-semibold text-right">Precio</TableHead>
-                    <TableHead className="font-semibold text-right">Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {order.line_items.map((item, index) => (
-                    <TableRow key={`${item.product_id}-${index}`}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {item.image && (
-                            <img src={item.image} alt={item.name} className="w-10 h-10 object-cover rounded" />
-                          )}
-                          <span>{item.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{item.sku}</TableCell>
-                      <TableCell className="text-center">{item.quantity}</TableCell>
-                      <TableCell className="text-right">${formatCurrency(item.price)}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        ${formatCurrency(parseFloat(item.price) * item.quantity)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-
-          {/* Resumen de Costos */}
-          <div>
-            <h4 className="text-sm font-medium mb-2">Resumen de Costos</h4>
-            <div className="bg-card p-4 rounded-lg border space-y-2">
-              <div className="flex justify-between">
-                <span>Subtotal</span>
-                <span>${formatCurrency(order.metadata.calculated_subtotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Descuento</span>
-                <span>${formatCurrency(order.metadata.calculated_discount)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>IVA</span>
-                <span>${formatCurrency(order.metadata.calculated_iva)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-lg">
-                <span>Total</span>
-                <span>${formatCurrency(order.metadata.calculated_total)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Enlaces a PDFs */}
-          <div className="space-y-2">
-            {order.metadata.pdf_on_hold_url && (
-              <Button 
-                variant="outline" 
-                className="w-full justify-start"
-                onClick={() => window.open(order.metadata.pdf_on_hold_url, '_blank')}
-              >
-                Ver PDF de Presupuesto
-              </Button>
-            )}
-            {order.metadata.pdf_processing_url && (
-              <Button 
-                variant="outline" 
-                className="w-full justify-start"
-                onClick={() => window.open(order.metadata.pdf_processing_url, '_blank')}
-              >
-                Ver PDF de Contrato
-              </Button>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    );
-  };
 
   const handleOrderCreated = (newOrder: Order) => {
     setOrders([newOrder, ...orders]);
@@ -614,9 +388,44 @@ const OrdersDashboard = ({
             {filteredOrders.map((order) => (
               <TableRow key={`${order.customer_id}-${order.date_created}`}>
                 <TableCell>
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
-                    {statusTranslations[order.status] || order.status}
-                  </span>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button
+                        onClick={() => setSelectedOrder(order)}
+                        variant="ghost"
+                        size="sm"
+                        className={`${statusColors[order.status] || 'bg-gray-100 text-gray-800'} hover:opacity-80`}
+                      >
+                        {statusTranslations[order.status] || order.status}
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>Detalles del Proceso - Orden #{order.id}</DialogTitle>
+                      </DialogHeader>
+                      <ProcessOrder
+                        order={{
+                          orders: {
+                            success: true,
+                            orders: [{
+                              id: order.id,
+                              status: order.status,
+                              date_created: order.date_created,
+                              total: order.metadata.calculated_total,
+                              customer: {
+                                first_name: order.billing.first_name,
+                                last_name: order.billing.last_name,
+                                email: order.billing.email
+                              },
+                              fotos_garantia: [],
+                              correo_enviado: false,
+                              pago_completo: order.status === 'completed'
+                            }]
+                          }
+                        }}
+                      />
+                    </DialogContent>
+                  </Dialog>
                 </TableCell>
                 <TableCell className="text-foreground">
                   <div className="font-medium">{order.billing.first_name} {order.billing.last_name}</div>
@@ -647,7 +456,7 @@ const OrdersDashboard = ({
                         <FileCheck className="h-4 w-4" />
                       </Button>
                     )}
-                    <a href={`/orders/${order.id}`} className="no-underline">
+                    <a href={`/orders/${order.id}`} className="no-underline" target="_blank">
                       <Button 
                         variant="outline" 
                         size="sm"

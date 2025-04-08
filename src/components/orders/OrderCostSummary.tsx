@@ -93,7 +93,7 @@ export const OrderCostSummary = ({
           {(mode === 'create' || mode === 'edit') && onDiscountChange ? (
             <Input
               type="number"
-              className="w-32 text-right"
+              className="w-24 md:w-32 text-right"
               value={discount}
               onChange={(e) => onDiscountChange(e.target.value)}
               disabled={loading}
@@ -109,8 +109,9 @@ export const OrderCostSummary = ({
               checked={applyIva}
               onCheckedChange={handleIvaChange}
               disabled={loading || (mode !== 'create' && mode !== 'edit')}
+              className="h-5 w-5"
             />
-            <Label htmlFor="apply-iva" className="cursor-pointer">
+            <Label htmlFor="apply-iva" className="cursor-pointer text-sm md:text-base">
               Aplicar IVA (19%)
             </Label>
           </div>
@@ -121,7 +122,7 @@ export const OrderCostSummary = ({
             <span>${formatCurrency(ivaValue)}</span>
           </div>
         )}
-        <div className="flex justify-between font-bold text-lg border-t pt-2 mt-2">
+        <div className="flex justify-between font-bold text-base md:text-lg border-t pt-2 mt-2">
           <span>Total</span>
           <span>${formatCurrency(total)}</span>
         </div>

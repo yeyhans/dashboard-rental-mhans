@@ -5,45 +5,49 @@ export const GET: APIRoute = async ({ request }) => {
     // Get URL parameters
     const url = new URL(request.url);
     const page = url.searchParams.get('page') || '1';
-    const per_page = url.searchParams.get('per_page') || '10';
+    const per_page = url.searchParams.get('per_page') || '100';
     const status = url.searchParams.get('status') || ''; // Filter by order status
 
     // WordPress admin credentials
     const username = import.meta.env.WORDPRESS_USERNAME;
     const password = import.meta.env.WORDPRESS_PASSWORD;
+    const wpUrl = import.meta.env.WOOCOMMERCE_STORE_URL;
 
-    console.log(`Variables de entorno disponibles: ${Boolean(username)} / ${Boolean(password)}`);
-    
+
+
+    if (!username || !password || !wpUrl) {
+      throw new Error('WordPress credentials or URL are not configured');
+    }
+
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
-    console.log(`Intentando autenticar con usuario: ${username}`);
+
 
     // Build the WordPress API URL with parameters
-    const wpApiUrl = new URL('https://rental.mariohans.cl/wp-json/custom/v1/orders');
+    const wpApiUrl = new URL(`${wpUrl}/wp-json/custom/v1/orders`);
     wpApiUrl.searchParams.set('page', page);
     wpApiUrl.searchParams.set('per_page', per_page);
     
-    // Si se solicita un estado específico
     if (status) {
       wpApiUrl.searchParams.set('status', status);
     }
 
-    console.log(`Consultando órdenes con estado: ${status || 'todas'}`);
-    console.log(`URL de consulta: ${wpApiUrl.toString()}`);
+
 
     // Fetch orders from WordPress API with authentication
+    console.log('=== Making Request ===');
     const response = await fetch(wpApiUrl.toString(), {
       headers: {
-        'Authorization': `Basic ${auth}`
+        'Authorization': `Basic ${auth}`,
+        'Accept': 'application/json'
       }
     });
     
+
     if (!response.ok) {
-      console.error(`Error en la API de WordPress: ${response.status} ${response.statusText}`);
-      
+
       try {
-        // Intentar leer el mensaje de error de la API
         const errorData = await response.json();
-        console.error('Detalles del error:', JSON.stringify(errorData));
+        console.error('Response body:', JSON.stringify(errorData, null, 2));
         
         if (response.status === 401) {
           return new Response(JSON.stringify({

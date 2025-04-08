@@ -1,0 +1,94 @@
+{
+    "orders": {
+      "success": true,
+      "orders": [
+        {
+          "id": 5998,
+          "status": "on-hold",
+          "date_created": "2025-04-07 17:21:39",
+          "total": "52360",
+          "customer": {
+            "first_name": "Yeyson",
+            "last_name": "Hans",
+            "email": "chocolopeison@gmail.com"
+          },
+          "fotos_garantia": [],
+          "correo_enviado": false,
+          "pago_completo": false
+        },
+        {
+          "id": 5995,
+          "status": "processing",
+          "date_created": "2025-04-07 15:47:23",
+          "total": "95200",
+          "customer": {
+            "first_name": "Yeyson",
+            "last_name": "Hans",
+            "email": "yeysonhans@gmail.com"
+          },
+          "fotos_garantia": [],
+          "correo_enviado": false,
+          "pago_completo": false
+        },
+        {
+          "id": 5994,
+          "status": "on-hold",
+          "date_created": "2025-04-07 15:37:44",
+          "total": "99960",
+          "customer": {
+            "first_name": "Yeyson",
+            "last_name": "Hans",
+            "email": "yeysonhans@gmail.com"
+          },
+          "fotos_garantia": [],
+          "correo_enviado": false,
+          "pago_completo": false
+        },
+        {
+          "id": 5993,
+          "status": "on-hold",
+          "date_created": "2025-04-07 15:31:19",
+          "total": "183260",
+          "customer": {
+            "first_name": "Yeyson",
+            "last_name": "Hans",
+            "email": "yeysonhans@gmail.com"
+          },
+          "fotos_garantia": [],
+          "correo_enviado": false,
+          "pago_completo": false
+        },
+        {
+          "id": 5992,
+          "status": "on-hold",
+          "date_created": "2025-04-07 15:27:48",
+          "total": "216580",
+          "customer": {
+            "first_name": "Yeyson",
+            "last_name": "Hans",
+            "email": "yeysonhans@gmail.com"
+          },
+          "fotos_garantia": [],
+          "correo_enviado": false,
+          "pago_completo": false
+        },
+        {
+          "id": 5971,
+          "status": "completed",
+          "date_created": "2025-04-03 09:29:02",
+          "total": "53550",
+          "customer": {
+            "first_name": "Romina",
+            "last_name": "Riveros",
+            "email": "romina@fruta.studio"
+          },
+          "fotos_garantia": [
+            "https://rental.mariohans.cl/wp-content/uploads/2025/04/tempImageDphKWz-scaled.jpg",
+            "https://rental.mariohans.cl/wp-content/uploads/2025/04/tempImage5rfGWo-scaled.jpg"
+          ],
+          "correo_enviado": true,
+          "pago_completo": false
+        }
+      ]
+    }
+  }

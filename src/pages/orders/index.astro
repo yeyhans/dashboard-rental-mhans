@@ -26,9 +26,11 @@ if (status) {
   params.append('status', status);
 }
 
-// Fetch orders data from the API with parameters
+// Fetch orders data from both APIs
 const response = await fetch(`${Astro.url.origin}/api/woo/get-orders?${params}`);
+const response2 = await fetch(`${Astro.url.origin}/api/wp/get-orders?${params}`);
 const ordersData = await response.json();
+const ordersData2 = await response2.json();
 
 // Verificar que ordersData tenga la estructura correcta
 if (!ordersData.data?.orders) {
@@ -39,6 +41,22 @@ if (!ordersData.data?.orders) {
   };
 }
 
+// Verificar que ordersData2 tenga la estructura correcta
+if (!ordersData2.orders) {
+  ordersData2.orders = [];
+}
+
+// Merge WooCommerce orders with WordPress data
+const mergedOrders = ordersData.data.orders.map((wooOrder: any) => {
+  const wpOrder = ordersData2.orders.orders?.find((order: any) => order.id === wooOrder.id);
+  return {
+    ...wooOrder,
+    fotos_garantia: wpOrder?.fotos_garantia || [],
+    correo_enviado: wpOrder?.correo_enviado || false,
+    pago_completo: wpOrder?.pago_completo || false
+  };
+});
+
 const title = "Test Dashboard";
 ---
 
@@ -46,7 +64,7 @@ const title = "Test Dashboard";
   <div class="container py-6">
     <OrdersDashboard 
       client:load
-      initialOrders={ordersData.data.orders}
+      initialOrders={mergedOrders}
       initialTotal={ordersData.data.total}
       initialTotalPages={ordersData.data.totalPages}
       initialPage={page}

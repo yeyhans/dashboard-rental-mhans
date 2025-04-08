@@ -47,25 +47,19 @@ const formatDate = (dateString: string) => {
   return date.toLocaleDateString('es-ES', {
     day: '2-digit',
     month: '2-digit',
-    year: 'numeric'
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
   });
 };
 
-// Add this helper function at the top with other helper functions
-const calculateDaysBetweenDates = (startDate: string, endDate: string): number => {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const diffTime = Math.abs(end.getTime() - start.getTime());
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end days
-};
+
 
 interface OrderDetailsProps {
   order: any; // Raw WooCommerce API response
 }
 
-interface EditedItemsState {
-  [key: string]: LineItem;
-}
 
 interface EditableOrderData {
   billing: {
@@ -83,7 +77,6 @@ interface EditableOrderData {
 const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
   const [loading, setLoading] = useState(false);
   const [transformedOrder, setTransformedOrder] = useState<Order | null>(null);
-  const [editedItems, setEditedItems] = useState<EditedItemsState>({});
   const [isEditingOrder, setIsEditingOrder] = useState(false);
   const [editedOrderData, setEditedOrderData] = useState<EditableOrderData | null>(null);
   const [products, setProducts] = useState<any[]>([]); // Added for product selection
@@ -927,21 +920,21 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
             <Button 
               variant="outline" 
-              className="gap-2"
+              className="gap-2 w-full md:w-auto"
               onClick={() => window.location.href = '/orders'}
             >
               <ChevronLeft className="h-4 w-4" />
               Volver a pedidos
             </Button>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 w-full md:w-auto">
               {(isEditingOrder || isEditingProducts) && (
                 <>
                   <Button
                     variant="outline"
-                    className="gap-2"
+                    className="gap-2 w-full md:w-auto"
                     onClick={handleSaveOrderChanges}
                     disabled={loading}
                   >
@@ -950,7 +943,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                   </Button>
                   <Button
                     variant="outline"
-                    className="gap-2"
+                    className="gap-2 w-full md:w-auto"
                     onClick={() => {
                       setIsEditingOrder(false);
                       setIsEditingProducts(false);
@@ -963,7 +956,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                   </Button>
                 </>
               )}
-              <div className={`px-3 py-1 rounded-md text-sm font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
+              <div className={`px-3 py-1 rounded-md text-sm font-medium text-center ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
                 {statusTranslations[order.status] || order.status}
               </div>
             </div>
@@ -974,13 +967,8 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {renderClientInfo()}
-          {renderProjectInfo()}
-          {renderProductInfo()}
-          {renderCostSummary()}
-          
-          {/* Estado y Fechas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Estado y Fechas */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
             <div>
               <Label className="font-medium">Estado</Label>
               <div className="mt-1 flex items-center gap-2">
@@ -1010,28 +998,41 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
           </div>
 
           {/* Enlaces a PDFs */}
-          <div className="space-y-2">
+          <div className="space-y-2 p-4 bg-muted/50 rounded-lg">
             {order.metadata.pdf_on_hold_url && (
               <Button 
                 variant="outline" 
-                className="w-full justify-start gap-2"
+                className="w-full justify-start gap-2 h-auto py-3"
                 onClick={() => window.open(order.metadata.pdf_on_hold_url, '_blank')}
               >
-                <FileText className="h-4 w-4" />
-                Ver PDF de Presupuesto
+                <FileText className="h-4 w-4 shrink-0" />
+                <span className="text-left">Ver PDF de Presupuesto</span>
               </Button>
             )}
             {order.metadata.pdf_processing_url && (
               <Button 
                 variant="outline" 
-                className="w-full justify-start gap-2"
+                className="w-full justify-start gap-2 h-auto py-3"
                 onClick={() => window.open(order.metadata.pdf_processing_url, '_blank')}
               >
-                <FileCheck className="h-4 w-4" />
-                Ver PDF de Contrato
+                <FileCheck className="h-4 w-4 shrink-0" />
+                <span className="text-left">Ver PDF de Contrato</span>
               </Button>
             )}
           </div>
+          {/* Client Info */}
+          {renderClientInfo()}
+
+          {/* Project Info */}
+          {renderProjectInfo()}
+
+          {/* Product Info */}
+          {renderProductInfo()}
+
+          {/* Cost Summary */}
+          {renderCostSummary()}
+          
+
 
           {/* Notas */}
           <div className="space-y-2">
