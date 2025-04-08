@@ -2,10 +2,23 @@ import { useState } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Plus, Save, X, Edit2 } from 'lucide-react';
+import { Plus, Save, X, Edit2, Search } from 'lucide-react';
 import type { Product } from '../../types/product';
 import type { LineItem } from '../../types/order';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '../ui/command';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
 
 // Helper function to format currency
 const formatCurrency = (value: string | number) => {
@@ -38,6 +51,8 @@ export const ProductSelector = ({
   const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
   const [editingItem, setEditingItem] = useState<number | null>(null);
   const [editedItems, setEditedItems] = useState<{ [key: string]: Partial<LineItem> }>({});
+  const [open, setOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   const handleAddProduct = () => {
     const product = products.find(p => p.id.toString() === selectedProductId);
@@ -122,22 +137,68 @@ export const ProductSelector = ({
     });
   };
 
+  const handleSelectProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setSelectedProductId(product.id.toString());
+    setOpen(false);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row gap-2">
         <div className="flex-1">
-          <Select value={selectedProductId} onValueChange={setSelectedProductId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Seleccione un producto" />
-            </SelectTrigger>
-            <SelectContent>
-              {products.map(product => (
-                <SelectItem key={product.id} value={product.id.toString()}>
-                  {product.name} - ${formatCurrency(product.price)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between"
+            onClick={() => setOpen(true)}
+          >
+            {selectedProduct ? (
+              <span>{selectedProduct.name} - ${formatCurrency(selectedProduct.price)}</span>
+            ) : (
+              <span className="text-muted-foreground">Seleccione un producto</span>
+            )}
+            <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent className="sm:max-w-[475px]">
+              <DialogHeader>
+                <DialogTitle>Buscar Productos</DialogTitle>
+              </DialogHeader>
+              <Command className="rounded-lg border shadow-md">
+                <CommandInput placeholder="Buscar producto..." />
+                <CommandList>
+                  <CommandEmpty>No se encontraron productos.</CommandEmpty>
+                  <CommandGroup heading="Productos">
+                    {products.map((product) => (
+                      <CommandItem
+                        key={product.id}
+                        value={product.name}
+                        onSelect={() => handleSelectProduct(product)}
+                      >
+                        <div className="flex items-center gap-2">
+                          {product.images?.[0] && (
+                            <img 
+                              src={product.images[0].src} 
+                              alt={product.images[0].alt} 
+                              className="w-8 h-8 object-cover rounded"
+                            />
+                          )}
+                          <div className="flex flex-col">
+                            <span>{product.name}</span>
+                            <span className="text-sm text-muted-foreground">
+                              ${formatCurrency(product.price)}
+                            </span>
+                          </div>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </DialogContent>
+          </Dialog>
         </div>
         <div className="w-full md:w-24 mt-2 md:mt-0">
           <Input

@@ -5,6 +5,8 @@ export type User = {
   registered_date: string;
   first_name: string;
   last_name: string;
+  billing_first_name: string;
+  billing_last_name: string;
   rut: string;
   birth_date: string;
   billing_phone: string;

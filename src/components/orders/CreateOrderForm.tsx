@@ -11,19 +11,22 @@ import {
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Plus, Minus, Trash2 } from 'lucide-react';
+import { Plus, Minus, Trash2, Search } from 'lucide-react';
 import type { Order } from '../../types/order';
 import type { User } from '../../types/user';
 import type { Product } from '../../types/product';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select';
+  Command,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '../ui/command';
 import { ProductSelector } from './ProductSelector';
 import { OrderCostSummary } from './OrderCostSummary';
+import { DialogTitle } from '../ui/dialog';
 
 // Helper function to format currency
 const formatCurrency = (value: string | number) => {
@@ -109,6 +112,7 @@ const CreateOrderForm = ({ onOrderCreated }: CreateOrderFormProps) => {
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
+  const [isCommandOpen, setIsCommandOpen] = useState(false);
 
 
   // Cargar usuarios y productos cuando se abre el formulario
@@ -147,8 +151,8 @@ const CreateOrderForm = ({ onOrderCreated }: CreateOrderFormProps) => {
         ...prev,
         customer_id: userId,
         billing: {
-          first_name: selectedUser.first_name || '',
-          last_name: selectedUser.last_name || '',
+          first_name: selectedUser.billing_first_name || '',
+          last_name: selectedUser.billing_last_name || '',
           company: selectedUser.billing_company || '',
           email: selectedUser.email || '',
           phone: selectedUser.billing_phone || '',
@@ -345,18 +349,58 @@ const CreateOrderForm = ({ onOrderCreated }: CreateOrderFormProps) => {
           {/* Selector de Usuario */}
           <div className="space-y-2">
             <Label htmlFor="userSelect">Seleccionar Cliente</Label>
-            <Select value={selectedUserId} onValueChange={handleUserSelect}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione un cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                {users.map(user => (
-                  <SelectItem key={user.id} value={user.id.toString()}>
-                    {user.first_name} {user.last_name} {user.billing_company ? `(${user.billing_company})` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Buscar cliente..."
+                value={selectedUserId ? 
+                  (() => {
+                    const user = users.find(u => u.id.toString() === selectedUserId);
+                    if (!user) return '';
+                    const name = `${user.billing_first_name || user.first_name} ${user.billing_last_name || user.last_name}`;
+                    return user.billing_company ? `${name} (${user.billing_company})` : name;
+                  })() 
+                  : ''}
+                onClick={() => setIsCommandOpen(true)}
+                readOnly
+              />
+              <Button variant="outline" size="icon" onClick={() => setIsCommandOpen(true)}>
+                <Search className="h-4 w-4" />
+              </Button>
+            </div>
+            <CommandDialog open={isCommandOpen} onOpenChange={setIsCommandOpen}>
+              <DialogTitle className="px-4 pt-4">Buscar Cliente</DialogTitle>
+              <Command className="rounded-lg border shadow-md">
+                <CommandInput placeholder="Buscar cliente por nombre o email..." />
+                <CommandList>
+                  <CommandEmpty>No se encontraron clientes.</CommandEmpty>
+                  <CommandGroup heading="Clientes">
+                    {users.map(user => {
+                      const displayName = `${user.billing_first_name || user.first_name} ${user.billing_last_name || user.last_name}`;
+                      return (
+                        <CommandItem
+                          key={user.id}
+                          value={`${displayName} ${user.email} ${user.billing_company || ''}`}
+                          onSelect={(value) => {
+                            handleUserSelect(user.id.toString());
+                            setIsCommandOpen(false);
+                          }}
+                          className="flex flex-col items-start gap-1"
+                        >
+                          <div className="flex items-center w-full">
+                            <Search className="mr-2 h-4 w-4 shrink-0" />
+                            <span className="font-medium">{displayName}</span>
+                            {user.billing_company && (
+                              <span className="ml-2 text-muted-foreground">({user.billing_company})</span>
+                            )}
+                          </div>
+                          <span className="text-sm text-muted-foreground ml-6">{user.email}</span>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </CommandDialog>
           </div>
 
           {/* Información del Cliente */}

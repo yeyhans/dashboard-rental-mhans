@@ -65,12 +65,13 @@ const title = `Orden #${id}`;
   <div class="container py-6">
     {orderData.success ? (
       <>
-
-
-
         <OrderDetails 
           client:load
-          order={orderData.data} 
+          order={{
+            ...orderData.data,
+            correo_enviado: specificOrder?.correo_enviado || false,
+            pago_completo: specificOrder?.pago_completo || false
+          }} 
         />
 
         {specificOrder && (

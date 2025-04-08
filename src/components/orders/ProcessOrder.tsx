@@ -55,41 +55,12 @@ function ProcessOrder({ order }: { order: WPOrderResponse }) {
   return (
     <div className="mt-6 space-y-4">
       <div className="rounded-lg border p-4">
-        <h3 className="text-lg font-semibold mb-4">Estado del Proceso</h3>
+        <h3 className="text-lg font-semibold mb-4">Fotos de Garantía</h3>
         
         <div className="space-y-4">
-          {/* Email Status */}
-          <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${orderData.correo_enviado ? 'bg-green-500' : 'bg-yellow-500'}`} />
-            <span>
-              Correo de confirmación: {orderData.correo_enviado ? 'Enviado' : 'Pendiente'}
-            </span>
-          </div>
-
-          {/* Payment Status */}
-          <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${orderData.pago_completo ? 'bg-green-500' : 'bg-yellow-500'}`} />
-            <span>
-              Estado del pago: {orderData.pago_completo ? 'Completado' : 'Pendiente'}
-            </span>
-          </div>
-
-          {/* Order Details */}
-          <div className="space-y-2">
-            <h4 className="font-medium">Detalles de la Orden</h4>
-            <div className="grid gap-2 text-sm">
-              <p>ID: {orderData.id}</p>
-              <p>Estado: {orderData.status}</p>
-              <p>Fecha: {new Date(orderData.date_created).toLocaleDateString()}</p>
-              <p>Total: ${orderData.total}</p>
-              <p>Cliente: {orderData.customer.first_name} {orderData.customer.last_name}</p>
-              <p>Email: {orderData.customer.email}</p>
-            </div>
-          </div>
 
           {/* Warranty Photos */}
           <div className="space-y-2">
-            <h4 className="font-medium">Fotos de Garantía</h4>
             {orderData.fotos_garantia && orderData.fotos_garantia.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {orderData.fotos_garantia.map((foto, index) => (

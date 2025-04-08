@@ -57,7 +57,12 @@ const formatDate = (dateString: string) => {
 
 
 interface OrderDetailsProps {
-  order: any; // Raw WooCommerce API response
+  order: {
+    correo_enviado?: boolean;
+    pago_completo?: boolean;
+    meta_data?: any[];
+    [key: string]: any;
+  };
 }
 
 
@@ -967,7 +972,6 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-                        {/* Estado y Fechas */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
             <div>
               <Label className="font-medium">Estado</Label>
@@ -994,6 +998,28 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
             <div>
               <Label className="font-medium">Última Modificación</Label>
               <div className="mt-1">{formatDate(order.date_modified)}</div>
+            </div>
+          </div>
+
+          {/* Estado del Proceso */}
+          <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+            <h4 className="text-sm font-medium">Estado del Proceso</h4>
+            <div className="space-y-4">
+              {/* Email Status */}
+              <div className="flex items-center gap-2">
+                <div className={`w-3 h-3 rounded-full ${rawOrder.correo_enviado ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                <span>
+                  Correo de confirmación: {rawOrder.correo_enviado ? 'Enviado' : 'Pendiente'}
+                </span>
+              </div>
+
+              {/* Payment Status */}
+              <div className="flex items-center gap-2">
+                <div className={`w-3 h-3 rounded-full ${rawOrder.pago_completo ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                <span>
+                  Estado del pago: {rawOrder.pago_completo ? 'Completado' : 'Pendiente'}
+                </span>
+              </div>
             </div>
           </div>
 

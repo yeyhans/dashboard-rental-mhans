@@ -286,7 +286,7 @@ const OrdersDashboard = ({
   // Render error state
   if (error) {
     return (
-      <div className="p-4 bg-destructive/10 text-destructive rounded-md">
+      <div className="p-4 bg-destructive/10 text-destructive">
         <p>{error}</p>
       </div>
     );
@@ -372,7 +372,7 @@ const OrdersDashboard = ({
 
     // Desktop view - Table layout
     return (
-      <div className="rounded-md border overflow-hidden">
+      <div className="border overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
@@ -501,7 +501,7 @@ const OrdersDashboard = ({
               <div className="w-full sm:w-48">
                 <select
                   id="status"
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                  className="flex h-9 w-full border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
                   value={statusFilter}
                   onChange={(e) => {
                     setStatusFilter(e.target.value);
@@ -551,7 +551,7 @@ const OrdersDashboard = ({
                 Anterior
               </Button>
               
-              <div className="flex items-center px-3 h-9 border rounded-md">
+              <div className="flex items-center px-3 h-9 border ">
                 <span className="text-sm font-medium">
                   {currentPage} / {totalPages}
                 </span>
