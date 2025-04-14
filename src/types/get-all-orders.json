@@ -1,0 +1,1204 @@
+{
+    "success": true,
+    "message": "Orders fetched successfully",
+    "data": {
+      "orders": [
+        {
+          "id": 6017,
+          "status": "completed",
+          "date_created": "2025-04-11T22:39:58",
+          "date_modified": "2025-04-14T10:03:49",
+          "customer_id": 103,
+          "billing": {
+            "first_name": "Izumi",
+            "last_name": "Nakagawa",
+            "company": "JOIA",
+            "address_1": "Punta Arenas 22",
+            "city": "Santiago",
+            "email": "izumi@joiamagazine.com",
+            "phone": "999151934"
+          },
+          "metadata": {
+            "order_fecha_inicio": "11-04-2025",
+            "order_fecha_termino": "11-04-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "78000",
+            "calculated_discount": "0",
+            "calculated_iva": "14820",
+            "calculated_total": "92820",
+            "company_rut": "777081624",
+            "order_proyecto": "Campaña Denim",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/presupuesto_6017_12-04-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/contrato_pedido_6017_2025-04-13_16-02-41.pdf",
+            "order_retire_name": "Izumi",
+            "order_retire_rut": "21201964k",
+            "order_retire_phone": "999151934",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "Profoto Air Remote Air TTL canon",
+              "product_id": 3099,
+              "sku": "L14",
+              "price": 14000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3099_01-1.webp"
+            },
+            {
+              "name": "Profoto Paraguas Deep White XL",
+              "product_id": 4707,
+              "sku": "M27",
+              "price": 29000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/01/3105_01.webp"
+            },
+            {
+              "name": "Profoto D2 500W + tripode",
+              "product_id": 3096,
+              "sku": "L12",
+              "price": 35000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3096_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 6017,
+            "status": "completed",
+            "date_created": "2025-04-11 22:39:58",
+            "total": "92820",
+            "customer": {
+              "first_name": "Izumi",
+              "last_name": "Nakagawa",
+              "email": "izumi@joiamagazine.com"
+            },
+            "fotos_garantia": [],
+            "correo_enviado": false,
+            "pago_completo": false
+          }
+        },
+        {
+          "id": 6016,
+          "status": "processing",
+          "date_created": "2025-04-11T21:35:58",
+          "date_modified": "2025-04-13T13:03:07",
+          "customer_id": 104,
+          "billing": {
+            "first_name": "gonzalo",
+            "last_name": "morales",
+            "company": "",
+            "address_1": "Álvarez 2120",
+            "city": "Viña del mar",
+            "email": "gbmorales40@gmail.com",
+            "phone": "926193530"
+          },
+          "metadata": {
+            "order_fecha_inicio": "15-04-2025",
+            "order_fecha_termino": "15-04-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "143000",
+            "calculated_discount": "0",
+            "calculated_iva": "27170",
+            "calculated_total": "170170",
+            "company_rut": "Sin",
+            "order_proyecto": "Sesión fotos Alessia EP",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/presupuesto_6016_12-04-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/contrato_pedido_6016_2025-04-13_16-03-06.pdf",
+            "order_retire_name": "",
+            "order_retire_rut": "",
+            "order_retire_phone": "",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "KIT 03 Profoto D2 1000/1000W",
+              "product_id": 4713,
+              "sku": "L08",
+              "price": 85000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/01/4713.webp"
+            },
+            {
+              "name": "Multispot (efecto sombras)",
+              "product_id": 3128,
+              "sku": "M08",
+              "price": 40000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3128_01.webp"
+            },
+            {
+              "name": "Profoto OCF Octa 2 60cm",
+              "product_id": 5276,
+              "sku": "M54",
+              "price": 18000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5276_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 6016,
+            "status": "processing",
+            "date_created": "2025-04-11 21:35:58",
+            "total": "170170",
+            "customer": {
+              "first_name": "gonzalo",
+              "last_name": "morales",
+              "email": "gbmorales40@gmail.com"
+            },
+            "fotos_garantia": [],
+            "correo_enviado": false,
+            "pago_completo": false
+          }
+        },
+        {
+          "id": 6013,
+          "status": "completed",
+          "date_created": "2025-04-10T13:24:30",
+          "date_modified": "2025-04-11T20:46:33",
+          "customer_id": 83,
+          "billing": {
+            "first_name": "Guillermo",
+            "last_name": "González",
+            "company": "ESTUDIO FE",
+            "address_1": "Monseñor Eyzaguirre 649",
+            "city": "Ñuñoa",
+            "email": "gmo.gonzalezcortes@gmail.com",
+            "phone": "953937450"
+          },
+          "metadata": {
+            "order_fecha_inicio": "11-04-2025",
+            "order_fecha_termino": "11-04-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "48000",
+            "calculated_discount": "0",
+            "calculated_iva": "9120",
+            "calculated_total": "57120",
+            "company_rut": "76125585-1",
+            "order_proyecto": "OPV - ESTUDIO FE",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/presupuesto_6013_10-04-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/contrato_pedido_6013_2025-04-10_18-41-11.pdf",
+            "order_retire_name": "Benjamina",
+            "order_retire_rut": "",
+            "order_retire_phone": "",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "Tether Tools CUC15-ORG cable USB-C A USB-C",
+              "product_id": 3075,
+              "sku": "C12",
+              "price": 8000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3075_01.webp"
+            },
+            {
+              "name": "Multispot (efecto sombras)",
+              "product_id": 3128,
+              "sku": "M08",
+              "price": 40000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3128_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 6013,
+            "status": "completed",
+            "date_created": "2025-04-10 13:24:30",
+            "total": "57120",
+            "customer": {
+              "first_name": "Guillermo",
+              "last_name": "González",
+              "email": "gmo.gonzalezcortes@gmail.com"
+            },
+            "fotos_garantia": [],
+            "correo_enviado": false,
+            "pago_completo": false
+          }
+        },
+        {
+          "id": 6006,
+          "status": "completed",
+          "date_created": "2025-04-08T21:29:32",
+          "date_modified": "2025-04-13T00:10:32",
+          "customer_id": 101,
+          "billing": {
+            "first_name": "Bruno",
+            "last_name": "Vidal",
+            "company": "",
+            "address_1": "Luis thayer ojeda 122",
+            "city": "Santiago",
+            "email": "bvidalmirauda@gmail.com",
+            "phone": "978876123"
+          },
+          "metadata": {
+            "order_fecha_inicio": "11-04-2025",
+            "order_fecha_termino": "11-04-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "128000",
+            "calculated_discount": "0",
+            "calculated_iva": "24320",
+            "calculated_total": "152320",
+            "company_rut": "20658405-k",
+            "order_proyecto": "Sin nombre",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/presupuesto_6006_09-04-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/contrato_pedido_6006_2025-04-10_18-40-07.pdf",
+            "order_retire_name": "bruno vidal",
+            "order_retire_rut": "20658405-k",
+            "order_retire_phone": "978876123",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "KIT 01 Profoto D2 1000/500W",
+              "product_id": 4710,
+              "sku": "L02",
+              "price": 78000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/01/4713.webp"
+            },
+            {
+              "name": "Profoto Paraguas Deep White L",
+              "product_id": 4706,
+              "sku": "M28",
+              "price": 25000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/01/3106_01.webp"
+            },
+            {
+              "name": "Profoto Octa 4 RFI 120cm",
+              "product_id": 5270,
+              "sku": "M48",
+              "price": 25000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5270_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 6006,
+            "status": "completed",
+            "date_created": "2025-04-08 21:29:32",
+            "total": "152320",
+            "customer": {
+              "first_name": "Bruno",
+              "last_name": "Vidal",
+              "email": "bvidalmirauda@gmail.com"
+            },
+            "fotos_garantia": [
+              "https://rental.mariohans.cl/wp-content/uploads/2025/04/IMG_4090-scaled.jpeg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/04/IMG_4089-scaled.jpeg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/04/IMG_4088-scaled.jpeg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/04/IMG_4087-scaled.jpeg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/04/IMG_4086-scaled.jpeg"
+            ],
+            "correo_enviado": false,
+            "pago_completo": false
+          }
+        },
+        {
+          "id": 5990,
+          "status": "completed",
+          "date_created": "2025-04-07T13:08:42",
+          "date_modified": "2025-04-13T13:04:00",
+          "customer_id": 62,
+          "billing": {
+            "first_name": "Romina",
+            "last_name": "Riveros",
+            "company": "Fruta Studio",
+            "address_1": "General Salvo 20",
+            "city": "Santiago",
+            "email": "romina@fruta.studio",
+            "phone": "951215654"
+          },
+          "metadata": {
+            "order_fecha_inicio": "",
+            "order_fecha_termino": "",
+            "num_jornadas": "1",
+            "calculated_subtotal": "85000",
+            "calculated_discount": "0",
+            "calculated_iva": "16150",
+            "calculated_total": "101150",
+            "company_rut": "",
+            "order_proyecto": "Crema Lechuga",
+            "pdf_on_hold_url": "",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/contrato_pedido_5990_2025-04-07_16-10-43.pdf",
+            "order_retire_name": "",
+            "order_retire_rut": "",
+            "order_retire_phone": "",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "Tamizador Skylite Rapid 2x2",
+              "product_id": 3135,
+              "sku": "M12",
+              "price": 45000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3135_01.webp"
+            },
+            {
+              "name": "Profoto Beauty Dish White L",
+              "product_id": 3132,
+              "sku": "M14",
+              "price": 40000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3132_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 5990,
+            "status": "completed",
+            "date_created": "2025-04-07 13:08:42",
+            "total": "101150",
+            "customer": {
+              "first_name": "Romina",
+              "last_name": "Riveros",
+              "email": "romina@fruta.studio"
+            },
+            "fotos_garantia": [],
+            "correo_enviado": false,
+            "pago_completo": false
+          }
+        },
+        {
+          "id": 5988,
+          "status": "completed",
+          "date_created": "2025-04-07T13:02:51",
+          "date_modified": "2025-04-13T13:04:09",
+          "customer_id": 62,
+          "billing": {
+            "first_name": "Romina",
+            "last_name": "Riveros",
+            "company": "Fruta Studio",
+            "address_1": "General Salvo 20",
+            "city": "Santiago",
+            "email": "romina@fruta.studio",
+            "phone": "951215654"
+          },
+          "metadata": {
+            "order_fecha_inicio": "",
+            "order_fecha_termino": "",
+            "num_jornadas": "1",
+            "calculated_subtotal": "45000",
+            "calculated_discount": "0",
+            "calculated_iva": "8550",
+            "calculated_total": "53550",
+            "company_rut": "",
+            "order_proyecto": "Biloba",
+            "pdf_on_hold_url": "",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/contrato_pedido_5988_2025-04-07_16-05-58.pdf",
+            "order_retire_name": "",
+            "order_retire_rut": "",
+            "order_retire_phone": "",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "Tamizador Skylite Rapid 2x2",
+              "product_id": 3135,
+              "sku": "M12",
+              "price": 45000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3135_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 5988,
+            "status": "completed",
+            "date_created": "2025-04-07 13:02:51",
+            "total": "53550",
+            "customer": {
+              "first_name": "Romina",
+              "last_name": "Riveros",
+              "email": "romina@fruta.studio"
+            },
+            "fotos_garantia": [],
+            "correo_enviado": false,
+            "pago_completo": false
+          }
+        },
+        {
+          "id": 5986,
+          "status": "completed",
+          "date_created": "2025-04-04T08:02:11",
+          "date_modified": "2025-04-05T13:34:10",
+          "customer_id": 83,
+          "billing": {
+            "first_name": "Guillermo",
+            "last_name": "González",
+            "company": "ESTUDIO FE",
+            "address_1": "Monseñor Eyzaguirre 649",
+            "city": "Ñuñoa",
+            "email": "gmo.gonzalezcortes@gmail.com",
+            "phone": "953937450"
+          },
+          "metadata": {
+            "order_fecha_inicio": "04-04-2025",
+            "order_fecha_termino": "04-04-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "8000",
+            "calculated_discount": "0",
+            "calculated_iva": "1520",
+            "calculated_total": "9520",
+            "company_rut": "76125585-1",
+            "order_proyecto": "Cannes Estudio FE",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/presupuesto_5986_04-04-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/contrato_pedido_5986_2025-04-04_12-30-08.pdf",
+            "order_retire_name": "Guillermo Gonzalez",
+            "order_retire_rut": "18481897-3",
+            "order_retire_phone": "9-53937450",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "Tether Tools CUC15-ORG cable USB-C A USB-C",
+              "product_id": 3075,
+              "sku": "C12",
+              "price": 8000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3075_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 5986,
+            "status": "completed",
+            "date_created": "2025-04-04 08:02:11",
+            "total": "9520",
+            "customer": {
+              "first_name": "Guillermo",
+              "last_name": "González",
+              "email": "gmo.gonzalezcortes@gmail.com"
+            },
+            "fotos_garantia": [],
+            "correo_enviado": false,
+            "pago_completo": false
+          }
+        },
+        {
+          "id": 5977,
+          "status": "completed",
+          "date_created": "2025-04-03T10:51:38",
+          "date_modified": "2025-04-13T13:03:24",
+          "customer_id": 66,
+          "billing": {
+            "first_name": "Javiera",
+            "last_name": "Aguirre",
+            "company": "Javi Aguirre D producciones",
+            "address_1": "Avenida General Bustamante 176",
+            "city": "Santiago",
+            "email": "javi@grupomahavat.com",
+            "phone": "989051546"
+          },
+          "metadata": {
+            "order_fecha_inicio": "08-04-2025",
+            "order_fecha_termino": "08-04-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "73000",
+            "calculated_discount": "10950",
+            "calculated_iva": "11789.5",
+            "calculated_total": "73839.5",
+            "company_rut": "78102064-8",
+            "order_proyecto": "Accion Empresas",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/presupuesto_5977_03-04-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/contrato_pedido_5977_2025-04-08_13-07-36.pdf",
+            "order_retire_name": "Javiera Aguirre",
+            "order_retire_rut": "17024315-3",
+            "order_retire_phone": "989051546",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "Canon EF 70-200mm f/2.8L USM II",
+              "product_id": 3078,
+              "sku": "C04",
+              "price": 38000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3078_01.webp"
+            },
+            {
+              "name": "kit Profoto A1 Canon",
+              "product_id": 3098,
+              "sku": "L24",
+              "price": 35000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3098_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 5977,
+            "status": "completed",
+            "date_created": "2025-04-03 10:51:38",
+            "total": "86870",
+            "customer": {
+              "first_name": "Javiera",
+              "last_name": "Aguirre",
+              "email": "javi@grupomahavat.com"
+            },
+            "fotos_garantia": [
+              "https://rental.mariohans.cl/wp-content/uploads/2025/04/tempImage2nX1Yp-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/04/tempImageTXGzQd-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/04/tempImageaqnXXb-scaled.jpg"
+            ],
+            "correo_enviado": true,
+            "pago_completo": false
+          }
+        },
+        {
+          "id": 5971,
+          "status": "completed",
+          "date_created": "2025-04-03T09:29:02",
+          "date_modified": "2025-04-04T11:05:38",
+          "customer_id": 62,
+          "billing": {
+            "first_name": "Romina",
+            "last_name": "Riveros",
+            "company": "Fruta Studio",
+            "address_1": "General Salvo 20",
+            "city": "Santiago",
+            "email": "romina@fruta.studio",
+            "phone": "951215654"
+          },
+          "metadata": {
+            "order_fecha_inicio": "",
+            "order_fecha_termino": "",
+            "num_jornadas": "1",
+            "calculated_subtotal": "45000",
+            "calculated_discount": "0",
+            "calculated_iva": "8550",
+            "calculated_total": "53550",
+            "company_rut": "",
+            "order_proyecto": "Lechugas",
+            "pdf_on_hold_url": "",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/04/contrato_pedido_5971_2025-04-03_12-30-31.pdf",
+            "order_retire_name": "",
+            "order_retire_rut": "",
+            "order_retire_phone": "",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "Tamizador Skylite Rapid 2x2",
+              "product_id": 3135,
+              "sku": "M12",
+              "price": 45000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3135_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 5971,
+            "status": "completed",
+            "date_created": "2025-04-03 09:29:02",
+            "total": "53550",
+            "customer": {
+              "first_name": "Romina",
+              "last_name": "Riveros",
+              "email": "romina@fruta.studio"
+            },
+            "fotos_garantia": [
+              "https://rental.mariohans.cl/wp-content/uploads/2025/04/tempImageDphKWz-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/04/tempImage5rfGWo-scaled.jpg"
+            ],
+            "correo_enviado": true,
+            "pago_completo": false
+          }
+        },
+        {
+          "id": 5938,
+          "status": "completed",
+          "date_created": "2025-03-29T17:24:41",
+          "date_modified": "2025-04-01T13:50:48",
+          "customer_id": 68,
+          "billing": {
+            "first_name": "Javier",
+            "last_name": "Briceño",
+            "company": "",
+            "address_1": "Monte Alegre 1050",
+            "city": "Santiago",
+            "email": "brialfotos@gmail.com",
+            "phone": "978806779"
+          },
+          "metadata": {
+            "order_fecha_inicio": "31-03-2025",
+            "order_fecha_termino": "31-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "160000",
+            "calculated_discount": "0",
+            "calculated_iva": "30400",
+            "calculated_total": "190400",
+            "company_rut": "20.165.810-1",
+            "order_proyecto": "Shooting Asics",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5938_29-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5938_2025-03-30_15-23-35.pdf",
+            "order_retire_name": "",
+            "order_retire_rut": "",
+            "order_retire_phone": "",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "Profoto Olla Magnum",
+              "product_id": 3133,
+              "sku": "M18",
+              "price": 25000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3133_01.webp"
+            },
+            {
+              "name": "KIT Profoto B1X 500/500W",
+              "product_id": 5269,
+              "sku": "L25",
+              "price": 135000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5269_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 5938,
+            "status": "completed",
+            "date_created": "2025-03-29 17:24:41",
+            "total": "190400",
+            "customer": {
+              "first_name": "Javier",
+              "last_name": "Briceño",
+              "email": "brialfotos@gmail.com"
+            },
+            "fotos_garantia": [
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImageZwyQL7-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/01-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/02-scaled.jpg"
+            ],
+            "correo_enviado": true,
+            "pago_completo": true
+          }
+        },
+        {
+          "id": 5937,
+          "status": "completed",
+          "date_created": "2025-03-28T22:45:29",
+          "date_modified": "2025-03-30T12:24:24",
+          "customer_id": 79,
+          "billing": {
+            "first_name": "Melisa",
+            "last_name": "González",
+            "company": "",
+            "address_1": "Francisco Antonio Encina 1781",
+            "city": "Santiago",
+            "email": "louvacquie@gmail.com",
+            "phone": "+56976157871"
+          },
+          "metadata": {
+            "order_fecha_inicio": "29-03-2025",
+            "order_fecha_termino": "29-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "12000",
+            "calculated_discount": "0",
+            "calculated_iva": "2280",
+            "calculated_total": "14280",
+            "company_rut": "197606479",
+            "order_proyecto": "Himura",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5937_29-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5937_2025-03-29_01-49-15.pdf",
+            "order_retire_name": "",
+            "order_retire_rut": "",
+            "order_retire_phone": "",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "Profoto Air Remote generico",
+              "product_id": 3100,
+              "sku": "L15",
+              "price": 12000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3100_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 5937,
+            "status": "completed",
+            "date_created": "2025-03-28 22:45:29",
+            "total": "14280",
+            "customer": {
+              "first_name": "Melisa",
+              "last_name": "González",
+              "email": "louvacquie@gmail.com"
+            },
+            "fotos_garantia": [],
+            "correo_enviado": false,
+            "pago_completo": true
+          }
+        },
+        {
+          "id": 5935,
+          "status": "completed",
+          "date_created": "2025-03-27T13:20:15",
+          "date_modified": "2025-04-05T13:34:59",
+          "customer_id": 64,
+          "billing": {
+            "first_name": "Bolivar",
+            "last_name": "Vega González",
+            "company": "SF CHILE SPA",
+            "address_1": "Miguel Claro 1750",
+            "city": "Providencia",
+            "email": "bolivar.vega.g@gmail.com",
+            "phone": "942561593"
+          },
+          "metadata": {
+            "order_fecha_inicio": "",
+            "order_fecha_termino": "",
+            "num_jornadas": "1",
+            "calculated_subtotal": "190000",
+            "calculated_discount": "0",
+            "calculated_iva": "36100",
+            "calculated_total": "226100",
+            "company_rut": "77.504.606-6",
+            "order_proyecto": "the maestros",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5935_27-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5935_2025-03-29_01-02-31.pdf",
+            "order_retire_name": "",
+            "order_retire_rut": "",
+            "order_retire_phone": "",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "KIT Profoto B10X Plus 500/500w",
+              "product_id": 4715,
+              "sku": "L20",
+              "price": 130000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/01/4715.webp"
+            },
+            {
+              "name": "Maleta laptops 17”",
+              "product_id": 3183,
+              "sku": "P05",
+              "price": 25000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/1354526447_902932.webp"
+            },
+            {
+              "name": "Profoto Paraguas Deep White M",
+              "product_id": 4705,
+              "sku": "M29",
+              "price": 20000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/01/3107_01.webp"
+            },
+            {
+              "name": "Profoto Difusor 1.5 Paraguas M",
+              "product_id": 3114,
+              "sku": "M34",
+              "price": 7000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3114_01.webp"
+            },
+            {
+              "name": "Batería Profoto B1",
+              "product_id": 3102,
+              "sku": "L17",
+              "price": 8000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3102_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 5935,
+            "status": "completed",
+            "date_created": "2025-03-27 13:20:15",
+            "total": "226100",
+            "customer": {
+              "first_name": "Bolivar",
+              "last_name": "Vega González",
+              "email": "bolivar.vega.g@gmail.com"
+            },
+            "fotos_garantia": [
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImagenRK05W-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImageZyfwoc-scaled.jpg"
+            ],
+            "correo_enviado": true,
+            "pago_completo": true
+          }
+        },
+        {
+          "id": 5914,
+          "status": "completed",
+          "date_created": "2025-03-26T13:14:53",
+          "date_modified": "2025-03-31T14:50:40",
+          "customer_id": 73,
+          "billing": {
+            "first_name": "Estudio Fe y Compañia Ltda",
+            "last_name": "Estudio Fe y Compañia Ltda",
+            "company": "Estudio fe y compañia ltda",
+            "address_1": "Monseñor Eyzaguirre 649",
+            "city": "Ñuñoa",
+            "email": "muralvarezcamila@gmail.com",
+            "phone": "997902709"
+          },
+          "metadata": {
+            "order_fecha_inicio": "28-03-2025",
+            "order_fecha_termino": "28-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "63000",
+            "calculated_discount": "0",
+            "calculated_iva": "11970",
+            "calculated_total": "74970",
+            "company_rut": "761255851",
+            "order_proyecto": "Ripley.com",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5914_26-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5914_2025-03-27_15-47-05.pdf",
+            "order_retire_name": "",
+            "order_retire_rut": "",
+            "order_retire_phone": "",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "Profoto Pro-B3 750W",
+              "product_id": 5644,
+              "sku": "",
+              "price": 63000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5280_1.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 5914,
+            "status": "completed",
+            "date_created": "2025-03-26 13:14:53",
+            "total": "74970",
+            "customer": {
+              "first_name": "Estudio Fe y Compañia Ltda",
+              "last_name": "Estudio Fe y Compañia Ltda",
+              "email": "muralvarezcamila@gmail.com"
+            },
+            "fotos_garantia": [
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImageZaPq73-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImagee8iTjL-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImage714sFr-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImagejYO0v8-scaled.jpg"
+            ],
+            "correo_enviado": true,
+            "pago_completo": false
+          }
+        },
+        {
+          "id": 5912,
+          "status": "completed",
+          "date_created": "2025-03-26T11:10:46",
+          "date_modified": "2025-03-28T14:08:28",
+          "customer_id": 76,
+          "billing": {
+            "first_name": "Paula",
+            "last_name": "Muñoz",
+            "company": "JOIA SPA",
+            "address_1": "Domingo Faustino Sarmiento 250, depto 202 B, ñuñoa",
+            "city": "Ñuñoa",
+            "email": "paula@joiamagazine.com",
+            "phone": "957566863"
+          },
+          "metadata": {
+            "order_fecha_inicio": "27-03-2025",
+            "order_fecha_termino": "27-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "16000",
+            "calculated_discount": "0",
+            "calculated_iva": "3040",
+            "calculated_total": "19040",
+            "company_rut": "77.708.162-4",
+            "order_proyecto": "Bold shooting asics",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5912_26-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5912_2025-03-26_15-05-35.pdf",
+            "order_retire_name": "",
+            "order_retire_rut": "",
+            "order_retire_phone": "",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "Avenger C-Stand",
+              "product_id": 5241,
+              "sku": "S04",
+              "price": 8000,
+              "quantity": 2,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5241_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 5912,
+            "status": "completed",
+            "date_created": "2025-03-26 11:10:46",
+            "total": "19040",
+            "customer": {
+              "first_name": "Paula",
+              "last_name": "Muñoz",
+              "email": "paula@joiamagazine.com"
+            },
+            "fotos_garantia": [],
+            "correo_enviado": false,
+            "pago_completo": true
+          }
+        },
+        {
+          "id": 5905,
+          "status": "completed",
+          "date_created": "2025-03-25T12:36:53",
+          "date_modified": "2025-03-31T14:52:41",
+          "customer_id": 75,
+          "billing": {
+            "first_name": "Victor",
+            "last_name": "GANDOLFO",
+            "company": "ESTUDIO FE Y COMPANIA LTDA.",
+            "address_1": "Eucaliptus diez #18865, Maipu",
+            "city": "Santiago",
+            "email": "victorgandolfob@gmail.com",
+            "phone": "978767002"
+          },
+          "metadata": {
+            "order_fecha_inicio": "28-03-2025",
+            "order_fecha_termino": "28-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "184000",
+            "calculated_discount": "0",
+            "calculated_iva": "34960",
+            "calculated_total": "218960",
+            "company_rut": "76125585-1",
+            "order_proyecto": "FE _RIPLEY.COM",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5905_25-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5905_2025-03-27_15-37-54.pdf",
+            "order_retire_name": "",
+            "order_retire_rut": "",
+            "order_retire_phone": "",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "Canon EF 24-70MM F/2.8L II USM",
+              "product_id": 3077,
+              "sku": "C03",
+              "price": 35000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3077_01.webp"
+            },
+            {
+              "name": "Profoto Air Remote Air TTL canon",
+              "product_id": 3099,
+              "sku": "L14",
+              "price": 14000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3099_01-1.webp"
+            },
+            {
+              "name": "Profoto D2 1000W +  tripode",
+              "product_id": 3095,
+              "sku": "L11",
+              "price": 45000,
+              "quantity": 3,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3095_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 5905,
+            "status": "completed",
+            "date_created": "2025-03-25 12:36:53",
+            "total": "218960",
+            "customer": {
+              "first_name": "Victor",
+              "last_name": "GANDOLFO",
+              "email": "victorgandolfob@gmail.com"
+            },
+            "fotos_garantia": [
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImagexIDNuF-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImage4MiLau-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImageePb5fe-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImageRfRNeg-scaled.jpg"
+            ],
+            "correo_enviado": true,
+            "pago_completo": false
+          }
+        },
+        {
+          "id": 5901,
+          "status": "completed",
+          "date_created": "2025-03-24T11:45:59",
+          "date_modified": "2025-03-31T00:54:45",
+          "customer_id": 73,
+          "billing": {
+            "first_name": "Estudio Fe y Compañia Ltda",
+            "last_name": "Estudio Fe y Compañia Ltda",
+            "company": "Estudio fe y compañia ltda",
+            "address_1": "Monseñor Eyzaguirre 649",
+            "city": "Ñuñoa",
+            "email": "muralvarezcamila@gmail.com",
+            "phone": "997902709"
+          },
+          "metadata": {
+            "order_fecha_inicio": "26-03-2025",
+            "order_fecha_termino": "26-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "163000",
+            "calculated_discount": "0",
+            "calculated_iva": "30970",
+            "calculated_total": "193970",
+            "company_rut": "76125585-1",
+            "order_proyecto": "Umbrale x Paz Vasquez",
+            "pdf_on_hold_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/presupuesto_5901_24-03-2025.pdf",
+            "pdf_processing_url": "https://rental.mariohans.cl/wp-content/uploads/2025/03/contrato_pedido_5901_2025-03-24_15-06-17.pdf",
+            "order_retire_name": "Benjamin Andres Rivera Hurtado 20.183.935-1",
+            "order_retire_rut": "",
+            "order_retire_phone": "",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "Canon EF 50mm f/1.2",
+              "product_id": 5166,
+              "sku": "C13",
+              "price": 35000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5166_01.webp"
+            },
+            {
+              "name": "Tether Tools CUC15-ORG cable USB-C A USB-C",
+              "product_id": 3075,
+              "sku": "C12",
+              "price": 8000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3075_01.webp"
+            },
+            {
+              "name": "Canon EOS R5 + Lente EF",
+              "product_id": 5630,
+              "sku": "",
+              "price": 120000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/C10.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 5901,
+            "status": "completed",
+            "date_created": "2025-03-24 11:45:59",
+            "total": "193970",
+            "customer": {
+              "first_name": "Estudio Fe y Compañia Ltda",
+              "last_name": "Estudio Fe y Compañia Ltda",
+              "email": "muralvarezcamila@gmail.com"
+            },
+            "fotos_garantia": [
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImage4GK7O2-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImageYRfrTG-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImageE0IFMh-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImagek3IORm-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImageH6UBEh-scaled.jpg"
+            ],
+            "correo_enviado": true,
+            "pago_completo": false
+          }
+        },
+        {
+          "id": 5829,
+          "status": "completed",
+          "date_created": "2025-03-15T14:11:24",
+          "date_modified": "2025-03-24T10:14:32",
+          "customer_id": 68,
+          "billing": {
+            "first_name": "Javier",
+            "last_name": "Briceño",
+            "company": "",
+            "address_1": "Monte Alegre 1050",
+            "city": "Santiago",
+            "email": "brialfotos@gmail.com",
+            "phone": "978806779"
+          },
+          "metadata": {
+            "order_fecha_inicio": "20-03-2025",
+            "order_fecha_termino": "20-03-2025",
+            "num_jornadas": "1",
+            "calculated_subtotal": "168500",
+            "calculated_discount": "0",
+            "calculated_iva": "32015",
+            "calculated_total": "200515",
+            "company_rut": "20.165.810-1",
+            "order_proyecto": "Shooting Pisco 3R",
+            "pdf_on_hold_url": "",
+            "pdf_processing_url": "",
+            "order_retire_name": "",
+            "order_retire_rut": "",
+            "order_retire_phone": "",
+            "order_comments": ""
+          },
+          "line_items": [
+            {
+              "name": "KIT 04 Profoto D2 1000/500/500W",
+              "product_id": 4714,
+              "sku": "L04",
+              "price": 88000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/01/kit-4714-03.webp"
+            },
+            {
+              "name": "Brazo D520 40\"",
+              "product_id": 5815,
+              "sku": "",
+              "price": 5500,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5251_01-1.webp"
+            },
+            {
+              "name": "Avenger Rotula D200 2 1/2",
+              "product_id": 5250,
+              "sku": "S14",
+              "price": 3500,
+              "quantity": 2,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5250_01.webp"
+            },
+            {
+              "name": "KIT banderas 91x61cm",
+              "product_id": 3140,
+              "sku": "M46",
+              "price": 28000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3140_01.webp"
+            },
+            {
+              "name": "Multispot (efecto sombras)",
+              "product_id": 3128,
+              "sku": "M08",
+              "price": 40000,
+              "quantity": 1,
+              "image": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3128_01.webp"
+            }
+          ],
+          "wordpress_data": {
+            "id": 5829,
+            "status": "completed",
+            "date_created": "2025-03-15 14:11:24",
+            "total": "200515",
+            "customer": {
+              "first_name": "Javier",
+              "last_name": "Briceño",
+              "email": "brialfotos@gmail.com"
+            },
+            "fotos_garantia": [
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImagecsqpWD-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImageniZtCc-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImageI8Lt6j-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImageXl18la-scaled.jpg",
+              "https://rental.mariohans.cl/wp-content/uploads/2025/03/tempImage8BJ2za-scaled.jpg"
+            ],
+            "correo_enviado": true,
+            "pago_completo": true
+          }
+        }
+      ],
+      "total": 17,
+      "totalPages": 1,
+      "page": 1,
+      "per_page": 20,
+      "debug": {
+        "wooOrdersCount": 17,
+        "wpOrdersCount": 17,
+        "uniqueOrdersCount": 17
+      }
+    }
+  }

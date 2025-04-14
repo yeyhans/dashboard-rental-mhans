@@ -12,22 +12,12 @@ if (!session) {
   return Astro.redirect("/");
 }
 
-// Fetch orders data from the API
-const response = await fetch(`${Astro.url.origin}/api/woo/get-orders`);
-const ordersData = await response.json();
+// Fetch orders data
+const ordersResponse = await fetch(`${Astro.url.origin}/api/get-all-orders`);
+const ordersData = await ordersResponse.json();
 
-// Fetch users data from the API
-const usersResponse = await fetch(`${Astro.url.origin}/api/wp/get-users`);
-const usersData = await usersResponse.json();
-
-// Verificar que ordersData tenga la estructura correcta
-if (!ordersData.data?.orders) {
-  ordersData.data = {
-    orders: [],
-    total: "0",
-    totalPages: "0"
-  };
-}
+// Fetch users data (esto es un placeholder - necesitarás implementar este endpoint)
+const usersData = { users: [] }; // Por ahora lo dejamos vacío
 
 const title = "Dashboard - Rental Mhans";
 ---
@@ -44,23 +34,21 @@ const title = "Dashboard - Rental Mhans";
     <OrderStatsOverview 
       client:load 
       orders={ordersData.data.orders || []} 
-      totalOrders={ordersData.data.total || "0"} 
+      totalOrders={ordersData.data.total.toString() || "0"} 
     />
-    
-
     
     <!-- Order Summary Cards Component -->
     <OrderSummaryCards 
       client:load
       orders={ordersData.data.orders || []}
-      totalOrders={ordersData.data.total || "0"}
+      totalOrders={ordersData.data.total.toString() || "0"}
       users={usersData.users || []}
     />
     
-        <!-- Revenue Chart Component -->
-        <div class="my-4">
+    <!-- Revenue Chart Component -->
+    <div class="my-4">
 
-        </div>
+    </div>
 
   </div>
 </Base>

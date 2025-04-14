@@ -77,7 +77,11 @@ export const GET: APIRoute = async ({ request }) => {
         company_rut: order.meta_data.find((meta: any) => meta.key === 'company_rut')?.value || '',
         order_proyecto: order.meta_data.find((meta: any) => meta.key === 'order_proyecto')?.value || '',
         pdf_on_hold_url: order.meta_data.find((meta: any) => meta.key === '_pdf_on_hold_url')?.value || '',
-        pdf_processing_url: order.meta_data.find((meta: any) => meta.key === '_pdf_processing_url')?.value || ''
+        pdf_processing_url: order.meta_data.find((meta: any) => meta.key === '_pdf_processing_url')?.value || '',
+        order_retire_name: order.meta_data.find((meta: any) => meta.key === 'order_retire_name')?.value || '',
+        order_retire_rut: order.meta_data.find((meta: any) => meta.key === 'order_retire_rut')?.value || '',
+        order_retire_phone: order.meta_data.find((meta: any) => meta.key === 'order_retire_phone')?.value || '',
+        order_comments: order.meta_data.find((meta: any) => meta.key === 'order_comments')?.value || ''
       },
       line_items: order.line_items.map((item: any) => ({
         name: item.name,

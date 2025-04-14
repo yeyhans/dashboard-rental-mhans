@@ -30,6 +30,10 @@ export type Metadata = {
   order_proyecto: string;
   pdf_on_hold_url: string;
   pdf_processing_url: string;
+  order_retire_name: string;
+  order_retire_rut: string;
+  order_retire_phone: string;
+  order_comments: string;
 };
 
 export type Order = {
