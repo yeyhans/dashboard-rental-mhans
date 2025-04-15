@@ -159,107 +159,107 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Weekly Deliveries Card */}
-        <Card className="col-span-1 sm:col-span-2 lg:col-span-2 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Entregas de esta semana</CardTitle>
+        <Card className="shadow-sm">
+          <CardHeader className="py-2 px-3">
+            <CardTitle className="text-sm">Entregas de esta semana</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="py-2 px-3">
             {weeklyDeliveries.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {weeklyDeliveries.map((order, index) => {
                   const user = findUserById(order.customer_id);
                   return (
                     <Dialog key={index}>
                       <DialogTrigger asChild>
-                        <div className="border rounded-md p-2 cursor-pointer hover:bg-accent active:bg-accent/90 touch-manipulation">
+                        <div className="border rounded-md p-1.5 cursor-pointer hover:bg-accent active:bg-accent/90 touch-manipulation">
                           <div className="flex justify-between items-start">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
                               {statusTranslations[order.status] || order.status}
                             </span>
-                            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap ml-1">
+                            <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap ml-1">
                               {order.metadata.order_fecha_inicio}
                             </span>
                           </div>
-                          <p className="font-semibold text-sm mt-1 truncate">{order.metadata.order_proyecto || 'Sin proyecto'}</p>
-                          <p className="text-xs sm:text-sm truncate">
+                          <p className="font-semibold text-xs mt-0.5 truncate">{order.metadata.order_proyecto || 'Sin proyecto'}</p>
+                          <p className="text-[10px] truncate">
                             {user ? (user.customer_type === 'empresa' ? user.billing_company : `${user.first_name} ${user.last_name}`) : 
                                    (order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`)}
                           </p>
                           {user && user.instagram && (
-                            <p className="text-xs text-muted-foreground mt-0.5 truncate">{user.instagram}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">{user.instagram}</p>
                           )}
                         </div>
                       </DialogTrigger>
-                      <DialogContent className="sm:max-w-xl md:max-w-3xl max-h-[85vh] overflow-y-auto p-3 sm:p-6">
-                        <DialogHeader className="space-y-1 mb-2">
-                          <DialogTitle className="text-base sm:text-lg">Detalles del Pedido</DialogTitle>
-                          <DialogDescription className="text-xs sm:text-sm">
+                      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-2 sm:p-4">
+                        <DialogHeader className="space-y-0.5 mb-2">
+                          <DialogTitle className="text-sm">Detalles del Pedido</DialogTitle>
+                          <DialogDescription className="text-[10px]">
                             Pedido del {formatDate(order.date_created || '')}
                           </DialogDescription>
                         </DialogHeader>
 
-                        <div className="space-y-4">
+                        <div className="space-y-2">
                           {/* Estado y Fechas */}
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="grid grid-cols-3 gap-2">
                             <div>
-                              <Label className="text-xs sm:text-sm">Estado</Label>
-                              <div className={`mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
+                              <Label className="text-[10px]">Estado</Label>
+                              <div className={`mt-0.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
                                 {statusTranslations[order.status] || order.status}
                               </div>
                             </div>
                             <div>
-                              <Label className="text-xs sm:text-sm">Fecha de Inicio</Label>
-                              <div className="mt-1 text-xs sm:text-sm">{order.metadata.order_fecha_inicio}</div>
+                              <Label className="text-[10px]">Fecha Inicio</Label>
+                              <div className="mt-0.5 text-[10px]">{order.metadata.order_fecha_inicio}</div>
                             </div>
                             <div>
-                              <Label className="text-xs sm:text-sm">Fecha de Término</Label>
-                              <div className="mt-1 text-xs sm:text-sm">{order.metadata.order_fecha_termino}</div>
+                              <Label className="text-[10px]">Fecha Término</Label>
+                              <div className="mt-0.5 text-[10px]">{order.metadata.order_fecha_termino}</div>
                             </div>
                           </div>
 
                           {/* Información del Cliente */}
                           <div>
-                            <h4 className="text-xs sm:text-sm font-medium mb-1">Información del Cliente</h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-card p-2 sm:p-3 rounded-lg">
+                            <h4 className="text-[10px] font-medium mb-0.5">Información del Cliente</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-card p-1.5 rounded-lg">
                               <div>
-                                <Label className="text-xs sm:text-sm">Nombre</Label>
-                                <div className="mt-1 text-xs sm:text-sm">
+                                <Label className="text-[10px]">Nombre</Label>
+                                <div className="mt-0.5 text-[10px]">
                                   {user ? `${user.first_name} ${user.last_name}` : 
                                          `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}
                                 </div>
                               </div>
                               <div>
-                                <Label className="text-xs sm:text-sm">Empresa</Label>
-                                <div className="mt-1 text-xs sm:text-sm">
+                                <Label className="text-[10px]">Empresa</Label>
+                                <div className="mt-0.5 text-[10px]">
                                   {user ? user.billing_company || '-' : order.billing?.company || '-'}
                                 </div>
                               </div>
                               <div>
-                                <Label className="text-xs sm:text-sm">Email</Label>
-                                <div className="mt-1 text-xs sm:text-sm break-all">
+                                <Label className="text-[10px]">Email</Label>
+                                <div className="mt-0.5 text-[10px] break-all">
                                   {user ? user.email : order.billing?.email || ''}
                                 </div>
                               </div>
                               {user && user.rut && (
                                 <div>
-                                  <Label className="text-xs sm:text-sm">RUT</Label>
-                                  <div className="mt-1 text-xs sm:text-sm">{user.rut}</div>
+                                  <Label className="text-[10px]">RUT</Label>
+                                  <div className="mt-0.5 text-[10px]">{user.rut}</div>
                                 </div>
                               )}
                               {user && user.billing_phone && (
                                 <div>
-                                  <Label className="text-xs sm:text-sm">Teléfono</Label>
-                                  <div className="mt-1 text-xs sm:text-sm">{user.billing_phone}</div>
+                                  <Label className="text-[10px]">Teléfono</Label>
+                                  <div className="mt-0.5 text-[10px]">{user.billing_phone}</div>
                                 </div>
                               )}
                               {user && user.instagram && (
                                 <div>
-                                  <Label className="text-xs sm:text-sm">Instagram</Label>
-                                  <div className="mt-1 text-xs sm:text-sm">{user.instagram}</div>
+                                  <Label className="text-[10px]">Instagram</Label>
+                                  <div className="mt-0.5 text-[10px]">{user.instagram}</div>
                                 </div>
                               )}
                             </div>
@@ -268,36 +268,36 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                           {/* Productos */}
                           {order.line_items && (
                             <div>
-                              <h4 className="text-xs sm:text-sm font-medium mb-1">Productos</h4>
-                              <div className="bg-card p-2 sm:p-3 rounded-lg">
+                              <h4 className="text-[10px] font-medium mb-0.5">Productos</h4>
+                              <div className="bg-card p-1.5 rounded-lg">
                                 <ScrollArea className="w-full overflow-auto">
-                                  <div className="min-w-[500px]">
+                                  <div className="min-w-[300px]">
                                     <Table>
                                       <TableHeader>
                                         <TableRow>
-                                          <TableHead className="text-xs sm:text-sm w-14">Imagen</TableHead>
-                                          <TableHead className="text-xs sm:text-sm">Producto</TableHead>
-                                          <TableHead className="text-xs sm:text-sm text-center">Cant</TableHead>
-                                          <TableHead className="text-xs sm:text-sm text-right">Precio</TableHead>
-                                          <TableHead className="text-xs sm:text-sm text-right">Total</TableHead>
+                                          <TableHead className="text-[10px] w-12">Img</TableHead>
+                                          <TableHead className="text-[10px]">Producto</TableHead>
+                                          <TableHead className="text-[10px] text-center">Cant</TableHead>
+                                          <TableHead className="text-[10px] text-right">Precio</TableHead>
+                                          <TableHead className="text-[10px] text-right">Total</TableHead>
                                         </TableRow>
                                       </TableHeader>
                                       <TableBody>
                                         {order.line_items.map((item, index) => (
                                           <TableRow key={index}>
-                                            <TableCell className="p-1 sm:p-2">
+                                            <TableCell className="p-1">
                                               {item.image && (
                                                 <img 
                                                   src={item.image} 
                                                   alt={item.name} 
-                                                  className="w-10 h-10 object-cover rounded-md"
+                                                  className="w-8 h-8 object-cover rounded-md"
                                                 />
                                               )}
                                             </TableCell>
-                                            <TableCell className="text-xs sm:text-sm p-1 sm:p-2">{item.name}</TableCell>
-                                            <TableCell className="text-xs sm:text-sm text-center p-1 sm:p-2">{item.quantity}</TableCell>
-                                            <TableCell className="text-xs sm:text-sm text-right p-1 sm:p-2">${item.price.toLocaleString('es-CL')}</TableCell>
-                                            <TableCell className="text-xs sm:text-sm text-right p-1 sm:p-2">${(item.price * item.quantity).toLocaleString('es-CL')}</TableCell>
+                                            <TableCell className="text-[10px] p-1">{item.name}</TableCell>
+                                            <TableCell className="text-[10px] text-center p-1">{item.quantity}</TableCell>
+                                            <TableCell className="text-[10px] text-right p-1">${item.price.toLocaleString('es-CL')}</TableCell>
+                                            <TableCell className="text-[10px] text-right p-1">${(item.price * item.quantity).toLocaleString('es-CL')}</TableCell>
                                           </TableRow>
                                         ))}
                                       </TableBody>
@@ -310,16 +310,16 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
 
                           {/* Detalles del proyecto */}
                           <div>
-                            <h4 className="text-xs sm:text-sm font-medium mb-1">Detalles del proyecto</h4>
-                            <div className="bg-card p-2 sm:p-3 rounded-lg space-y-2">
+                            <h4 className="text-[10px] font-medium mb-0.5">Detalles del proyecto</h4>
+                            <div className="bg-card p-1.5 rounded-lg space-y-1">
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                  <Label className="text-xs sm:text-sm">Proyecto</Label>
-                                  <div className="mt-1 text-xs sm:text-sm font-semibold">{order.metadata.order_proyecto || 'Sin nombre'}</div>
+                                  <Label className="text-[10px]">Proyecto</Label>
+                                  <div className="mt-0.5 text-[10px] font-semibold">{order.metadata.order_proyecto || 'Sin nombre'}</div>
                                 </div>
                                 <div>
-                                  <Label className="text-xs sm:text-sm">Jornadas</Label>
-                                  <div className="mt-1 text-xs sm:text-sm font-semibold">{order.metadata.num_jornadas || '1'}</div>
+                                  <Label className="text-[10px]">Jornadas</Label>
+                                  <div className="mt-0.5 text-[10px] font-semibold">{order.metadata.num_jornadas || '1'}</div>
                                 </div>
                               </div>
                             </div>
@@ -327,26 +327,26 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
 
                           {/* Información de Retiro */}
                           <div>
-                            <h4 className="text-xs sm:text-sm font-medium mb-1">Información de Retiro</h4>
-                            <div className="bg-card p-2 sm:p-3 rounded-lg space-y-2">
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <h4 className="text-[10px] font-medium mb-0.5">Información de Retiro</h4>
+                            <div className="bg-card p-1.5 rounded-lg space-y-1">
+                              <div className="grid grid-cols-3 gap-2">
                                 <div>
-                                  <Label className="text-xs sm:text-sm">Nombre</Label>
-                                  <div className="mt-1 text-xs sm:text-sm">{order.metadata.order_retire_name || '-'}</div>
+                                  <Label className="text-[10px]">Nombre</Label>
+                                  <div className="mt-0.5 text-[10px]">{order.metadata.order_retire_name || '-'}</div>
                                 </div>
                                 <div>
-                                  <Label className="text-xs sm:text-sm">RUT</Label>
-                                  <div className="mt-1 text-xs sm:text-sm">{order.metadata.order_retire_rut || '-'}</div>
+                                  <Label className="text-[10px]">RUT</Label>
+                                  <div className="mt-0.5 text-[10px]">{order.metadata.order_retire_rut || '-'}</div>
                                 </div>
                                 <div>
-                                  <Label className="text-xs sm:text-sm">Teléfono</Label>
-                                  <div className="mt-1 text-xs sm:text-sm">{order.metadata.order_retire_phone || '-'}</div>
+                                  <Label className="text-[10px]">Teléfono</Label>
+                                  <div className="mt-0.5 text-[10px]">{order.metadata.order_retire_phone || '-'}</div>
                                 </div>
                               </div>
                               {order.metadata.order_comments && (
-                                <div className="mt-2">
-                                  <Label className="text-xs sm:text-sm">Comentarios</Label>
-                                  <div className="mt-1 text-xs sm:text-sm text-muted-foreground">{order.metadata.order_comments}</div>
+                                <div className="mt-1">
+                                  <Label className="text-[10px]">Comentarios</Label>
+                                  <div className="mt-0.5 text-[10px] text-muted-foreground">{order.metadata.order_comments}</div>
                                 </div>
                               )}
                             </div>
@@ -354,39 +354,39 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
 
                           {/* Resumen financiero */}
                           <div>
-                            <h4 className="text-xs sm:text-sm font-medium mb-1">Resumen financiero</h4>
-                            <div className="bg-card p-2 sm:p-3 rounded-lg">
-                              <div className="space-y-1">
+                            <h4 className="text-[10px] font-medium mb-0.5">Resumen financiero</h4>
+                            <div className="bg-card p-1.5 rounded-lg">
+                              <div className="space-y-0.5">
                                 <div className="flex justify-between">
-                                  <span className="text-xs sm:text-sm text-muted-foreground">Subtotal:</span>
-                                  <span className="text-xs sm:text-sm">${parseInt(order.metadata.calculated_subtotal || '0').toLocaleString('es-CL')}</span>
+                                  <span className="text-[10px] text-muted-foreground">Subtotal:</span>
+                                  <span className="text-[10px]">${parseInt(order.metadata.calculated_subtotal || '0').toLocaleString('es-CL')}</span>
                                 </div>
                                 
                                 {order.metadata.calculated_discount && parseInt(order.metadata.calculated_discount) > 0 && (
                                   <div className="flex justify-between">
-                                    <span className="text-xs sm:text-sm text-muted-foreground">Descuento:</span>
-                                    <span className="text-xs sm:text-sm text-green-600">-${parseInt(order.metadata.calculated_discount).toLocaleString('es-CL')}</span>
+                                    <span className="text-[10px] text-muted-foreground">Descuento:</span>
+                                    <span className="text-[10px] text-green-600">-${parseInt(order.metadata.calculated_discount).toLocaleString('es-CL')}</span>
                                   </div>
                                 )}
                                 
                                 <div className="flex justify-between">
-                                  <span className="text-xs sm:text-sm text-muted-foreground">IVA (19%):</span>
-                                  <span className="text-xs sm:text-sm">${parseInt(order.metadata.calculated_iva || '0').toLocaleString('es-CL')}</span>
+                                  <span className="text-[10px] text-muted-foreground">IVA (19%):</span>
+                                  <span className="text-[10px]">${parseInt(order.metadata.calculated_iva || '0').toLocaleString('es-CL')}</span>
                                 </div>
                                 
-                                <div className="flex justify-between border-t pt-2 mt-2">
-                                  <span className="text-xs sm:text-sm font-medium">Total:</span>
-                                  <span className="text-base sm:text-lg font-bold text-primary">${parseInt(order.metadata.calculated_total).toLocaleString('es-CL')}</span>
+                                <div className="flex justify-between border-t pt-1 mt-1">
+                                  <span className="text-[10px] font-medium">Total:</span>
+                                  <span className="text-sm font-bold text-primary">${parseInt(order.metadata.calculated_total).toLocaleString('es-CL')}</span>
                                 </div>
                               </div>
                             </div>
                           </div>
 
                           {/* Botón Ver Detalle */}
-                          <div className="flex justify-end pt-4">
+                          <div className="flex justify-end pt-2">
                             <a 
                               href={`/orders/${order.id}`} target="_blank"
-                              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+                              className="inline-flex items-center justify-center rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 py-1"
                             >
                               Ver Detalle Completo
                             </a>
@@ -398,110 +398,110 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                 })}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No hay entregas programadas para esta semana.</p>
+              <p className="text-xs text-muted-foreground">No hay entregas programadas para esta semana.</p>
             )}
           </CardContent>
         </Card>
 
         {/* Weekly Returns Card */}
-        <Card className="col-span-1 sm:col-span-2 lg:col-span-2 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Devoluciones de esta semana</CardTitle>
+        <Card className="shadow-sm">
+          <CardHeader className="py-2 px-3">
+            <CardTitle className="text-sm">Devoluciones de esta semana</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="py-2 px-3">
             {weeklyReturns.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {weeklyReturns.map((order, index) => {
                   const user = findUserById(order.customer_id);
                   return (
                     <Dialog key={index}>
                       <DialogTrigger asChild>
-                        <div className="border rounded-md p-2 cursor-pointer hover:bg-accent active:bg-accent/90 touch-manipulation">
+                        <div className="border rounded-md p-1.5 cursor-pointer hover:bg-accent active:bg-accent/90 touch-manipulation">
                           <div className="flex justify-between items-start">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
                               {statusTranslations[order.status] || order.status}
                             </span>
-                            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap ml-1">
+                            <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap ml-1">
                               {order.metadata.order_fecha_termino}
                             </span>
                           </div>
-                          <p className="font-semibold text-sm mt-1 truncate">{order.metadata.order_proyecto || 'Sin proyecto'}</p>
-                          <p className="text-xs sm:text-sm truncate">
+                          <p className="font-semibold text-xs mt-0.5 truncate">{order.metadata.order_proyecto || 'Sin proyecto'}</p>
+                          <p className="text-[10px] truncate">
                             {user ? (user.customer_type === 'empresa' ? user.billing_company : `${user.first_name} ${user.last_name}`) : 
                                    (order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`)}
                           </p>
                           {user && user.instagram && (
-                            <p className="text-xs text-muted-foreground mt-0.5 truncate">{user.instagram}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">{user.instagram}</p>
                           )}
                         </div>
                       </DialogTrigger>
-                      <DialogContent className="sm:max-w-xl md:max-w-3xl max-h-[85vh] overflow-y-auto p-3 sm:p-6">
-                        <DialogHeader className="space-y-1 mb-2">
-                          <DialogTitle className="text-base sm:text-lg">Detalles del Pedido</DialogTitle>
-                          <DialogDescription className="text-xs sm:text-sm">
+                      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto p-2 sm:p-4">
+                        <DialogHeader className="space-y-0.5 mb-2">
+                          <DialogTitle className="text-sm">Detalles del Pedido</DialogTitle>
+                          <DialogDescription className="text-[10px]">
                             Pedido del {formatDate(order.date_created || '')}
                           </DialogDescription>
                         </DialogHeader>
 
-                        <div className="space-y-4">
+                        <div className="space-y-2">
                           {/* Estado y Fechas */}
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="grid grid-cols-3 gap-2">
                             <div>
-                              <Label className="text-xs sm:text-sm">Estado</Label>
-                              <div className={`mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
+                              <Label className="text-[10px]">Estado</Label>
+                              <div className={`mt-0.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
                                 {statusTranslations[order.status] || order.status}
                               </div>
                             </div>
                             <div>
-                              <Label className="text-xs sm:text-sm">Fecha de Inicio</Label>
-                              <div className="mt-1 text-xs sm:text-sm">{order.metadata.order_fecha_inicio}</div>
+                              <Label className="text-[10px]">Fecha Inicio</Label>
+                              <div className="mt-0.5 text-[10px]">{order.metadata.order_fecha_inicio}</div>
                             </div>
                             <div>
-                              <Label className="text-xs sm:text-sm">Fecha de Término</Label>
-                              <div className="mt-1 text-xs sm:text-sm">{order.metadata.order_fecha_termino}</div>
+                              <Label className="text-[10px]">Fecha Término</Label>
+                              <div className="mt-0.5 text-[10px]">{order.metadata.order_fecha_termino}</div>
                             </div>
                           </div>
 
                           {/* Información del Cliente */}
                           <div>
-                            <h4 className="text-xs sm:text-sm font-medium mb-1">Información del Cliente</h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-card p-2 sm:p-3 rounded-lg">
+                            <h4 className="text-[10px] font-medium mb-0.5">Información del Cliente</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-card p-1.5 rounded-lg">
                               <div>
-                                <Label className="text-xs sm:text-sm">Nombre</Label>
-                                <div className="mt-1 text-xs sm:text-sm">
+                                <Label className="text-[10px]">Nombre</Label>
+                                <div className="mt-0.5 text-[10px]">
                                   {user ? `${user.first_name} ${user.last_name}` : 
                                          `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}
                                 </div>
                               </div>
 
                               <div>
-                                <Label className="text-xs sm:text-sm">Empresa</Label>
-                                <div className="mt-1 text-xs sm:text-sm">
+                                <Label className="text-[10px]">Empresa</Label>
+                                <div className="mt-0.5 text-[10px]">
                                   {user ? user.billing_company || '-' : order.billing?.company || '-'}
                                 </div>
                               </div>
                               <div>
-                                <Label className="text-xs sm:text-sm">Email</Label>
-                                <div className="mt-1 text-xs sm:text-sm break-all">
+                                <Label className="text-[10px]">Email</Label>
+                                <div className="mt-0.5 text-[10px] break-all">
                                   {user ? user.email : order.billing?.email || ''}
                                 </div>
                               </div>
                               {user && user.rut && (
                                 <div>
-                                  <Label className="text-xs sm:text-sm">RUT</Label>
-                                  <div className="mt-1 text-xs sm:text-sm">{user.rut}</div>
+                                  <Label className="text-[10px]">RUT</Label>
+                                  <div className="mt-0.5 text-[10px]">{user.rut}</div>
                                 </div>
                               )}
                               {user && user.billing_phone && (
                                 <div>
-                                  <Label className="text-xs sm:text-sm">Teléfono</Label>
-                                  <div className="mt-1 text-xs sm:text-sm">{user.billing_phone}</div>
+                                  <Label className="text-[10px]">Teléfono</Label>
+                                  <div className="mt-0.5 text-[10px]">{user.billing_phone}</div>
                                 </div>
                               )}
                               {user && user.instagram && (
                                 <div>
-                                  <Label className="text-xs sm:text-sm">Instagram</Label>
-                                  <div className="mt-1 text-xs sm:text-sm">{user.instagram}</div>
+                                  <Label className="text-[10px]">Instagram</Label>
+                                  <div className="mt-0.5 text-[10px]">{user.instagram}</div>
                                 </div>
                               )}
                             </div>
@@ -510,36 +510,36 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                           {/* Productos */}
                           {order.line_items && (
                             <div>
-                              <h4 className="text-xs sm:text-sm font-medium mb-1">Productos</h4>
-                              <div className="bg-card p-2 sm:p-3 rounded-lg">
+                              <h4 className="text-[10px] font-medium mb-0.5">Productos</h4>
+                              <div className="bg-card p-1.5 rounded-lg">
                                 <ScrollArea className="w-full overflow-auto">
-                                  <div className="min-w-[500px]">
+                                  <div className="min-w-[300px]">
                                     <Table>
                                       <TableHeader>
                                         <TableRow>
-                                          <TableHead className="text-xs sm:text-sm w-14">Imagen</TableHead>
-                                          <TableHead className="text-xs sm:text-sm">Producto</TableHead>
-                                          <TableHead className="text-xs sm:text-sm text-center">Cant</TableHead>
-                                          <TableHead className="text-xs sm:text-sm text-right">Precio</TableHead>
-                                          <TableHead className="text-xs sm:text-sm text-right">Total</TableHead>
+                                          <TableHead className="text-[10px] w-12">Img</TableHead>
+                                          <TableHead className="text-[10px]">Producto</TableHead>
+                                          <TableHead className="text-[10px] text-center">Cant</TableHead>
+                                          <TableHead className="text-[10px] text-right">Precio</TableHead>
+                                          <TableHead className="text-[10px] text-right">Total</TableHead>
                                         </TableRow>
                                       </TableHeader>
                                       <TableBody>
                                         {order.line_items.map((item, index) => (
                                           <TableRow key={index}>
-                                            <TableCell className="p-1 sm:p-2">
+                                            <TableCell className="p-1">
                                               {item.image && (
                                                 <img 
                                                   src={item.image} 
                                                   alt={item.name} 
-                                                  className="w-10 h-10 object-cover rounded-md"
+                                                  className="w-8 h-8 object-cover rounded-md"
                                                 />
                                               )}
                                             </TableCell>
-                                            <TableCell className="text-xs sm:text-sm p-1 sm:p-2">{item.name}</TableCell>
-                                            <TableCell className="text-xs sm:text-sm text-center p-1 sm:p-2">{item.quantity}</TableCell>
-                                            <TableCell className="text-xs sm:text-sm text-right p-1 sm:p-2">${item.price.toLocaleString('es-CL')}</TableCell>
-                                            <TableCell className="text-xs sm:text-sm text-right p-1 sm:p-2">${(item.price * item.quantity).toLocaleString('es-CL')}</TableCell>
+                                            <TableCell className="text-[10px] p-1">{item.name}</TableCell>
+                                            <TableCell className="text-[10px] text-center p-1">{item.quantity}</TableCell>
+                                            <TableCell className="text-[10px] text-right p-1">${item.price.toLocaleString('es-CL')}</TableCell>
+                                            <TableCell className="text-[10px] text-right p-1">${(item.price * item.quantity).toLocaleString('es-CL')}</TableCell>
                                           </TableRow>
                                         ))}
                                       </TableBody>
@@ -552,16 +552,16 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
 
                           {/* Detalles del proyecto */}
                           <div>
-                            <h4 className="text-xs sm:text-sm font-medium mb-1">Detalles del proyecto</h4>
-                            <div className="bg-card p-2 sm:p-3 rounded-lg space-y-2">
+                            <h4 className="text-[10px] font-medium mb-0.5">Detalles del proyecto</h4>
+                            <div className="bg-card p-1.5 rounded-lg space-y-1">
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                  <Label className="text-xs sm:text-sm">Proyecto</Label>
-                                  <div className="mt-1 text-xs sm:text-sm font-semibold">{order.metadata.order_proyecto || 'Sin nombre'}</div>
+                                  <Label className="text-[10px]">Proyecto</Label>
+                                  <div className="mt-0.5 text-[10px] font-semibold">{order.metadata.order_proyecto || 'Sin nombre'}</div>
                                 </div>
                                 <div>
-                                  <Label className="text-xs sm:text-sm">Jornadas</Label>
-                                  <div className="mt-1 text-xs sm:text-sm font-semibold">{order.metadata.num_jornadas || '1'}</div>
+                                  <Label className="text-[10px]">Jornadas</Label>
+                                  <div className="mt-0.5 text-[10px] font-semibold">{order.metadata.num_jornadas || '1'}</div>
                                 </div>
                               </div>
                             </div>
@@ -569,26 +569,26 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
 
                           {/* Información de Retiro */}
                           <div>
-                            <h4 className="text-xs sm:text-sm font-medium mb-1">Información de Retiro</h4>
-                            <div className="bg-card p-2 sm:p-3 rounded-lg space-y-2">
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <h4 className="text-[10px] font-medium mb-0.5">Información de Retiro</h4>
+                            <div className="bg-card p-1.5 rounded-lg space-y-1">
+                              <div className="grid grid-cols-3 gap-2">
                                 <div>
-                                  <Label className="text-xs sm:text-sm">Nombre</Label>
-                                  <div className="mt-1 text-xs sm:text-sm">{order.metadata.order_retire_name || '-'}</div>
+                                  <Label className="text-[10px]">Nombre</Label>
+                                  <div className="mt-0.5 text-[10px]">{order.metadata.order_retire_name || '-'}</div>
                                 </div>
                                 <div>
-                                  <Label className="text-xs sm:text-sm">RUT</Label>
-                                  <div className="mt-1 text-xs sm:text-sm">{order.metadata.order_retire_rut || '-'}</div>
+                                  <Label className="text-[10px]">RUT</Label>
+                                  <div className="mt-0.5 text-[10px]">{order.metadata.order_retire_rut || '-'}</div>
                                 </div>
                                 <div>
-                                  <Label className="text-xs sm:text-sm">Teléfono</Label>
-                                  <div className="mt-1 text-xs sm:text-sm">{order.metadata.order_retire_phone || '-'}</div>
+                                  <Label className="text-[10px]">Teléfono</Label>
+                                  <div className="mt-0.5 text-[10px]">{order.metadata.order_retire_phone || '-'}</div>
                                 </div>
                               </div>
                               {order.metadata.order_comments && (
-                                <div className="mt-2">
-                                  <Label className="text-xs sm:text-sm">Comentarios</Label>
-                                  <div className="mt-1 text-xs sm:text-sm text-muted-foreground">{order.metadata.order_comments}</div>
+                                <div className="mt-1">
+                                  <Label className="text-[10px]">Comentarios</Label>
+                                  <div className="mt-0.5 text-[10px] text-muted-foreground">{order.metadata.order_comments}</div>
                                 </div>
                               )}
                             </div>
@@ -596,39 +596,39 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
 
                           {/* Resumen financiero */}
                           <div>
-                            <h4 className="text-xs sm:text-sm font-medium mb-1">Resumen financiero</h4>
-                            <div className="bg-card p-2 sm:p-3 rounded-lg">
-                              <div className="space-y-1">
+                            <h4 className="text-[10px] font-medium mb-0.5">Resumen financiero</h4>
+                            <div className="bg-card p-1.5 rounded-lg">
+                              <div className="space-y-0.5">
                                 <div className="flex justify-between">
-                                  <span className="text-xs sm:text-sm text-muted-foreground">Subtotal:</span>
-                                  <span className="text-xs sm:text-sm">${parseInt(order.metadata.calculated_subtotal || '0').toLocaleString('es-CL')}</span>
+                                  <span className="text-[10px] text-muted-foreground">Subtotal:</span>
+                                  <span className="text-[10px]">${parseInt(order.metadata.calculated_subtotal || '0').toLocaleString('es-CL')}</span>
                                 </div>
                                 
                                 {order.metadata.calculated_discount && parseInt(order.metadata.calculated_discount) > 0 && (
                                   <div className="flex justify-between">
-                                    <span className="text-xs sm:text-sm text-muted-foreground">Descuento:</span>
-                                    <span className="text-xs sm:text-sm text-green-600">-${parseInt(order.metadata.calculated_discount).toLocaleString('es-CL')}</span>
+                                    <span className="text-[10px] text-muted-foreground">Descuento:</span>
+                                    <span className="text-[10px] text-green-600">-${parseInt(order.metadata.calculated_discount).toLocaleString('es-CL')}</span>
                                   </div>
                                 )}
                                 
                                 <div className="flex justify-between">
-                                  <span className="text-xs sm:text-sm text-muted-foreground">IVA (19%):</span>
-                                  <span className="text-xs sm:text-sm">${parseInt(order.metadata.calculated_iva || '0').toLocaleString('es-CL')}</span>
+                                  <span className="text-[10px] text-muted-foreground">IVA (19%):</span>
+                                  <span className="text-[10px]">${parseInt(order.metadata.calculated_iva || '0').toLocaleString('es-CL')}</span>
                                 </div>
                                 
-                                <div className="flex justify-between border-t pt-2 mt-2">
-                                  <span className="text-xs sm:text-sm font-medium">Total:</span>
-                                  <span className="text-base sm:text-lg font-bold text-primary">${parseInt(order.metadata.calculated_total).toLocaleString('es-CL')}</span>
+                                <div className="flex justify-between border-t pt-1 mt-1">
+                                  <span className="text-[10px] font-medium">Total:</span>
+                                  <span className="text-sm font-bold text-primary">${parseInt(order.metadata.calculated_total).toLocaleString('es-CL')}</span>
                                 </div>
                               </div>
                             </div>
                           </div>
 
                           {/* Botón Ver Detalle */}
-                          <div className="flex justify-end pt-4">
+                          <div className="flex justify-end pt-2">
                             <a 
                               href={`/orders/${order.id}`}
-                              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+                              className="inline-flex items-center justify-center rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 py-1"
                             >
                               Ver Detalle Completo
                             </a>
@@ -640,7 +640,7 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                 })}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No hay devoluciones programadas para esta semana.</p>
+              <p className="text-xs text-muted-foreground">No hay devoluciones programadas para esta semana.</p>
             )}
           </CardContent>
         </Card>

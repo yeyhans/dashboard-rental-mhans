@@ -1,0 +1,51 @@
+---
+import Base from "../../layout/Base.astro";
+import { supabase } from "../../lib/supabase";
+import { ProductDetailController } from "../../components/products/ProductDetailController";
+
+export const prerender = false;
+
+// Get the user session
+const { data: { session } } = await supabase.auth.getSession();
+
+if (!session) {
+  return Astro.redirect("/");
+}
+
+// Get the product ID from the URL parameter
+const { id } = Astro.params;
+
+if (!id) {
+  return Astro.redirect("/products");
+}
+
+// Fetch the product data for this specific ID
+const response = await fetch(`${Astro.url.origin}/api/woo/get-product/${id}`);
+const productData = await response.json();
+
+// Fetch categories for the dropdown of editing
+const categoriesResponse = await fetch(`${Astro.url.origin}/api/woo/get-categories`);
+const categoriesData = await categoriesResponse.json();
+
+// Process the result to access categories correctly
+const categories = categoriesData.success ? categoriesData.data.categories || [] : [];
+
+const title = productData.success ? `Producto: ${productData.data.name}` : "Producto no encontrado";
+---
+
+<Base title={title}>
+  {productData.success ? (
+    <ProductDetailController 
+      client:load
+      initialProduct={productData.data} 
+      initialCategories={categories}
+    />
+  ) : (
+    <div class="container py-4 px-4 max-w-6xl mx-auto">
+      <div class="p-6 bg-destructive/10 text-destructive rounded-md">
+        <p class="font-medium">Error al cargar el producto: {productData.message}</p>
+        <p class="mt-2">Por favor, intenta nuevamente o contacta al administrador.</p>
+      </div>
+    </div>
+  )}
+</Base>

@@ -1,0 +1,1090 @@
+{
+    "success": true,
+    "message": "Todos los productos obtenidos exitosamente",
+    "data": {
+      "products": [
+        {
+          "id": 5953,
+          "name": "Paño negro 4×4",
+          "slug": "pano-negro-4x4",
+          "status": "publish",
+          "short_description": "\u003Cp class=\"\" data-start=\"45\" data-end=\"399\"\u003EUn accesorio esencial en fotografía y cine, ideal para bloquear luz no deseada, reducir reflejos y controlar el contraste en cualquier set de grabación o sesión fotográfica. Fabricado con material opaco de alta calidad, permite crear sombras definidas y mejorar la dirección de la iluminación en interiores y exteriores.\u003C/p\u003E\n\u003Cp class=\"\" data-start=\"401\" data-end=\"568\"\u003E\u003Cstrong data-start=\"401\" data-end=\"421\"\u003ECaracterísticas:\u003C/strong\u003E\u003Cbr data-start=\"421\" data-end=\"424\" /\u003E✔️ Dimensiones: 4&#215;4 metros\u003Cbr data-start=\"450\" data-end=\"453\" /\u003E✔️ Material opaco y resistente\u003Cbr data-start=\"483\" data-end=\"486\" /\u003E✔️ Absorbe la luz y minimiza reflejos\u003Cbr data-start=\"523\" data-end=\"526\" /\u003E✔️ Uso versátil en estudios y locaciones\u003C/p\u003E\n\u003Cp class=\"\" data-start=\"570\" data-end=\"695\"\u003EPerfecto para cinematografía, retratos y producciones publicitarias, garantizando un mayor control sobre la luz en cada toma.\u003C/p\u003E\n",
+          "sku": "",
+          "price": "10000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 596,
+              "name": "Producción",
+              "slug": "produccion"
+            }
+          ],
+          "images": [
+            {
+              "id": 5956,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/04/pano-negro_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5955,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/04/pano-negro_01.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5913,
+          "name": "Paño negro 4×4",
+          "slug": "delivery-equipos-rm",
+          "status": "private",
+          "short_description": "\u003Cp class=\"\" data-start=\"45\" data-end=\"399\"\u003EUn accesorio esencial en fotografía y cine, ideal para bloquear luz no deseada, reducir reflejos y controlar el contraste en cualquier set de grabación o sesión fotográfica. Fabricado con material opaco de alta calidad, permite crear sombras definidas y mejorar la dirección de la iluminación en interiores y exteriores.\u003C/p\u003E\n\u003Cp class=\"\" data-start=\"401\" data-end=\"568\"\u003E\u003Cstrong data-start=\"401\" data-end=\"421\"\u003ECaracterísticas:\u003C/strong\u003E\u003Cbr data-start=\"421\" data-end=\"424\" /\u003E✔️ Dimensiones: 4&#215;4 metros\u003Cbr data-start=\"450\" data-end=\"453\" /\u003E✔️ Material opaco y resistente\u003Cbr data-start=\"483\" data-end=\"486\" /\u003E✔️ Absorbe la luz y minimiza reflejos\u003Cbr data-start=\"523\" data-end=\"526\" /\u003E✔️ Uso versátil en estudios y locaciones\u003C/p\u003E\n\u003Cp class=\"\" data-start=\"570\" data-end=\"695\"\u003EPerfecto para cinematografía, retratos y producciones publicitarias, garantizando un mayor control sobre la luz en cada toma.\u003C/p\u003E\n",
+          "sku": "",
+          "price": "15000",
+          "stock_status": "outofstock",
+          "categories": [
+            {
+              "id": 15,
+              "name": "Uncategorized",
+              "slug": "uncategorized"
+            }
+          ],
+          "images": []
+        },
+        {
+          "id": 5883,
+          "name": "Reflector Silver White L",
+          "slug": "reflector-silver-white-l",
+          "status": "publish",
+          "short_description": "\u003Ch3 class=\"tab__content-title section--max-width\"\u003EReflector Plegable Silver / White L de 120 cm\u003C/h3\u003E\n\u003Cp\u003ELos Reflectores Plegables de Profoto representan, probablemente, el modelado de la luz en su forma más simple. Son fáciles de usar, fáciles de transportar y pueden utilizarse para rebotar o disipar tanto la luz del sol como la del flash. La estructura de metal resistente y plegable está equipada con dos asas conformadas ergonómicamente que facilitan el plegado de los reflectores y su sujeción en varias posiciones.\u003C/p\u003E\n",
+          "sku": "",
+          "price": "12000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 589,
+              "name": "Tamizadores - Reflectores",
+              "slug": "tamizadores-reflectores"
+            }
+          ],
+          "images": [
+            {
+              "id": 5878,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5286_03.webp",
+              "alt": ""
+            },
+            {
+              "id": 5877,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5286_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5876,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5286_01.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5875,
+          "name": "Reflector Silver White M",
+          "slug": "reflector-silver-white-m",
+          "status": "publish",
+          "short_description": "\u003Ch4 class=\"tab__content-title section--max-width\"\u003EReflector Plegable Silver / White M  80 cm\u003C/h4\u003E\n\u003Cp\u003ELos Reflectores Plegables de Profoto representan, probablemente, el modelado de la luz en su forma más simple. Son fáciles de usar, fáciles de transportar y pueden utilizarse para rebotar o disipar tanto la luz del sol como la del flash. La estructura de metal resistente y plegable está equipada con dos asas conformadas ergonómicamente que facilitan el plegado de los reflectores y su sujeción en varias posiciones.\u003C/p\u003E\n\u003Cp\u003E&nbsp;\u003C/p\u003E\n",
+          "sku": "",
+          "price": "8500",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 589,
+              "name": "Tamizadores - Reflectores",
+              "slug": "tamizadores-reflectores"
+            }
+          ],
+          "images": [
+            {
+              "id": 5881,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5287_03.webp",
+              "alt": ""
+            },
+            {
+              "id": 5880,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5287_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5879,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5287_01.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5815,
+          "name": "Brazo D520 40\"",
+          "slug": "brazo-d520-40-2",
+          "status": "publish",
+          "short_description": "\u003Cp\u003EAvenger  Brazo de Agarre D520 (102 cm)\u003C/p\u003E\n\u003Cp\u003EIdeal para soportes en C. Se usa con el Grip Head D200 para sostener scrims, banderas, luces livianas o micrófonos en cine y fotografía. Proporciona un punto de agarre seguro y versátil para iluminación y reflectores.\u003C/p\u003E\n\u003Cul\u003E\n\u003Cli\u003EColor: Silver\u003C/li\u003E\n\u003Cli\u003EMaterial: Acero Cromado\u003C/li\u003E\n\u003Cli\u003EPeso: 1.6kg\u003C/li\u003E\n\u003C/ul\u003E\n",
+          "sku": "",
+          "price": "5500",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 594,
+              "name": "C-Stands - Pie de Flash",
+              "slug": "c-stands-pie-de-flash"
+            },
+            {
+              "id": 591,
+              "name": "Soporte",
+              "slug": "soporte"
+            }
+          ],
+          "images": [
+            {
+              "id": 5816,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5251_01-1.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5813,
+          "name": "C-stand + brazo + grip",
+          "slug": "c-stand-brazo-grip",
+          "status": "publish",
+          "short_description": "\u003Cp\u003E\u003Cstrong data-start=\"0\" data-end=\"39\" data-is-only-node=\"\"\u003EKit C-Stand Avenger A2033FKIT (40&#8243;)\u003C/strong\u003E\u003Cbr data-start=\"39\" data-end=\"42\" /\u003ESoporte en C de acero cromado con base fija, Incluye cabezal de agarre D200 y brazo D520. Ideal para sostener banderas, gobos y luces en cine, video y fotografía. Durabilidad y estabilidad en los entornos más exigentes.\u003C/p\u003E\n",
+          "sku": "",
+          "price": "16000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 594,
+              "name": "C-Stands - Pie de Flash",
+              "slug": "c-stands-pie-de-flash"
+            },
+            {
+              "id": 591,
+              "name": "Soporte",
+              "slug": "soporte"
+            }
+          ],
+          "images": [
+            {
+              "id": 5814,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5253_01-1.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5809,
+          "name": "Profoto Snoot + Porta Grids + Zoom II",
+          "slug": "profoto-snoot-porta-grids-zoom-ii",
+          "status": "publish",
+          "short_description": "\u003Cp\u003EArriendo de Kit Profoto completo: Snoot, Zoom Reflector II y Porta Grids. Modifica la luz con precisión, creando desde haces concentrados hasta efectos de iluminación sutiles. Ideal para profesionales.\u003C/p\u003E\n",
+          "sku": "",
+          "price": "23000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 587,
+              "name": "Reflectores Duros",
+              "slug": "reflectores-duros"
+            }
+          ],
+          "images": [
+            {
+              "id": 5810,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5285_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5796,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5283_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5806,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5284_03.webp",
+              "alt": ""
+            },
+            {
+              "id": 5409,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3129_01.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5800,
+          "name": "Profoto Porta Grid and Filter Holder",
+          "slug": "profoto-porta-grid-and-filter-holder",
+          "status": "publish",
+          "short_description": "\u003Cp\u003EEl Grid and Filter Holder es un accesorio que sirve para montar un Snoot o un Grid en combinación con filtros sobre el Zoom Reflector.\u003C/p\u003E\n",
+          "sku": "",
+          "price": "11000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 587,
+              "name": "Reflectores Duros",
+              "slug": "reflectores-duros"
+            }
+          ],
+          "images": [
+            {
+              "id": 5806,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5284_03.webp",
+              "alt": ""
+            },
+            {
+              "id": 5807,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5284_01-1.webp",
+              "alt": ""
+            },
+            {
+              "id": 5804,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5284_02.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5795,
+          "name": "Profoto Snoot para Zoom",
+          "slug": "profoto-snoot-para-zoom",
+          "status": "publish",
+          "short_description": "\u003Cp\u003EEs un modificador de luz que concentra el haz de luz en un área pequeña, creando un efecto de luz puntual.\u003C/p\u003E\n\u003Cul data-sourcepos=\"12:5-15:0\"\u003E\n\u003Cli data-sourcepos=\"12:5-12:45\"\u003EPermite crear una luz nítida y directa.\u003C/li\u003E\n\u003Cli data-sourcepos=\"13:5-13:49\"\u003EProduce una luz de forma circular perfecta.\u003C/li\u003E\n\u003Cli data-sourcepos=\"14:5-15:0\"\u003EComunmente usado para iluminar el cabello o para cualquier aplicación donde se necesite iluminar un area pequeña.\u003C/li\u003E\n\u003C/ul\u003E\n\u003Cp\u003E&nbsp;\u003C/p\u003E\n\u003Cp\u003E\u003Cstrong\u003EEl snoot no se puede montar directamente sobre el Zoom Reflector. Necesitas un Grid and Filter Holder para poder acoplar el snoot al reflector.\u003C/strong\u003E\u003C/p\u003E\n",
+          "sku": "",
+          "price": "9000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 587,
+              "name": "Reflectores Duros",
+              "slug": "reflectores-duros"
+            }
+          ],
+          "images": [
+            {
+              "id": 5796,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5283_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5797,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5283_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5805,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5283_03.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5791,
+          "name": "Extensión  30 mts",
+          "slug": "extension-30-mts",
+          "status": "publish",
+          "short_description": "\u003Cp class=\"content-descriptor-title\"\u003EExtensión 30 Metros Naranjo\u003C/p\u003E\n\u003Cp class=\"content-descriptor-text\"\u003EEs la solución ideal para conectar tus dispositivos eléctricos a distancia. Con su cable de 30 metros de largo, podrás llegar a cualquier punto con  su diseño resistente y duradero te asegura un uso prolongado y confiable.\u003C/p\u003E\n",
+          "sku": "",
+          "price": "5000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 596,
+              "name": "Producción",
+              "slug": "produccion"
+            }
+          ],
+          "images": [
+            {
+              "id": 5792,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5282_01.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5737,
+          "name": "Profoto Zoom Rod Softbox",
+          "slug": "profoto-zoom-rod-softbox",
+          "status": "publish",
+          "short_description": "\u003Ch4 class=\"text-base pt-3xl\"\u003EProfoto Zoom Rod S\u003C/h4\u003E\n\u003Cp class=\"text-base pt-3xl\"\u003EEs la herramienta perfecta para los fotógrafos creativos a los que les gusta ir más allá. Permite modelar la luz con un esfuerzo mínimo y es compatible tanto con frontales planos como con cabezas que sobresalen. El RFi Softbox Octa es la softbox ideal para utilizarla con el Zoom Rod S. Acopla el Zoom Rod S a la softbox y utilízalo con o sin difusor para conseguir el resultado exacto que buscas. Con el difusor, tendrás una fuente de luz más uniforme y eliminarás las zonas sobreexpuestas sin perder potencia. Sin el difusor, la salida de luz será mayor y conseguirás reflejos especulares.\u003C/p\u003E\n\u003Cp class=\"text-base pt-3xl\"\u003EAdemás, el Zoom Rod S también es compatible con todas las Profoto Softboxes resistentes al calor y con los Profoto Soft Zoom Reflectors.\u003C/p\u003E\n\u003Cp\u003E&nbsp;\u003C/p\u003E\n\u003Cp\u003E\u003Ciframe title=\"Zoom Rod S – a walkthrough of the product\" width=\"1170\" height=\"658\" src=\"https://www.youtube.com/embed/mb49pfedxUw?feature=oembed\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" referrerpolicy=\"strict-origin-when-cross-origin\" allowfullscreen\u003E\u003C/iframe\u003E\u003C/p\u003E\n",
+          "sku": "",
+          "price": "23000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 587,
+              "name": "Reflectores Duros",
+              "slug": "reflectores-duros"
+            }
+          ],
+          "images": [
+            {
+              "id": 5738,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5281_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5739,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5281_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5740,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5281_03.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5644,
+          "name": "Profoto Pro-B3 750W",
+          "slug": "profoto-pro-b3-750w",
+          "status": "publish",
+          "short_description": "\u003Ch4\u003ENUEVO Profoto Pro-B3 750 AirS\u003C/h4\u003E\n\u003Cp\u003EUn monolight de 750Ws diseñado para satisfacer las exigencias de fotógrafos profesionales que buscan potencia, velocidad y versatilidad en sus sesiones fotográficas.\u003C/p\u003E\n\u003Cp\u003ECaracterísticas:\u003C/p\u003E\n\u003Cp\u003EPotencia de 750Ws\u003Cbr /\u003E\nReciclaje rápido entre 0,01 y 2,3 segundos\u003Cbr /\u003E\nDuración del flash ultracorta, hasta 1/75,000 segundos\u003Cbr /\u003E\nLuz de modelado LED mejorada\u003Cbr /\u003E\nBatería de alta capacidad hasta 250 disparos.\u003Cbr /\u003E\nConectividad Bluetooth para control mediante aplicaciones móviles.\u003C/p\u003E\n\u003Cp\u003E&nbsp;\u003C/p\u003E\n\u003Cp\u003E\u003Ciframe title=\"Introducing Profoto Pro-D3\" width=\"1170\" height=\"658\" src=\"https://www.youtube.com/embed/i4F_lA8_92U?feature=oembed\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" referrerpolicy=\"strict-origin-when-cross-origin\" allowfullscreen\u003E\u003C/iframe\u003E\u003C/p\u003E\n",
+          "sku": "",
+          "price": "63000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 583,
+              "name": "Flash portátil",
+              "slug": "flash-portatil"
+            },
+            {
+              "id": 581,
+              "name": "Iluminación",
+              "slug": "iluminacion"
+            }
+          ],
+          "images": [
+            {
+              "id": 5645,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5280_1.webp",
+              "alt": ""
+            },
+            {
+              "id": 5647,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5280_3.webp",
+              "alt": ""
+            },
+            {
+              "id": 5646,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5280_2.webp",
+              "alt": ""
+            },
+            {
+              "id": 5648,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5280_4.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5630,
+          "name": "Canon EOS R5 + Lente EF",
+          "slug": "canon-eos-r5-lente",
+          "status": "publish",
+          "short_description": "\u003Cp\u003ECaptura cada detalle con la Canon EOS R5, una cámara mirrorless full frame que combina resolución, velocidad y tecnología de vanguardia. Personaliza tu experiencia eligiendo entre los \u003Cstrong\u003Elentes 24-70mm o 24-105mm (según disponibilidad)\u003C/strong\u003E, ideales para bodas, eventos y retratos. Además, este kit incluye un Adaptador de Montura EF-EOS R, una batería extra y una tarjeta de 32GB.\u003C/p\u003E\n\u003Cp\u003E¡Lleva tu fotografía y video al siguiente nivel!\u003C/p\u003E\n",
+          "sku": "",
+          "price": "120000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 580,
+              "name": "Reflex - Mirrorless",
+              "slug": "reflex-mirrorless"
+            }
+          ],
+          "images": [
+            {
+              "id": 5631,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/C10.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5627,
+          "name": "Canon EOS 5D Mark IV + Lente",
+          "slug": "canon-eos-5d-mark-iv-lente",
+          "status": "publish",
+          "short_description": "\u003Cp data-start=\"0\" data-end=\"71\"\u003E\u003Cstrong data-start=\"0\" data-end=\"69\"\u003ECanon 5D Mark IV + Lente\u003C/strong\u003E\u003C/p\u003E\n\u003Cp data-start=\"73\" data-end=\"495\" data-is-last-node=\"\" data-is-only-node=\"\"\u003ECaptura momentos inolvidables con la Canon 5D Mark IV, una cámara full frame diseñada para ofrecer imágenes de calidad profesional. Personaliza tu experiencia eligiendo entre los lentes \u003Cstrong\u003E24-70mm o 24-105mm (según disponibilidad)\u003C/strong\u003E, ideales para bodas, eventos y retratos. Este kit incluye una batería extra y una tarjeta de 32GB, para que no te pierdas ningún detalle. ¡Lleva tu fotografía al siguiente nivel!\u003C/p\u003E\n",
+          "sku": "",
+          "price": "79000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 580,
+              "name": "Reflex - Mirrorless",
+              "slug": "reflex-mirrorless"
+            }
+          ],
+          "images": [
+            {
+              "id": 5628,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/C07_kit.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5625,
+          "name": "Canon EOS R5",
+          "slug": "canon-eos-r5",
+          "status": "publish",
+          "short_description": "\u003Cp data-start=\"0\" data-end=\"44\"\u003E\u003Cstrong data-start=\"0\" data-end=\"42\"\u003ECanon EOS R5 \u003C/strong\u003E\u003C/p\u003E\n\u003Cp data-start=\"46\" data-end=\"456\" data-is-last-node=\"\" data-is-only-node=\"\"\u003ERedefine la fotografía y el video profesional con su sensor Full Frame de 45 MP y enfoque Dual Pixel CMOS AF II ultrarrápido. Graba en 8K RAW y ofrece una estabilización de imagen de hasta 8 pasos, ideal para capturas nítidas sin trípode. Su velocidad de ráfaga de 20 fps y su construcción resistente la convierten en la herramienta perfecta para cualquier desafío creativo.\u003C/p\u003E\n\u003Cp data-start=\"46\" data-end=\"456\" data-is-last-node=\"\" data-is-only-node=\"\"\u003ERAW Completo (8192 x 5464 px, 45 MP). Peso del archivo: 50-60 MB por foto.\u003C/p\u003E\n\u003Cp\u003E&nbsp;\u003C/p\u003E\n",
+          "sku": "",
+          "price": "85000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 580,
+              "name": "Reflex - Mirrorless",
+              "slug": "reflex-mirrorless"
+            }
+          ],
+          "images": [
+            {
+              "id": 5620,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/R5_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5621,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/R5_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5622,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/R5_03.webp",
+              "alt": ""
+            },
+            {
+              "id": 5623,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/R5_04.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5615,
+          "name": "Canon 5D Mark IV",
+          "slug": "canon-5d-mark-iv",
+          "status": "publish",
+          "short_description": "\u003Cp\u003ELa Canon 5D Mark IV es una cámara full frame diseñada para quienes buscan calidad profesional en foto y video. Con su sensor de 30.4 MP, enfoque Dual Pixel ultrarrápido y grabación en 4K, captura cada detalle con precisión. Resistente y versátil, es la compañera ideal para cualquier tipo de proyecto.\u003C/p\u003E\n\u003Cp class=\"\" data-start=\"218\" data-end=\"262\"\u003ERAW Completo (6720 × 4480 px, 30.4 MP) Peso del archivo: 36-40 MB por foto.\u003C/p\u003E\n\u003Cp data-start=\"218\" data-end=\"262\"\u003E\n",
+          "sku": "",
+          "price": "50000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 580,
+              "name": "Reflex - Mirrorless",
+              "slug": "reflex-mirrorless"
+            }
+          ],
+          "images": [
+            {
+              "id": 5616,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5D-Mark-IV_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5617,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5D-Mark-IV_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5618,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5D-Mark-IV_03.webp",
+              "alt": ""
+            },
+            {
+              "id": 5619,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5D-Mark-IV_04.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5278,
+          "name": "Profoto OCF Softbox 1X4 (30x120)",
+          "slug": "profoto-ocf-softbox-1x4-30x120cm",
+          "status": "publish",
+          "short_description": "\u003Cp\u003ELas OCF Softboxes de Profoto ofrecen una luz suave y favorecedora en un diseño ultraligero y portátil. Ideales para fotografía en exteriores, se montan rápidamente gracias a sus varillas codificadas por color y difusor fijo. \u003Cstrong\u003Eincluye OCF Speedring.\u003C/strong\u003E\u003C/p\u003E\n\u003Cp\u003E\u003Cstrong\u003EImportante:\u003C/strong\u003E Solamente se recomienda para los flashes de cabeza plana de Profoto. Flash máximo de 750 W. Solo se puede utilizar con flashes Profoto con luz de modelado LED. No se debe utilizar con flashes Profoto con luz de modelado halógena debido a la resistencia al calor.\u003C/p\u003E\n",
+          "sku": "M56",
+          "price": "25000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 478,
+              "name": "Modificadores",
+              "slug": "modificadores"
+            },
+            {
+              "id": 605,
+              "name": "OCF",
+              "slug": "ocf"
+            },
+            {
+              "id": 586,
+              "name": "Softbox",
+              "slug": "softbox"
+            }
+          ],
+          "images": [
+            {
+              "id": 5672,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5278_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5673,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5278_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5674,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5278_03.webp",
+              "alt": ""
+            },
+            {
+              "id": 5675,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5278_04.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5279,
+          "name": "Profoto OCF Grid 50° 1X4 (30x120)",
+          "slug": "profoto-rfi-grid-50-1x4-30x120cm",
+          "status": "publish",
+          "short_description": "\u003Ch4 class=\"pos-title\"\u003EProfoto OCF Grid Softbox 1×4′ (30x120cm)\u003C/h4\u003E\n\u003Cp class=\"pos-title\"\u003ELuz suave y direccional para retratos y más. Control preciso con grid integrado. Montaje rápido, ideal para locaciones\u003C/p\u003E\n",
+          "sku": "M57",
+          "price": "9000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 605,
+              "name": "OCF",
+              "slug": "ocf"
+            },
+            {
+              "id": 586,
+              "name": "Softbox",
+              "slug": "softbox"
+            }
+          ],
+          "images": [
+            {
+              "id": 5684,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5279_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5685,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5279_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5686,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5279_03.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5273,
+          "name": "Profoto Softbox RFi 2X3 (60X90)",
+          "slug": "profoto-softbox-rfi-2x3-60x90-cm",
+          "status": "publish",
+          "short_description": "\u003Ch4 id=\":r1b:-heading\" class=\"text-xl md:text-2xl font-bold\" aria-labelledby=\":r1b:-heading :r1b:-sub\"\u003ERFi Softbox 2&#215;3&#8242; (60x90cm)\u003C/h4\u003E\n\u003Cp\u003ESoftbox rectangular diseñado para crear una luz suave y difusa, ideal para retratos, fotografía de productos y moda. Su forma rectangular proporciona una iluminación uniforme y controlada, perfecta para modelar la luz y crear efectos de iluminación profesionales. Fácil de montar y compatible con una variedad de flashes, esta softbox es una herramienta esencial para cualquier fotógrafo que busque una iluminación de alta calidad.\u003C/p\u003E\n",
+          "sku": "M51",
+          "price": "24000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 606,
+              "name": "RFI",
+              "slug": "rfi"
+            },
+            {
+              "id": 586,
+              "name": "Softbox",
+              "slug": "softbox"
+            }
+          ],
+          "images": [
+            {
+              "id": 5713,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5273_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5714,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5273_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5715,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5273_03.webp",
+              "alt": ""
+            },
+            {
+              "id": 5716,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5273_04.webp",
+              "alt": ""
+            },
+            {
+              "id": 5717,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5273_05.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5274,
+          "name": "Profoto RFi Grid 50° 2X3 (60X90)",
+          "slug": "profoto-rfi-grid-50-2x3-60x90-cm",
+          "status": "publish",
+          "short_description": "\u003Ch4\u003EProfoto OCF Grid 50° Softbox 2×3′ (60x90cm)\u003C/h4\u003E\n\u003Cp\u003EEs un accesorio diseñado para controlar y dirigir la luz de manera precisa. Reduce la dispersión de la luz a 50 grados, permitiendo un enfoque más definido en el sujeto. Ideal para fotografía de retratos y moda, este grid se instala fácilmente en softboxes RFi 2X3, proporcionando un control de luz superior y efectos de iluminación dramáticos.\u003C/p\u003E\n",
+          "sku": "M52",
+          "price": "9000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 606,
+              "name": "RFI",
+              "slug": "rfi"
+            },
+            {
+              "id": 586,
+              "name": "Softbox",
+              "slug": "softbox"
+            }
+          ],
+          "images": [
+            {
+              "id": 5709,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5274_01-1.webp",
+              "alt": ""
+            },
+            {
+              "id": 5710,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5274_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5711,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5274_03.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5275,
+          "name": "Profoto Softbox RFi 1X6 (30x180)",
+          "slug": "profoto-softbox-rfi-1x6-30x180cm",
+          "status": "publish",
+          "short_description": "\u003Ch4\u003EProfoto Softbox RFi 1×6′ (30x180cm)\u003C/h4\u003E\n\u003Cp\u003EIluminación tipo strip para bordes definidos y luz suave. Ideal para retratos de cuerpo entero, moda y efectos creativos. Montaje rápido y compatible con múltiples flashes.\u003C/p\u003E\n",
+          "sku": "M53",
+          "price": "26000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 606,
+              "name": "RFI",
+              "slug": "rfi"
+            },
+            {
+              "id": 586,
+              "name": "Softbox",
+              "slug": "softbox"
+            }
+          ],
+          "images": [
+            {
+              "id": 5692,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5275_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5693,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5275_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5694,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5275_03.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5276,
+          "name": "Profoto OCF Octa 2 60cm",
+          "slug": "profoto-ocf-octa-2-60cm",
+          "status": "publish",
+          "short_description": "\u003Cp\u003ELa Profoto OCF Softbox octa 2&#8242; (60)\u003C/p\u003E\n\u003Cp\u003EEstá diseñada para un uso rápido y fácil en exteriores. Crea una luz suave y favorecedora, perfecta para fotografía de retratos. Es ligero, compacto y portátil, con varillas codificadas por color y difusores fijos para una configuración rápida. \u003Cstrong\u003Eincluye OCF Speedring\u003C/strong\u003E\u003C/p\u003E\n\u003Cp\u003E\u003Cstrong\u003EImportante:\u003C/strong\u003E Solamente se recomienda para los flashes de cabeza plana de Profoto. Flash máximo de 750 W. Solo se puede utilizar con flashes Profoto con luz de modelado LED. No se debe utilizar con flashes Profoto con luz de modelado halógena debido a la resistencia al calor.\u003C/p\u003E\n\u003Cp\u003E&nbsp;\u003C/p\u003E\n",
+          "sku": "M54",
+          "price": "18000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 478,
+              "name": "Modificadores",
+              "slug": "modificadores"
+            },
+            {
+              "id": 605,
+              "name": "OCF",
+              "slug": "ocf"
+            },
+            {
+              "id": 586,
+              "name": "Softbox",
+              "slug": "softbox"
+            }
+          ],
+          "images": [
+            {
+              "id": 5677,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5276_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5678,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5276_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5679,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5276_03.webp",
+              "alt": ""
+            },
+            {
+              "id": 5680,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5276_04.webp",
+              "alt": ""
+            },
+            {
+              "id": 5681,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5276_05.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5277,
+          "name": "Profoto OCF Grid 50° Octa 2 60cm",
+          "slug": "profoto-rfi-grid-50-octa-2-60cm",
+          "status": "publish",
+          "short_description": "\u003Ch4\u003EProfoto OCF Grid 50° Octa 2&#8242; (60cm)\u003C/h4\u003E\n\u003Cp\u003EEs un accesorio esencial para modelar la luz con precisión. Reduce la dispersión de la luz a 50 grados, permitiendo un control direccional estricto. Perfecto para retratos y fotografía de moda, crea efectos de iluminación definidos y dramáticos. Fácil de instalar en la OCF Softbox 2&#8242; (60cm) Octa, ideal para uso en locaciones.\u003C/p\u003E\n",
+          "sku": "M55",
+          "price": "8000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 605,
+              "name": "OCF",
+              "slug": "ocf"
+            },
+            {
+              "id": 586,
+              "name": "Softbox",
+              "slug": "softbox"
+            }
+          ],
+          "images": [
+            {
+              "id": 5688,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5277_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5689,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5277_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5690,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5277_03.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5270,
+          "name": "Profoto Octa 4 RFI 120cm",
+          "slug": "profoto-octa-4-rfi-120cm",
+          "status": "publish",
+          "short_description": "\u003Ch4\u003EProfoto Softbox RFi Octa 4`(120cm)\u003C/h4\u003E\n\u003Cp\u003EEs una herramienta esencial para fotógrafos de moda, belleza y retratos. Su diseño octogonal produce una luz suave y uniforme, perfecta para resaltar la belleza natural del sujeto. El efecto de luz circular en los ojos, característico de esta softbox, añade un toque profesional y atractivo a tus fotografías.\u003C/p\u003E\n",
+          "sku": "M48",
+          "price": "25000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 606,
+              "name": "RFI",
+              "slug": "rfi"
+            },
+            {
+              "id": 586,
+              "name": "Softbox",
+              "slug": "softbox"
+            }
+          ],
+          "images": [
+            {
+              "id": 5730,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5270_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5731,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5270_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5732,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5270_03.webp",
+              "alt": ""
+            },
+            {
+              "id": 5733,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5270_04.webp",
+              "alt": ""
+            },
+            {
+              "id": 5734,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5270_05.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5271,
+          "name": "Profoto Softbox RFi 1X3 (30x90)",
+          "slug": "profoto-softbox-rfi-1x3-30x90cm",
+          "status": "publish",
+          "short_description": "\u003Ch4\u003EProfoto Softbox RFi 1×3′ (30x90cm)\u003C/h4\u003E\n\u003Cp\u003EEs ideal para iluminar bordes y contornos, perfecta para retratos y fotografía de productos. Su diseño alargado y estrecho crea una luz suave y direccional, permitiendo un control preciso de la iluminación. Cuenta con difusores de doble capa e interior reflectante plateado. Accesorios opcionales como grids y máscaras permiten un modelado de luz aún más preciso. Disponible en múltiples tamaños para adaptarse a cada necesidad, cuanto mayor sea la softbox y más cerca esté del sujeto, más suave será la luz.\u003C/p\u003E\n",
+          "sku": "M49",
+          "price": "20000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 606,
+              "name": "RFI",
+              "slug": "rfi"
+            },
+            {
+              "id": 586,
+              "name": "Softbox",
+              "slug": "softbox"
+            }
+          ],
+          "images": [
+            {
+              "id": 5719,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5272_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5720,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5272_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5721,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5272_03.webp",
+              "alt": ""
+            },
+            {
+              "id": 5722,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5272_04.webp",
+              "alt": ""
+            },
+            {
+              "id": 5723,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/Copia-de-5272_04.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5272,
+          "name": "Profoto RFi Grid 50° 1X3 (30X90)",
+          "slug": "profoto-rfi-grid-50-1x3-30x90cm",
+          "status": "publish",
+          "short_description": "\u003Cdiv class=\"pos-description\"\u003E\n\u003Cdiv class=\"element element-textarea first last\"\u003E\n\u003Ch4\u003EProfoto RFi Grid 50° Softbox 1×3′ (30x90cm)\u003C/h4\u003E\n\u003Cp\u003EReduce la extensión de la luz a 50°, creando así una luz más directa al tiempo que reduce la cantidad de luz dispersa.\u003C/p\u003E\n\u003C/div\u003E\n\u003C/div\u003E\n",
+          "sku": "M50",
+          "price": "9000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 606,
+              "name": "RFI",
+              "slug": "rfi"
+            },
+            {
+              "id": 586,
+              "name": "Softbox",
+              "slug": "softbox"
+            }
+          ],
+          "images": [
+            {
+              "id": 5725,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5271_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5726,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5271_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5727,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5271_03.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5266,
+          "name": "Caleidoscopio medio 77mm",
+          "slug": "caleidoscopio-medio-77mm",
+          "status": "pending",
+          "short_description": "",
+          "sku": "F07",
+          "price": "6000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 15,
+              "name": "Uncategorized",
+              "slug": "uncategorized"
+            }
+          ],
+          "images": []
+        },
+        {
+          "id": 5267,
+          "name": "Filtro Dioprtias divididas 3 77mm",
+          "slug": "filtro-dioprtias-divididas-3-77mm",
+          "status": "pending",
+          "short_description": "",
+          "sku": "F08",
+          "price": "6000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 15,
+              "name": "Uncategorized",
+              "slug": "uncategorized"
+            }
+          ],
+          "images": []
+        },
+        {
+          "id": 5268,
+          "name": "KIT Profoto B1X 500W",
+          "slug": "profoto-b1x-500w-bateria-air-ttl-tripode",
+          "status": "publish",
+          "short_description": "\u003Ch4\u003EProfoto \u003Cstrong data-start=\"71\" data-end=\"97\"\u003EB1X 500w\u003C/strong\u003E + Bateria + Air TTL + tripode.\u003C/h4\u003E\n\u003Cp data-start=\"68\" data-end=\"363\"\u003EEs un flash autónomo de 500W, diseñado para ofrecer potencia, velocidad y control inalámbrico en cualquier entorno. Con su batería de alto rendimiento, permite hasta 325 destellos a plena potencia, brindando libertad total para trabajar en exteriores.\u003C/p\u003E\n\u003Cp data-start=\"68\" data-end=\"363\"\u003E✔ \u003Cstrong data-start=\"367\" data-end=\"388\"\u003EModo AirTTL y HSS\u003C/strong\u003E para una exposición precisa y sincronización con alta velocidad.\u003C/p\u003E\n\u003Cp\u003EIncluye:\u003C/p\u003E\n\u003Cp\u003E1 Profoto B1x 500W\u003Cbr /\u003E\n2 Profoto Batería Litio x1\u003Cbr /\u003E\nCargador batería x1\u003Cbr /\u003E\nTrípodes Manfrotto 1004BAC\u003Cbr /\u003E\nTransmisores Profoto Air Remote TTL\u003C/p\u003E\n",
+          "sku": "L23",
+          "price": "75000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 583,
+              "name": "Flash portátil",
+              "slug": "flash-portatil"
+            },
+            {
+              "id": 602,
+              "name": "kit",
+              "slug": "kit"
+            }
+          ],
+          "images": [
+            {
+              "id": 5315,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2024/08/3090_01.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5269,
+          "name": "KIT Profoto B1X 500/500W",
+          "slug": "profoto-2-b1x-500-500w-4-bateria-air-ttl-tripode",
+          "status": "publish",
+          "short_description": "\u003Cp data-start=\"68\" data-end=\"363\"\u003EEs un flash autónomo de 500W, diseñado para ofrecer potencia, velocidad y control inalámbrico en cualquier entorno. Con su batería de alto rendimiento, permite hasta 325 destellos a plena potencia, brindando libertad total para trabajar en exteriores.\u003C/p\u003E\n\u003Cp data-start=\"68\" data-end=\"363\"\u003E✔ \u003Cstrong data-start=\"367\" data-end=\"388\"\u003EModo AirTTL y HSS\u003C/strong\u003E para una exposición precisa y sincronización con alta velocidad.\u003C/p\u003E\n\u003Cp\u003E\u003Cspan data-sheets-root=\"1\"\u003EIncluye:\u003C/span\u003E\u003C/p\u003E\n\u003Cp\u003E\u003Cspan data-sheets-root=\"1\"\u003E2 flashes B1X Plus de 500W \u003C/span\u003E\u003C/p\u003E\n\u003Cp\u003E\u003Cspan data-sheets-root=\"1\"\u003E2 Trípodes Manfrotto 1004BAC\u003C/span\u003E\u003C/p\u003E\n\u003Cp\u003E\u003Cspan data-sheets-root=\"1\"\u003E4 Profoto Batería Litio x1\u003C/span\u003E\u003C/p\u003E\n\u003Cp\u003E\u003Cspan data-sheets-root=\"1\"\u003E1 Cargador batería \u003C/span\u003E\u003C/p\u003E\n\u003Cp\u003E\u003Cspan data-sheets-root=\"1\"\u003E1 Transmisores Profoto Air Remote TTL\u003C/span\u003E\u003C/p\u003E\n\u003Cp\u003EMochila de transporte\u003C/p\u003E\n",
+          "sku": "L25",
+          "price": "135000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 583,
+              "name": "Flash portátil",
+              "slug": "flash-portatil"
+            },
+            {
+              "id": 602,
+              "name": "kit",
+              "slug": "kit"
+            }
+          ],
+          "images": [
+            {
+              "id": 5651,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5269_01.webp",
+              "alt": ""
+            },
+            {
+              "id": 5652,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5269_02.webp",
+              "alt": ""
+            },
+            {
+              "id": 5653,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5269_03.webp",
+              "alt": ""
+            },
+            {
+              "id": 5654,
+              "src": "https://rental.mariohans.cl/wp-content/uploads/2025/03/5269_04.webp",
+              "alt": ""
+            }
+          ]
+        },
+        {
+          "id": 5261,
+          "name": "Filtro CPL elimina reflejo 77mm",
+          "slug": "filtro-cpl-elimina-reflejo-77mm",
+          "status": "pending",
+          "short_description": "",
+          "sku": "F02",
+          "price": "6000",
+          "stock_status": "instock",
+          "categories": [
+            {
+              "id": 15,
+              "name": "Uncategorized",
+              "slug": "uncategorized"
+            }
+          ],
+          "images": []
+        }
+      ]
+    }
+  }
+}
+    

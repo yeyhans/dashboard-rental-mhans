@@ -1,7 +1,7 @@
 ---
-import Base from "../layout/Base.astro";
-import ProductsDashboard from "../components/ProductsDashboard";
-import { supabase } from "../lib/supabase";
+import Base from "../../layout/Base.astro";
+import ProductsDashboard from "../../components/ProductsDashboard";
+import { supabase } from "../../lib/supabase";
 export const prerender = false;
 
 const { data: { session } } = await supabase.auth.getSession();

@@ -37,9 +37,11 @@ export const GET: APIRoute = async ({ request }) => {
         name: product.name,
         slug: product.slug,
         status: product.status,
+        description: product.description,
         short_description: product.short_description,
         sku: product.sku,
         price: product.price,
+        stock_quantity: product.stock_quantity,
         stock_status: product.stock_status,
         categories: product.categories.map((category: any) => ({
           id: category.id,

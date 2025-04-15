@@ -9,6 +9,12 @@ import {
 } from './ui/card';
 import { cn } from "@/lib/utils";
 import { Separator } from './ui/separator';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "./ui/accordion";
 
 // Define the types for our component props
 interface Order {
@@ -245,103 +251,107 @@ const OrderStatsOverview: React.FC<OrderStatsOverviewProps> = ({ orders, totalOr
   ];
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Estado de Pedidos</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {orderStatusStats.map((stat, index) => (
-            <Card 
-              key={index} 
-              className={cn(
-                "shadow-sm hover:shadow-md transition-shadow duration-200",
-                stat.bgColor
-              )}
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {stat.title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className={cn("text-3xl font-bold", stat.textColor)}>
-                  {stat.value}
-                </p>
-                {stat.description && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {stat.description}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-      
-      <Separator />
-      
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Resumen Financiero</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {financialStats.map((stat, index) => (
-            <Card 
-              key={index} 
-              className={cn(
-                "shadow-sm hover:shadow-md transition-shadow duration-200",
-                stat.bgColor
-              )}
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {stat.title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className={cn("text-3xl font-bold", stat.textColor)}>
-                  {stat.value}
-                </p>
-                {stat.description && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {stat.description}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      <Separator />
-      
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Detalles Fiscales</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {fiscalStats.map((stat, index) => (
-            <Card 
-              key={index} 
-              className={cn(
-                "shadow-sm hover:shadow-md transition-shadow duration-200",
-                stat.bgColor
-              )}
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {stat.title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className={cn("text-3xl font-bold", stat.textColor)}>
-                  {stat.value}
-                </p>
-                {stat.description && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {stat.description}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
+    <div className="space-y-2">
+      <Accordion type="single" collapsible className="w-full">
+        <AccordionItem value="estado-pedidos">
+          <AccordionTrigger className="text-base font-semibold py-2">Estado de Pedidos</AccordionTrigger>
+          <AccordionContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-1">
+              {orderStatusStats.map((stat, index) => (
+                <Card 
+                  key={index} 
+                  className={cn(
+                    "shadow-sm hover:shadow-md transition-shadow duration-200",
+                    stat.bgColor
+                  )}
+                >
+                  <CardHeader className="py-1 px-2">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">
+                      {stat.title}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="py-1 px-2">
+                    <p className={cn("text-xl md:text-2xl font-bold", stat.textColor)}>
+                      {stat.value}
+                    </p>
+                    {stat.description && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {stat.description}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+        
+        <AccordionItem value="resumen-financiero">
+          <AccordionTrigger className="text-base font-semibold py-2">Resumen Financiero</AccordionTrigger>
+          <AccordionContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-1">
+              {financialStats.map((stat, index) => (
+                <Card 
+                  key={index} 
+                  className={cn(
+                    "shadow-sm hover:shadow-md transition-shadow duration-200",
+                    stat.bgColor
+                  )}
+                >
+                  <CardHeader className="py-1 px-2">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">
+                      {stat.title}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="py-1 px-2">
+                    <p className={cn("text-lg md:text-xl font-bold", stat.textColor)}>
+                      {stat.value}
+                    </p>
+                    {stat.description && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {stat.description}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+        
+        <AccordionItem value="detalles-fiscales">
+          <AccordionTrigger className="text-base font-semibold py-2">Detalles Fiscales</AccordionTrigger>
+          <AccordionContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-1">
+              {fiscalStats.map((stat, index) => (
+                <Card 
+                  key={index} 
+                  className={cn(
+                    "shadow-sm hover:shadow-md transition-shadow duration-200",
+                    stat.bgColor
+                  )}
+                >
+                  <CardHeader className="py-1 px-2">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">
+                      {stat.title}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="py-1 px-2">
+                    <p className={cn("text-lg md:text-xl font-bold", stat.textColor)}>
+                      {stat.value}
+                    </p>
+                    {stat.description && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {stat.description}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 };
