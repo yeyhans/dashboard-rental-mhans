@@ -17,17 +17,16 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '../ui/dialog';
 
-import { Label } from '../ui/label';
+
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import type { Order, LineItem } from '../../types/order';
-import { ChevronRight, RefreshCw, Search, FileText, FileCheck, Plus, Trash2 } from 'lucide-react';
+import type { Order } from '../../types/order';
+import { ChevronRight, RefreshCw, Search, FileText, FileCheck } from 'lucide-react';
 import CreateOrderForm from './CreateOrderForm';
 import ProcessOrder from "./ProcessOrder";
 
@@ -333,6 +332,12 @@ const OrdersDashboard = ({
                 </div>
                 
                 <div className="mt-2 flex gap-2">
+                <div className="flex items-center gap-1">
+                  <div className={`w-2 h-2 rounded-full ${order.pago_completo ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                  <p className="text-sm font-medium text-foreground">
+                    {order.pago_completo ? 'Completo' : 'Pendiente'}
+                  </p>
+                </div>
                   {order.metadata.pdf_on_hold_url && (
                     <Button 
                       variant="ghost" 
@@ -419,7 +424,7 @@ const OrdersDashboard = ({
                               },
                               fotos_garantia: [],
                               correo_enviado: false,
-                              pago_completo: order.status === 'completed'
+                              pago_completo: (order.status === 'completed').toString()
                             }]
                           }
                         }}
@@ -436,6 +441,12 @@ const OrdersDashboard = ({
                 <TableCell className="text-foreground text-right font-bold">${formatCurrency(order.metadata.calculated_total)}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex flex-row gap-2 justify-end">
+                  <div className="flex items-center gap-1">
+                  <div className={`w-2 h-2 rounded-full ${order.pago_completo ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                  <p className="text-sm font-medium text-foreground">
+                    {order.pago_completo ? 'Completo' : 'Pendiente'}
+                  </p>
+                </div>
                     {order.metadata.pdf_on_hold_url && (
                       <Button 
                         variant="ghost" 

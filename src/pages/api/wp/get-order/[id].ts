@@ -12,10 +12,11 @@ interface WPOrder {
   };
   fotos_garantia: string[];
   correo_enviado: boolean;
-  pago_completo: boolean;
+  pago_completo: string;
 }
 
-export const GET: APIRoute = async ({ params, request }) => {
+
+export const GET: APIRoute = async ({ params }) => {
   try {
     const { id } = params;
 
@@ -51,6 +52,7 @@ export const GET: APIRoute = async ({ params, request }) => {
     console.log('Request URL:', wpApiUrl.toString());
     console.log('Order ID:', id);
 
+    console.log('Actualizando pedido en WordPress:', wpApiUrl.toString());
     const response = await fetch(wpApiUrl.toString(), {
       headers: {
         'Authorization': `Basic ${auth}`,
@@ -128,4 +130,4 @@ export const GET: APIRoute = async ({ params, request }) => {
       }
     );
   }
-}; 
+};

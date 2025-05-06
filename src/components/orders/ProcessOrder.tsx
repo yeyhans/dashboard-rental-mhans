@@ -17,7 +17,7 @@ interface WPOrder {
   };
   fotos_garantia: string[];
   correo_enviado: boolean;
-  pago_completo: boolean;
+  pago_completo: string | null;
 }
 
 function ProcessOrder({ order }: { order: WPOrderResponse }) {
@@ -54,6 +54,15 @@ function ProcessOrder({ order }: { order: WPOrderResponse }) {
 
   return (
     <div className="mt-6 space-y-4">
+      <div className="rounded-lg border p-4">
+        <h3 className="text-lg font-semibold mb-4">Estado de Pago</h3>
+        <div className="flex items-center gap-1">
+          <div className={`w-2 h-2 rounded-full ${orderData.pago_completo === 'completo' ? 'bg-green-500' : 'bg-yellow-500'}`} />
+          <p className="text-sm font-medium text-foreground">
+            {orderData.pago_completo === 'completo' ? 'Completo' : 'Pendiente'}
+          </p>
+        </div>
+      </div>
       <div className="rounded-lg border p-4">
         <h3 className="text-lg font-semibold mb-4">Fotos de Garantía</h3>
         

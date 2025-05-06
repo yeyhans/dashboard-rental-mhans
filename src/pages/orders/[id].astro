@@ -80,7 +80,10 @@ const title = `Orden #${id}`;
             order={{
               orders: {
                 success: true,
-                orders: [specificOrder]
+                orders: specificOrder ? [{
+                  ...specificOrder,
+                  pago_completo: Boolean(specificOrder.pago_completo)
+                }] : []
               }
             }}
           />

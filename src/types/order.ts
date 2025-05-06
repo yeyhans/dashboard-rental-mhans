@@ -45,4 +45,5 @@ export type Order = {
   billing: Billing;
   metadata: Metadata;
   line_items: LineItem[];
+  pago_completo: string;
 }; 

@@ -11,7 +11,7 @@ import {
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
-import { FileText, FileCheck, ChevronLeft, Edit2, Save, X, Edit, Plus } from 'lucide-react';
+import { FileText, FileCheck, ChevronLeft, Save, X, Edit } from 'lucide-react';
 import { ProductSelector } from './ProductSelector';
 import { OrderCostSummary } from './OrderCostSummary';
 import { OrderNotes } from './OrderNotes';
@@ -59,7 +59,7 @@ const formatDate = (dateString: string) => {
 interface OrderDetailsProps {
   order: {
     correo_enviado?: boolean;
-    pago_completo?: boolean;
+    pago_completo?: string;
     meta_data?: any[];
     [key: string]: any;
   };
@@ -80,6 +80,64 @@ interface EditableOrderData {
 }
 
 const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
+  const [isEditingPayment, setIsEditingPayment] = useState(false);
+  // Cambiar el estado para manejar string, inicializar con valor existente o cadena vacía
+  const [paymentStatus, setPaymentStatus] = useState<string>(rawOrder.pago_completo || '');
+
+  // Estado para mostrar detalles
+  const [showPaymentDetails, setShowPaymentDetails] = useState(false); // Estado para mostrar detalles
+
+  const handlePaymentUpdate = async (newStatus: string) => {
+    if (!newStatus || newStatus.trim() === '') {
+      alert('Por favor ingrese un estado de pago válido');
+      return;
+    }
+    console.log('Actualizando estado de pago:', newStatus);
+    try {
+      // Actualización en WooCommerce y WordPress (mantener lógica existente, pero enviar string)
+      console.log('Enviando solicitud de actualización a:', '/api/woo/update-orders');
+      const wooResponse = await fetch(`/api/woo/update-orders`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: rawOrder.id,
+          meta_data: [{ key: 'pago_completo', value: newStatus }] // Actualizar metadata
+        })
+      });
+
+      console.log('Enviando solicitud de actualización a WordPress');
+      const wpResponse = await fetch(`/api/wp/update-order/${rawOrder.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pago_completo: newStatus
+        })
+      });
+
+      if (!wpResponse.ok) {
+        throw new Error('Error al actualizar el estado de pago en WordPress');
+      }
+
+      const wooData = await wooResponse.json();
+      console.log('Respuesta de la API Woo:', wooData);
+
+      if (wooData.success) {
+        // Actualizar estado local y recargar si es necesario o manejar la UI
+        setPaymentStatus(newStatus);
+        setIsEditingPayment(false);
+        // Opcional: window.location.reload(); si prefieres recargar la página
+      } else {
+        alert(`Error al actualizar en WooCommerce: ${wooData.message}`);
+      }
+    } catch (err) {
+      console.error('Error al actualizar el estado de pago', err);
+      alert('Error al actualizar el estado de pago');
+    }
+  };
   const [loading, setLoading] = useState(false);
   const [transformedOrder, setTransformedOrder] = useState<Order | null>(null);
   const [isEditingOrder, setIsEditingOrder] = useState(false);
@@ -112,14 +170,18 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       order_fecha_inicio: getMetaValue('order_fecha_inicio'),
       order_fecha_termino: getMetaValue('order_fecha_termino'),
       num_jornadas: getMetaValue('num_jornadas'),
-      calculated_subtotal: getMetaValue('calculated_subtotal'),
+      calculated_subtotal: getMetaValue('calculated_subtotal'), 
       calculated_discount: getMetaValue('calculated_discount'),
       calculated_iva: getMetaValue('calculated_iva'),
       calculated_total: getMetaValue('calculated_total'),
       company_rut: getMetaValue('company_rut'),
       order_proyecto: getMetaValue('order_proyecto'),
       pdf_on_hold_url: getMetaValue('_pdf_on_hold_url'),
-      pdf_processing_url: getMetaValue('_pdf_processing_url')
+      pdf_processing_url: getMetaValue('_pdf_processing_url'),
+      order_retire_name: getMetaValue('order_retire_name'),
+      order_retire_rut: getMetaValue('order_retire_rut'), 
+      order_retire_phone: getMetaValue('order_retire_phone'),
+      order_comments: getMetaValue('order_comments')
     };
 
     const order: Order = {
@@ -138,7 +200,8 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
         phone: rawOrder.billing.phone || ''
       },
       metadata,
-      line_items: lineItems
+      line_items: lineItems,
+      pago_completo: ''
     };
 
     setTransformedOrder(order);
@@ -148,6 +211,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
   const handleStatusUpdate = async (orderId: number, newStatus: string) => {
     try {
       setLoading(true);
+      console.log('Enviando solicitud de actualización a:', '/api/woo/update-orders');
       const response = await fetch(`/api/woo/update-orders`, {
         method: 'PUT',
         headers: {
@@ -160,6 +224,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       });
 
       const data = await response.json();
+      console.log('Respuesta de la API:', data);
       
       if (data.success) {
         // Reload the page to show updated status
@@ -276,6 +341,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       try {
         const response = await fetch('/api/woo/get-products');
         const data = await response.json();
+      console.log('Respuesta de la API:', data);
         if (data.success) {
           setProducts(data.data.products);
         }
@@ -519,6 +585,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       });
 
       const data = await response.json();
+      console.log('Respuesta de la API:', data);
       
       if (data.success) {
         // Update the local state with new data
@@ -880,7 +947,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
           discount={editedOrderData.metadata.calculated_discount}
           iva={editedOrderData.metadata.calculated_iva}
           total={editedOrderData.metadata.calculated_total}
-          numDays={editedOrderData.metadata.num_jornadas}
+          numDays={parseInt(editedOrderData.metadata.num_jornadas)}
           onDiscountChange={handleDiscountChange}
           onTotalChange={handleIvaChange}
           mode="edit"
@@ -979,7 +1046,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                 <select
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   value={order.status}
-                  onChange={(e) => handleStatusUpdate(parseInt(order.id), e.target.value)}
+                  onChange={(e) => handleStatusUpdate(Number(order.id), e.target.value)}
                   disabled={loading}
                 >
                   {Object.entries(statusTranslations).map(([value, label]) => (
@@ -1015,10 +1082,54 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
 
               {/* Payment Status */}
               <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${rawOrder.pago_completo ? 'bg-green-500' : 'bg-yellow-500'}`} />
-                <span>
-                  Estado del pago: {rawOrder.pago_completo ? 'Completado' : 'Pendiente'}
-                </span>
+                {isEditingPayment ? (
+                  <Input
+                    type="text"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={paymentStatus}
+                    onChange={(e) => setPaymentStatus(e.target.value)}
+                    placeholder="Detalles del pago (ej: Transferencia #123)"
+                  />
+                ) : (
+                  <>
+                    <div className={`w-3 h-3 rounded-full ${paymentStatus ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                    <span 
+                      className={`cursor-pointer ${paymentStatus ? 'hover:underline' : ''}`}
+                      onClick={() => paymentStatus && setShowPaymentDetails(true)} // Mostrar detalles al hacer clic si hay valor
+                    >
+                      Estado del pago: {paymentStatus ? 'Completo' : 'Pendiente'}
+                    </span>
+                    {/* Modal o Tooltip para mostrar detalles del pago */}
+                    {showPaymentDetails && paymentStatus && (
+                      <Dialog open={showPaymentDetails} onOpenChange={setShowPaymentDetails}>
+                        <DialogContent className="sm:max-w-[425px]">
+                          <DialogHeader>
+                            <DialogTitle>Detalles del Pago</DialogTitle>
+                          </DialogHeader>
+                          <div className="py-4">
+                            <p>{paymentStatus}</p>
+                          </div>
+                          <DialogFooter>
+                            <Button onClick={() => setShowPaymentDetails(false)}>Cerrar</Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+                  </>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={() => {
+                    if (isEditingPayment) {
+                      handlePaymentUpdate(paymentStatus); // Enviar el valor string
+                    }
+                    setIsEditingPayment(!isEditingPayment);
+                  }}
+                >
+                  {isEditingPayment ? <Save className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
+                </Button>
               </div>
             </div>
           </div>
@@ -1063,7 +1174,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
           {/* Notas */}
           <div className="space-y-2">
             <Label className="font-medium">Notas</Label>
-            <OrderNotes orderId={transformedOrder.id} />
+            <OrderNotes orderId={transformedOrder.id.toString()} />
           </div>
         </CardContent>
       </Card>
@@ -1071,4 +1182,13 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
   );
 };
 
-export default OrderDetails; 
+export default OrderDetails;
+
+// Asegúrate de importar Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter si no están ya importados
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from '../ui/dialog'; // Ajusta la ruta si es necesario
