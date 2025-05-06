@@ -12,7 +12,7 @@ interface WordPressOrder {
   };
   fotos_garantia: string[];
   correo_enviado: boolean;
-  pago_completo: boolean;
+  pago_completo: string;
 }
 
 interface WooCommerceOrder {
@@ -45,7 +45,7 @@ export const GET: APIRoute = async ({ request }) => {
   try {
     const url = new URL(request.url);
     const page = url.searchParams.get('page') || '1';
-    const per_page = url.searchParams.get('per_page') || '20';
+    const per_page = url.searchParams.get('per_page') || '100';
 
     // Fetch WooCommerce orders
     const wooResponse = await fetch(`${url.origin}/api/woo/get-orders?page=${page}&per_page=${per_page}`);

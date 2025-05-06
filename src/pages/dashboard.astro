@@ -18,6 +18,8 @@ if (!session) {
 const ordersResponse = await fetch(`${Astro.url.origin}/api/get-all-orders`);
 const ordersData = await ordersResponse.json();
 
+console.log('Orders Data:', ordersData); // Añade esto para depurar
+
 // Fetch users data (esto es un placeholder - necesitarás implementar este endpoint)
 const usersData = { users: [] }; // Por ahora lo dejamos vacío
 

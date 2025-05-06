@@ -82,7 +82,7 @@ const OrderStatsOverview: React.FC<OrderStatsOverviewProps> = ({ orders, totalOr
     pending: orders.filter(order => order.status === 'pending').length,
     on_hold: orders.filter(order => order.status === 'on-hold').length,
     cancelled: orders.filter(order => ['cancelled', 'failed', 'refunded'].includes(order.status)).length,
-    pagados: orders.filter(order => order.wordpress_data?.pago_completo === true).length,
+    pagados: orders.filter(order => order.wordpress_data?.pago_completo !== false).length,
     
     // Totales monetarios
     totalSales: orders.reduce((sum: number, order) => {
@@ -104,7 +104,7 @@ const OrderStatsOverview: React.FC<OrderStatsOverviewProps> = ({ orders, totalOr
     
     // Monto total de pedidos pagados completamente
     totalPagado: orders.reduce((sum: number, order) => {
-      if (order.wordpress_data?.pago_completo === true) {
+      if (order.wordpress_data?.pago_completo !== false) {
         const total = parseInt(order.metadata.calculated_total) || 0;
         return sum + total;
       }
@@ -138,7 +138,7 @@ const OrderStatsOverview: React.FC<OrderStatsOverviewProps> = ({ orders, totalOr
     
     // Calcular el porcentaje de pedidos pagados
     porcentajePagados: orders.length > 0 
-      ? (orders.filter(order => order.wordpress_data?.pago_completo === true).length / orders.length) * 100 
+      ? (orders.filter(order => order.wordpress_data?.pago_completo !== false ).length / orders.length) * 100 
       : 0
   };
 
@@ -230,7 +230,7 @@ const OrderStatsOverview: React.FC<OrderStatsOverviewProps> = ({ orders, totalOr
     {
       title: "IVA Total",
       value: formatMoney(orderStats.totalIva),
-      description: `${formatPercentage(orderStats.totalIva/orderStats.totalSubtotal*100)} del subtotal`,
+      description: `${formatPercentage(orderStats.totalIva/orderStats.totalSubtotal*100)} del subtotal (${orders.filter(order => order.metadata.calculated_iva !== '0').length} órdenes)`,
       textColor: "text-indigo-600",
       bgColor: "bg-indigo-50"
     },
@@ -356,4 +356,4 @@ const OrderStatsOverview: React.FC<OrderStatsOverviewProps> = ({ orders, totalOr
   );
 };
 
-export default OrderStatsOverview; 
+export default OrderStatsOverview;

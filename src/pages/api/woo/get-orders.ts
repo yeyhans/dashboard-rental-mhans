@@ -20,7 +20,7 @@ export const GET: APIRoute = async ({ request }) => {
     // Get URL parameters
     const url = new URL(request.url);
     const page = url.searchParams.get('page') || '1';
-    const per_page = url.searchParams.get('per_page') || '10';
+    const per_page = url.searchParams.get('per_page') || '50';
     const status = url.searchParams.get('status') || '';
     const search = url.searchParams.get('search') || '';
 
