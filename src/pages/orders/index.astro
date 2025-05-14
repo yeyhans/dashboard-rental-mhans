@@ -53,7 +53,7 @@ const mergedOrders = ordersData.data.orders.map((wooOrder: any) => {
     ...wooOrder,
     fotos_garantia: wpOrder?.fotos_garantia || [],
     correo_enviado: wpOrder?.correo_enviado || false,
-    pago_completo: wpOrder?.pago_completo || false
+    pago_completo: wpOrder?.pago_completo ? 'true' : 'false'
   };
 });
 

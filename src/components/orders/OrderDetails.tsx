@@ -15,6 +15,13 @@ import { FileText, FileCheck, ChevronLeft, Save, X, Edit } from 'lucide-react';
 import { ProductSelector } from './ProductSelector';
 import { OrderCostSummary } from './OrderCostSummary';
 import { OrderNotes } from './OrderNotes';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from '../ui/dialog';
 
 // Status translations and colors based on WooCommerce
 const statusTranslations: { [key: string]: string } = {
@@ -54,7 +61,11 @@ const formatDate = (dateString: string) => {
   });
 };
 
-
+// Función que determina si un estado de pago se considera efectivamente pagado
+const isEffectivelyPaid = (status: string | undefined | null): boolean => {
+  // Simplificado: cualquier valor no vacío se considera pagado
+  return !!status && status.trim() !== '';
+};
 
 interface OrderDetailsProps {
   order: {
@@ -88,10 +99,8 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
   const [showPaymentDetails, setShowPaymentDetails] = useState(false); // Estado para mostrar detalles
 
   const handlePaymentUpdate = async (newStatus: string) => {
-    if (!newStatus || newStatus.trim() === '') {
-      alert('Por favor ingrese un estado de pago válido');
-      return;
-    }
+    // Eliminar la validación que impide valores vacíos
+    // Se permite enviar un estado vacío para marcar como no pagado
     console.log('Actualizando estado de pago:', newStatus);
     try {
       // Actualización en WooCommerce y WordPress (mantener lógica existente, pero enviar string)
@@ -1080,24 +1089,36 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                 </span>
               </div>
 
-              {/* Payment Status */}
+              {/* Payment Status - Modificado para usar isEffectivelyPaid */}
               <div className="flex items-center gap-2">
                 {isEditingPayment ? (
-                  <Input
-                    type="text"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                    value={paymentStatus}
-                    onChange={(e) => setPaymentStatus(e.target.value)}
-                    placeholder="Detalles del pago (ej: Transferencia #123)"
-                  />
+                  <div className="flex items-center w-full gap-2">
+                    <Input
+                      type="text"
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      value={paymentStatus}
+                      onChange={(e) => setPaymentStatus(e.target.value)}
+                      placeholder="Detalles del pago (ej: Transferencia #123)"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 whitespace-nowrap"
+                      onClick={() => setPaymentStatus('')}
+                      title="Marcar como no pagado"
+                    >
+                      Limpiar
+                    </Button>
+                  </div>
                 ) : (
                   <>
-                    <div className={`w-3 h-3 rounded-full ${paymentStatus ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                    <div className={`w-3 h-3 rounded-full ${isEffectivelyPaid(paymentStatus) ? 'bg-green-500' : 'bg-yellow-500'}`} />
                     <span 
                       className={`cursor-pointer ${paymentStatus ? 'hover:underline' : ''}`}
-                      onClick={() => paymentStatus && setShowPaymentDetails(true)} // Mostrar detalles al hacer clic si hay valor
+                      onClick={() => paymentStatus && setShowPaymentDetails(true)} 
                     >
-                      Estado del pago: {paymentStatus ? 'Completo' : 'Pendiente'}
+                      Estado del pago: {isEffectivelyPaid(paymentStatus) ? 'Pagado' : 'No Pagado'}
+                      {paymentStatus && ' (click para ver detalles)'}
                     </span>
                     {/* Modal o Tooltip para mostrar detalles del pago */}
                     {showPaymentDetails && paymentStatus && (
@@ -1123,7 +1144,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                   className="h-8 px-2"
                   onClick={() => {
                     if (isEditingPayment) {
-                      handlePaymentUpdate(paymentStatus); // Enviar el valor string
+                      handlePaymentUpdate(paymentStatus); // Enviar el valor string (puede ser vacío)
                     }
                     setIsEditingPayment(!isEditingPayment);
                   }}
@@ -1183,12 +1204,3 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
 };
 
 export default OrderDetails;
-
-// Asegúrate de importar Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter si no están ya importados
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter
-} from '../ui/dialog'; // Ajusta la ruta si es necesario

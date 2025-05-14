@@ -30,7 +30,6 @@ import { ChevronRight, RefreshCw, Search, FileText, FileCheck } from 'lucide-rea
 import CreateOrderForm from './CreateOrderForm';
 import ProcessOrder from "./ProcessOrder";
 
-
 // Helper function to format currency with thousands separator
 const formatCurrency = (value: string | number) => {
   const numValue = typeof value === 'string' ? parseFloat(value) : value;
@@ -158,19 +157,59 @@ const OrdersDashboard = ({
       }
 
       console.log('Fetching orders with params:', params.toString());
-      const response = await fetch(`/api/woo/get-orders?${params}`);
-      const data = await response.json();
       
-      if (data.success) {
-        console.log('Orders received:', data.data.orders.length);
-        console.log('Total pages:', data.data.totalPages);
-        console.log('Total orders:', data.data.total);
+      // Fetch orders data from both APIs in parallel
+      const [wooResponse, wpResponse] = await Promise.all([
+        fetch(`/api/woo/get-orders?${params}`),
+        fetch(`/api/wp/get-orders?${params}`)
+      ]);
+      
+      const wooData = await wooResponse.json();
+      const wpData = await wpResponse.json();
+      
+      if (wooData.success) {
+        console.log('Orders received:', wooData.data.orders.length);
+        console.log('Total pages:', wooData.data.totalPages);
+        console.log('Total orders:', wooData.data.total);
         
-        setOrders(data.data.orders);
-        setTotal(parseInt(data.data.total));
-        setTotalPages(parseInt(data.data.totalPages));
+        // Verificar que wpData tenga la estructura correcta
+        const wpOrders = wpData.success && wpData.data && Array.isArray(wpData.data.orders) 
+          ? wpData.data.orders 
+          : [];
+        
+        // Create a map of WordPress orders by order ID for fast lookup
+        const wpOrdersMap: Record<string, any> = {};
+        wpOrders.forEach(wpOrder => {
+          if (wpOrder.id) {
+            wpOrdersMap[wpOrder.id] = wpOrder;
+          }
+        });
+        
+        // Merge WordPress data into WooCommerce orders - siguiendo mismo patrón de index.astro
+        const mergedOrders = wooData.data.orders.map(order => {
+          // Get matching WordPress order data if exists
+          const wpOrder = wpOrdersMap[order.id] || {};
+          
+          // Return merged order with pago_completo from WordPress data
+          return {
+            ...order,
+            fotos_garantia: wpOrder.fotos_garantia || [],
+            correo_enviado: wpOrder.correo_enviado || false,
+            pago_completo: wpOrder.pago_completo ? 'true' : 'false'
+          };
+        });
+        
+        setOrders(mergedOrders);
+        setTotal(parseInt(wooData.data.total));
+        setTotalPages(parseInt(wooData.data.totalPages));
+        
+        // Scroll al inicio de la tabla/listado cuando cambia la página
+        const tableElement = document.querySelector('.border.overflow-hidden');
+        if (tableElement) {
+          tableElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
       } else {
-        setError(data.message);
+        setError(wooData.message);
       }
     } catch (err) {
       setError('Error al cargar los pedidos');
@@ -205,8 +244,11 @@ const OrdersDashboard = ({
     if (!isInitialLoad) {
       loadOrders(currentPage, statusFilter, searchTerm);
       updateURL(currentPage, statusFilter, searchTerm);
+    } else {
+      // Asegurarse de que la URL refleja los valores iniciales en la carga inicial
+      updateURL(currentPage, statusFilter, searchTerm);
+      setIsInitialLoad(false);
     }
-    setIsInitialLoad(false);
   }, [currentPage, statusFilter, searchTerm]);
 
   // Función para recargar los datos
@@ -218,7 +260,7 @@ const OrdersDashboard = ({
   const filteredOrders = orders;
 
   // Get unique statuses from orders
-  const uniqueStatuses = [...new Set(orders.map(order => order.status))];
+  const uniqueStatuses = Array.from(new Set(orders.map(order => order.status)));
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -268,6 +310,30 @@ const OrdersDashboard = ({
   const handleOrderCreated = (newOrder: Order) => {
     setOrders([newOrder, ...orders]);
     setTotal(total + 1);
+  };
+
+  // Función para manejar el cambio de página
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage && !loading) {
+      // Crear una nueva URL con los parámetros actuales
+      const url = new URL(window.location.href);
+      url.searchParams.set('page', newPage.toString());
+      
+      if (statusFilter) {
+        url.searchParams.set('status', statusFilter);
+      } else {
+        url.searchParams.delete('status');
+      }
+      
+      if (searchTerm) {
+        url.searchParams.set('search', searchTerm);
+      } else {
+        url.searchParams.delete('search');
+      }
+      
+      // Redirigir a la nueva URL para forzar una recarga completa
+      window.location.href = url.toString();
+    }
   };
 
   // Render loading state
@@ -333,9 +399,9 @@ const OrdersDashboard = ({
                 
                 <div className="mt-2 flex gap-2">
                 <div className="flex items-center gap-1">
-                  <div className={`w-2 h-2 rounded-full ${order.pago_completo ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                  <div className={`w-2 h-2 rounded-full ${order.pago_completo === 'true' ? 'bg-green-500' : 'bg-yellow-500'}`} />
                   <p className="text-sm font-medium text-foreground">
-                    {order.pago_completo ? 'Completo' : 'Pendiente'}
+                    {order.pago_completo === 'true' ? 'Completo' : 'Pendiente'}
                   </p>
                 </div>
                   {order.metadata.pdf_on_hold_url && (
@@ -442,9 +508,9 @@ const OrdersDashboard = ({
                 <TableCell className="text-right">
                   <div className="flex flex-row gap-2 justify-end">
                   <div className="flex items-center gap-1">
-                  <div className={`w-2 h-2 rounded-full ${order.pago_completo ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                  <div className={`w-2 h-2 rounded-full ${order.pago_completo === 'true' ? 'bg-green-500' : 'bg-yellow-500'}`} />
                   <p className="text-sm font-medium text-foreground">
-                    {order.pago_completo ? 'Completo' : 'Pendiente'}
+                    {order.pago_completo === 'true' ? 'Completo' : 'Pendiente'}
                   </p>
                 </div>
                     {order.metadata.pdf_on_hold_url && (
@@ -549,33 +615,67 @@ const OrdersDashboard = ({
               Mostrando {filteredOrders.length} de {total} pedidos
             </div>
             
-            <div className="flex gap-2 order-1 sm:order-2">
+            <div className="flex flex-wrap justify-center gap-2 order-1 sm:order-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  const newPage = Math.max(1, currentPage - 1);
-                  setCurrentPage(newPage);
-                }}
+                onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1 || loading}
+                className="px-3"
+                aria-label="Página anterior"
               >
                 Anterior
               </Button>
               
-              <div className="flex items-center px-3 h-9 border ">
-                <span className="text-sm font-medium">
-                  {currentPage} / {totalPages}
-                </span>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  // Calculamos las páginas a mostrar
+                  let pageToShow;
+                  if (totalPages <= 5) {
+                    // Si hay 5 o menos páginas, mostramos todas
+                    pageToShow = i + 1;
+                  } else if (currentPage <= 3) {
+                    // Si estamos en las primeras páginas
+                    pageToShow = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    // Si estamos en las últimas páginas
+                    pageToShow = totalPages - 4 + i;
+                  } else {
+                    // Estamos en medio, mostramos 2 antes y 2 después
+                    pageToShow = currentPage - 2 + i;
+                  }
+
+                  return (
+                    <Button
+                      key={pageToShow}
+                      variant={currentPage === pageToShow ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handlePageChange(pageToShow)}
+                      disabled={loading}
+                      className="w-9 h-9 hidden sm:flex items-center justify-center"
+                      aria-label={`Ir a página ${pageToShow}`}
+                      aria-current={currentPage === pageToShow ? "page" : undefined}
+                    >
+                      {pageToShow}
+                    </Button>
+                  );
+                })}
+                
+                {/* En móvil mostramos el indicador de página actual */}
+                <div className="sm:hidden flex items-center px-3 h-9 border rounded">
+                  <span className="text-sm font-medium">
+                    {currentPage} / {totalPages}
+                  </span>
+                </div>
               </div>
               
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  const newPage = Math.min(totalPages, currentPage + 1);
-                  setCurrentPage(newPage);
-                }}
+                onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages || loading}
+                className="px-3"
+                aria-label="Página siguiente"
               >
                 Siguiente
               </Button>
