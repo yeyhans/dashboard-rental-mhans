@@ -48,6 +48,18 @@ const statusColors: { [key: string]: string } = {
   'auto-draft': 'bg-[#e5e5e5] text-[#777777]'
 };
 
+// Payment status colors (agregado)
+const paymentStatusColors: { [key: string]: string } = {
+  'true': 'bg-[#c6e1c6] text-[#5b841b]',
+  'false': 'bg-[#f8dda7] text-[#94660c]'
+};
+
+// Payment status text (agregado)
+const paymentStatusText: { [key: string]: string } = {
+  'true': 'Pagado',
+  'false': 'Pendiente'
+};
+
 // Format date
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -70,7 +82,9 @@ const isEffectivelyPaid = (status: string | undefined | null): boolean => {
 interface OrderDetailsProps {
   order: {
     correo_enviado?: boolean;
-    pago_completo?: string;
+    pago_completo?: string | boolean;
+    orden_compra?: string;
+    numero_factura?: string;
     meta_data?: any[];
     [key: string]: any;
   };
@@ -91,20 +105,78 @@ interface EditableOrderData {
 }
 
 const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
+  // Debug para ver qué valores se reciben
+  console.log('OrderDetails recibió:', {
+    pago_completo: rawOrder.pago_completo,
+    orden_compra: rawOrder.orden_compra,
+    numero_factura: rawOrder.numero_factura,
+    tipo_pago_completo: typeof rawOrder.pago_completo
+  });
+
   const [isEditingPayment, setIsEditingPayment] = useState(false);
-  // Cambiar el estado para manejar string, inicializar con valor existente o cadena vacía
-  const [paymentStatus, setPaymentStatus] = useState<string>(rawOrder.pago_completo || '');
+  // Estado para manejar pago_completo como 'true'/'false' en formato string
+  const [paymentStatus, setPaymentStatus] = useState<string>(() => {
+    if (typeof rawOrder.pago_completo === 'boolean') {
+      return rawOrder.pago_completo ? 'true' : 'false';
+    } else if (typeof rawOrder.pago_completo === 'string') {
+      return rawOrder.pago_completo === 'true' ? 'true' : 'false';
+    }
+    return 'false'; // Valor por defecto
+  });
+  
+  // Nuevos estados para OC y número de factura
+  const [ordenCompra, setOrdenCompra] = useState<string>(rawOrder.orden_compra || '');
+  const [numeroFactura, setNumeroFactura] = useState<string>(rawOrder.numero_factura || '');
 
-  // Estado para mostrar detalles
-  const [showPaymentDetails, setShowPaymentDetails] = useState(false); // Estado para mostrar detalles
+  // Effect para actualizar los estados cuando cambian las props
+  useEffect(() => {
+    console.log('Props de orden actualizadas:', {
+      pago_completo: rawOrder.pago_completo,
+      orden_compra: rawOrder.orden_compra,
+      numero_factura: rawOrder.numero_factura
+    });
+    
+    // Actualizar status de pago
+    if (typeof rawOrder.pago_completo === 'boolean') {
+      setPaymentStatus(rawOrder.pago_completo ? 'true' : 'false');
+    } else if (typeof rawOrder.pago_completo === 'string') {
+      setPaymentStatus(rawOrder.pago_completo === 'true' ? 'true' : 'false');
+    }
+    
+    // Actualizar OC y factura
+    if (rawOrder.orden_compra) setOrdenCompra(rawOrder.orden_compra);
+    if (rawOrder.numero_factura) setNumeroFactura(rawOrder.numero_factura);
+  }, [rawOrder.pago_completo, rawOrder.orden_compra, rawOrder.numero_factura]);
 
-  const handlePaymentUpdate = async (newStatus: string) => {
-    // Eliminar la validación que impide valores vacíos
-    // Se permite enviar un estado vacío para marcar como no pagado
-    console.log('Actualizando estado de pago:', newStatus);
+  const handlePaymentUpdate = async (isPaymentComplete: boolean) => {
+    console.log('Actualizando estado de pago:', { 
+      isPaymentComplete, 
+      ordenCompra, 
+      numeroFactura,
+      orderId: rawOrder.id 
+    });
+    
     try {
-      // Actualización en WooCommerce y WordPress (mantener lógica existente, pero enviar string)
-      console.log('Enviando solicitud de actualización a:', '/api/woo/update-orders');
+      // Simplificar: solo enviar true/false como string
+      const paymentValue = isPaymentComplete ? 'true' : 'false';
+      
+      // Preparar los datos a enviar
+      const metaData = [
+        { key: 'pago_completo', value: paymentValue }
+      ];
+      
+      // Agregar orden_compra y numero_factura solo si tienen valor
+      if (ordenCompra.trim()) {
+        metaData.push({ key: 'orden_compra', value: ordenCompra.trim() });
+      }
+      
+      if (numeroFactura.trim()) {
+        metaData.push({ key: 'numero_factura', value: numeroFactura.trim() });
+      }
+      
+      console.log('Enviando meta_data a WooCommerce:', metaData);
+      
+      // Actualización en WooCommerce
       const wooResponse = await fetch(`/api/woo/update-orders`, {
         method: 'PUT',
         headers: {
@@ -112,39 +184,71 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
         },
         body: JSON.stringify({
           id: rawOrder.id,
-          meta_data: [{ key: 'pago_completo', value: newStatus }] // Actualizar metadata
+          meta_data: metaData
         })
       });
 
-      console.log('Enviando solicitud de actualización a WordPress');
+      if (!wooResponse.ok) {
+        console.error('Error en respuesta de WooCommerce:', await wooResponse.text());
+        throw new Error('Error al actualizar el estado de pago en WooCommerce');
+      }
+
+      // Preparar datos para WordPress
+      const wpData: {
+        pago_completo: string;
+        orden_compra?: string;
+        numero_factura?: string;
+      } = {
+        pago_completo: paymentValue
+      };
+      
+      // Agregar OC y factura solo si tienen valor
+      if (ordenCompra.trim()) {
+        wpData.orden_compra = ordenCompra.trim();
+      }
+      
+      if (numeroFactura.trim()) {
+        wpData.numero_factura = numeroFactura.trim();
+      }
+      
+      console.log('Enviando datos a WordPress:', wpData);
+      
+      // Actualización en WordPress
       const wpResponse = await fetch(`/api/wp/update-order/${rawOrder.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          pago_completo: newStatus
-        })
+        body: JSON.stringify(wpData)
       });
 
       if (!wpResponse.ok) {
+        console.error('Error en respuesta de WordPress:', await wpResponse.text());
         throw new Error('Error al actualizar el estado de pago en WordPress');
       }
+      
+      const wpResponseData = await wpResponse.json();
+      console.log('Respuesta de la API WordPress:', wpResponseData);
 
-      const wooData = await wooResponse.json();
-      console.log('Respuesta de la API Woo:', wooData);
+      const wooResponseData = await wooResponse.json();
+      console.log('Respuesta de la API Woo:', wooResponseData);
 
-      if (wooData.success) {
-        // Actualizar estado local y recargar si es necesario o manejar la UI
-        setPaymentStatus(newStatus);
+      if (wooResponseData.success) {
+        // Actualizar estados locales
+        setPaymentStatus(isPaymentComplete ? 'true' : 'false');
         setIsEditingPayment(false);
-        // Opcional: window.location.reload(); si prefieres recargar la página
+        
+        // Mensaje de éxito
+        alert('Estado de pago actualizado correctamente');
+        
+        // Recargar la página para mostrar los datos actualizados
+        window.location.reload();
       } else {
-        alert(`Error al actualizar en WooCommerce: ${wooData.message}`);
+        alert(`Error al actualizar en WooCommerce: ${wooResponseData.message}`);
       }
     } catch (err) {
       console.error('Error al actualizar el estado de pago', err);
-      alert('Error al actualizar el estado de pago');
+      alert('Error al actualizar el estado de pago: ' + (err instanceof Error ? err.message : 'Error desconocido'));
     }
   };
   const [loading, setLoading] = useState(false);
@@ -1089,62 +1193,73 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                 </span>
               </div>
 
-              {/* Payment Status - Modificado para usar isEffectivelyPaid */}
-              <div className="flex items-center gap-2">
-                {isEditingPayment ? (
-                  <div className="flex items-center w-full gap-2">
-                    <Input
-                      type="text"
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      value={paymentStatus}
-                      onChange={(e) => setPaymentStatus(e.target.value)}
-                      placeholder="Detalles del pago (ej: Transferencia #123)"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9 whitespace-nowrap"
-                      onClick={() => setPaymentStatus('')}
-                      title="Marcar como no pagado"
-                    >
-                      Limpiar
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <div className={`w-3 h-3 rounded-full ${isEffectivelyPaid(paymentStatus) ? 'bg-green-500' : 'bg-yellow-500'}`} />
-                    <span 
-                      className={`cursor-pointer ${paymentStatus ? 'hover:underline' : ''}`}
-                      onClick={() => paymentStatus && setShowPaymentDetails(true)} 
-                    >
-                      Estado del pago: {isEffectivelyPaid(paymentStatus) ? 'Pagado' : 'No Pagado'}
-                      {paymentStatus && ' (click para ver detalles)'}
-                    </span>
-                    {/* Modal o Tooltip para mostrar detalles del pago */}
-                    {showPaymentDetails && paymentStatus && (
-                      <Dialog open={showPaymentDetails} onOpenChange={setShowPaymentDetails}>
-                        <DialogContent className="sm:max-w-[425px]">
-                          <DialogHeader>
-                            <DialogTitle>Detalles del Pago</DialogTitle>
-                          </DialogHeader>
-                          <div className="py-4">
-                            <p>{paymentStatus}</p>
+              {/* Payment Status */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  {isEditingPayment ? (
+                    <div className="flex flex-col w-full gap-2">
+                      <div className="flex items-center w-full gap-2">
+                        <div className="flex items-center gap-2">
+                          <label className="inline-flex items-center cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              className="sr-only peer"
+                              checked={paymentStatus === 'true'}
+                              onChange={(e) => setPaymentStatus(e.target.checked ? 'true' : 'false')}
+                            />
+                            <div className="relative w-11 h-6 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                            <span className="ml-3 text-sm font-medium">
+                              {paymentStatus === 'true' ? 'Pagado' : 'No pagado'}
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs">Orden de Compra</Label>
+                          <Input
+                            type="text"
+                            value={ordenCompra}
+                            onChange={(e) => setOrdenCompra(e.target.value)}
+                            placeholder="OC"
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Número de Factura</Label>
+                          <Input
+                            type="text"
+                            value={numeroFactura}
+                            onChange={(e) => setNumeroFactura(e.target.value)}
+                            placeholder="Factura"
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-col space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${paymentStatusColors[paymentStatus]}`}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => setIsEditingPayment(true)}
+                          >
+                            {paymentStatusText[paymentStatus]}
                           </div>
-                          <DialogFooter>
-                            <Button onClick={() => setShowPaymentDetails(false)}>Cerrar</Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    )}
-                  </>
-                )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-8 px-2"
                   onClick={() => {
                     if (isEditingPayment) {
-                      handlePaymentUpdate(paymentStatus); // Enviar el valor string (puede ser vacío)
+                      handlePaymentUpdate(paymentStatus === 'true');
                     }
                     setIsEditingPayment(!isEditingPayment);
                   }}
@@ -1152,6 +1267,27 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                   {isEditingPayment ? <Save className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
                 </Button>
               </div>
+              
+              {/* Información de OC y Factura (visible cuando no está editando) */}
+              {!isEditingPayment && (
+                <div className="space-y-2 p-3 rounded-md">
+                  <h5 className="text-sm font-medium">Información de Facturación</h5>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Orden de Compra</Label>
+                      <div className={`mt-1 p-2 border rounded ${ordenCompra ? '' : 'text-gray-400 italic'}`}>
+                        {ordenCompra || 'No especificado'}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Número de Factura</Label>
+                      <div className={`mt-1 p-2 border rounded ${numeroFactura ? '' : 'text-gray-400 italic'}`}>
+                        {numeroFactura || 'No especificado'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

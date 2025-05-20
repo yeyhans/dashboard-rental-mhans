@@ -1,0 +1,75 @@
+---
+import Base from "../../layout/Base.astro";
+import PaymentsTable from "../../components/payments/PaymentsTable";
+import { supabase } from "../../lib/supabase";
+export const prerender = false;
+
+const { data: { session } } = await supabase.auth.getSession();
+
+if (!session) {
+  return Astro.redirect("/");
+}
+
+// Get URL parameters for initial load
+const url = new URL(Astro.request.url);
+const page = url.searchParams.get('page') || '1';
+const per_page = url.searchParams.get('per_page') || '10';
+const status = url.searchParams.get('status') || '';
+
+// Build query parameters
+const params = new URLSearchParams({
+  page,
+  per_page
+});
+
+if (status) {
+  params.append('status', status);
+}
+
+// Fetch orders data from both APIs
+const response = await fetch(`${Astro.url.origin}/api/woo/get-orders?${params}`);
+const response2 = await fetch(`${Astro.url.origin}/api/wp/get-orders?${params}`);
+const ordersData = await response.json();
+const ordersData2 = await response2.json();
+
+// Verificar que ordersData tenga la estructura correcta
+if (!ordersData.data?.orders) {
+  ordersData.data = {
+    orders: [],
+    total: "0",
+    totalPages: "0"
+  };
+}
+
+// Verificar que ordersData2 tenga la estructura correcta
+if (!ordersData2.orders) {
+  ordersData2.orders = [];
+}
+
+// Merge WooCommerce orders with WordPress data
+const mergedOrders = ordersData.data.orders.map((wooOrder: any) => {
+  const wpOrder = ordersData2.orders.orders?.find((order: any) => order.id === wooOrder.id);
+  return {
+    ...wooOrder,
+    fotos_garantia: wpOrder?.fotos_garantia || [],
+    correo_enviado: wpOrder?.correo_enviado || false,
+    pago_completo: wpOrder?.pago_completo ? 'true' : 'false'
+  };
+});
+
+const title = "Tabla de Pagos";
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    <PaymentsTable 
+      client:load
+      initialOrders={mergedOrders}
+      initialTotal={ordersData.data.total}
+      initialTotalPages={ordersData.data.totalPages}
+      initialPage={page}
+      initialStatus={status}
+      initialPerPage={per_page}
+    />
+  </div>
+</Base> 

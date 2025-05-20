@@ -13,14 +13,11 @@ export const GET: APIRoute = async ({ request }) => {
     const password = import.meta.env.WORDPRESS_PASSWORD;
     const wpUrl = import.meta.env.WOOCOMMERCE_STORE_URL;
 
-
-
     if (!username || !password || !wpUrl) {
       throw new Error('WordPress credentials or URL are not configured');
     }
 
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
-
 
     // Build the WordPress API URL with parameters
     const wpApiUrl = new URL(`${wpUrl}/wp-json/custom/v1/orders`);
@@ -31,10 +28,10 @@ export const GET: APIRoute = async ({ request }) => {
       wpApiUrl.searchParams.set('status', status);
     }
 
-
-
     // Fetch orders from WordPress API with authentication
     console.log('=== Making Request ===');
+    console.log('API URL:', wpApiUrl.toString());
+    
     const response = await fetch(wpApiUrl.toString(), {
       headers: {
         'Authorization': `Basic ${auth}`,
@@ -42,9 +39,7 @@ export const GET: APIRoute = async ({ request }) => {
       }
     });
     
-
     if (!response.ok) {
-
       try {
         const errorData = await response.json();
         console.error('Response body:', JSON.stringify(errorData, null, 2));
@@ -81,13 +76,51 @@ export const GET: APIRoute = async ({ request }) => {
       }
     }
 
-    const orders = await response.json();
-
-    // Return all order data
+    const data = await response.json();
+    
+    // Debug log para verificar la estructura y contenido
+    console.log('=== WordPress API Response ===');
+    console.log('Response structure:', JSON.stringify(Object.keys(data), null, 2));
+    
+    // Verificar si hay órdenes y si tienen los campos requeridos
+    if (data.orders && Array.isArray(data.orders)) {
+      // Log de la primera orden para verificar campos
+      if (data.orders.length > 0) {
+        const firstOrder = data.orders[0];
+        console.log('First order fields:', JSON.stringify(Object.keys(firstOrder), null, 2));
+        console.log('orden_compra:', firstOrder.orden_compra);
+        console.log('numero_factura:', firstOrder.numero_factura);
+      }
+      
+      // Asegurar que cada orden tenga los campos requeridos
+      const processedOrders = data.orders.map((order: any) => ({
+        ...order,
+        orden_compra: order.orden_compra || '',
+        numero_factura: order.numero_factura || ''
+      }));
+      
+      // Devolver los datos con las órdenes procesadas
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          orders: processedOrders,
+          total: data.total || response.headers.get('X-WP-Total'),
+          totalPages: data.total_pages || response.headers.get('X-WP-TotalPages')
+        }
+      }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+    
+    // Si la estructura es diferente a la esperada
+    console.log('Unexpected data structure, returning raw data');
+    
     return new Response(JSON.stringify({
-      orders: orders,
-      total: response.headers.get('X-WP-Total'),
-      totalPages: response.headers.get('X-WP-TotalPages')
+      success: true,
+      data: data
     }), {
       status: 200,
       headers: {
@@ -98,6 +131,7 @@ export const GET: APIRoute = async ({ request }) => {
   } catch (error) {
     console.error('Error fetching WordPress orders:', error);
     return new Response(JSON.stringify({
+      success: false,
       error: 'Failed to fetch orders',
       message: error instanceof Error ? error.message : 'Unknown error occurred'
     }), {

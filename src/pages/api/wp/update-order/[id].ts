@@ -13,6 +13,8 @@ export interface WPOrder {
     fotos_garantia: string[];
     correo_enviado: boolean;
     pago_completo: string;
+    orden_compra: string;
+    numero_factura: string;
   }
   
 export const PUT: APIRoute = async ({ params, request }) => {
@@ -48,11 +50,17 @@ export const PUT: APIRoute = async ({ params, request }) => {
   
       const body = await request.json();
       console.log('Datos recibidos para actualización:', body);
-      if (!body || typeof body.pago_completo !== 'string') {
+      
+      // Validate that at least one required field is present
+      if (!body || (
+          typeof body.pago_completo !== 'string' && 
+          typeof body.orden_compra !== 'string' && 
+          typeof body.numero_factura !== 'string'
+        )) {
         return new Response(
           JSON.stringify({
             success: false,
-            message: "Datos de actualización no válidos"
+            message: "Datos de actualización no válidos. Se requiere al menos uno de los campos: pago_completo, orden_compra, o numero_factura"
           }),
           {
             status: 400,

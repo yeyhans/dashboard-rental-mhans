@@ -32,15 +32,21 @@ export const onRequest = defineMiddleware(
       }
 
       locals.email = data.user?.email!;
+      
+      const accessTokenExpiresIn = data?.session?.expires_in ?? 3600; // Default a 1 hora (3600s)
+      const refreshTokenMaxAge = 7 * 24 * 60 * 60; // 7 días en segundos
+      
       cookies.set("sb-access-token", data?.session?.access_token!, {
         sameSite: "strict",
         path: "/",
         secure: true,
+        maxAge: accessTokenExpiresIn
       });
       cookies.set("sb-refresh-token", data?.session?.refresh_token!, {
         sameSite: "strict",
         path: "/",
         secure: true,
+        maxAge: refreshTokenMaxAge
       });
     }
 

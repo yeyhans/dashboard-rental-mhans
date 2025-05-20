@@ -97,10 +97,10 @@ const { data: { session } } = await supabase.auth.getSession();
     </footer>
 
     {session && (
-      <aside class="fixed left-0 top-0 h-screen transition-all duration-300" id="sidebar">
+      <aside class="fixed left-0 top-0 h-screen transition-all duration-300 z-10" id="sidebar">
         <button 
           onclick="toggleSidebar()"
-          class="fixed sidebar-toggle-btn transition-all duration-300 p-2 rounded-lg shadow z-30 top-4"
+          class="fixed sidebar-toggle-btn transition-all duration-300 p-2 rounded-lg shadow z-20 top-4"
           style="left: 240px"
           aria-label="Toggle Sidebar"
         >
@@ -112,7 +112,7 @@ const { data: { session } } = await supabase.auth.getSession();
           </svg>
         </button>
         
-        <div class="w-64 h-full shadow transition-all duration-300" id="sidebar-content">
+        <div class="w-64 h-full shadow transition-all duration-300 pointer-events-auto" id="sidebar-content">
           <div class="p-4">
             <div class="flex justify-center items-center py-4 mb-4 border-b">
               <img src="/logo-black.png" alt="Logo" class="h-12 w-auto logo-image" data-dark-src="/logo-black.png" data-light-src="/logo-white.png" onerror="this.src='/placeholder-logo.svg'; this.onerror=null;">
@@ -158,7 +158,7 @@ const { data: { session } } = await supabase.auth.getSession();
           </div>
         </div>
 
-        <div class="fixed left-0 top-0 h-screen transition-all duration-300 hidden" id="icon-only-sidebar">
+        <div class="fixed left-0 top-0 h-screen transition-all duration-300 hidden pointer-events-auto z-10" id="icon-only-sidebar">
           <div class="h-full w-16 p-4">
             <div class="flex justify-center items-center py-4 mb-8 border-b">
               <a href="/" class="flex items-center justify-center">
@@ -362,6 +362,24 @@ const { data: { session } } = await supabase.auth.getSession();
         
         #footer a {
           color: black;
+        }
+
+        /* Ensure sidebar doesn't interfere with page content */
+        body.sidebar-open {
+          overflow: hidden;
+        }
+        
+        #sidebar.collapsed {
+          pointer-events: none;
+        }
+        
+        #sidebar.collapsed #sidebar-content {
+          pointer-events: none;
+        }
+        
+        #sidebar.collapsed #icon-only-sidebar,
+        #sidebar.collapsed .sidebar-toggle-btn {
+          pointer-events: auto;
         }
       `;
       document.head.appendChild(styles);

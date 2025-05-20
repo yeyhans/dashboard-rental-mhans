@@ -61,6 +61,18 @@ const statusColors: { [key: string]: string } = {
   'auto-draft': 'bg-[#e5e5e5] text-[#777777]'
 };
 
+// Payment status colors and text
+const paymentStatusColors: { [key: string]: string } = {
+  'true': 'bg-[#c6e1c6] text-[#5b841b]',
+  'false': 'bg-[#f8dda7] text-[#94660c]'
+};
+
+// Payment status text
+const paymentStatusText: { [key: string]: string } = {
+  'true': 'Pagado',
+  'false': 'Pendiente'
+};
+
 interface OrdersDashboardProps {
   initialOrders: Order[];
   initialTotal: string;
@@ -122,6 +134,7 @@ const OrdersDashboard = ({
   const [isMobileView, setIsMobileView] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
 
   const perPage = parseInt(initialPerPage);
 
@@ -179,14 +192,14 @@ const OrdersDashboard = ({
         
         // Create a map of WordPress orders by order ID for fast lookup
         const wpOrdersMap: Record<string, any> = {};
-        wpOrders.forEach(wpOrder => {
+        wpOrders.forEach((wpOrder: any) => {
           if (wpOrder.id) {
             wpOrdersMap[wpOrder.id] = wpOrder;
           }
         });
         
         // Merge WordPress data into WooCommerce orders - siguiendo mismo patrón de index.astro
-        const mergedOrders = wooData.data.orders.map(order => {
+        const mergedOrders = wooData.data.orders.map((order: any) => {
           // Get matching WordPress order data if exists
           const wpOrder = wpOrdersMap[order.id] || {};
           
@@ -305,7 +318,45 @@ const OrdersDashboard = ({
     }
   };
 
+  // Add new function to handle payment status update
+  const handleUpdatePaymentStatus = async (orderId: number, currentStatus: string) => {
+    try {
+      setUpdatingOrderId(orderId);
+      // Invert the current status
+      const newStatus = currentStatus === 'true' ? 'false' : 'true';
+      
+      const response = await fetch(`/api/wp/update-order/${orderId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pago_completo: newStatus
+        })
+      });
 
+      if (response.ok) {
+        // Update local state
+        setOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.id === orderId 
+              ? { ...order, pago_completo: newStatus } 
+              : order
+          )
+        );
+        console.log(`Payment status updated for order ${orderId}`);
+      } else {
+        const errorData = await response.json();
+        console.error('Error updating payment status:', errorData);
+        setError(`Error updating payment status: ${errorData.message || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      setError('Error updating payment status');
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
 
   const handleOrderCreated = (newOrder: Order) => {
     setOrders([newOrder, ...orders]);
@@ -398,11 +449,12 @@ const OrdersDashboard = ({
                 </div>
                 
                 <div className="mt-2 flex gap-2">
-                <div className="flex items-center gap-1">
-                  <div className={`w-2 h-2 rounded-full ${order.pago_completo === 'true' ? 'bg-green-500' : 'bg-yellow-500'}`} />
-                  <p className="text-sm font-medium text-foreground">
-                    {order.pago_completo === 'true' ? 'Completo' : 'Pendiente'}
-                  </p>
+                <div 
+                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${paymentStatusColors[order.pago_completo]}`}
+                  onClick={() => handleUpdatePaymentStatus(order.id, order.pago_completo)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {paymentStatusText[order.pago_completo]}
                 </div>
                   {order.metadata.pdf_on_hold_url && (
                     <Button 
@@ -507,12 +559,13 @@ const OrdersDashboard = ({
                 <TableCell className="text-foreground text-right font-bold">${formatCurrency(order.metadata.calculated_total)}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex flex-row gap-2 justify-end">
-                  <div className="flex items-center gap-1">
-                  <div className={`w-2 h-2 rounded-full ${order.pago_completo === 'true' ? 'bg-green-500' : 'bg-yellow-500'}`} />
-                  <p className="text-sm font-medium text-foreground">
-                    {order.pago_completo === 'true' ? 'Completo' : 'Pendiente'}
-                  </p>
-                </div>
+                  <div 
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${paymentStatusColors[order.pago_completo]}`}
+                    onClick={() => handleUpdatePaymentStatus(order.id, order.pago_completo)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {paymentStatusText[order.pago_completo]}
+                  </div>
                     {order.metadata.pdf_on_hold_url && (
                       <Button 
                         variant="ghost" 

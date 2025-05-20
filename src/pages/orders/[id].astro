@@ -6,21 +6,6 @@ import ProcessOrder from "../../components/orders/ProcessOrder";
 
 export const prerender = false;
 
-interface WPOrder {
-  id: number;
-  status: string;
-  date_created: string;
-  total: string;
-  customer: {
-    first_name: string;
-    last_name: string;
-    email: string;
-  };
-  fotos_garantia: string[];
-  correo_enviado: boolean;
-  pago_completo: boolean;
-}
-
 const { data: { session } } = await supabase.auth.getSession();
 
 if (!session) {
@@ -38,25 +23,97 @@ if (!id) {
 const response = await fetch(`${Astro.url.origin}/api/woo/get-order/${id}`);
 const orderData = await response.json();
 
-let specificOrder: WPOrder | null = null;
+let specificOrder: any = null;
 
 try {
   const response2 = await fetch(`${Astro.url.origin}/api/wp/get-orders/`);
   const orderData2 = await response2.json();
+  
+  // Depuración detallada de la estructura de datos
+  console.log('WordPress API respuesta:', {
+    keys: orderData2 ? Object.keys(orderData2) : 'null',
+    orders: orderData2?.orders ? (Array.isArray(orderData2.orders) ? 'array' : typeof orderData2.orders) : 'undefined',
+    ordersStructure: orderData2?.orders?.orders ? (Array.isArray(orderData2.orders.orders) ? 'array' : typeof orderData2.orders.orders) : 'undefined',
+    directOrders: Array.isArray(orderData2) ? 'array' : typeof orderData2
+  });
 
-  // Filter the specific order that matches the ID
-  specificOrder = orderData2.orders.orders.find(
-    (order: WPOrder) => order.id === parseInt(id)
-  ) || null;
+  // Check if the data structure is as expected and find the order
+  if (orderData2 && orderData2.orders && Array.isArray(orderData2.orders)) {
+    console.log('Buscando en estructura orderData2.orders[]');
+    specificOrder = orderData2.orders.find(
+      (order: any) => order.id === parseInt(id)
+    ) || null;
+  } else if (orderData2 && orderData2.orders && orderData2.orders.orders && Array.isArray(orderData2.orders.orders)) {
+    console.log('Buscando en estructura orderData2.orders.orders[]');
+    specificOrder = orderData2.orders.orders.find(
+      (order: any) => order.id === parseInt(id)
+    ) || null;
+  } else if (Array.isArray(orderData2)) {
+    console.log('Buscando en estructura orderData2[]');
+    specificOrder = orderData2.find(
+      (order: any) => order.id === parseInt(id)
+    ) || null;
+  }
   
   if (!specificOrder) {
-    console.log('Order not found in WP data');
+    console.log('Order not found in WP data, ID buscado:', id);
+    // Intentar búsqueda manual por ID en todas las estructuras posibles
+    if (orderData2 && typeof orderData2 === 'object') {
+      console.log('Intentando búsqueda manual recursiva');
+      const searchRecursive = (obj: any, targetId: number): any => {
+        if (!obj) return null;
+        
+        // Si es un array, buscar en cada elemento
+        if (Array.isArray(obj)) {
+          for (const item of obj) {
+            if (item && item.id === targetId) {
+              return item;
+            }
+            const result = searchRecursive(item, targetId);
+            if (result) return result;
+          }
+        } 
+        // Si es un objeto, buscar en propiedades que podrían contener arrays u objetos
+        else if (typeof obj === 'object') {
+          // Comprobar si este objeto es la orden que buscamos
+          if (obj.id === targetId) {
+            return obj;
+          }
+          
+          // Buscar en propiedades
+          for (const key in obj) {
+            if (obj[key] && typeof obj[key] === 'object') {
+              const result = searchRecursive(obj[key], targetId);
+              if (result) return result;
+            }
+          }
+        }
+        
+        return null;
+      };
+      
+      specificOrder = searchRecursive(orderData2, parseInt(id));
+      if (specificOrder) {
+        console.log('¡Orden encontrada mediante búsqueda recursiva!');
+      }
+    }
   } else {
     console.log('Found WP Order:', JSON.stringify(specificOrder, null, 2));
   }
 } catch (error) {
   console.error('Error fetching WP order data:', error);
 }
+
+// Variables para dar un valor por defecto en caso de que no se encuentre la orden
+const wpPagoCompleto = specificOrder?.pago_completo || '';
+const wpOrdenCompra = specificOrder?.orden_compra || '';
+const wpNumeroFactura = specificOrder?.numero_factura || '';
+
+console.log('Valores a pasar a OrderDetails:', {
+  pago_completo: wpPagoCompleto, 
+  orden_compra: wpOrdenCompra, 
+  numero_factura: wpNumeroFactura
+});
 
 const title = `Orden #${id}`;
 ---
@@ -70,7 +127,9 @@ const title = `Orden #${id}`;
           order={{
             ...orderData.data,
             correo_enviado: specificOrder?.correo_enviado || false,
-            pago_completo: specificOrder?.pago_completo || false
+            pago_completo: wpPagoCompleto,
+            orden_compra: wpOrdenCompra,
+            numero_factura: wpNumeroFactura
           }} 
         />
 
@@ -80,10 +139,7 @@ const title = `Orden #${id}`;
             order={{
               orders: {
                 success: true,
-                orders: specificOrder ? [{
-                  ...specificOrder,
-                  pago_completo: Boolean(specificOrder.pago_completo)
-                }] : []
+                orders: [specificOrder]
               }
             }}
           />
