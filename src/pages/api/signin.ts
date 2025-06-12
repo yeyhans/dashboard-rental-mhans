@@ -1,9 +1,9 @@
 // Con `output: 'hybrid'` configurado:
 // export const prerender = false;
-import type { APIContext } from "astro";
+import type { APIRoute } from "astro";
 import { supabase } from "../../lib/supabase";
 
-export const POST = async ({ request, cookies, redirect }: APIContext) => {
+export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const formData = await request.formData();
   const email = formData.get("email")?.toString();
   const password = formData.get("password")?.toString();

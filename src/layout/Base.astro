@@ -107,7 +107,7 @@ const { data: { session } } = await supabase.auth.getSession();
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon-collapse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon-expand hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/_2000/svg" class="h-5 w-5 sidebar-icon-expand hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
         </button>
@@ -195,6 +195,8 @@ const { data: { session } } = await supabase.auth.getSession();
   // Simplified JavaScript for sidebar toggle
   function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+
     const sidebarContent = document.getElementById('sidebar-content');
     const iconOnlySidebar = document.getElementById('icon-only-sidebar');
     const collapseIcon = document.querySelector('.sidebar-icon-collapse');
@@ -211,36 +213,42 @@ const { data: { session } } = await supabase.auth.getSession();
     
     if (isCollapsed) {
       // Expanding
-      sidebarContent.classList.remove('transform', '-translate-x-64');
-      iconOnlySidebar.classList.add('hidden');
-      collapseIcon.classList.remove('hidden');
-      expandIcon.classList.add('hidden');
-      toggleBtn.style.left = '240px'; // Ajuste para posición expandida
-      mainContent.classList.remove('ml-0', 'ml-16');
-      mainContent.classList.add('ml-64');
-      footer.classList.remove('ml-0', 'ml-16');
-      footer.classList.add('ml-64');
+      if (sidebarContent) sidebarContent.classList.remove('transform', '-translate-x-64');
+      if (iconOnlySidebar) iconOnlySidebar.classList.add('hidden');
+      if (collapseIcon) collapseIcon.classList.remove('hidden');
+      if (expandIcon) expandIcon.classList.add('hidden');
+      if (toggleBtn) toggleBtn.style.left = '240px'; // Ajuste para posición expandida
+      if (mainContent) {
+        mainContent.classList.remove('ml-0', 'ml-16');
+        mainContent.classList.add('ml-64');
+      }
+      if (footer) {
+        footer.classList.remove('ml-0', 'ml-16');
+        footer.classList.add('ml-64');
+      }
     } else {
       // Collapsing
-      sidebarContent.classList.add('transform', '-translate-x-64');
-      if (!isMobile) {
+      if (sidebarContent) sidebarContent.classList.add('transform', '-translate-x-64');
+      if (!isMobile && iconOnlySidebar) {
         iconOnlySidebar.classList.remove('hidden');
       }
-      collapseIcon.classList.add('hidden');
-      expandIcon.classList.remove('hidden');
+      if (collapseIcon) collapseIcon.classList.add('hidden');
+      if (expandIcon) expandIcon.classList.remove('hidden');
       
-      if (isMobile) {
-        toggleBtn.style.left = '16px';
+      if (toggleBtn) {
+        if (isMobile) {
+          toggleBtn.style.left = '16px';
+        } else {
+          toggleBtn.style.left = '60px'; // Ajuste para posición colapsada
+        }
+      }
+      if (mainContent) {
         mainContent.classList.remove('ml-64');
-        mainContent.classList.add('ml-0');
+        mainContent.classList.add(isMobile ? 'ml-0' : 'ml-16');
+      }
+      if (footer) {
         footer.classList.remove('ml-64');
-        footer.classList.add('ml-0');
-      } else {
-        toggleBtn.style.left = '60px'; // Ajuste para posición colapsada
-        mainContent.classList.remove('ml-64');
-        mainContent.classList.add('ml-16');
-        footer.classList.remove('ml-64');
-        footer.classList.add('ml-16');
+        footer.classList.add(isMobile ? 'ml-0' : 'ml-16');
       }
     }
   }
@@ -248,6 +256,8 @@ const { data: { session } } = await supabase.auth.getSession();
   // Initialize sidebar on page load with simplified logic
   document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+
     const sidebarContent = document.getElementById('sidebar-content');
     const iconOnlySidebar = document.getElementById('icon-only-sidebar');
     const collapseIcon = document.querySelector('.sidebar-icon-collapse');
@@ -383,6 +393,7 @@ const { data: { session } } = await supabase.auth.getSession();
   function applyThemeToSidebar() {
     const isDark = document.documentElement.classList.contains('dark');
     const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
     
     if (isDark) {
       sidebar.classList.add('dark-theme');
@@ -442,7 +453,7 @@ const { data: { session } } = await supabase.auth.getSession();
   });
 </script>
 
-<script is:inline>
+<script>
 	const getThemePreference = () => {
 		if (typeof localStorage !== 'undefined' && localStorage.getItem('theme')) {
 			return localStorage.getItem('theme');
