@@ -1,9 +1,9 @@
 // Con `output: 'hybrid'` configurado:
 // export const prerender = false;
-import type { APIRoute } from "astro";
+import type { APIContext } from "astro";
 import { supabase } from "../../lib/supabase";
 
-export const POST: APIRoute = async ({ request, cookies, redirect }) => {
+export const POST = async ({ request, cookies, redirect }: APIContext) => {
   const formData = await request.formData();
   const email = formData.get("email")?.toString();
   const password = formData.get("password")?.toString();
@@ -22,11 +22,26 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   }
 
   const { access_token, refresh_token } = data.session;
+  
+  // Configurar las cookies con mayor seguridad y duración apropiada
+  const accessTokenExpiresIn = data?.session?.expires_in ?? 3600; // Default a 1 hora (3600s)
+  const refreshTokenMaxAge = 7 * 24 * 60 * 60; // 7 días en segundos
+  
   cookies.set("sb-access-token", access_token, {
+    sameSite: "strict",
     path: "/",
+    secure: true,
+    maxAge: accessTokenExpiresIn,
+    httpOnly: true
   });
+  
   cookies.set("sb-refresh-token", refresh_token, {
+    sameSite: "strict", 
     path: "/",
+    secure: true,
+    maxAge: refreshTokenMaxAge,
+    httpOnly: true
   });
+  
   return redirect("/dashboard");
 };

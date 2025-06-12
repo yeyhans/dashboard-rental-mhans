@@ -1,11 +1,17 @@
-import type { APIRoute } from "astro";
+import type { APIContext } from "astro";
 import { supabase } from "../../lib/supabase";
 
-export const POST: APIRoute = async ({ cookies, redirect }) => {
+export const POST = async ({ cookies, redirect }: APIContext) => {
+  // Cerrar sesión en Supabase
   await supabase.auth.signOut();
   
-  cookies.delete("sb-access-token");
-  cookies.delete("sb-refresh-token");
+  // Eliminar las cookies de sesión
+  cookies.delete("sb-access-token", {
+    path: "/",
+  });
+  cookies.delete("sb-refresh-token", {
+    path: "/",
+  });
   
   return redirect("/");
 }; 
