@@ -11,6 +11,12 @@ export default defineConfig({
   adapter: vercel(),
   integrations: [tailwind(), react()],
 
+  vite: {
+    ssr: {
+      external: ["micromatch"],
+    },
+  },
+
   env: {
     schema: {
       SUPABASE_ANON_KEY: envField.string({ context: "server", access: "secret" }),
