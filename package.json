@@ -50,6 +50,7 @@
     "woocommerce-rest-ts-api": "^7.0.0"
   },
   "devDependencies": {
+    "@types/micromatch": "^4.0.9",
     "@types/woocommerce__woocommerce-rest-api": "^1.0.5",
     "prettier": "^3.1.1",
     "prettier-plugin-astro": "^0.12.2"

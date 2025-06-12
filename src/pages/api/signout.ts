@@ -1,7 +1,7 @@
-import type { APIRoute } from "astro";
 import { supabase } from "../../lib/supabase";
 
-export const POST: APIRoute = async ({ cookies, redirect }) => {
+export const POST = async ({ cookies, redirect }: any) => {
+  console.log("signing out");
   await supabase.auth.signOut();
   
   cookies.delete("sb-access-token");
