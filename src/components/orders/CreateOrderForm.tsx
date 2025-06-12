@@ -11,7 +11,7 @@ import {
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Plus, Minus, Trash2, Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import type { Order } from '../../types/order';
 import type { User } from '../../types/user';
 import type { Product } from '../../types/product';

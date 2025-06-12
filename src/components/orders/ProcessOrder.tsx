@@ -64,7 +64,7 @@ function ProcessOrder({ order }: { order: WPOrderResponse }) {
         </div>
       </div>
       <div className="rounded-lg border p-4">
-        <h3 className="text-lg font-semibold mb-4">Fotos de Garantía</h3>
+        <h3 className="text-lg font-semibold mb-4">Fotos de productos de la orden</h3>
         
         <div className="space-y-4">
 

@@ -15,6 +15,12 @@ import {
 } from '../ui/table';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../ui/tooltip';
 import type { Order } from '../../types/order';
 import { RefreshCw, Search } from 'lucide-react';
 
@@ -39,36 +45,36 @@ const paymentStatusText: { [key: string]: string } = {
 interface PaymentsTableProps {
   initialOrders: Order[];
   initialTotal: string;
-  initialTotalPages: string;
-  initialPage?: string;
   initialStatus?: string;
-  initialPerPage?: string;
 }
 
 const PaymentsTable = ({ 
   initialOrders,
-  initialTotal,
-  initialTotalPages,
-  initialPage = '1',
-  initialStatus = '',
-  initialPerPage = '10'
+  initialTotal
 }: PaymentsTableProps) => {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(parseInt(initialPage));
-  const [totalPages, setTotalPages] = useState(parseInt(initialTotalPages));
   const [total, setTotal] = useState(parseInt(initialTotal));
-  const [editableFields, setEditableFields] = useState<{[key: string]: {oc?: string, factura?: string}}>({}); 
+  const [editableFields, setEditableFields] = useState<{[key: string]: {oc?: string, factura?: string}}>(() => {
+    // Inicializar campos editables con los datos iniciales
+    const initialEditableFields: {[key: string]: {oc?: string, factura?: string}} = {};
+    initialOrders.forEach((order: any) => {
+      initialEditableFields[order.id] = {
+        oc: order.orden_compra || '',
+        factura: order.numero_factura || ''
+      };
+    });
+    return initialEditableFields;
+  }); 
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
-
-  const perPage = parseInt(initialPerPage);
+  const [sortBy, setSortBy] = useState<'date' | 'client' | 'status' | 'id'>('date');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Actualizar la URL para reflejar los filtros actuales
-  const updateURL = (page: number, status: string = '', search: string = '') => {
+  const updateURL = (status: string = '', search: string = '', sortBy: string = 'date', sortDirection: string = 'desc') => {
     const url = new URL(window.location.href);
-    url.searchParams.set('page', page.toString());
     
     if (status) {
       url.searchParams.set('status', status);
@@ -82,18 +88,18 @@ const PaymentsTable = ({
       url.searchParams.delete('search');
     }
     
+    url.searchParams.set('sortBy', sortBy);
+    url.searchParams.set('sortDirection', sortDirection);
+    
     window.history.pushState({}, '', url.toString());
   };
 
   // Función para cargar los datos con filtros
-  const loadOrders = async (page: number, status: string = '', search: string = '') => {
+  const loadOrders = async (status: string = '', search: string = '', sortByParam: string = sortBy, sortDirectionParam: string = sortDirection) => {
     try {
       setLoading(true);
       setError(null); // Limpiar errores previos
-      const params = new URLSearchParams({
-        page: page.toString(),
-        per_page: perPage.toString(),
-      });
+      const params = new URLSearchParams();
 
       if (status) {
         params.append('status', status);
@@ -135,6 +141,8 @@ const PaymentsTable = ({
             wpOrdersMap[orderId] = wpOrder;
           }
         });
+
+        console.log(wpData);
         
         // Merge WordPress data into WooCommerce orders
         const mergedOrders = wooData.data.orders.map((order: any) => {
@@ -155,11 +163,52 @@ const PaymentsTable = ({
           };
         });
         
-        // Ordenar por ID para mantener consistencia
-        mergedOrders.sort((a: Order, b: Order) => a.id - b.id);
-        
-        setOrders(mergedOrders);
-        setTotalPages(parseInt(wooData.data.totalPages));
+        // Ordenar en frontend según sortBy y sortDirection
+        let mergedSortedOrders = [...mergedOrders];
+        mergedSortedOrders.sort((a: Order, b: Order) => {
+          let aValue: any, bValue: any;
+          switch (sortByParam) {
+            case 'client':
+              aValue = a.billing?.company || `${a.billing?.first_name} ${a.billing?.last_name}`;
+              bValue = b.billing?.company || `${b.billing?.first_name} ${b.billing?.last_name}`;
+              break;
+            case 'status':
+              // Convert pago_completo to number for logical sorting: 'true' -> 1, 'false' -> 0
+              aValue = a.pago_completo === 'true' ? 1 : 0;
+              bValue = b.pago_completo === 'true' ? 1 : 0;
+              break;
+            case 'date':
+              aValue = a.date_created;
+              bValue = b.date_created;
+              break;
+            case 'id':
+              aValue = a.id;
+              bValue = b.id;
+              break;
+            default:
+              aValue = a.id;
+              bValue = b.id;
+          }
+          if (aValue === undefined || aValue === null) aValue = '';
+          if (bValue === undefined || bValue === null) bValue = '';
+          if (sortByParam === 'id') {
+            return sortDirectionParam === 'asc' ? aValue - bValue : bValue - aValue;
+          }
+          if (sortByParam === 'date') {
+            return sortDirectionParam === 'asc'
+              ? new Date(aValue).getTime() - new Date(bValue).getTime()
+              : new Date(bValue).getTime() - new Date(aValue).getTime();
+          }
+          // For status, compare as numbers
+          if (sortByParam === 'status') {
+            return sortDirectionParam === 'asc' ? aValue - bValue : bValue - aValue;
+          }
+          // String comparison
+          if (aValue < bValue) return sortDirectionParam === 'asc' ? -1 : 1;
+          if (aValue > bValue) return sortDirectionParam === 'asc' ? 1 : -1;
+          return 0;
+        });
+        setOrders(mergedSortedOrders);
         setTotal(parseInt(wooData.data.total));
         
         // Initialize editable fields
@@ -172,7 +221,7 @@ const PaymentsTable = ({
         });
         setEditableFields(initialEditableFields);
         
-        updateURL(page, status, search);
+        updateURL(status, search, sortByParam, sortDirectionParam);
       } else {
         setError('Error al cargar datos de WooCommerce');
       }
@@ -184,31 +233,69 @@ const PaymentsTable = ({
     }
   };
 
+  // Efecto para cargar todos los datos al montar el componente
+  useEffect(() => {
+    // Solo cargar datos si no hay datos iniciales o si están vacíos
+    if (initialOrders.length === 0) {
+      loadOrders('', '', sortBy, sortDirection);
+    } else {
+      // Si tenemos datos iniciales, aplicar el ordenamiento
+      let sortedOrders = [...initialOrders];
+      sortedOrders.sort((a: Order, b: Order) => {
+        let aValue: any, bValue: any;
+        switch (sortBy) {
+          case 'client':
+            aValue = a.billing?.company || `${a.billing?.first_name} ${a.billing?.last_name}`;
+            bValue = b.billing?.company || `${b.billing?.first_name} ${b.billing?.last_name}`;
+            break;
+          case 'status':
+            aValue = a.pago_completo === 'true' ? 1 : 0;
+            bValue = b.pago_completo === 'true' ? 1 : 0;
+            break;
+          case 'date':
+            aValue = a.date_created;
+            bValue = b.date_created;
+            break;
+          case 'id':
+            aValue = a.id;
+            bValue = b.id;
+            break;
+          default:
+            aValue = a.id;
+            bValue = b.id;
+        }
+        if (aValue === undefined || aValue === null) aValue = '';
+        if (bValue === undefined || bValue === null) bValue = '';
+        if (sortBy === 'id') {
+          return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+        }
+        if (sortBy === 'date') {
+          return sortDirection === 'asc'
+            ? new Date(aValue).getTime() - new Date(bValue).getTime()
+            : new Date(bValue).getTime() - new Date(aValue).getTime();
+        }
+        if (sortBy === 'status') {
+          return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+        }
+        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+      setOrders(sortedOrders);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Solo ejecutar al montar
+
   // Efecto para cargar los datos cuando cambian los filtros
   useEffect(() => {
-    loadOrders(currentPage);
-  }, [currentPage]);
+    loadOrders('', searchTerm, sortBy, sortDirection);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortBy, sortDirection]);
 
   const refreshData = () => {
-    loadOrders(currentPage, '', searchTerm);
+    loadOrders('', searchTerm, sortBy, sortDirection);
   };
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-    
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('es-CL', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    }).format(date);
-  };
-
-  const handlePageChange = (newPage: number) => {
-    if (newPage > 0 && newPage <= totalPages) {
-      setCurrentPage(newPage);
-    }
-  };
 
   // Manejar cambios en campos editables
   const handleFieldChange = (orderId: number, field: 'oc' | 'factura', value: string) => {
@@ -336,142 +423,162 @@ const PaymentsTable = ({
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    loadOrders(1, '', searchTerm);
+    loadOrders('', searchTerm, sortBy, sortDirection);
+  };
+
+  const toggleSortDirection = () => {
+    setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
   };
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <CardTitle>Tabla de Pagos</CardTitle>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={refreshData}
-            disabled={loading}
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="mb-4">
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <Input
-              placeholder="Buscar por cliente o proyecto..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
-            />
-            <Button type="submit" size="icon" variant="ghost">
-              <Search className="h-4 w-4" />
-            </Button>
-          </form>
-        </div>
+    <TooltipProvider>
+      <Card className="w-full">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Tabla de Pagos</CardTitle>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={refreshData}
+                disabled={loading}
+                title="Actualizar datos"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4">
+            <form onSubmit={handleSearch} className="flex gap-2">
+              <Input
+                placeholder="Buscar por cliente o proyecto..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="max-w-sm"
+              />
+              <Button type="submit" size="icon" variant="ghost">
+                <Search className="h-4 w-4" />
+              </Button>
+            </form>
+          </div>
 
-        {error && <div className="text-red-500 mb-4">{error}</div>}
-        
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[180px]">Cliente</TableHead>
-                <TableHead>ID Orden</TableHead>
-                <TableHead>Proyecto</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>OC</TableHead>
-                <TableHead>N° Factura</TableHead>
-                <TableHead>Estado Pago</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {orders.length === 0 ? (
+          {error && <div className="text-red-500 mb-4">{error}</div>}
+          
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-4">
-                    {loading ? 'Cargando...' : 'No se encontraron órdenes'}
-                  </TableCell>
+                  <TableHead className="w-[180px]">Cliente</TableHead>
+                  <TableHead>ID Orden</TableHead>
+                  <TableHead>Proyecto</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead>OC</TableHead>
+                  <TableHead>N° Factura</TableHead>
+                  <TableHead>Estado Pago</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
-              ) : (
-                orders.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-medium">
-                      {order.billing?.company || `${order.billing?.first_name} ${order.billing?.last_name}`}
-                    </TableCell>
-                    <TableCell>{order.id}</TableCell>
-                    <TableCell>{order.metadata?.order_proyecto || '-'}</TableCell>
-                    <TableCell>
-                      ${formatCurrency(order.metadata?.calculated_total || '0')}
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={editableFields[order.id]?.oc || ''}
-                        onChange={(e) => handleFieldChange(order.id, 'oc', e.target.value)}
-                        className="w-24"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={editableFields[order.id]?.factura || ''}
-                        onChange={(e) => handleFieldChange(order.id, 'factura', e.target.value)}
-                        className="w-24"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div 
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${paymentStatusColors[order.pago_completo]}`}
-                        onClick={() => handleUpdatePaymentStatus(order.id, order.pago_completo)}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        {paymentStatusText[order.pago_completo]}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => saveFieldChanges(order.id)}
-                        disabled={updatingOrderId === order.id}
-                      >
-                        {updatingOrderId === order.id ? 'Guardando...' : 'Guardar'}
-                      </Button>
+              </TableHeader>
+              <TableBody>
+                {orders.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-4">
+                      {loading ? 'Cargando...' : 'No se encontraron órdenes'}
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ) : (
+                  orders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell className="font-medium">
+                        {order.billing?.company || `${order.billing?.first_name} ${order.billing?.last_name}`}
+                      </TableCell>
+                      <TableCell>
+                        <a 
+                          href={`/orders/${order.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer font-medium"
+                          tabIndex={0}
+                          aria-label={`Ver detalles de la orden ${order.id}`}
+                        >
+                          {order.id}
+                        </a>
+                      </TableCell>
+                      <TableCell>{order.metadata?.order_proyecto || '-'}</TableCell>
+                      <TableCell>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-help">
+                              ${formatCurrency(order.metadata?.calculated_total || '0')}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Subtotal: ${formatCurrency(order.metadata?.calculated_subtotal || '0')}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={editableFields[order.id]?.oc || ''}
+                          onChange={(e) => handleFieldChange(order.id, 'oc', e.target.value)}
+                          className="w-24"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={editableFields[order.id]?.factura || ''}
+                          onChange={(e) => handleFieldChange(order.id, 'factura', e.target.value)}
+                          className="w-24"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div 
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${paymentStatusColors[order.pago_completo]}`}
+                          onClick={() => handleUpdatePaymentStatus(order.id, order.pago_completo)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          {paymentStatusText[order.pago_completo]}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-2 justify-end">
+                          {order.metadata?.pdf_processing_url && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => window.open(order.metadata.pdf_processing_url, '_blank')}
+                              title="Ver PDF"
+                            >
+                              Ver PDF
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => saveFieldChanges(order.id)}
+                            disabled={updatingOrderId === order.id}
+                          >
+                            {updatingOrderId === order.id ? 'Guardando...' : 'Guardar'}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
 
-        {/* Paginación */}
-        <div className="flex items-center justify-between mt-4">
-          <div className="text-sm text-muted-foreground">
-            Mostrando {orders.length} de {total} resultados
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1 || loading}
-            >
-              Anterior
-            </Button>
-            <div className="text-sm">
-              Página {currentPage} de {totalPages || 1}
+          {/* Información de resultados */}
+          <div className="flex items-center justify-between mt-4">
+            <div className="text-sm text-muted-foreground">
+              Mostrando {orders.length} de {total} resultados
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage >= totalPages || loading}
-            >
-              Siguiente
-            </Button>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </TooltipProvider>
   );
 };
 
