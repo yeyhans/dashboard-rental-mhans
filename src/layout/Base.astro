@@ -145,39 +145,7 @@ const { data: { session } } = await supabase.auth.getSession();
                 </svg>
                 <span class="sidebar-text ml-3">Usuarios</span>
               </a>
-              <a 
-                href="/products" 
-                class="flex items-center px-4 py-2 rounded-lg"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
-                <span class="sidebar-text ml-3">Productos</span>
-              </a>
-              <a 
-                href="/payments-table" 
-                class="flex items-center px-4 py-2 rounded-lg"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2" />
-                </svg>
-                <span class="sidebar-text ml-3">Pagos</span>
-              </a>
-              
-              <!-- Logout Button -->
-              <div class="mt-4 pt-4 border-t">
-                <form action="/api/signout" method="post">
-                  <button 
-                    type="submit"
-                    class="flex items-center px-4 py-2 rounded-lg w-full text-left hover:bg-red-50 text-red-600"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    <span class="sidebar-text ml-3">Cerrar Sesión</span>
-                  </button>
-                </form>
-              </div>
+                            <a                 href="/products"                 class="flex items-center px-4 py-2 rounded-lg"              >                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />                </svg>                <span class="sidebar-text ml-3">Productos</span>              </a>              <a                 href="/payments-table"                 class="flex items-center px-4 py-2 rounded-lg"              >                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2" />                </svg>                <span class="sidebar-text ml-3">Pagos</span>              </a>
             </nav>
           </div>
         </div>
@@ -215,37 +183,7 @@ const { data: { session } } = await supabase.auth.getSession();
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               </a>
-              <a 
-                href="/products" 
-                class="p-2 rounded-lg"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
-              </a>
-              <a 
-                href="/payments-table" 
-                class="p-2 rounded-lg"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2" />
-                </svg>
-              </a>
-              
-              <!-- Logout Button for collapsed sidebar -->
-              <div class="mt-4 pt-4 border-t">
-                <form action="/api/signout" method="post">
-                  <button 
-                    type="submit"
-                    class="p-2 rounded-lg text-red-600 hover:bg-red-50"
-                    title="Cerrar Sesión"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                  </button>
-                </form>
-              </div>
+                            <a                 href="/products"                 class="p-2 rounded-lg"              >                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />                </svg>              </a>              <a                 href="/payments-table"                 class="p-2 rounded-lg"              >                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2" />                </svg>              </a>
             </nav>
           </div>
         </div>
@@ -257,10 +195,6 @@ const { data: { session } } = await supabase.auth.getSession();
   // Simplified JavaScript for sidebar toggle
   function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
-    
-    // Only toggle sidebar if it exists (user is logged in)
-    if (!sidebar) return;
-    
     const sidebarContent = document.getElementById('sidebar-content');
     const iconOnlySidebar = document.getElementById('icon-only-sidebar');
     const collapseIcon = document.querySelector('.sidebar-icon-collapse');
@@ -268,13 +202,6 @@ const { data: { session } } = await supabase.auth.getSession();
     const toggleBtn = document.querySelector('.sidebar-toggle-btn');
     const mainContent = document.getElementById('main-content');
     const footer = document.getElementById('footer');
-    
-    // Check if all required elements exist
-    if (!sidebarContent || !iconOnlySidebar || !collapseIcon || !expandIcon || !toggleBtn || !mainContent || !footer) {
-      console.warn('Some sidebar elements are missing, cannot toggle');
-      return;
-    }
-    
     const isMobile = window.innerWidth < 768;
     
     const isCollapsed = sidebar.classList.contains('collapsed');
@@ -321,10 +248,6 @@ const { data: { session } } = await supabase.auth.getSession();
   // Initialize sidebar on page load with simplified logic
   document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');
-    
-    // Only initialize sidebar if it exists (user is logged in)
-    if (!sidebar) return;
-    
     const sidebarContent = document.getElementById('sidebar-content');
     const iconOnlySidebar = document.getElementById('icon-only-sidebar');
     const collapseIcon = document.querySelector('.sidebar-icon-collapse');
@@ -332,13 +255,6 @@ const { data: { session } } = await supabase.auth.getSession();
     const toggleBtn = document.querySelector('.sidebar-toggle-btn');
     const mainContent = document.getElementById('main-content');
     const footer = document.getElementById('footer');
-    
-    // Check if all required elements exist
-    if (!sidebarContent || !iconOnlySidebar || !collapseIcon || !expandIcon || !toggleBtn || !mainContent || !footer) {
-      console.warn('Some sidebar elements are missing, skipping initialization');
-      return;
-    }
-    
     const isMobile = window.innerWidth < 768;
     
     // Start with collapsed sidebar
@@ -465,12 +381,8 @@ const { data: { session } } = await supabase.auth.getSession();
   
   // Function to apply current theme to sidebar
   function applyThemeToSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    
-    // Only apply theme to sidebar if it exists (user is logged in)
-    if (!sidebar) return;
-    
     const isDark = document.documentElement.classList.contains('dark');
+    const sidebar = document.getElementById('sidebar');
     
     if (isDark) {
       sidebar.classList.add('dark-theme');
@@ -499,18 +411,10 @@ const { data: { session } } = await supabase.auth.getSession();
   // Simplified resize handler
   window.addEventListener('resize', function() {
     const sidebar = document.getElementById('sidebar');
-    
-    // Only handle resize for sidebar if it exists (user is logged in)
-    if (!sidebar) return;
-    
     const iconOnlySidebar = document.getElementById('icon-only-sidebar');
     const toggleBtn = document.querySelector('.sidebar-toggle-btn');
     const mainContent = document.getElementById('main-content');
     const footer = document.getElementById('footer');
-    
-    // Check if all required elements exist
-    if (!iconOnlySidebar || !toggleBtn || !mainContent || !footer) return;
-    
     const isMobile = window.innerWidth < 768;
     
     if (sidebar.classList.contains('collapsed')) {

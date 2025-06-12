@@ -21,27 +21,12 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     return new Response(error.message, { status: 500 });
   }
 
-  const { access_token, refresh_token, expires_in } = data.session;
-  
-  // Configurar cookies con mejores opciones de seguridad
-  const accessTokenExpiresIn = expires_in ?? 3600; // Default a 1 hora (3600s)
-  const refreshTokenMaxAge = 7 * 24 * 60 * 60; // 7 días en segundos
-  
+  const { access_token, refresh_token } = data.session;
   cookies.set("sb-access-token", access_token, {
-    sameSite: "strict",
     path: "/",
-    secure: true,
-    maxAge: accessTokenExpiresIn,
-    httpOnly: false // Necesario para acceso del cliente
   });
-  
   cookies.set("sb-refresh-token", refresh_token, {
-    sameSite: "strict",
     path: "/",
-    secure: true,
-    maxAge: refreshTokenMaxAge,
-    httpOnly: false // Necesario para acceso del cliente
   });
-  
   return redirect("/dashboard");
 };

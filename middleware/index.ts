@@ -2,9 +2,9 @@ import { defineMiddleware } from "astro:middleware";
 import { supabase } from "../src/lib/supabase";
 import * as micromatch from "micromatch";
 
-const protectedRoutes = ["/dashboard(|/)", "/orders(|/)", "/users(|/)", "/products(|/)", "/payments-table(|/)"];
-const redirectRoutes = ["/signin(|/)", "/register(|/)", "/(|/)"];
-const proptectedAPIRoutes = ["/api/guestbook(|/)"];
+const protectedRoutes = ["/dashboard(|/)", "/orders(|/)", "/users(|/)", "/payments-table(|/)"];
+const redirectRoutes = ["/(|/)"];
+const proptectedAPIRoutes = ["/api/guestbook(|/)", "/api/signin(|/)", "/api/signout(|/)", "/api/woo/get-orders(|/)", "/api/wp/get-orders(|/)", "/api/woo/get-order-details(|/)", "/api/wp/get-order-details(|/)", "/api/woo/get-order-details(|/)", "/api/wp/get-order-details(|/)"];
 
 export const onRequest = defineMiddleware(
   async ({ locals, url, cookies, redirect }, next) => {
@@ -13,7 +13,7 @@ export const onRequest = defineMiddleware(
       const refreshToken = cookies.get("sb-refresh-token");
 
       if (!accessToken || !refreshToken) {
-        return redirect("/");
+        return redirect("/signin");
       }
 
       const { data, error } = await supabase.auth.setSession({
@@ -28,7 +28,7 @@ export const onRequest = defineMiddleware(
         cookies.delete("sb-refresh-token", {
           path: "/",
         });
-        return redirect("/");
+        return redirect("/signin");
       }
 
       locals.email = data.user?.email!;

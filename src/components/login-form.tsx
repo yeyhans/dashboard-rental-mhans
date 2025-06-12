@@ -9,8 +9,6 @@ export function LoginForm({
   ...props
 }: React.ComponentPropsWithoutRef<"div">) {
   const [theme, setTheme] = React.useState<"light" | "dark">("light")
-  const [isLoading, setIsLoading] = React.useState(false)
-  const [error, setError] = React.useState<string>("")
   
   React.useEffect(() => {
     // Check for theme on mount and set state
@@ -37,36 +35,9 @@ export function LoginForm({
     }
   }, [])
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError("")
-    
-    const formData = new FormData(e.currentTarget)
-    
-    try {
-      const response = await fetch("/api/signin", {
-        method: "POST",
-        body: formData,
-      })
-      
-      if (response.ok) {
-        // Redirect will be handled by the API
-        window.location.href = "/dashboard"
-      } else {
-        const errorText = await response.text()
-        setError(errorText || "Error al iniciar sesión")
-      }
-    } catch (err) {
-      setError("Error de conexión. Por favor, intenta de nuevo.")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   return (
     <div className={cn("flex flex-col gap-6 bg-card p-8 rounded-lg shadow-lg border", className)} {...props}>
-      <form onSubmit={handleSubmit}>
+      <form action="/api/signin" method="post">
         <div className="flex flex-col gap-6">
           <div className="flex flex-col items-center gap-2">
             {theme === "light" ? (
@@ -88,13 +59,6 @@ export function LoginForm({
             )}
             <h1 className="text-xl font-bold text-foreground">Bienvenido al mundo de Mario Hans</h1>
           </div>
-          
-          {error && (
-            <div className="p-3 text-sm text-red-500 bg-red-50 border border-red-200 rounded-md">
-              {error}
-            </div>
-          )}
-          
           <div className="flex flex-col gap-6">
             <div className="grid gap-2">
               <Label htmlFor="email" className="text-foreground">Correo electrónico</Label>
@@ -104,7 +68,6 @@ export function LoginForm({
                 type="email"
                 placeholder="ejemplo@correo.com"
                 required
-                disabled={isLoading}
                 className="bg-background text-foreground border-input"
               />
             </div>
@@ -116,16 +79,11 @@ export function LoginForm({
                 type="password"
                 placeholder="••••••••"
                 required
-                disabled={isLoading}
                 className="bg-background text-foreground border-input"
               />
             </div>
-            <Button 
-              type="submit" 
-              disabled={isLoading}
-              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {isLoading ? "Iniciando sesión..." : "Iniciar sesión"}
+            <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+              Iniciar sesión
             </Button>
           </div>
         </div>
