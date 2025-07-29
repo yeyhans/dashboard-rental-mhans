@@ -22,7 +22,7 @@ import {
   TooltipTrigger,
 } from '../ui/tooltip';
 import type { Order } from '../../types/order';
-import { RefreshCw, Search } from 'lucide-react';
+import { RefreshCw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 // Helper function to format currency with thousands separator
 const formatCurrency = (value: string | number) => {
@@ -71,9 +71,16 @@ const PaymentsTable = ({
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<'date' | 'client' | 'status' | 'id'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(20); // Items per page
+
+  // Calculate total pages
+  const totalPages = Math.ceil(total / pageSize);
 
   // Actualizar la URL para reflejar los filtros actuales
-  const updateURL = (status: string = '', search: string = '', sortBy: string = 'date', sortDirection: string = 'desc') => {
+  const updateURL = (status: string = '', search: string = '', sortBy: string = 'date', sortDirection: string = 'desc', page: number = 1) => {
     const url = new URL(window.location.href);
     
     if (status) {
@@ -90,12 +97,13 @@ const PaymentsTable = ({
     
     url.searchParams.set('sortBy', sortBy);
     url.searchParams.set('sortDirection', sortDirection);
+    url.searchParams.set('page', page.toString());
     
     window.history.pushState({}, '', url.toString());
   };
 
   // Función para cargar los datos con filtros
-  const loadOrders = async (status: string = '', search: string = '', sortByParam: string = sortBy, sortDirectionParam: string = sortDirection) => {
+  const loadOrders = async (status: string = '', search: string = '', sortByParam: string = sortBy, sortDirectionParam: string = sortDirection, page: number = currentPage) => {
     try {
       setLoading(true);
       setError(null); // Limpiar errores previos
@@ -108,6 +116,10 @@ const PaymentsTable = ({
       if (search) {
         params.append('search', search);
       }
+      
+      // Add pagination parameters
+      params.append('page', page.toString());
+      params.append('per_page', pageSize.toString());
       
       // Fetch orders data from both APIs in parallel
       const [wooResponse, wpResponse] = await Promise.all([
@@ -221,7 +233,7 @@ const PaymentsTable = ({
         });
         setEditableFields(initialEditableFields);
         
-        updateURL(status, search, sortByParam, sortDirectionParam);
+        updateURL(status, search, sortByParam, sortDirectionParam, page);
       } else {
         setError('Error al cargar datos de WooCommerce');
       }
@@ -237,7 +249,7 @@ const PaymentsTable = ({
   useEffect(() => {
     // Solo cargar datos si no hay datos iniciales o si están vacíos
     if (initialOrders.length === 0) {
-      loadOrders('', '', sortBy, sortDirection);
+      loadOrders('', '', sortBy, sortDirection, currentPage);
     } else {
       // Si tenemos datos iniciales, aplicar el ordenamiento
       let sortedOrders = [...initialOrders];
@@ -288,14 +300,53 @@ const PaymentsTable = ({
 
   // Efecto para cargar los datos cuando cambian los filtros
   useEffect(() => {
-    loadOrders('', searchTerm, sortBy, sortDirection);
+    loadOrders('', searchTerm, sortBy, sortDirection, currentPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortBy, sortDirection]);
+  }, [sortBy, sortDirection, currentPage]);
 
   const refreshData = () => {
-    loadOrders('', searchTerm, sortBy, sortDirection);
+    loadOrders('', searchTerm, sortBy, sortDirection, currentPage);
   };
 
+  // Pagination handlers
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  const handleFirstPage = () => handlePageChange(1);
+  const handleLastPage = () => handlePageChange(totalPages);
+  const handlePreviousPage = () => handlePageChange(currentPage - 1);
+  const handleNextPage = () => handlePageChange(currentPage + 1);
+
+  // Generate page numbers for pagination controls
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    
+    if (totalPages <= maxVisiblePages) {
+      // Show all pages if total is small
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Show pages around current page
+      let start = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+      let end = Math.min(totalPages, start + maxVisiblePages - 1);
+      
+      // Adjust start if we're near the end
+      if (end === totalPages) {
+        start = Math.max(1, end - maxVisiblePages + 1);
+      }
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+    }
+    
+    return pages;
+  };
 
   // Manejar cambios en campos editables
   const handleFieldChange = (orderId: number, field: 'oc' | 'factura', value: string) => {
@@ -423,7 +474,8 @@ const PaymentsTable = ({
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    loadOrders('', searchTerm, sortBy, sortDirection);
+    setCurrentPage(1); // Reset to first page when searching
+    loadOrders('', searchTerm, sortBy, sortDirection, 1);
   };
 
   const toggleSortDirection = () => {
@@ -574,8 +626,61 @@ const PaymentsTable = ({
           <div className="flex items-center justify-between mt-4">
             <div className="text-sm text-muted-foreground">
               Mostrando {orders.length} de {total} resultados
+              {totalPages > 1 && (
+                <span className="ml-2">
+                  (Página {currentPage} de {totalPages})
+                </span>
+              )}
             </div>
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleFirstPage}
+                disabled={currentPage === 1}
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePreviousPage}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {getPageNumbers().map((page) => (
+                <Button
+                  key={page}
+                  variant={page === currentPage ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handlePageChange(page)}
+                >
+                  {page}
+                </Button>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLastPage}
+                disabled={currentPage === totalPages}
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </TooltipProvider>
