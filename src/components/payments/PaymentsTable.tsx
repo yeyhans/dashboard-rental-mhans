@@ -21,8 +21,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
 import type { Order } from '../../types/order';
-import { RefreshCw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { RefreshCw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter } from 'lucide-react';
 
 // Helper function to format currency with thousands separator
 const formatCurrency = (value: string | number) => {
@@ -50,12 +57,14 @@ interface PaymentsTableProps {
 
 const PaymentsTable = ({ 
   initialOrders,
-  initialTotal
+  initialTotal,
+  initialStatus,
 }: PaymentsTableProps) => {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState(initialStatus || '');
   const [total, setTotal] = useState(parseInt(initialTotal));
   const [editableFields, setEditableFields] = useState<{[key: string]: {oc?: string, factura?: string}}>(() => {
     // Inicializar campos editables con los datos iniciales
@@ -103,7 +112,7 @@ const PaymentsTable = ({
   };
 
   // Función para cargar los datos con filtros
-  const loadOrders = async (status: string = '', search: string = '', sortByParam: string = sortBy, sortDirectionParam: string = sortDirection, page: number = currentPage) => {
+  const loadOrders = async (status: string, search: string, sortByParam: string, sortDirectionParam: string, page: number) => {
     try {
       setLoading(true);
       setError(null); // Limpiar errores previos
@@ -249,7 +258,7 @@ const PaymentsTable = ({
   useEffect(() => {
     // Solo cargar datos si no hay datos iniciales o si están vacíos
     if (initialOrders.length === 0) {
-      loadOrders('', '', sortBy, sortDirection, currentPage);
+      loadOrders(statusFilter, '', sortBy, sortDirection, currentPage);
     } else {
       // Si tenemos datos iniciales, aplicar el ordenamiento
       let sortedOrders = [...initialOrders];
@@ -300,12 +309,16 @@ const PaymentsTable = ({
 
   // Efecto para cargar los datos cuando cambian los filtros
   useEffect(() => {
-    loadOrders('', searchTerm, sortBy, sortDirection, currentPage);
+    // No recargar en el montaje inicial si ya tenemos ordenes
+    if (initialOrders.length > 0 && currentPage === 1 && searchTerm === '' && statusFilter === (initialStatus || '')) {
+      return;
+    }
+    loadOrders(statusFilter, searchTerm, sortBy, sortDirection, currentPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortBy, sortDirection, currentPage]);
+  }, [statusFilter, sortBy, sortDirection, currentPage]);
 
   const refreshData = () => {
-    loadOrders('', searchTerm, sortBy, sortDirection, currentPage);
+    loadOrders(statusFilter, searchTerm, sortBy, sortDirection, currentPage);
   };
 
   // Pagination handlers
@@ -346,6 +359,13 @@ const PaymentsTable = ({
     }
     
     return pages;
+  };
+
+  const handleStatusChange = (newStatus: string) => {
+    if (newStatus !== statusFilter) {
+      setCurrentPage(1);
+      setStatusFilter(newStatus);
+    }
   };
 
   // Manejar cambios en campos editables
@@ -475,7 +495,7 @@ const PaymentsTable = ({
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentPage(1); // Reset to first page when searching
-    loadOrders('', searchTerm, sortBy, sortDirection, 1);
+    loadOrders(statusFilter, searchTerm, sortBy, sortDirection, 1);
   };
 
   const toggleSortDirection = () => {
@@ -502,7 +522,7 @@ const PaymentsTable = ({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="mb-4">
+          <div className="flex justify-between items-center mb-4">
             <form onSubmit={handleSearch} className="flex gap-2">
               <Input
                 placeholder="Buscar por cliente o proyecto..."
@@ -514,6 +534,23 @@ const PaymentsTable = ({
                 <Search className="h-4 w-4" />
               </Button>
             </form>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <span>{statusFilter ? paymentStatusText[statusFilter] : 'Estado Pago'}</span>
+                  <Filter className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuRadioGroup value={statusFilter} onValueChange={handleStatusChange}>
+                  <DropdownMenuRadioItem value="">Todos</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="true">Pagado</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="false">Pendiente</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
           </div>
 
           {error && <div className="text-red-500 mb-4">{error}</div>}
