@@ -74,7 +74,7 @@ const PaymentsTable = ({
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(20); // Items per page
+  const [pageSize] = useState(50); // Items per page
 
   // Calculate total pages
   const totalPages = Math.ceil(total / pageSize);
