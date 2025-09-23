@@ -1,3 +1,22 @@
+import type { Database } from './database';
+
+// Database user profile type
+export type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
+export type UserProfileInsert = Database['public']['Tables']['user_profiles']['Insert'];
+export type UserProfileUpdate = Database['public']['Tables']['user_profiles']['Update'];
+
+// Enhanced user type for UI components
+export interface EnhancedUser extends UserProfile {
+  // Computed properties for better UX
+  fullName: string;
+  displayName: string;
+  hasContract: boolean;
+  hasAcceptedTerms: boolean;
+  registrationStatus: 'complete' | 'incomplete' | 'pending';
+  completionPercentage: number;
+}
+
+// Legacy User type for backward compatibility (if needed)
 export type User = {
   id: number;
   username: string;
@@ -27,4 +46,34 @@ export type User = {
   url_user_contrato: string;
   terms_accepted: string;
   pdf_preview_path: string;
-}; 
+};
+
+// User statistics type
+export interface UserStats {
+  totalUsers: number;
+  usersWithContracts: number;
+  usersWithTerms: number;
+  recentUsers: number;
+  contractCompletionRate: string;
+  termsAcceptanceRate: string;
+}
+
+// API response types
+export interface UsersApiResponse {
+  success: boolean;
+  data: {
+    users: UserProfile[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    searchTerm?: string;
+  };
+  error?: string;
+}
+
+export interface UserApiResponse {
+  success: boolean;
+  data?: UserProfile;
+  error?: string;
+}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, CardContent } from '../ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -10,22 +10,46 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
-import type { ProductImage, Product, ProductCategory } from '../../types/product';
+import type { Database } from '../../types/database';
+import type { ProductCategory } from '../../types/product';
+import { CategorySelector } from './CategorySelector';
+
+type Product = Database['public']['Tables']['products']['Row'];
 
 interface ProductDetailProps {
   product: Product;
   categories: ProductCategory[];
   onSave: (updatedProduct: Partial<Product>) => Promise<void>;
+  accessToken?: string | undefined;
 }
 
-export function ProductDetail({ product, categories, onSave }: ProductDetailProps) {
+export function ProductDetail({ product, categories, onSave, accessToken }: ProductDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [updatedProduct, setUpdatedProduct] = useState<Partial<Product>>({ ...product });
   const [isSaving, setIsSaving] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [newImageUrl, setNewImageUrl] = useState('');
-  const [newImageAlt, setNewImageAlt] = useState('');
-  const [searchCategory, setSearchCategory] = useState('');
+  
+  // Parse categories from product data
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>(() => {
+    try {
+      if (product.categories_ids && typeof product.categories_ids === 'string') {
+        return JSON.parse(product.categories_ids);
+      } else if (Array.isArray(product.categories_ids)) {
+        return product.categories_ids;
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Product status options
+  const statusOptions = [
+    { value: 'publish', label: 'Publicado' },
+    { value: 'draft', label: 'Borrador' },
+    { value: 'private', label: 'Privado' },
+    { value: 'trash', label: 'Papelera' }
+  ];
 
   // Stock status options
   const stockStatusOptions = [
@@ -34,53 +58,50 @@ export function ProductDetail({ product, categories, onSave }: ProductDetailProp
     { value: 'onbackorder', label: 'Por pedido' }
   ];
 
-  const getStockStatusDisplay = (status: string) => {
-    const option = stockStatusOptions.find(opt => opt.value === status);
-    return option ? option.label : status;
-  };
+  // Product type options
+  const typeOptions = [
+    { value: 'simple', label: 'Simple' },
+    { value: 'variable', label: 'Variable' },
+    { value: 'grouped', label: 'Agrupado' },
+    { value: 'external', label: 'Externo' }
+  ];
 
-  const getStockStatusClass = (status: string) => {
-    switch (status) {
-      case 'instock': return 'bg-green-100 text-green-800';
-      case 'outofstock': return 'bg-red-100 text-red-800';
-      case 'onbackorder': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
+  // Catalog visibility options
+  const catalogVisibilityOptions = [
+    { value: 'visible', label: 'Visible' },
+    { value: 'catalog', label: 'Solo catálogo' },
+    { value: 'search', label: 'Solo búsqueda' },
+    { value: 'hidden', label: 'Oculto' }
+  ];
 
-  // Format currency with thousands separator
-  const formatCurrency = (value: string | number) => {
+  const formatCurrency = (value: string | number | null) => {
+    if (!value) return '0';
     const numValue = typeof value === 'string' ? parseFloat(value) : value;
     return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setUpdatedProduct(prev => ({ ...prev, [name]: value }));
+  const handleInputChange = (field: keyof Product, value: any) => {
+    setUpdatedProduct(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
-  // Handle category checkbox selection
-  const handleCategoryToggle = (categoryId: number, checked: boolean) => {
-    if (!updatedProduct.categories) {
-      updatedProduct.categories = [...product.categories];
-    }
+  const handleCategoryChange = (categoryIds: number[]) => {
+    setSelectedCategoryIds(categoryIds);
+    setUpdatedProduct(prev => ({
+      ...prev,
+      categories_ids: JSON.stringify(categoryIds)
+    }));
+  };
 
-    if (checked) {
-      // Add the category if it's checked and not already in the list
-      const categoryToAdd = categories.find(c => c.id === categoryId);
-      if (categoryToAdd && !updatedProduct.categories.some(c => c.id === categoryId)) {
-        setUpdatedProduct(prev => ({
-          ...prev,
-          categories: [...(prev.categories || []), categoryToAdd]
-        }));
-      }
-    } else {
-      // Remove the category if it's unchecked
-      setUpdatedProduct(prev => ({
-        ...prev,
-        categories: (prev.categories || []).filter(c => c.id !== categoryId)
-      }));
-    }
+  const handleNumberChange = (field: keyof Product, value: string) => {
+    const numValue = value === '' ? null : parseFloat(value);
+    setUpdatedProduct(prev => ({ ...prev, [field]: numValue }));
+  };
+
+  const handleBooleanChange = (field: keyof Product, checked: boolean) => {
+    setUpdatedProduct(prev => ({ ...prev, [field]: checked }));
   };
 
   // Generate slug from name
@@ -106,7 +127,13 @@ export function ProductDetail({ product, categories, onSave }: ProductDetailProp
   const handleSaveChanges = async () => {
     setIsSaving(true);
     try {
-      await onSave(updatedProduct);
+      // Ensure updated_at is set
+      const dataToSave = {
+        ...updatedProduct,
+        updated_at: new Date().toISOString()
+      };
+      
+      await onSave(dataToSave);
       setIsEditing(false);
       toast.success("Producto actualizado correctamente", {
         description: "Los cambios han sido guardados."
@@ -122,28 +149,54 @@ export function ProductDetail({ product, categories, onSave }: ProductDetailProp
 
   const toggleEditMode = () => {
     if (isEditing) {
-      // Cancel editing - restore original data
       setUpdatedProduct({ ...product });
-      setSearchCategory('');
     }
     setIsEditing(!isEditing);
   };
 
-  const handleImageClick = (index: number) => {
-    setActiveImageIndex(index);
+  // Parse images from JSON
+  const parseImages = (images: any): string[] => {
+    if (!images) return [];
+    if (typeof images === 'string') {
+      try {
+        const parsed = JSON.parse(images);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return Array.isArray(images) ? images : [];
   };
 
-  // Filter categories based on search term
-  const filteredCategories = categories.filter(category => 
-    category.name.toLowerCase().includes(searchCategory.toLowerCase())
-  );
+  const productImages = parseImages(product.images);
+
+  const getStatusBadgeVariant = (status: string | null) => {
+    switch (status) {
+      case 'publish': return 'default';
+      case 'draft': return 'secondary';
+      case 'private': return 'outline';
+      case 'trash': return 'destructive';
+      default: return 'outline';
+    }
+  };
+
+  const getStockStatusBadgeVariant = (status: string | null) => {
+    switch (status) {
+      case 'instock': return 'default';
+      case 'outofstock': return 'destructive';
+      case 'onbackorder': return 'secondary';
+      default: return 'outline';
+    }
+  };
 
   return (
-    <div className="container py-4 px-4 sm:px-6 max-w-5xl mx-auto">
+    <div className="container py-4 px-4 sm:px-6 max-w-6xl mx-auto">
       <div className="space-y-6">
-        {/* Header with title and actions */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight break-words">{product.name}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight break-words">
+            {product.name || 'Producto sin nombre'}
+          </h1>
           <div className="flex space-x-3 w-full sm:w-auto">
             <Button 
               onClick={toggleEditMode}
@@ -169,149 +222,118 @@ export function ProductDetail({ product, categories, onSave }: ProductDetailProp
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Product Images Section */}
-          <div className="space-y-4">
-            {product.images && product.images.length > 0 ? (
-              <div>
-                <div className="bg-white border rounded-lg overflow-hidden">
-                  <img 
-                    src={product.images[activeImageIndex]?.src} 
-                    alt={product.images[activeImageIndex]?.alt || product.name} 
-                    className="w-full h-auto object-contain mx-auto"
-                    style={{ maxHeight: '350px' }}
-                  />
-                </div>
+        {isEditing ? (
+          /* Edit Mode */
+          <Tabs defaultValue="basic" className="w-full">
+            <TabsList className="grid w-full grid-cols-5">
+              <TabsTrigger value="basic">Básico</TabsTrigger>
+              <TabsTrigger value="pricing">Precios</TabsTrigger>
+              <TabsTrigger value="inventory">Inventario</TabsTrigger>
+              <TabsTrigger value="seo">SEO</TabsTrigger>
+              <TabsTrigger value="advanced">Avanzado</TabsTrigger>
+            </TabsList>
 
-                {product.images.length > 1 && (
-                  <div className="grid grid-cols-4 gap-2 mt-4">
-                    {product.images.map((image, index) => (
-                      <div 
-                        key={image.id} 
-                        onClick={() => handleImageClick(index)}
-                        className={`border rounded-lg overflow-hidden cursor-pointer 
-                          ${index === activeImageIndex ? 'ring-2 ring-primary' : ''}`}
-                      >
-                        <img 
-                          src={image.src} 
-                          alt={image.alt || product.name} 
-                          className="w-full h-20 object-cover"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {isEditing && (
-                  <div className="mt-4 space-y-2">
-                    <h3 className="text-md font-semibold">Gestionar imágenes</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <TabsContent value="basic" className="space-y-4 mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Información Básica</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Nombre del producto *</Label>
                       <Input
-                        type="text"
-                        placeholder="URL de la imagen"
-                        value={newImageUrl}
-                        onChange={(e) => setNewImageUrl(e.target.value)}
-                      />
-                      <Input
-                        type="text"
-                        placeholder="Texto alternativo"
-                        value={newImageAlt}
-                        onChange={(e) => setNewImageAlt(e.target.value)}
+                        id="name"
+                        value={updatedProduct.name || ''}
+                        onChange={(e) => handleInputChange('name', e.target.value)}
+                        placeholder="Nombre del producto"
                       />
                     </div>
-                    <Button 
-                      onClick={() => toast("Funcionalidad en desarrollo", {
-                        description: "Próximamente podrás añadir imágenes aquí"
-                      })}
-                      variant="outline"
-                      className="w-full sm:w-auto"
-                      disabled={!newImageUrl}
-                    >
-                      Añadir imagen
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="w-full h-80 bg-card rounded-lg border flex items-center justify-center">
-                <span className="text-muted-foreground">No hay imagen disponible</span>
-              </div>
-            )}
-          </div>
-
-          {/* Product Info Section */}
-          <div className="space-y-6">
-            {isEditing ? (
-              <Card>
-                <CardContent className="pt-6 space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nombre del producto</Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      value={updatedProduct.name || ''}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="slug">Slug</Label>
                       <div className="flex space-x-2">
                         <Input
                           id="slug"
-                          name="slug"
                           value={updatedProduct.slug || ''}
-                          onChange={handleInputChange}
-                          className="flex-1"
+                          onChange={(e) => handleInputChange('slug', e.target.value)}
+                          placeholder="slug-del-producto"
                         />
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          onClick={generateSlug}
-                          className="whitespace-nowrap"
-                        >
+                        <Button type="button" variant="outline" onClick={generateSlug}>
                           Generar
                         </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        El slug se usa en la URL del producto
-                      </p>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="sku">SKU</Label>
                       <Input
                         id="sku"
-                        name="sku"
                         value={updatedProduct.sku || ''}
-                        onChange={handleInputChange}
+                        onChange={(e) => handleInputChange('sku', e.target.value)}
+                        placeholder="Código único del producto"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="brands">Marca</Label>
+                      <Input
+                        id="brands"
+                        value={updatedProduct.brands || ''}
+                        onChange={(e) => handleInputChange('brands', e.target.value)}
+                        placeholder="Marca del producto"
                       />
                     </div>
                   </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="price">Precio</Label>
-                      <Input
-                        id="price"
-                        name="price"
-                        type="number"
-                        value={updatedProduct.price || ''}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="stock_status">Estado del stock</Label>
+                      <Label htmlFor="status">Estado</Label>
                       <Select
-                        name="stock_status"
-                        value={updatedProduct.stock_status || 'instock'}
-                        onValueChange={(value) => setUpdatedProduct(prev => ({ ...prev, stock_status: value }))}
+                        value={updatedProduct.status || 'draft'}
+                        onValueChange={(value) => handleInputChange('status', value)}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar estado" />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {stockStatusOptions.map(option => (
+                          {statusOptions.map(option => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="type">Tipo</Label>
+                      <Select
+                        value={updatedProduct.type || 'simple'}
+                        onValueChange={(value) => handleInputChange('type', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {typeOptions.map(option => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="catalog_visibility">Visibilidad</Label>
+                      <Select
+                        value={updatedProduct.catalog_visibility || 'visible'}
+                        onValueChange={(value) => handleInputChange('catalog_visibility', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {catalogVisibilityOptions.map(option => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>
@@ -320,159 +342,389 @@ export function ProductDetail({ product, categories, onSave }: ProductDetailProp
                       </Select>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
-                    <Label htmlFor="categories">Categorías</Label>
-                    <Input
-                      placeholder="Buscar categorías..."
-                      value={searchCategory}
-                      onChange={(e) => setSearchCategory(e.target.value)}
-                      className="mb-2"
+                    <Label htmlFor="short_description">Descripción corta</Label>
+                    <Textarea
+                      id="short_description"
+                      rows={3}
+                      value={updatedProduct.short_description || ''}
+                      onChange={(e) => handleInputChange('short_description', e.target.value)}
+                      placeholder="Descripción breve del producto"
                     />
-                    <Card className="border">
-                      <ScrollArea className="h-48 px-1">
-                        <div className="p-2 space-y-2">
-                          {filteredCategories.length > 0 ? (
-                            filteredCategories.map((category) => (
-                              <label
-                                key={category.id}
-                                className="flex items-center space-x-2 py-1 px-2 rounded hover:bg-muted cursor-pointer"
-                              >
-                                <Checkbox 
-                                  id={`category-${category.id}`}
-                                  checked={updatedProduct.categories?.some(c => c.id === category.id) || false}
-                                  onCheckedChange={(checked) => handleCategoryToggle(category.id, checked as boolean)}
-                                />
-                                <span>{category.name}</span>
-                              </label>
-                            ))
-                          ) : (
-                            <div className="py-2 text-center text-muted-foreground">
-                              No se encontraron categorías
-                            </div>
-                          )}
-                        </div>
-                      </ScrollArea>
-                    </Card>
-                    {updatedProduct.categories && updatedProduct.categories.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {updatedProduct.categories.map(category => (
-                          <Badge key={category.id} variant="secondary" className="flex items-center space-x-1">
-                            <span>{category.name}</span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-4 w-4 p-0 text-muted-foreground hover:text-foreground"
-                              onClick={() => handleCategoryToggle(category.id, false)}
-                            >
-                              ×
-                            </Button>
-                          </Badge>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Descripción completa</Label>
+                    <Textarea
+                      id="description"
+                      rows={6}
+                      value={updatedProduct.description || ''}
+                      onChange={(e) => handleInputChange('description', e.target.value)}
+                      placeholder="Descripción detallada del producto"
+                    />
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="featured"
+                      checked={updatedProduct.featured || false}
+                      onCheckedChange={(checked) => handleBooleanChange('featured', checked as boolean)}
+                    />
+                    <Label htmlFor="featured">Producto destacado</Label>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="pricing" className="space-y-4 mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Configuración de Precios</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Precio *</Label>
+                      <Input
+                        id="price"
+                        type="number"
+                        step="0.01"
+                        value={updatedProduct.price || ''}
+                        onChange={(e) => handleNumberChange('price', e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="regular_price">Precio regular</Label>
+                      <Input
+                        id="regular_price"
+                        type="number"
+                        step="0.01"
+                        value={updatedProduct.regular_price || ''}
+                        onChange={(e) => handleNumberChange('regular_price', e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="sale_price">Precio de oferta</Label>
+                      <Input
+                        id="sale_price"
+                        type="number"
+                        step="0.01"
+                        value={updatedProduct.sale_price || ''}
+                        onChange={(e) => handleNumberChange('sale_price', e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="on_sale"
+                      checked={updatedProduct.on_sale || false}
+                      onCheckedChange={(checked) => handleBooleanChange('on_sale', checked as boolean)}
+                    />
+                    <Label htmlFor="on_sale">En oferta</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="sold_individually"
+                      checked={updatedProduct.sold_individually || false}
+                      onCheckedChange={(checked) => handleBooleanChange('sold_individually', checked as boolean)}
+                    />
+                    <Label htmlFor="sold_individually">Vender individualmente</Label>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="inventory" className="space-y-4 mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Inventario y Stock</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="stock_status">Estado del stock</Label>
+                    <Select
+                      value={updatedProduct.stock_status || 'instock'}
+                      onValueChange={(value) => handleInputChange('stock_status', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stockStatusOptions.map(option => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Dimensiones (cm)</Label>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <Label htmlFor="dimensions_length" className="text-sm">Largo</Label>
+                        <Input
+                          id="dimensions_length"
+                          type="number"
+                          step="0.01"
+                          value={updatedProduct.dimensions_length || ''}
+                          onChange={(e) => handleNumberChange('dimensions_length', e.target.value)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="dimensions_width" className="text-sm">Ancho</Label>
+                        <Input
+                          id="dimensions_width"
+                          type="number"
+                          step="0.01"
+                          value={updatedProduct.dimensions_width || ''}
+                          onChange={(e) => handleNumberChange('dimensions_width', e.target.value)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="dimensions_height" className="text-sm">Alto</Label>
+                        <Input
+                          id="dimensions_height"
+                          type="number"
+                          step="0.01"
+                          value={updatedProduct.dimensions_height || ''}
+                          onChange={(e) => handleNumberChange('dimensions_height', e.target.value)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="seo" className="space-y-4 mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Optimización SEO</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="seo_title">Título SEO</Label>
+                    <Input
+                      id="seo_title"
+                      value={updatedProduct.seo_title || ''}
+                      onChange={(e) => handleInputChange('seo_title', e.target.value)}
+                      placeholder="Título para motores de búsqueda"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="seo_description">Descripción SEO</Label>
+                    <Textarea
+                      id="seo_description"
+                      rows={3}
+                      value={updatedProduct.seo_description || ''}
+                      onChange={(e) => handleInputChange('seo_description', e.target.value)}
+                      placeholder="Descripción para motores de búsqueda"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="seo_keywords">Palabras clave SEO</Label>
+                    <Input
+                      id="seo_keywords"
+                      value={updatedProduct.seo_keywords || ''}
+                      onChange={(e) => handleInputChange('seo_keywords', e.target.value)}
+                      placeholder="palabra1, palabra2, palabra3"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="advanced" className="space-y-4 mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Configuración Avanzada</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <CategorySelector
+                    selectedCategoryIds={selectedCategoryIds}
+                    onCategoryChange={handleCategoryChange}
+                    accessToken={accessToken}
+                  />
+
+                  <div className="space-y-2">
+                    <Label htmlFor="total_sales">Total de ventas</Label>
+                    <Input
+                      id="total_sales"
+                      type="number"
+                      value={updatedProduct.total_sales || ''}
+                      onChange={(e) => handleNumberChange('total_sales', e.target.value)}
+                      placeholder="0"
+                      readOnly
+                    />
+                    <p className="text-sm text-muted-foreground">Este campo se actualiza automáticamente</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <div className="flex justify-end space-x-4 pt-4">
+              <Button variant="outline" onClick={toggleEditMode}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveChanges} disabled={isSaving}>
+                {isSaving ? 'Guardando...' : 'Guardar cambios'}
+              </Button>
+            </div>
+          </Tabs>
+        ) : (
+          /* View Mode */
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Product Images */}
+            <div className="lg:col-span-1">
+              {productImages.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="bg-white border rounded-lg overflow-hidden">
+                    <img 
+                      src={productImages[activeImageIndex]} 
+                      alt={product.name || 'Product'} 
+                      className="w-full h-auto object-contain mx-auto"
+                      style={{ maxHeight: '400px' }}
+                    />
+                  </div>
+                  {productImages.length > 1 && (
+                    <div className="grid grid-cols-4 gap-2">
+                      {productImages.map((imageUrl, index) => (
+                        <div 
+                          key={index}
+                          onClick={() => setActiveImageIndex(index)}
+                          className={`border rounded-lg overflow-hidden cursor-pointer 
+                            ${index === activeImageIndex ? 'ring-2 ring-primary' : ''}`}
+                        >
+                          <img 
+                            src={imageUrl} 
+                            alt={product.name || 'Product'} 
+                            className="w-full h-20 object-cover"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="w-full h-80 bg-card rounded-lg border flex items-center justify-center">
+                  <span className="text-muted-foreground">No hay imagen disponible</span>
+                </div>
+              )}
+            </div>
+
+            {/* Product Information */}
+            <div className="lg:col-span-2 space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    Información del Producto
+                    <div className="flex gap-2">
+                      <Badge variant={getStatusBadgeVariant(product.status)}>
+                        {statusOptions.find(s => s.value === product.status)?.label || product.status}
+                      </Badge>
+                      {product.featured && (
+                        <Badge variant="secondary">Destacado</Badge>
+                      )}
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">SKU</Label>
+                      <p className="text-sm">{product.sku || 'No definido'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Marca</Label>
+                      <p className="text-sm">{product.brands || 'No definida'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Tipo</Label>
+                      <p className="text-sm">{typeOptions.find(t => t.value === product.type)?.label || product.type}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Stock</Label>
+                      <Badge variant={getStockStatusBadgeVariant(product.stock_status)}>
+                        {stockStatusOptions.find(s => s.value === product.stock_status)?.label || product.stock_status}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {product.short_description && (
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Descripción</Label>
+                      <p className="text-sm mt-1">{product.short_description}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Precios</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center p-4 bg-primary/5 rounded-lg">
+                      <Label className="text-sm font-medium text-muted-foreground">Precio</Label>
+                      <p className="text-2xl font-bold text-primary">${formatCurrency(product.price)}</p>
+                    </div>
+                    {product.regular_price && (
+                      <div className="text-center p-4 bg-muted/50 rounded-lg">
+                        <Label className="text-sm font-medium text-muted-foreground">Precio Regular</Label>
+                        <p className="text-xl font-semibold">${formatCurrency(product.regular_price)}</p>
+                      </div>
+                    )}
+                    {product.sale_price && (
+                      <div className="text-center p-4 bg-green-50 rounded-lg">
+                        <Label className="text-sm font-medium text-muted-foreground">Precio Oferta</Label>
+                        <p className="text-xl font-semibold text-green-600">${formatCurrency(product.sale_price)}</p>
                       </div>
                     )}
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="short_description">Descripción</Label>
-                    <Textarea
-                      id="short_description"
-                      name="short_description"
-                      rows={6}
-                      value={updatedProduct.short_description?.replace(/<[^>]*>/g, '') || ''}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                  
-                  <Button 
-                    onClick={handleSaveChanges} 
-                    disabled={isSaving}
-                    className="w-full"
-                  >
-                    {isSaving ? 'Guardando...' : 'Guardar cambios'}
-                  </Button>
                 </CardContent>
               </Card>
-            ) : (
-              <Tabs defaultValue="info" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="info">Información</TabsTrigger>
-                  <TabsTrigger value="description">Descripción</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="info" className="space-y-4 mt-4">
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="space-y-1">
-                          <p className="text-sm text-muted-foreground">Precio</p>
-                          <p className="text-2xl sm:text-3xl font-bold">$ {formatCurrency(product.price)}</p>
-                        </div>
-                        <div className="space-y-1 text-right">
-                          <p className="text-sm text-muted-foreground">Disponibilidad</p>
-                          <Badge className={getStockStatusClass(product.stock_status)}>
-                            {getStockStatusDisplay(product.stock_status)}
-                          </Badge>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-4 mt-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {product.sku && (
-                            <div className="p-3 sm:p-4 bg-card rounded-lg border">
-                              <div className="text-sm font-medium text-muted-foreground">SKU / Código</div>
-                              <div className="text-lg sm:text-xl font-medium mt-1">{product.sku}</div>
-                            </div>
-                          )}
-                          
-                          {product.slug && (
-                            <div className="p-3 sm:p-4 bg-card rounded-lg border">
-                              <div className="text-sm font-medium text-muted-foreground">Slug</div>
-                              <div className="text-lg sm:text-xl font-medium mt-1 break-all">{product.slug}</div>
-                            </div>
-                          )}
-                        </div>
 
-                        {product.categories && product.categories.length > 0 && (
-                          <div className="p-3 sm:p-4 bg-card rounded-lg border">
-                            <div className="text-sm font-medium text-muted-foreground">Categorías</div>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {product.categories.map((category) => (
-                                <Badge key={category.id} variant="secondary">
-                                  {category.name}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+              {(product.dimensions_length || product.dimensions_width || product.dimensions_height) && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Dimensiones</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <Label className="text-sm font-medium text-muted-foreground">Largo</Label>
+                        <p className="text-lg font-semibold">{product.dimensions_length || 0} cm</p>
                       </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-                
-                <TabsContent value="description" className="mt-4">
-                  {product.short_description ? (
-                    <Card>
-                      <CardContent className="pt-6">
-                        <div 
-                          className="prose max-w-none prose-sm sm:prose-base" 
-                          dangerouslySetInnerHTML={{ __html: product.short_description }} 
-                        />
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <Card>
-                      <CardContent className="pt-6">
-                        <p className="text-muted-foreground">No hay descripción disponible para este producto.</p>
-                      </CardContent>
-                    </Card>
-                  )}
-                </TabsContent>
-              </Tabs>
-            )}
+                      <div>
+                        <Label className="text-sm font-medium text-muted-foreground">Ancho</Label>
+                        <p className="text-lg font-semibold">{product.dimensions_width || 0} cm</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium text-muted-foreground">Alto</Label>
+                        <p className="text-lg font-semibold">{product.dimensions_height || 0} cm</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
-} 
+}

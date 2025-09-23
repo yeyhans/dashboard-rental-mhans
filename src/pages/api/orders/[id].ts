@@ -1,0 +1,174 @@
+import type { APIRoute } from 'astro';
+import { OrderService } from '../../../services/orderService';
+import { withAuth, withCors } from '../../../middleware/auth';
+
+export const GET: APIRoute = withCors(withAuth(async (context) => {
+  try {
+    const orderId = parseInt(context.params.id as string);
+
+    if (isNaN(orderId)) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'ID de orden inválido'
+      }), {
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    const order = await OrderService.getOrderById(orderId);
+
+    if (!order) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Orden no encontrada'
+      }), {
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      data: order
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  } catch (error) {
+    console.error('Error in GET /api/orders/[id]:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Error al obtener la orden'
+    }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  }
+}));
+
+export const PUT: APIRoute = withCors(withAuth(async (context) => {
+  try {
+    const orderId = parseInt(context.params.id as string);
+    const updates = await context.request.json();
+
+    if (isNaN(orderId)) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'ID de orden inválido'
+      }), {
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    // Verificar que la orden existe
+    const existingOrder = await OrderService.getOrderById(orderId);
+    if (!existingOrder) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Orden no encontrada'
+      }), {
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    const updatedOrder = await OrderService.updateOrder(orderId, {
+      ...updates,
+      date_modified: new Date().toISOString()
+    });
+
+    return new Response(JSON.stringify({
+      success: true,
+      data: updatedOrder
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  } catch (error) {
+    console.error('Error in PUT /api/orders/[id]:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Error al actualizar la orden'
+    }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  }
+}));
+
+export const DELETE: APIRoute = withCors(withAuth(async (context) => {
+  try {
+    const orderId = parseInt(context.params.id as string);
+
+    if (isNaN(orderId)) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'ID de orden inválido'
+      }), {
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    // Verificar que la orden existe
+    const existingOrder = await OrderService.getOrderById(orderId);
+    if (!existingOrder) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Orden no encontrada'
+      }), {
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    await OrderService.deleteOrder(orderId);
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Orden eliminada correctamente'
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  } catch (error) {
+    console.error('Error in DELETE /api/orders/[id]:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Error al eliminar la orden'
+    }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  }
+}));
+
+export const OPTIONS: APIRoute = withCors(async () => {
+  return new Response(null, { status: 200 });
+});

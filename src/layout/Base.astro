@@ -74,6 +74,37 @@ const { data: { session } } = await supabase.auth.getSession();
       html.dark .sidebar-menu a:hover {
         background-color: rgba(255, 255, 255, 0.1);
       }
+      
+      /* Sub-menu styling */
+      .menu-section button:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+      }
+      
+      html.dark .menu-section button:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+      
+      .submenu a:hover {
+        background-color: rgba(0, 0, 0, 0.03);
+      }
+      
+      html.dark .submenu a:hover {
+        background-color: rgba(255, 255, 255, 0.08);
+      }
+      
+      .submenu-arrow {
+        transition: transform 0.2s ease;
+      }
+      
+      /* Tooltip styling for collapsed sidebar */
+      .group:hover .absolute {
+        display: block;
+      }
+      
+      html.dark .group .absolute {
+        background-color: white;
+        color: black;
+      }
     </style>
   </head>
   <body class="flex flex-col h-full w-full">
@@ -127,15 +158,37 @@ const { data: { session } } = await supabase.auth.getSession();
                 </svg>
                 <span class="sidebar-text ml-3">Dashboard</span>
               </a>
-              <a 
-                href="/orders" 
-                class="flex items-center px-4 py-2 rounded-lg"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                </svg>
-                <span class="sidebar-text ml-3">Pedidos</span>
-              </a>
+              <!-- Orders Section with Sub-menu -->
+              <div class="menu-section">
+                <button 
+                  onclick="toggleSubmenu('orders')"
+                  class="flex items-center justify-between px-4 py-2 rounded-lg w-full text-left"
+                >
+                  <div class="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                    </svg>
+                    <span class="sidebar-text ml-3">Pedidos</span>
+                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sidebar-icon transition-transform duration-200 submenu-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                <div class="submenu ml-8 mt-1 space-y-1 hidden" id="orders-submenu">
+                  <a 
+                    href="/orders" 
+                    class="flex items-center px-4 py-2 rounded-lg text-sm"
+                  >
+                    <span class="sidebar-text">Todos los Pedidos</span>
+                  </a>
+                  <a 
+                    href="/orders/coupons" 
+                    class="flex items-center px-4 py-2 rounded-lg text-sm"
+                  >
+                    <span class="sidebar-text">Cupones</span>
+                  </a>
+                </div>
+              </div>
               <a 
                 href="/users" 
                 class="flex items-center px-4 py-2 rounded-lg"
@@ -145,7 +198,57 @@ const { data: { session } } = await supabase.auth.getSession();
                 </svg>
                 <span class="sidebar-text ml-3">Usuarios</span>
               </a>
-                            <a                 href="/products"                 class="flex items-center px-4 py-2 rounded-lg"              >                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />                </svg>                <span class="sidebar-text ml-3">Productos</span>              </a>              <a                 href="/payments-table"                 class="flex items-center px-4 py-2 rounded-lg"              >                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2" />                </svg>                <span class="sidebar-text ml-3">Pagos</span>              </a>
+              <!-- Products Section with Sub-menu -->
+              <div class="menu-section">
+                <button 
+                  onclick="toggleSubmenu('products')"
+                  class="flex items-center justify-between px-4 py-2 rounded-lg w-full text-left"
+                >
+                  <div class="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <span class="sidebar-text ml-3">Productos</span>
+                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sidebar-icon transition-transform duration-200 submenu-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                <div class="submenu ml-8 mt-1 space-y-1 hidden" id="products-submenu">
+                  <a 
+                    href="/products" 
+                    class="flex items-center px-4 py-2 rounded-lg text-sm"
+                  >
+                    <span class="sidebar-text">Todos los Productos</span>
+                  </a>
+                  <a 
+                    href="/products/categories" 
+                    class="flex items-center px-4 py-2 rounded-lg text-sm"
+                  >
+                    <span class="sidebar-text">Categorías</span>
+                  </a>
+                </div>
+              </div>
+              <a 
+                href="/payments-table" 
+                class="flex items-center px-4 py-2 rounded-lg"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2" />
+                </svg>
+                <span class="sidebar-text ml-3">Pagos</span>
+              </a>
+              
+              <!-- Logout Button -->
+              <button 
+                onclick="handleLogout()"
+                class="flex items-center px-4 py-2 rounded-lg w-full text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 mt-4 border-t border-gray-200 dark:border-gray-700 pt-4"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span class="sidebar-text ml-3">Cerrar Sesión</span>
+              </button>
             </nav>
           </div>
         </div>
@@ -166,14 +269,24 @@ const { data: { session } } = await supabase.auth.getSession();
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                 </svg>
               </a>
-              <a 
-                href="/orders" 
-                class="p-2 rounded-lg"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                </svg>
-              </a>
+              <!-- Orders with tooltip for submenu -->
+              <div class="relative group">
+                <a 
+                  href="/orders" 
+                  class="p-2 rounded-lg block"
+                  title="Pedidos"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                  </svg>
+                </a>
+                <!-- Tooltip for collapsed sidebar -->
+                <div class="absolute left-full ml-2 top-0 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                  <div class="font-medium">Pedidos</div>
+                  <div class="text-xs opacity-75">• Todos los Pedidos</div>
+                  <div class="text-xs opacity-75">• Cupones</div>
+                </div>
+              </div>
 
               <a 
                 href="/users" 
@@ -183,7 +296,42 @@ const { data: { session } } = await supabase.auth.getSession();
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               </a>
-                            <a                 href="/products"                 class="p-2 rounded-lg"              >                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />                </svg>              </a>              <a                 href="/payments-table"                 class="p-2 rounded-lg"              >                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2" />                </svg>              </a>
+              <!-- Products with tooltip for submenu -->
+              <div class="relative group">
+                <a 
+                  href="/products" 
+                  class="p-2 rounded-lg block"
+                  title="Productos"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                </a>
+                <!-- Tooltip for collapsed sidebar -->
+                <div class="absolute left-full ml-2 top-0 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                  <div class="font-medium">Productos</div>
+                  <div class="text-xs opacity-75">• Todos los Productos</div>
+                  <div class="text-xs opacity-75">• Categorías</div>
+                </div>
+              </div>
+              <a 
+                href="/payments-table" 
+                class="p-2 rounded-lg"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2" />
+                </svg>
+              </a>
+              <!-- Logout Button for collapsed sidebar -->
+              <button 
+                onclick="handleLogout()"
+                class="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 mt-4 border-t border-gray-200 dark:border-gray-700 pt-4"
+                title="Cerrar Sesión"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
             </nav>
           </div>
         </div>
@@ -451,6 +599,52 @@ const { data: { session } } = await supabase.auth.getSession();
       footer.classList.add('ml-64');
     }
   });
+
+  // Handle submenu toggle functionality
+  function toggleSubmenu(menuId) {
+    const submenu = document.getElementById(menuId + '-submenu');
+    const arrow = document.querySelector(`button[onclick="toggleSubmenu('${menuId}')"] .submenu-arrow`);
+    
+    if (!submenu || !arrow) return;
+    
+    const isHidden = submenu.classList.contains('hidden');
+    
+    if (isHidden) {
+      // Show submenu
+      submenu.classList.remove('hidden');
+      arrow.style.transform = 'rotate(90deg)';
+    } else {
+      // Hide submenu
+      submenu.classList.add('hidden');
+      arrow.style.transform = 'rotate(0deg)';
+    }
+  }
+
+  // Handle logout functionality
+  async function handleLogout() {
+    try {
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        // On successful logout, the server has cleared the session cookies.
+        // Now, redirect the user to the home page.
+        window.location.href = '/';
+      } else {
+        console.error('Logout failed. Server responded with:', response.status);
+        // Even if the API call fails, force a redirect to the home page.
+        window.location.href = '/';
+      }
+    } catch (error) {
+      console.error('An error occurred during logout:', error);
+      // In case of a network error, also redirect to the home page.
+      window.location.href = '/';
+    }
+  }
 </script>
 
 <script>

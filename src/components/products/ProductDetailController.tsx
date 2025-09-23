@@ -7,9 +7,10 @@ import { Toaster } from 'sonner';
 interface ProductDetailControllerProps {
   initialProduct: Product;
   initialCategories: ProductCategory[];
+  accessToken?: string;
 }
 
-export function ProductDetailController({ initialProduct, initialCategories }: ProductDetailControllerProps) {
+export function ProductDetailController({ initialProduct, initialCategories, accessToken }: ProductDetailControllerProps) {
   const [product, setProduct] = useState<Product>(initialProduct);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'loading' | null; message: string | null }>({
     type: null,
@@ -20,7 +21,7 @@ export function ProductDetailController({ initialProduct, initialCategories }: P
     setStatusMessage({ type: 'loading', message: 'Guardando cambios...' });
     
     try {
-      const result = await updateProduct(product.id, updatedProduct);
+      const result = await updateProduct(product.id, updatedProduct, accessToken);
       
       if (result.success) {
         setStatusMessage({ type: 'success', message: 'Producto actualizado correctamente' });
@@ -60,6 +61,7 @@ export function ProductDetailController({ initialProduct, initialCategories }: P
         product={product} 
         categories={initialCategories} 
         onSave={handleSaveProduct}
+        accessToken={accessToken}
       />
       
       <Toaster richColors position="top-right" />

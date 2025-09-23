@@ -2,8 +2,14 @@
 import Base from "../../layout/Base.astro";
 import { supabase } from "../../lib/supabase";
 import { ProductDetailController } from "../../components/products/ProductDetailController";
+import { ProductService } from "../../services/productService";
+import { CategoryService } from "../../services/categoryService";
 
 export const prerender = false;
+
+if (!supabase) {
+  throw new Error("Supabase client is not initialized.");
+}
 
 // Get the user session
 const { data: { session } } = await supabase.auth.getSession();
@@ -12,6 +18,9 @@ if (!session) {
   return Astro.redirect("/");
 }
 
+// Extract the access token for client-side use
+const accessToken = session.access_token;
+
 // Get the product ID from the URL parameter
 const { id } = Astro.params;
 
@@ -19,17 +28,11 @@ if (!id) {
   return Astro.redirect("/products");
 }
 
-// Fetch the product data for this specific ID
-const response = await fetch(`${Astro.url.origin}/api/woo/get-product/${id}`);
-const productData = await response.json();
+// Fetch the product and categories data using the professional services
+const product = await ProductService.getProductById(parseInt(id, 10));
+const { categories } = await CategoryService.getAllCategories(1, 100); // Fetch all categories
 
-// Fetch categories for the dropdown of editing
-const categoriesResponse = await fetch(`${Astro.url.origin}/api/woo/get-categories`);
-const categoriesData = await categoriesResponse.json();
-
-// Process the result to access categories correctly
-const categories = categoriesData.success ? categoriesData.data.categories || [] : [];
-
+const productData = { success: !!product, data: product };
 const title = productData.success ? `Producto: ${productData.data.name}` : "Producto no encontrado";
 ---
 
@@ -39,6 +42,7 @@ const title = productData.success ? `Producto: ${productData.data.name}` : "Prod
       client:load
       initialProduct={productData.data} 
       initialCategories={categories}
+      accessToken={accessToken}
     />
   ) : (
     <div class="container py-4 px-4 max-w-6xl mx-auto">

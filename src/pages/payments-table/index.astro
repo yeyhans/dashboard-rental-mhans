@@ -2,8 +2,13 @@
 import Base from "../../layout/Base.astro";
 import PaymentsTable from "../../components/payments/PaymentsTable";
 import { supabase } from "../../lib/supabase";
+import { OrderService } from "../../services/orderService";
+
 export const prerender = false;
 
+if (!supabase) {
+  throw new Error("Supabase client is not initialized.");
+}
 const { data: { session } } = await supabase.auth.getSession();
 
 if (!session) {
@@ -12,50 +17,19 @@ if (!session) {
 
 // Get URL parameters for initial load
 const url = new URL(Astro.request.url);
-const status = url.searchParams.get('status') || '';
+const status = url.searchParams.get('status') || undefined;
+const page = parseInt(url.searchParams.get('page') || '1', 10);
+const limit = parseInt(url.searchParams.get('limit') || '20', 10);
 
-// Build query parameters - Load all results initially
-const params = new URLSearchParams({
-  page: '1',
-  per_page: '1000' // Load a large number to get all results
-});
+// Fetch orders data using the professional service
+const { orders, total } = await OrderService.getAllOrders(page, limit, status);
 
-if (status) {
-  params.append('status', status);
-}
-
-// Fetch orders data from both APIs
-const response = await fetch(`${Astro.url.origin}/api/woo/get-orders?${params}`);
-const response2 = await fetch(`${Astro.url.origin}/api/wp/get-orders?${params}`);
-const ordersData = await response.json();
-const ordersData2 = await response2.json();
-
-// Verificar que ordersData tenga la estructura correcta
-if (!ordersData.data?.orders) {
-  ordersData.data = {
-    orders: [],
-    total: "0",
-    totalPages: "0"
-  };
-}
-
-// Verificar que ordersData2 tenga la estructura correcta
-if (!ordersData2.data?.orders) {
-  ordersData2.data = { orders: [] };
-}
-
-// Merge WooCommerce orders with WordPress data
-const mergedOrders = ordersData.data.orders.map((wooOrder: any) => {
-  const wpOrder = ordersData2.data.orders?.find((order: any) => order.id === wooOrder.id);
-  return {
-    ...wooOrder,
-    fotos_garantia: wpOrder?.fotos_garantia || [],
-    correo_enviado: wpOrder?.correo_enviado || false,
-    pago_completo: wpOrder?.pago_completo || 'false',
-    orden_compra: wpOrder?.orden_compra || '',
-    numero_factura: wpOrder?.numero_factura || ''
-  };
-});
+const ordersData = {
+  data: {
+    orders: orders || [],
+    total: total || 0
+  }
+};
 
 const title = "Tabla de Pagos";
 ---
@@ -64,8 +38,8 @@ const title = "Tabla de Pagos";
   <div class="container py-6">
     <PaymentsTable 
       client:load
-      initialOrders={mergedOrders}
-      initialTotal={ordersData.data.total}
+      initialOrders={ordersData.data.orders}
+      initialTotal={ordersData.data.total.toString()}
       initialStatus={status}
     />
   </div>

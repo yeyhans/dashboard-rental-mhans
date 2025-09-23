@@ -1,12 +1,63 @@
 import { Label } from "../ui/label";
 import { Button } from "../ui/button";
-import { FileText, FileCheck } from "lucide-react";
 
+// Icons as SVG components
+const FileTextIcon = () => (
+  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
 
+const FileCheckIcon = () => (
+  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
 
+// Status translations
+const statusTranslations: { [key: string]: string } = {
+  'pending': 'Pendiente',
+  'processing': 'En proceso',
+  'on-hold': 'En espera',
+  'completed': 'Completado',
+  'cancelled': 'Cancelado',
+  'refunded': 'Reembolsado',
+  'failed': 'Fallido',
+  'trash': 'Papelera',
+  'auto-draft': 'Borrador'
+};
 
+// Format date
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+};
 
-function OrderEstado({ order, handleStatusUpdate, loading }: { order: any, handleStatusUpdate: any, loading: any }) {
+interface OrderEstadoProps {
+  order: {
+    id: number;
+    status: string;
+    date_created: string;
+    date_modified?: string;
+    metadata?: {
+      pdf_on_hold_url?: string;
+      pdf_processing_url?: string;
+    };
+    new_pdf_on_hold_url?: string;
+    new_pdf_processing_url?: string;
+  };
+  handleStatusUpdate: (orderId: number, newStatus: string) => void;
+  loading: boolean;
+}
+
+function OrderEstado({ order, handleStatusUpdate, loading }: OrderEstadoProps) {
   return (
     <div>
         {/* Estado y Fechas */}
@@ -17,7 +68,7 @@ function OrderEstado({ order, handleStatusUpdate, loading }: { order: any, handl
                 <select
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                   value={order.status}
-                  onChange={(e) => handleStatusUpdate(parseInt(order.id), e.target.value)}
+                  onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
                   disabled={loading}
                 >
                   {Object.entries(statusTranslations).map(([value, label]) => (
@@ -35,29 +86,29 @@ function OrderEstado({ order, handleStatusUpdate, loading }: { order: any, handl
             </div>
             <div>
               <Label className="font-medium">Última Modificación</Label>
-              <div className="mt-1">{formatDate(order.date_modified)}</div>
+              <div className="mt-1">{formatDate(order.date_modified || order.date_created)}</div>
             </div>
           </div>
 
           {/* Enlaces a PDFs */}
           <div className="space-y-2 p-4 bg-muted/50 rounded-lg">
-            {order.metadata.pdf_on_hold_url && (
+            {(order.metadata?.pdf_on_hold_url || order.new_pdf_on_hold_url) && (
               <Button 
                 variant="outline" 
                 className="w-full justify-start gap-2 h-auto py-3"
-                onClick={() => window.open(order.metadata.pdf_on_hold_url, '_blank')}
+                onClick={() => window.open(order.metadata?.pdf_on_hold_url || order.new_pdf_on_hold_url, '_blank')}
               >
-                <FileText className="h-4 w-4 shrink-0" />
+                <FileTextIcon />
                 <span className="text-left">Ver PDF de Presupuesto</span>
               </Button>
             )}
-            {order.metadata.pdf_processing_url && (
+            {(order.metadata?.pdf_processing_url || order.new_pdf_processing_url) && (
               <Button 
                 variant="outline" 
                 className="w-full justify-start gap-2 h-auto py-3"
-                onClick={() => window.open(order.metadata.pdf_processing_url, '_blank')}
+                onClick={() => window.open(order.metadata?.pdf_processing_url || order.new_pdf_processing_url, '_blank')}
               >
-                <FileCheck className="h-4 w-4 shrink-0" />
+                <FileCheckIcon />
                 <span className="text-left">Ver PDF de Contrato</span>
               </Button>
             )}

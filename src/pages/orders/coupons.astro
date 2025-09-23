@@ -1,0 +1,104 @@
+---
+import Base from '../../layout/Base.astro';
+import { supabase } from '../../lib/supabase';
+import { CouponService } from '../../services/couponService';
+import CouponsDashboard from '../../components/coupons/CouponsDashboard';
+import { Toaster } from '../../components/ui/sonner';
+
+// Check if user is authenticated
+const { data: { session } } = await supabase.auth.getSession();
+
+if (!session) {
+  return Astro.redirect('/');
+}
+
+// Verify admin access
+const { data: adminUser } = await supabase
+  .from('admin_users')
+  .select('*')
+  .eq('user_id', session.user.id)
+  .single();
+
+if (!adminUser) {
+  return Astro.redirect('/');
+}
+
+// Cargar datos iniciales de cupones
+let initialCoupons = [];
+let initialStats = null;
+let error = null;
+
+try {
+  // Obtener los primeros 20 cupones
+  const couponsResult = await CouponService.getAllCoupons(1, 20);
+  
+  // Obtener estadísticas de cupones
+  const statsResult = await CouponService.getCouponStats();
+  
+  initialCoupons = couponsResult.coupons || [];
+  initialStats = statsResult;
+} catch (err) {
+  console.error('Error loading initial coupons data:', err);
+  error = 'Error al cargar los cupones iniciales';
+  initialCoupons = [];
+  initialStats = {
+    totalCoupons: 0,
+    activeCoupons: 0,
+    usedCoupons: 0,
+    expiredCoupons: 0,
+    totalDiscount: '0.00',
+    usageRate: '0'
+  };
+}
+---
+
+<Base title="Gestión de Cupones - Sistema de Alquiler">
+  <div class="min-h-screen bg-background">
+    <div class="container mx-auto px-4 py-8">
+      {error && (
+        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+          <p><strong>Error:</strong> {error}</p>
+        </div>
+      )}
+      
+      <CouponsDashboard 
+        client:load
+        initialCoupons={initialCoupons}
+        initialStats={initialStats}
+      />
+      
+      <Toaster 
+        client:load
+        position="top-right"
+        richColors={true}
+        closeButton={true}
+      />
+    </div>
+  </div>
+
+  <!-- Estilos adicionales para el dashboard -->
+  <style>
+    /* Asegurar que el contenedor principal tenga el espacio correcto */
+    .container {
+      max-width: 1400px;
+    }
+    
+    /* Estilos para mejorar la experiencia móvil */
+    @media (max-width: 768px) {
+      .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+    }
+    
+    /* Estilos para los diálogos */
+    [data-radix-portal] {
+      z-index: 50;
+    }
+    
+    /* Asegurar que los toasts aparezcan correctamente */
+    [data-sonner-toaster] {
+      z-index: 100;
+    }
+  </style>
+</Base>

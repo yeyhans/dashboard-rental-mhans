@@ -2,24 +2,32 @@
 import Base from "../layout/Base.astro";
 import UsersDashboard from "../components/UsersDashboard";
 import { supabase } from "../lib/supabase";
+import { UserService } from "../services/userService";
+
 export const prerender = false;
 
+if (!supabase) {
+  throw new Error("Supabase client is not initialized.");
+}
 const { data: { session } } = await supabase.auth.getSession();
 
 if (!session) {
   return Astro.redirect("/");
 }
 
-// Fetch users data from the API
-const response = await fetch(`${Astro.url.origin}/api/wp/get-users`);
-const usersData = await response.json();
+// Fetch users data using the professional service
+const url = new URL(Astro.request.url);
+const page = parseInt(url.searchParams.get('page') || '1', 10);
+const limit = parseInt(url.searchParams.get('limit') || '10', 10);
+const search = url.searchParams.get('search') || '';
 
-// Verificar que usersData tenga la estructura correcta
-if (!usersData.users) {
-  usersData.users = [];
-  usersData.total = "0";
-  usersData.totalPages = "0";
-}
+const { users, total, totalPages } = await UserService.searchUsers(search, page, limit);
+
+const usersData = {
+  users: users || [],
+  total: total || 0,
+  totalPages: totalPages || 0
+};
 
 const title = "Gestión de Usuarios";
 ---

@@ -21,6 +21,24 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     return new Response(error.message, { status: 500 });
   }
 
+  // Verificar si el usuario es un administrador
+  const { data: adminUser, error: adminError } = await supabase
+    .from('admin_users')
+    .select('user_id')
+    .eq('user_id', data.user.id)
+    .maybeSingle();
+
+  if (adminError) {
+    console.error('Error checking admin user:', adminError);
+    return new Response('Error al verificar los permisos de administrador', { status: 500 });
+  }
+
+  if (!adminUser) {
+    // Si no es un admin, denegar acceso y no establecer cookies
+    return new Response('Acceso denegado. No tienes permisos de administrador.', { status: 403 });
+  }
+
+  // El usuario es un administrador, proceder a establecer la sesión
   const { access_token, refresh_token } = data.session;
   
   // Configurar las cookies con mayor seguridad y duración apropiada

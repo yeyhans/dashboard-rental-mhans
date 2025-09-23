@@ -67,11 +67,11 @@ const paymentStatusColors: { [key: string]: string } = {
   'false': 'bg-[#f8dda7] text-[#94660c]'
 };
 
-// Payment status text
-const paymentStatusText: { [key: string]: string } = {
-  'true': 'Pagado',
-  'false': 'Pendiente'
-};
+
+interface SessionData {
+  access_token: string;
+  user: any; // Usar any para compatibilidad con el tipo User de Supabase
+}
 
 interface OrdersDashboardProps {
   initialOrders: Order[];
@@ -80,6 +80,7 @@ interface OrdersDashboardProps {
   initialPage?: string;
   initialStatus?: string;
   initialPerPage?: string;
+  sessionData: SessionData;
 }
 
 // Interface for new order form
@@ -120,7 +121,8 @@ const OrdersDashboard = ({
   initialTotalPages,
   initialPage = '1',
   initialStatus = '',
-  initialPerPage = '10'
+  initialPerPage = '10',
+  sessionData
 }: OrdersDashboardProps) => {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [loading, setLoading] = useState(false);
@@ -171,50 +173,57 @@ const OrdersDashboard = ({
 
       console.log('Fetching orders with params:', params.toString());
       
-      // Fetch orders data from both APIs in parallel
-      const [wooResponse, wpResponse] = await Promise.all([
-        fetch(`/api/woo/get-orders?${params}`),
-        fetch(`/api/wp/get-orders?${params}`)
-      ]);
+      // Fetch orders data from new Supabase API
+      const response = await fetch(`/api/orders?${params}`);
+      const data = await response.json();
       
-      const wooData = await wooResponse.json();
-      const wpData = await wpResponse.json();
-      
-      if (wooData.success) {
-        console.log('Orders received:', wooData.data.orders.length);
-        console.log('Total pages:', wooData.data.totalPages);
-        console.log('Total orders:', wooData.data.total);
+      if (data.success) {
+        console.log('Orders received:', data.data.orders.length);
+        console.log('Total pages:', data.data.totalPages);
+        console.log('Total orders:', data.data.total);
         
-        // Verificar que wpData tenga la estructura correcta
-        const wpOrders = wpData.success && wpData.data && Array.isArray(wpData.data.orders) 
-          ? wpData.data.orders 
-          : [];
-        
-        // Create a map of WordPress orders by order ID for fast lookup
-        const wpOrdersMap: Record<string, any> = {};
-        wpOrders.forEach((wpOrder: any) => {
-          if (wpOrder.id) {
-            wpOrdersMap[wpOrder.id] = wpOrder;
-          }
-        });
-        
-        // Merge WordPress data into WooCommerce orders - siguiendo mismo patrón de index.astro
-        const mergedOrders = wooData.data.orders.map((order: any) => {
-          // Get matching WordPress order data if exists
-          const wpOrder = wpOrdersMap[order.id] || {};
-          
-          // Return merged order with pago_completo from WordPress data
+        // Transform orders to match expected structure
+        const transformedOrders = data.data.orders.map((order: any) => {
           return {
             ...order,
-            fotos_garantia: wpOrder.fotos_garantia || [],
-            correo_enviado: wpOrder.correo_enviado || false,
-            pago_completo: wpOrder.pago_completo ? 'true' : 'false'
+            // Create metadata object from direct properties for backward compatibility
+            metadata: {
+              order_proyecto: order.order_proyecto || '',
+              order_fecha_inicio: order.order_fecha_inicio || '',
+              order_fecha_termino: order.order_fecha_termino || '',
+              num_jornadas: order.num_jornadas || '',
+              calculated_subtotal: order.calculated_subtotal || '0',
+              calculated_discount: order.calculated_discount || '0',
+              calculated_iva: order.calculated_iva || '0',
+              calculated_total: order.calculated_total || '0',
+              company_rut: order.company_rut || '',
+              pdf_on_hold_url: order.pdf_on_hold_url || '',
+              pdf_processing_url: order.pdf_processing_url || '',
+              order_retire_name: order.order_retire_name || '',
+              order_retire_rut: order.order_retire_rut || '',
+              order_retire_phone: order.order_retire_phone || '',
+              order_comments: order.order_comments || ''
+            },
+            // Create billing object from direct properties
+            billing: {
+              first_name: order.billing_first_name || '',
+              last_name: order.billing_last_name || '',
+              company: order.billing_company || '',
+              address_1: order.billing_address_1 || '',
+              city: order.billing_city || '',
+              email: order.billing_email || '',
+              phone: order.billing_phone || ''
+            },
+            // Set default values for missing properties
+            fotos_garantia: order.fotos_garantia || [],
+            correo_enviado: order.correo_enviado || false,
+            pago_completo: order.pago_completo ? 'true' : 'false'
           };
         });
         
-        setOrders(mergedOrders);
-        setTotal(parseInt(wooData.data.total));
-        setTotalPages(parseInt(wooData.data.totalPages));
+        setOrders(transformedOrders);
+        setTotal(parseInt(data.data.total));
+        setTotalPages(parseInt(data.data.totalPages));
         
         // Scroll al inicio de la tabla/listado cuando cambia la página
         const tableElement = document.querySelector('.border.overflow-hidden');
@@ -222,7 +231,7 @@ const OrdersDashboard = ({
           tableElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       } else {
-        setError(wooData.message);
+        setError(data.error || 'Error al cargar los pedidos');
       }
     } catch (err) {
       setError('Error al cargar los pedidos');
@@ -289,13 +298,12 @@ const OrdersDashboard = ({
   const handleStatusUpdate = async (orderId: number, newStatus: string) => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/woo/update-orders`, {
+      const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          id: orderId,
           status: newStatus
         })
       });
@@ -308,7 +316,7 @@ const OrdersDashboard = ({
           order.id === orderId ? { ...order, status: newStatus } : order
         ));
       } else {
-        setError(data.message);
+        setError(data.error || 'Error al actualizar el estado del pedido');
       }
     } catch (err) {
       setError('Error al actualizar el estado del pedido');
@@ -323,9 +331,9 @@ const OrdersDashboard = ({
     try {
       setUpdatingOrderId(orderId);
       // Invert the current status
-      const newStatus = currentStatus === 'true' ? 'false' : 'true';
+      const newStatus = currentStatus === 'true' ? false : true;
       
-      const response = await fetch(`/api/wp/update-order/${orderId}`, {
+      const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -340,7 +348,7 @@ const OrdersDashboard = ({
         setOrders(prevOrders => 
           prevOrders.map(order => 
             order.id === orderId 
-              ? { ...order, pago_completo: newStatus } 
+              ? { ...order, pago_completo: newStatus ? 'true' : 'false' } 
               : order
           )
         );
@@ -348,7 +356,7 @@ const OrdersDashboard = ({
       } else {
         const errorData = await response.json();
         console.error('Error updating payment status:', errorData);
-        setError(`Error updating payment status: ${errorData.message || 'Unknown error'}`);
+        setError(`Error updating payment status: ${errorData.error || 'Unknown error'}`);
       }
     } catch (err) {
       console.error('Error:', err);
@@ -358,8 +366,45 @@ const OrdersDashboard = ({
     }
   };
 
-  const handleOrderCreated = (newOrder: Order) => {
-    setOrders([newOrder, ...orders]);
+  const handleOrderCreated = (newOrder: any) => {
+    // Transform the new order to match the expected structure
+    const transformedOrder: Order = {
+      ...newOrder,
+      // Create metadata object from direct properties for backward compatibility
+      metadata: {
+        order_proyecto: newOrder.order_proyecto || '',
+        order_fecha_inicio: newOrder.order_fecha_inicio || '',
+        order_fecha_termino: newOrder.order_fecha_termino || '',
+        num_jornadas: newOrder.num_jornadas?.toString() || '',
+        calculated_subtotal: newOrder.calculated_subtotal?.toString() || '0',
+        calculated_discount: newOrder.calculated_discount?.toString() || '0',
+        calculated_iva: newOrder.calculated_iva?.toString() || '0',
+        calculated_total: newOrder.calculated_total?.toString() || '0',
+        company_rut: newOrder.company_rut || '',
+        pdf_on_hold_url: newOrder.pdf_on_hold_url || '',
+        pdf_processing_url: newOrder.pdf_processing_url || '',
+        order_retire_name: newOrder.order_retire_name || '',
+        order_retire_rut: newOrder.order_retire_rut || '',
+        order_retire_phone: newOrder.order_retire_phone || '',
+        order_comments: newOrder.order_comments || ''
+      },
+      // Create billing object from direct properties
+      billing: {
+        first_name: newOrder.billing_first_name || '',
+        last_name: newOrder.billing_last_name || '',
+        company: newOrder.billing_company || '',
+        address_1: newOrder.billing_address_1 || '',
+        city: newOrder.billing_city || '',
+        email: newOrder.billing_email || '',
+        phone: newOrder.billing_phone || ''
+      },
+      // Set default values for missing properties
+      fotos_garantia: newOrder.fotos_garantia || [],
+      correo_enviado: newOrder.correo_enviado || false,
+      pago_completo: newOrder.pago_completo ? 'true' : 'false'
+    };
+
+    setOrders([transformedOrder, ...orders]);
     setTotal(total + 1);
   };
 
@@ -440,23 +485,17 @@ const OrdersDashboard = ({
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <div>
                     <p className="text-xs text-muted-foreground">Proyecto</p>
-                    <p className="text-sm font-medium text-foreground truncate">{order.metadata.order_proyecto}</p>
+                    <p className="text-sm font-medium text-foreground truncate">{order.metadata?.order_proyecto || ''}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-muted-foreground">Total</p>
-                    <p className="text-lg font-bold text-foreground">${formatCurrency(order.metadata.calculated_total)}</p>
+                    <p className="text-lg font-bold text-foreground">${formatCurrency(order.metadata?.calculated_total || '0')}</p>
                   </div>
                 </div>
                 
                 <div className="mt-2 flex gap-2">
-                <div 
-                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${paymentStatusColors[order.pago_completo]}`}
-                  onClick={() => handleUpdatePaymentStatus(order.id, order.pago_completo)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  {paymentStatusText[order.pago_completo]}
-                </div>
-                  {order.metadata.pdf_on_hold_url && (
+
+                  {order.metadata?.pdf_on_hold_url && (
                     <Button 
                       variant="ghost" 
                       size="sm"
@@ -466,7 +505,7 @@ const OrdersDashboard = ({
                       <FileText className="h-4 w-4" />
                     </Button>
                   )}
-                  {order.metadata.pdf_processing_url && (
+                  {order.metadata?.pdf_processing_url && (
                     <Button 
                       variant="ghost" 
                       size="sm"
@@ -534,7 +573,7 @@ const OrdersDashboard = ({
                               id: order.id,
                               status: order.status,
                               date_created: order.date_created,
-                              total: order.metadata.calculated_total,
+                              total: order.metadata?.calculated_total || '0',
                               customer: {
                                 first_name: order.billing.first_name,
                                 last_name: order.billing.last_name,
@@ -554,19 +593,12 @@ const OrdersDashboard = ({
                   <div className="font-medium">{order.billing.first_name} {order.billing.last_name}</div>
                   <div className="text-sm text-muted-foreground">{order.billing.email}</div>
                 </TableCell>
-                <TableCell className="text-foreground font-medium">{order.metadata.order_proyecto}</TableCell>
+                <TableCell className="text-foreground font-medium">{order.metadata?.order_proyecto || ''}</TableCell>
                 <TableCell className="text-foreground">{formatDate(order.date_created)}</TableCell>
-                <TableCell className="text-foreground text-right font-bold">${formatCurrency(order.metadata.calculated_total)}</TableCell>
+                <TableCell className="text-foreground text-right font-bold">${formatCurrency(order.metadata?.calculated_total || '0')}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex flex-row gap-2 justify-end">
-                  <div 
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${paymentStatusColors[order.pago_completo]}`}
-                    onClick={() => handleUpdatePaymentStatus(order.id, order.pago_completo)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    {paymentStatusText[order.pago_completo]}
-                  </div>
-                    {order.metadata.pdf_on_hold_url && (
+                    {order.metadata?.pdf_on_hold_url && (
                       <Button 
                         variant="ghost" 
                         size="sm"
@@ -576,7 +608,7 @@ const OrdersDashboard = ({
                         <FileText className="h-4 w-4" />
                       </Button>
                     )}
-                    {order.metadata.pdf_processing_url && (
+                    {order.metadata?.pdf_processing_url && (
                       <Button 
                         variant="ghost" 
                         size="sm"
@@ -655,7 +687,7 @@ const OrdersDashboard = ({
                 {loading ? 'Actualizando...' : 'Actualizar'}
               </Button>
 
-              <CreateOrderForm onOrderCreated={handleOrderCreated} />
+              <CreateOrderForm onOrderCreated={handleOrderCreated} sessionData={sessionData} />
             </div>
           </div>
 

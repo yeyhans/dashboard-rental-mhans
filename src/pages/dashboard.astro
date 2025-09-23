@@ -1,4 +1,4 @@
----
+--- 
 import Base from "../layout/Base.astro";
 import { supabase } from "../lib/supabase";
 import OrderSummaryCards from "../components/OrderSummaryCards";
@@ -8,20 +8,81 @@ import OrderStatsEquip from "../components/OrderStatsEquip";
 
 export const prerender = false;
 
+// Get session from Supabase
+if (!supabase) {
+  console.error('Supabase client is not initialized. Check environment variables.');
+  return Astro.redirect("/");
+}
+
 const { data: { session } } = await supabase.auth.getSession();
 
 if (!session) {
   return Astro.redirect("/");
 }
 
-// Fetch orders data
-const ordersResponse = await fetch(`${Astro.url.origin}/api/get-all-orders`);
-const ordersData = await ordersResponse.json();
+// Verify the user is an admin from the 'admin_users' table
+const { data: adminUser, error: adminError } = await supabase
+  .from('admin_users')
+  .select('*')
+  .eq('user_id', session.user.id)
+  .eq('role', 'admin')
+  .single();
 
-console.log('Orders Data:', ordersData); // Añade esto para depurar
+if (adminError || !adminUser) {
+  console.error('Admin verification failed:', adminError?.message);
+  // Clear cookies and redirect to login if not an admin
+  Astro.cookies.delete('sb-access-token', { path: '/' });
+  Astro.cookies.delete('sb-refresh-token', { path: '/' });
+  return Astro.redirect("/");
+}
 
-// Fetch users data (esto es un placeholder - necesitarás implementar este endpoint)
-const usersData = { users: [] }; // Por ahora lo dejamos vacío
+// Initialize default data structure
+let dashboardData = {
+  orders: [],
+  users: [],
+  products: [],
+  coupons: [],
+  stats: {
+    totalOrders: 0,
+    totalRevenue: 0,
+    totalUsers: 0,
+    totalProducts: 0
+  }
+};
+
+try {
+  // Fetch comprehensive dashboard data from the new API
+  const dashboardResponse = await fetch(`${Astro.url.origin}/api/dashboard`, {
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (dashboardResponse.ok) {
+    const dashboardResult = await dashboardResponse.json();
+    if (dashboardResult.success && dashboardResult.data) {
+      dashboardData = {
+        orders: [], // API doesn't return order list, only stats
+        users: [], // API doesn't return user list, only stats
+        products: [], // API doesn't return product list, only stats
+        coupons: [], // API doesn't return coupon list, only stats
+        stats: {
+          totalOrders: dashboardResult.data.orders?.total || 0,
+          totalRevenue: parseFloat(dashboardResult.data.overview?.totalRevenue || '0'),
+          totalUsers: dashboardResult.data.users?.total || 0,
+          totalProducts: dashboardResult.data.products?.total || 0
+        }
+      };
+    }
+  } else {
+    console.error('Dashboard API error:', dashboardResponse.status, dashboardResponse.statusText);
+  }
+} catch (error) {
+  console.error('Error fetching dashboard data:', error);
+}
+
+console.log('Dashboard Data:', dashboardData);
+console.log('Authenticated admin user:', adminUser);
 
 const title = "Dashboard - Rental Mhans";
 ---
@@ -37,8 +98,8 @@ const title = "Dashboard - Rental Mhans";
     <!-- Order Stats Overview Component -->
     <OrderStatsOverview 
       client:load 
-      orders={ordersData.data.orders || []} 
-      totalOrders={ordersData.data.total.toString() || "0"} 
+      orders={dashboardData.orders} 
+      totalOrders={dashboardData.stats.totalOrders.toString()} 
     />
 
     <Separator />
@@ -46,17 +107,17 @@ const title = "Dashboard - Rental Mhans";
     <!-- Order Summary Cards Component -->
     <OrderSummaryCards 
       client:load
-      orders={ordersData.data.orders || []}
-      totalOrders={ordersData.data.total.toString() || "0"}
-      users={usersData.users || []}
+      orders={dashboardData.orders}
+      totalOrders={dashboardData.stats.totalOrders.toString()}
+      users={dashboardData.users}
     />
 
     <Separator />
 
     <OrderStatsEquip 
       client:load
-      orders={ordersData.data.orders || []}
-      totalOrders={ordersData.data.total.toString() || "0"}
+      orders={dashboardData.orders}
+      totalOrders={dashboardData.stats.totalOrders.toString()}
     />
     
     <!-- Revenue Chart Component -->

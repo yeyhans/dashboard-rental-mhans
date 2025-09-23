@@ -19,12 +19,14 @@ export default defineConfig({
 
   env: {
     schema: {
-      SUPABASE_ANON_KEY: envField.string({ context: "server", access: "secret" }),
       SUPABASE_URL: envField.string({ context: "server", access: "secret" }),
-      WORDPRESS_USERNAME: envField.string({ context: "server", access: "secret" }),
-      WORDPRESS_PASSWORD: envField.string({ context: "server", access: "secret" }),
-      WOOCOMMERCE_CONSUMER_KEY: envField.string({ context: "server", access: "secret" }),
-      WOOCOMMERCE_CONSUMER_SECRET: envField.string({ context: "server", access: "secret" }),
+      SUPABASE_ANON_KEY: envField.string({ context: "server", access: "secret" }),
+      SUPABASE_SERVICE_ROLE_KEY: envField.string({ context: "server", access: "secret" }),
+      PORT: envField.number({ context: "server", access: "public", default: 4000 }),
+      NODE_ENV: envField.string({ context: "server", access: "public", default: "development" }),
+      FRONTEND_URL: envField.string({ context: "server", access: "public", default: "http://localhost:4321" }),
+      ALLOWED_ORIGINS: envField.string({ context: "server", access: "public", default: "http://localhost:4321,http://localhost:3000" }),
+      JWT_SECRET: envField.string({ context: "server", access: "secret" }),
     }
   }
 });

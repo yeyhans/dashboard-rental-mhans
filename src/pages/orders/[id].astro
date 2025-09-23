@@ -3,8 +3,13 @@ import Base from "../../layout/Base.astro";
 import OrderDetails from "../../components/orders/OrderDetails";
 import { supabase } from "../../lib/supabase";
 import ProcessOrder from "../../components/orders/ProcessOrder";
+import { OrderService } from "../../services/orderService";
 
 export const prerender = false;
+
+if (!supabase) {
+  throw new Error("Supabase client is not initialized.");
+}
 
 const { data: { session } } = await supabase.auth.getSession();
 
@@ -19,131 +24,153 @@ if (!id) {
   return Astro.redirect("/orders");
 }
 
-// Fetch the order data for this specific ID
-const response = await fetch(`${Astro.url.origin}/api/woo/get-order/${id}`);
-const orderData = await response.json();
+// Fetch the order data using the professional service
+const order = await OrderService.getOrderById(parseInt(id, 10));
 
-let specificOrder: any = null;
-
-try {
-  const response2 = await fetch(`${Astro.url.origin}/api/wp/get-orders/`);
-  const orderData2 = await response2.json();
-  
-  // Depuración detallada de la estructura de datos
-  console.log('WordPress API respuesta:', {
-    keys: orderData2 ? Object.keys(orderData2) : 'null',
-    orders: orderData2?.orders ? (Array.isArray(orderData2.orders) ? 'array' : typeof orderData2.orders) : 'undefined',
-    ordersStructure: orderData2?.orders?.orders ? (Array.isArray(orderData2.orders.orders) ? 'array' : typeof orderData2.orders.orders) : 'undefined',
-    directOrders: Array.isArray(orderData2) ? 'array' : typeof orderData2
-  });
-
-  // Check if the data structure is as expected and find the order
-  if (orderData2 && orderData2.orders && Array.isArray(orderData2.orders)) {
-    console.log('Buscando en estructura orderData2.orders[]');
-    specificOrder = orderData2.orders.find(
-      (order: any) => order.id === parseInt(id)
-    ) || null;
-  } else if (orderData2 && orderData2.orders && orderData2.orders.orders && Array.isArray(orderData2.orders.orders)) {
-    console.log('Buscando en estructura orderData2.orders.orders[]');
-    specificOrder = orderData2.orders.orders.find(
-      (order: any) => order.id === parseInt(id)
-    ) || null;
-  } else if (Array.isArray(orderData2)) {
-    console.log('Buscando en estructura orderData2[]');
-    specificOrder = orderData2.find(
-      (order: any) => order.id === parseInt(id)
-    ) || null;
-  }
-  
-  if (!specificOrder) {
-    console.log('Order not found in WP data, ID buscado:', id);
-    // Intentar búsqueda manual por ID en todas las estructuras posibles
-    if (orderData2 && typeof orderData2 === 'object') {
-      console.log('Intentando búsqueda manual recursiva');
-      const searchRecursive = (obj: any, targetId: number): any => {
-        if (!obj) return null;
-        
-        // Si es un array, buscar en cada elemento
-        if (Array.isArray(obj)) {
-          for (const item of obj) {
-            if (item && item.id === targetId) {
-              return item;
-            }
-            const result = searchRecursive(item, targetId);
-            if (result) return result;
-          }
-        } 
-        // Si es un objeto, buscar en propiedades que podrían contener arrays u objetos
-        else if (typeof obj === 'object') {
-          // Comprobar si este objeto es la orden que buscamos
-          if (obj.id === targetId) {
-            return obj;
-          }
-          
-          // Buscar en propiedades
-          for (const key in obj) {
-            if (obj[key] && typeof obj[key] === 'object') {
-              const result = searchRecursive(obj[key], targetId);
-              if (result) return result;
-            }
-          }
-        }
-        
-        return null;
-      };
-      
-      specificOrder = searchRecursive(orderData2, parseInt(id));
-      if (specificOrder) {
-        console.log('¡Orden encontrada mediante búsqueda recursiva!');
-      }
-    }
-  } else {
-    console.log('Found WP Order:', JSON.stringify(specificOrder, null, 2));
-  }
-} catch (error) {
-  console.error('Error fetching WP order data:', error);
-}
-
-// Variables para dar un valor por defecto en caso de que no se encuentre la orden
-const wpPagoCompleto = specificOrder?.pago_completo || '';
-const wpOrdenCompra = specificOrder?.orden_compra || '';
-const wpNumeroFactura = specificOrder?.numero_factura || '';
-
-console.log('Valores a pasar a OrderDetails:', {
-  pago_completo: wpPagoCompleto, 
-  orden_compra: wpOrdenCompra, 
-  numero_factura: wpNumeroFactura
-});
+// Transform the order data to include all database fields and ensure compatibility
+const orderData = {
+  success: !!order,
+  data: order ? {
+    // Basic order information
+    id: order.id,
+    status: order.status,
+    currency: order.currency,
+    date_created: order.date_created,
+    date_modified: order.date_modified,
+    date_completed: order.date_completed,
+    date_paid: order.date_paid,
+    customer_id: order.customer_id,
+    
+    // Financial calculations
+    calculated_subtotal: order.calculated_subtotal,
+    calculated_discount: order.calculated_discount,
+    calculated_iva: order.calculated_iva,
+    calculated_total: order.calculated_total,
+    discount_total: order.discount_total,
+    shipping_total: order.shipping_total,
+    cart_tax: order.cart_tax,
+    total: order.total,
+    total_tax: order.total_tax,
+    
+    // Billing information
+    billing_first_name: order.billing_first_name,
+    billing_last_name: order.billing_last_name,
+    billing_company: order.billing_company,
+    billing_address_1: order.billing_address_1,
+    billing_city: order.billing_city,
+    billing_email: order.billing_email,
+    billing_phone: order.billing_phone,
+    
+    // Project information
+    order_proyecto: order.order_proyecto,
+    order_fecha_inicio: order.order_fecha_inicio,
+    order_fecha_termino: order.order_fecha_termino,
+    num_jornadas: order.num_jornadas,
+    company_rut: order.company_rut,
+    
+    // Retirement information
+    order_retire_name: order.order_retire_name,
+    order_retire_phone: order.order_retire_phone,
+    order_retire_rut: order.order_retire_rut,
+    order_comments: order.order_comments,
+    
+    // Line items and other JSON fields
+    line_items: order.line_items,
+    tax_lines: order.tax_lines,
+    shipping_lines: order.shipping_lines,
+    fee_lines: order.fee_lines,
+    coupon_lines: order.coupon_lines,
+    refunds: order.refunds,
+    fotos_garantia: order.fotos_garantia,
+    
+    // Payment information
+    payment_method: order.payment_method,
+    payment_method_title: order.payment_method_title,
+    transaction_id: order.transaction_id,
+    order_key: order.order_key,
+    
+    // System information
+    customer_ip_address: order.customer_ip_address,
+    customer_user_agent: order.customer_user_agent,
+    created_via: order.created_via,
+    customer_note: order.customer_note,
+    
+    // Status flags
+    correo_enviado: order.correo_enviado,
+    pago_completo: order.pago_completo,
+    is_editable: order.is_editable,
+    needs_payment: order.needs_payment,
+    needs_processing: order.needs_processing,
+    
+    // Document URLs
+    orden_compra: order.orden_compra || '',
+    numero_factura: order.numero_factura || '',
+    new_pdf_on_hold_url: order.new_pdf_on_hold_url,
+    new_pdf_processing_url: order.new_pdf_processing_url,
+    
+    // User profile information (if available)
+    user_profiles: (order as any).user_profiles,
+    
+    // Legacy compatibility fields for components
+    billing: {
+      first_name: order.billing_first_name,
+      last_name: order.billing_last_name,
+      company: order.billing_company || '',
+      address_1: order.billing_address_1,
+      city: order.billing_city,
+      email: order.billing_email,
+      phone: order.billing_phone
+    },
+    
+    // Meta data for component compatibility
+    meta_data: [
+      { key: 'order_proyecto', value: order.order_proyecto },
+      { key: 'order_fecha_inicio', value: order.order_fecha_inicio },
+      { key: 'order_fecha_termino', value: order.order_fecha_termino },
+      { key: 'num_jornadas', value: order.num_jornadas?.toString() || '0' },
+      { key: 'company_rut', value: order.company_rut },
+      { key: 'calculated_subtotal', value: order.calculated_subtotal?.toString() || '0' },
+      { key: 'calculated_discount', value: order.calculated_discount?.toString() || '0' },
+      { key: 'calculated_iva', value: order.calculated_iva?.toString() || '0' },
+      { key: 'calculated_total', value: order.calculated_total?.toString() || '0' },
+      { key: 'order_retire_name', value: order.order_retire_name || '' },
+      { key: 'order_retire_phone', value: order.order_retire_phone || '' },
+      { key: 'order_retire_rut', value: order.order_retire_rut || '' },
+      { key: 'order_comments', value: order.order_comments || '' },
+      { key: '_pdf_on_hold_url', value: order.new_pdf_on_hold_url || '' },
+      { key: '_pdf_processing_url', value: order.new_pdf_processing_url || '' }
+    ]
+  } : null,
+  message: order ? '' : `No se encontró la orden con ID ${id}`
+};
 
 const title = `Orden #${id}`;
 ---
 
 <Base title={title}>
   <div class="container py-6">
-    {orderData.success ? (
+    {orderData.success && orderData.data ? (
       <>
-        <OrderDetails 
+
+
+        <ProcessOrder
           client:load
           order={{
-            ...orderData.data,
-            correo_enviado: specificOrder?.correo_enviado || false,
-            pago_completo: wpPagoCompleto,
-            orden_compra: wpOrdenCompra,
-            numero_factura: wpNumeroFactura
-          }} 
+            orders: {
+              success: true,
+              orders: [{ 
+                ...orderData.data,
+                customer: {
+                  id: orderData.data.customer_id,
+                  email: orderData.data.billing_email,
+                  first_name: orderData.data.billing_first_name,
+                  last_name: orderData.data.billing_last_name
+                }
+              } as any]
+            }
+          }}
+          sessionData={session}
         />
-
-        {specificOrder && (
-          <ProcessOrder
-            client:load
-            order={{
-              orders: {
-                success: true,
-                orders: [specificOrder]
-              }
-            }}
-          />
-        )}
       </>
     ) : (
       <div class="p-4 bg-destructive/10 text-destructive rounded-md">
