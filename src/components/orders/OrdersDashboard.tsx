@@ -77,6 +77,7 @@ interface OrdersDashboardProps {
   initialOrders: Order[];
   initialTotal: string;
   sessionData: SessionData;
+  initialUsers: any[]; // UserProfile array from Supabase
 }
 
 // Interface for new order form
@@ -114,7 +115,8 @@ interface NewOrderForm {
 const OrdersDashboard = ({ 
   initialOrders,
   initialTotal,
-  sessionData
+  sessionData,
+  initialUsers
 }: OrdersDashboardProps) => {
   // All orders loaded from server
   const [allOrders, setAllOrders] = useState<Order[]>(initialOrders);
@@ -240,37 +242,6 @@ const OrdersDashboard = ({
     });
   };
 
-  // Add new function to handle order status updates
-  const handleStatusUpdate = async (orderId: number, newStatus: string) => {
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/orders/${orderId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: newStatus
-        })
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        // Update the order in the local state
-        setAllOrders(allOrders.map((order: Order) => 
-          order.id === orderId ? { ...order, status: newStatus } : order
-        ));
-      } else {
-        setError(data.error || 'Error al actualizar el estado del pedido');
-      }
-    } catch (err) {
-      setError('Error al actualizar el estado del pedido');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
 
   const handleOrderCreated = (newOrder: any) => {
@@ -574,7 +545,7 @@ const OrdersDashboard = ({
                 {loading ? 'Actualizando...' : 'Actualizar'}
               </Button>
 
-              <CreateOrderForm onOrderCreated={handleOrderCreated} sessionData={sessionData} />
+              <CreateOrderForm onOrderCreated={handleOrderCreated} sessionData={sessionData} initialUsers={initialUsers} />
             </div>
           </div>
 

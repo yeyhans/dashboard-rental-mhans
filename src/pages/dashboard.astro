@@ -1,10 +1,8 @@
 --- 
 import Base from "../layout/Base.astro";
 import { supabase } from "../lib/supabase";
-import OrderSummaryCards from "../components/OrderSummaryCards";
-import OrderStatsOverview from "../components/OrderStatsOverview";
-import { Separator } from "../components/ui/separator";
-import OrderStatsEquip from "../components/OrderStatsEquip";
+import { DashboardService } from "../services/dashboardService";
+import DashboardContainer from "../components/DashboardContainer";
 
 export const prerender = false;
 
@@ -36,53 +34,43 @@ if (adminError || !adminUser) {
   return Astro.redirect("/");
 }
 
-// Initialize default data structure
-let dashboardData = {
-  orders: [],
-  users: [],
-  products: [],
-  coupons: [],
-  stats: {
-    totalOrders: 0,
-    totalRevenue: 0,
-    totalUsers: 0,
-    totalProducts: 0
-  }
-};
-
+// Fetch comprehensive dashboard data using the service
+let dashboardStats;
 try {
-  // Fetch comprehensive dashboard data from the new API
-  const dashboardResponse = await fetch(`${Astro.url.origin}/api/dashboard`, {
-    headers: {
-      'Content-Type': 'application/json'
-    }
+  dashboardStats = await DashboardService.getDashboardStats();
+  console.log('Dashboard Stats loaded successfully:', {
+    monthlyOrders: dashboardStats.monthlyOrderStats.totalOrders,
+    rentedEquipment: dashboardStats.rentedEquipment.length,
+    totalSales: dashboardStats.financialSummary.totalSales
   });
-
-  if (dashboardResponse.ok) {
-    const dashboardResult = await dashboardResponse.json();
-    if (dashboardResult.success && dashboardResult.data) {
-      dashboardData = {
-        orders: [], // API doesn't return order list, only stats
-        users: [], // API doesn't return user list, only stats
-        products: [], // API doesn't return product list, only stats
-        coupons: [], // API doesn't return coupon list, only stats
-        stats: {
-          totalOrders: dashboardResult.data.orders?.total || 0,
-          totalRevenue: parseFloat(dashboardResult.data.overview?.totalRevenue || '0'),
-          totalUsers: dashboardResult.data.users?.total || 0,
-          totalProducts: dashboardResult.data.products?.total || 0
-        }
-      };
-    }
-  } else {
-    console.error('Dashboard API error:', dashboardResponse.status, dashboardResponse.statusText);
-  }
 } catch (error) {
-  console.error('Error fetching dashboard data:', error);
+  console.error('Error fetching dashboard stats:', error);
+  // Initialize with empty data structure
+  dashboardStats = {
+    monthlyOrderStats: {
+      totalOrders: 0,
+      completedOrders: 0,
+      createdOrders: 0,
+      pendingOrders: 0,
+      processingOrders: 0,
+      onHoldOrders: 0
+    },
+    ordersByStatus: {
+      onHold: [],
+      pending: [],
+      processing: [],
+      completed: []
+    },
+    rentedEquipment: [],
+    financialSummary: {
+      totalSales: 0,
+      totalPaid: 0,
+      totalPending: 0,
+      reservationPayments: 0,
+      finalPayments: 0
+    }
+  };
 }
-
-console.log('Dashboard Data:', dashboardData);
-console.log('Authenticated admin user:', adminUser);
 
 const title = "Dashboard - Rental Mhans";
 ---
@@ -95,35 +83,11 @@ const title = "Dashboard - Rental Mhans";
       <p class="text-xs text-muted-foreground">Bienvenido al panel de control de Rental Mhans</p>
     </div>
     
-    <!-- Order Stats Overview Component -->
-    <OrderStatsOverview 
-      client:load 
-      orders={dashboardData.orders} 
-      totalOrders={dashboardData.stats.totalOrders.toString()} 
-    />
-
-    <Separator />
-    
-    <!-- Order Summary Cards Component -->
-    <OrderSummaryCards 
+    <!-- Dashboard Integrado con Filtros -->
+    <DashboardContainer 
       client:load
-      orders={dashboardData.orders}
-      totalOrders={dashboardData.stats.totalOrders.toString()}
-      users={dashboardData.users}
+      initialData={dashboardStats}
     />
-
-    <Separator />
-
-    <OrderStatsEquip 
-      client:load
-      orders={dashboardData.orders}
-      totalOrders={dashboardData.stats.totalOrders.toString()}
-    />
-    
-    <!-- Revenue Chart Component -->
-    <div class="my-3">
-
-    </div>
 
   </div>
 </Base>

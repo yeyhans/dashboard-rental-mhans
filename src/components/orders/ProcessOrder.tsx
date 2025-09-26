@@ -1156,7 +1156,7 @@ function ProcessOrder({ order, sessionData }: { order: WPOrderResponse, sessionD
                   {/* Product Selector Modal */}
                   {showProductSelector && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                      <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                      <div className=" rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-4">
                           <h3 className="text-lg font-semibold">Seleccionar Producto</h3>
                           <Button
@@ -1179,7 +1179,7 @@ function ProcessOrder({ order, sessionData }: { order: WPOrderResponse, sessionD
                   {/* Edited Products List */}
                   <div className="space-y-3">
                     {editedProducts.map((item, index) => (
-                      <div key={`${item.product_id}-${index}`} className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+                      <div key={`${item.product_id}-${index}`} className="flex items-center gap-3 p-3  rounded-lg border">
                         {/* Product Image */}
                         <div className="flex-shrink-0">
                           {item.images && item.images.length > 0 ? (
@@ -1523,7 +1523,7 @@ function ProcessOrder({ order, sessionData }: { order: WPOrderResponse, sessionD
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="w-8 h-8 p-0 bg-white/90 hover:bg-white"
+                      className="w-8 h-8 p-0 /90 hover:"
                       onClick={() => window.open(foto, '_blank')}
                     >
                       <ImageIcon className="w-4 h-4" />
@@ -1556,7 +1556,7 @@ function ProcessOrder({ order, sessionData }: { order: WPOrderResponse, sessionD
       {/* Upload Modal */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+          <div className=" rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Subir Fotos de Garantía</h3>
               <Button

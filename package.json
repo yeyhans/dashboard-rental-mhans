@@ -50,7 +50,8 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "puppeteer": "^23.0.0"
   },
   "devDependencies": {
     "@types/micromatch": "^4.0.9",

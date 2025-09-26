@@ -7,8 +7,10 @@ import {
   CardFooter,
   CardDescription
 } from './ui/card';
+import { Badge } from './ui/badge';
 import { cn } from "@/lib/utils";
 import { Separator } from './ui/separator';
+import { Filter } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -33,6 +35,8 @@ interface Order {
 interface OrderStatsOverviewProps {
   orders: Order[];
   totalOrders: string;
+  isFiltered?: boolean;
+  filterInfo?: string;
 }
 
 // Define interfaces for our stats data
@@ -63,12 +67,16 @@ interface OrderStatsData {
   porcentajePagados: number;
 }
 
-const OrderStatsOverview: React.FC<OrderStatsOverviewProps> = ({ orders, totalOrders }): React.ReactNode => {
+const OrderStatsOverview: React.FC<OrderStatsOverviewProps> = ({ 
+  orders, 
+  totalOrders, 
+  isFiltered = false, 
+  filterInfo = '' 
+}): React.ReactNode => {
   // Crear una función para formatear montos
   const formatMoney = (amount: number): string => {
     return `$${amount.toLocaleString('es-CL')}`;
   };
-
   // Crear una función para formatear porcentajes
   const formatPercentage = (percentage: number): string => {
     return `${Math.round(percentage)}%`;
@@ -76,7 +84,7 @@ const OrderStatsOverview: React.FC<OrderStatsOverviewProps> = ({ orders, totalOr
 
   // Calculate stats
   const orderStats: OrderStatsData = {
-    total: parseInt(totalOrders || "0"),
+    total: orders.length, // Usar la longitud del array de órdenes filtradas
     completed: orders.filter(order => order.status === 'completed').length,
     processing: orders.filter(order => order.status === 'processing').length,
     pending: orders.filter(order => order.status === 'pending').length,
@@ -252,6 +260,17 @@ const OrderStatsOverview: React.FC<OrderStatsOverviewProps> = ({ orders, totalOr
 
   return (
     <div className="space-y-2">
+      {/* Header con indicador de filtros */}
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-lg font-semibold">Resumen de Órdenes</h2>
+        {isFiltered && (
+          <Badge variant="secondary" className="ml-2">
+            <Filter className="h-3 w-3 mr-1" />
+            Filtrado por {filterInfo}
+          </Badge>
+        )}
+      </div>
+      
       <Accordion type="single" collapsible className="w-full">
         <AccordionItem value="estado-pedidos">
           <AccordionTrigger className="text-base font-semibold py-2">Estado de Pedidos</AccordionTrigger>

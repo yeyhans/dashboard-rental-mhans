@@ -69,7 +69,7 @@ export const POST: APIRoute = withCors(withAuth(async (context) => {
       ...orderData,
       date_created: new Date().toISOString(),
       date_modified: new Date().toISOString(),
-      status: orderData.status || 'pending'
+      status: orderData.status || 'on-hold'
     });
 
     return new Response(JSON.stringify({

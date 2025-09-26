@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contrato Completado - {{companyName}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            background-color: #f8fafc;
+        }
+        
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .header h2 {
+            font-size: 18px;
+            font-weight: 400;
+            opacity: 0.9;
+        }
+        
+        .celebration-banner {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: #92400e;
+            padding: 20px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 18px;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #1f2937;
+        }
+        
+        .intro-text {
+            font-size: 16px;
+            margin-bottom: 30px;
+            color: #4b5563;
+        }
+        
+        .success-message {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            border: 2px solid #10b981;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        
+        .success-message h3 {
+            color: #065f46;
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .success-message p {
+            color: #047857;
+            font-size: 16px;
+        }
+        
+        .contract-summary {
+            background-color: #f3f4f6;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+        
+        .contract-summary h3 {
+            color: #1f2937;
+            font-size: 18px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 8px;
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .summary-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .summary-label {
+            font-weight: 600;
+            color: #374151;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        
+        .summary-value {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        
+        .next-steps {
+            background-color: #eff6ff;
+            border-left: 4px solid #2563eb;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .next-steps h4 {
+            color: #1e40af;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .steps-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .steps-list li {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #374151;
+        }
+        
+        .step-number {
+            background-color: #2563eb;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 12px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        .benefits-section {
+            background-color: #f0fdf4;
+            border-left: 4px solid #10b981;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .benefits-section h4 {
+            color: #065f46;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .benefits-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .benefits-list li {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #047857;
+        }
+        
+        .benefit-icon {
+            color: #10b981;
+            margin-right: 10px;
+            font-size: 16px;
+        }
+        
+        .cta-section {
+            text-align: center;
+            margin: 40px 0;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: transform 0.2s ease;
+            margin: 10px;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .secondary-button {
+            display: inline-block;
+            background-color: transparent;
+            color: #2563eb;
+            border: 2px solid #2563eb;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            margin: 10px;
+        }
+        
+        .contact-info {
+            background-color: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        
+        .contact-info h4 {
+            color: #92400e;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        
+        .contact-info p {
+            color: #a16207;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .footer {
+            background-color: #1f2937;
+            color: #d1d5db;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        
+        .footer-content {
+            margin-bottom: 20px;
+        }
+        
+        .footer-links {
+            margin: 20px 0;
+        }
+        
+        .footer-links a {
+            color: #9ca3af;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 14px;
+        }
+        
+        .footer-links a:hover {
+            color: #ffffff;
+        }
+        
+        .copyright {
+            font-size: 12px;
+            color: #9ca3af;
+            border-top: 1px solid #374151;
+            padding-top: 20px;
+        }
+        
+        @media (max-width: 600px) {
+            .email-container {
+                margin: 0;
+            }
+            
+            .content {
+                padding: 30px 20px;
+            }
+            
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .cta-button, .secondary-button {
+                display: block;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>{{companyName}}</h1>
+            <h2>🎉 ¡Contrato Completado!</h2>
+        </div>
+        
+        <!-- Celebration Banner -->
+        <div class="celebration-banner">
+            🎊 ¡Felicitaciones! Tu proceso de contratación ha sido completado exitosamente 🎊
+        </div>
+        
+        <!-- Content -->
+        <div class="content">
+            <div class="greeting">
+                ¡Excelentes noticias, <strong>{{nombreCompleto}}</strong>! 🌟
+            </div>
+            
+            <div class="intro-text">
+                Tu contrato ha sido procesado y completado exitosamente. Ahora eres oficialmente parte de nuestra 
+                familia de clientes y puedes disfrutar de todos los beneficios y servicios que ofrecemos.
+            </div>
+            
+            <!-- Success Message -->
+            <div class="success-message">
+                <h3>✅ Proceso Completado con Éxito</h3>
+                <p>
+                    Todos los documentos han sido verificados y tu contrato está activo. 
+                    ¡Ya puedes comenzar a utilizar nuestros servicios!
+                </p>
+            </div>
+            
+            <!-- Contract Summary -->
+            <div class="contract-summary">
+                <h3>📋 Resumen del Contrato</h3>
+                
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <span class="summary-label">Cliente</span>
+                        <span class="summary-value">{{nombreCompleto}}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">RUT</span>
+                        <span class="summary-value">{{rut}}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Tipo de Cliente</span>
+                        <span class="summary-value">{{tipoCliente}}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Fecha de Activación</span>
+                        <span class="summary-value">{{currentDate}}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Email de Contacto</span>
+                        <span class="summary-value">{{email}}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Estado del Contrato</span>
+                        <span class="summary-value">✅ Activo</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Next Steps -->
+            <div class="next-steps">
+                <h4>🚀 Próximos Pasos</h4>
+                <ul class="steps-list">
+                    <li>
+                        <span class="step-number">1</span>
+                        <span>Accede a tu panel de cliente para explorar nuestros servicios disponibles</span>
+                    </li>
+                    <li>
+                        <span class="step-number">2</span>
+                        <span>Revisa tu contrato completo y guarda una copia para tus registros</span>
+                    </li>
+                    <li>
+                        <span class="step-number">3</span>
+                        <span>Contacta a nuestro equipo si tienes alguna pregunta o necesitas asistencia</span>
+                    </li>
+                    <li>
+                        <span class="step-number">4</span>
+                        <span>¡Comienza a disfrutar de todos nuestros servicios y beneficios!</span>
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- Benefits -->
+            <div class="benefits-section">
+                <h4>🎁 Beneficios de ser nuestro cliente</h4>
+                <ul class="benefits-list">
+                    <li>
+                        <span class="benefit-icon">✨</span>
+                        <span>Acceso completo a todos nuestros servicios de rental</span>
+                    </li>
+                    <li>
+                        <span class="benefit-icon">🛡️</span>
+                        <span>Protección y garantía en todos los productos</span>
+                    </li>
+                    <li>
+                        <span class="benefit-icon">📞</span>
+                        <span>Soporte técnico especializado 24/7</span>
+                    </li>
+                    <li>
+                        <span class="benefit-icon">💰</span>
+                        <span>Precios preferenciales y descuentos exclusivos</span>
+                    </li>
+                    <li>
+                        <span class="benefit-icon">🚚</span>
+                        <span>Servicio de entrega y recogida gratuito</span>
+                    </li>
+                    <li>
+                        <span class="benefit-icon">🔄</span>
+                        <span>Proceso de renovación simplificado</span>
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- Call to Action -->
+            <div class="cta-section">
+                <a href="{{contractUrl}}" class="cta-button">
+                    📄 Ver Mi Contrato Completo
+                </a>
+                <a href="#" class="secondary-button">
+                    🏠 Ir a Mi Panel de Cliente
+                </a>
+            </div>
+            
+            <!-- Contact Information -->
+            <div class="contact-info">
+                <h4>📞 ¿Necesitas Ayuda?</h4>
+                <p>Nuestro equipo de atención al cliente está disponible para ayudarte:</p>
+                <p><strong>Email:</strong> soporte@mariohans.cl</p>
+                <p><strong>Teléfono:</strong> +56 9 1234 5678</p>
+                <p><strong>Horario:</strong> Lunes a Viernes, 9:00 - 18:00</p>
+            </div>
+            
+            <div style="margin-top: 30px; font-size: 16px; color: #4b5563; text-align: center;">
+                <p>¡Gracias por confiar en nosotros! Estamos emocionados de trabajar contigo.</p>
+                <p style="margin-top: 15px;">
+                    <strong>¡Bienvenido/a a la familia {{companyName}}!</strong><br>
+                    El equipo de {{companyName}}
+                </p>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-content">
+                <strong>{{companyName}}</strong><br>
+                Tu socio confiable en servicios de rental
+            </div>
+            
+            <div class="footer-links">
+                <a href="#">Mi Cuenta</a>
+                <a href="#">Servicios</a>
+                <a href="#">Soporte</a>
+                <a href="#">Contacto</a>
+            </div>
+            
+            <div class="copyright">
+                &copy; {{currentYear}} {{companyName}}. Todos los derechos reservados.<br>
+                Este correo fue enviado automáticamente. Por favor, no respondas a este mensaje.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

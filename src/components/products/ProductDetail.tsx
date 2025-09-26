@@ -591,7 +591,7 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
             <div className="lg:col-span-1">
               {productImages.length > 0 ? (
                 <div className="space-y-4">
-                  <div className="bg-white border rounded-lg overflow-hidden">
+                  <div className=" border rounded-lg overflow-hidden">
                     <img 
                       src={productImages[activeImageIndex]} 
                       alt={product.name || 'Product'} 

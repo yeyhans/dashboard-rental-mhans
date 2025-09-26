@@ -12,7 +12,8 @@ import {
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, FileText, Mail } from 'lucide-react';
+import { generateBudgetWithOrderData } from '../../lib/budgetGenerationService';
 import type { Database } from '../../types/database';
 import type { Product } from '../../types/product';
 
@@ -41,6 +42,7 @@ interface SessionData {
 interface CreateOrderFormProps {
   onOrderCreated: (order: any) => void;
   sessionData?: SessionData;
+  initialUsers?: UserProfile[]; // Users loaded from Astro
 }
 
 interface NewOrderForm {
@@ -115,7 +117,7 @@ const initialFormState: NewOrderForm = {
   }>
 };
 
-const CreateOrderForm = ({ onOrderCreated, sessionData }: CreateOrderFormProps) => {
+const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOrderFormProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +128,9 @@ const CreateOrderForm = ({ onOrderCreated, sessionData }: CreateOrderFormProps) 
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [couponDiscountAmount, setCouponDiscountAmount] = useState(0);
+  const [budgetLoading, setBudgetLoading] = useState(false);
+  const [budgetError, setBudgetError] = useState<string | null>(null);
+  const [budgetSuccess, setBudgetSuccess] = useState<string | null>(null);
 
 
   // Función para obtener headers de autenticación
@@ -185,38 +190,57 @@ const CreateOrderForm = ({ onOrderCreated, sessionData }: CreateOrderFormProps) 
   useEffect(() => {
     const loadData = async () => {
       try {
+        // Si tenemos usuarios iniciales, usarlos en lugar de hacer llamada API
+        if (initialUsers && initialUsers.length > 0) {
+          console.log(`Using ${initialUsers.length} initial users from Astro`);
+          setUsers(initialUsers);
+        } else {
+          // Fallback: cargar usuarios desde API si no se pasaron inicialmente
+          console.log('No initial users provided, loading from API...');
+          
+          // Intentar primero con headers de autenticación
+          let headers: HeadersInit = { 'Content-Type': 'application/json' };
+          
+          try {
+            const authHeaders = await getAuthHeaders();
+            headers = authHeaders;
+            console.log('Using auth headers for requests');
+          } catch (authError) {
+            console.warn('Could not get auth headers, trying with credentials:', authError);
+            // Si no podemos obtener headers de auth, usar credentials para cookies
+          }
+
+          // Cargar usuarios desde Supabase
+          const usersResponse = await fetch('/api/users?limit=1000', { 
+            headers,
+            credentials: 'include' // Incluir cookies para autenticación
+          });
+          
+          if (!usersResponse.ok) {
+            throw new Error(`Error loading users: ${usersResponse.status} ${usersResponse.statusText}`);
+          }
+          
+          const usersData = await usersResponse.json();
+          if (usersData.success && usersData.data) {
+            setUsers(usersData.data.users || []);
+          } else {
+            console.error('Error loading users:', usersData.error);
+            setError('Error al cargar usuarios: ' + (usersData.error || 'Error desconocido'));
+            return;
+          }
+        }
+
+        // Cargar productos desde Supabase - solicitar todos los productos
         // Intentar primero con headers de autenticación
         let headers: HeadersInit = { 'Content-Type': 'application/json' };
         
         try {
           const authHeaders = await getAuthHeaders();
           headers = authHeaders;
-          console.log('Using auth headers for requests');
         } catch (authError) {
-          console.warn('Could not get auth headers, trying with credentials:', authError);
-          // Si no podemos obtener headers de auth, usar credentials para cookies
+          console.warn('Could not get auth headers for products, trying with credentials:', authError);
         }
 
-        // Cargar usuarios desde Supabase
-        const usersResponse = await fetch('/api/users', { 
-          headers,
-          credentials: 'include' // Incluir cookies para autenticación
-        });
-        
-        if (!usersResponse.ok) {
-          throw new Error(`Error loading users: ${usersResponse.status} ${usersResponse.statusText}`);
-        }
-        
-        const usersData = await usersResponse.json();
-        if (usersData.success && usersData.data) {
-          setUsers(usersData.data.users || []);
-        } else {
-          console.error('Error loading users:', usersData.error);
-          setError('Error al cargar usuarios: ' + (usersData.error || 'Error desconocido'));
-          return;
-        }
-
-        // Cargar productos desde Supabase - solicitar todos los productos
         const productsResponse = await fetch('/api/products?limit=1000', { 
           headers,
           credentials: 'include' // Incluir cookies para autenticación
@@ -242,7 +266,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData }: CreateOrderFormProps) 
     if (isOpen) {
       loadData();
     }
-  }, [isOpen]);
+  }, [isOpen, initialUsers]);
 
   // Función para autocompletar el formulario con datos del usuario
   const handleUserSelect = (userId: string) => {
@@ -255,7 +279,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData }: CreateOrderFormProps) 
         billing: {
           first_name: selectedUser.nombre || '',
           last_name: selectedUser.apellido || '',
-          company: selectedUser.empresa || '',
+          company: selectedUser.empresa_nombre || '',
           email: selectedUser.email || '',
           phone: selectedUser.telefono || '',
           address_1: selectedUser.direccion || '',
@@ -468,6 +492,147 @@ const CreateOrderForm = ({ onOrderCreated, sessionData }: CreateOrderFormProps) 
     });
   };
 
+  // Función para generar presupuesto automáticamente después de crear la orden
+  const generateBudgetForCreatedOrder = async (createdOrder: any) => {
+    try {
+      console.log('📄 Generating budget for created order:', createdOrder.id);
+      
+      // Preparar datos de presupuesto desde la orden creada
+      const budgetData = {
+        order_id: createdOrder.id, // Usar el ID real de la orden creada
+        customer_id: createdOrder.customer_id?.toString() || formData.customer_id,
+        status: 'on-hold',
+        billing: {
+          first_name: createdOrder.billing_first_name || formData.billing.first_name,
+          last_name: createdOrder.billing_last_name || formData.billing.last_name,
+          company: createdOrder.billing_company || formData.billing.company,
+          email: createdOrder.billing_email || formData.billing.email,
+          phone: createdOrder.billing_phone || formData.billing.phone,
+          address_1: createdOrder.billing_address_1 || formData.billing.address_1,
+          city: createdOrder.billing_city || formData.billing.city
+        },
+        metadata: {
+          order_proyecto: createdOrder.order_proyecto || formData.metadata.order_proyecto,
+          order_fecha_inicio: createdOrder.order_fecha_inicio || formData.metadata.order_fecha_inicio,
+          order_fecha_termino: createdOrder.order_fecha_termino || formData.metadata.order_fecha_termino,
+          num_jornadas: createdOrder.num_jornadas?.toString() || formData.metadata.num_jornadas,
+          company_rut: createdOrder.company_rut || formData.metadata.company_rut,
+          calculated_subtotal: createdOrder.calculated_subtotal?.toString() || formData.metadata.calculated_subtotal,
+          calculated_discount: createdOrder.calculated_discount?.toString() || formData.metadata.calculated_discount,
+          calculated_iva: createdOrder.calculated_iva?.toString() || formData.metadata.calculated_iva,
+          calculated_total: createdOrder.calculated_total?.toString() || formData.metadata.calculated_total
+        },
+        line_items: createdOrder.line_items || formData.line_items,
+        coupon_lines: createdOrder.coupon_lines || (formData.metadata.applied_coupon ? [{
+          code: formData.metadata.applied_coupon.code,
+          discount: formData.metadata.coupon_discount_amount?.toString() || '0',
+          discount_type: formData.metadata.applied_coupon.discount_type,
+          metadata: {
+            coupon_amount: formData.metadata.applied_coupon.amount?.toString() || '0',
+            coupon_id: formData.metadata.applied_coupon.id?.toString() || '0'
+          }
+        }] : [])
+      };
+
+      console.log('🚀 Generating budget with order data:', budgetData);
+
+      // Generar presupuesto PDF y enviar correo
+      const result = await generateBudgetWithOrderData(budgetData, true, true);
+
+      if (result.success) {
+        console.log('✅ Budget generated successfully for order:', createdOrder.id);
+        console.log('📎 Budget URL:', result.budgetUrl);
+        
+        // Mostrar notificación de éxito (opcional)
+        setBudgetSuccess(`Presupuesto generado y enviado por correo para la orden #${createdOrder.id}`);
+        
+        // Limpiar mensaje después de unos segundos
+        setTimeout(() => {
+          setBudgetSuccess(null);
+        }, 5000);
+      } else {
+        console.error('❌ Budget generation failed for order:', createdOrder.id, result.error);
+        // No mostrar error al usuario para no interrumpir el flujo de creación de orden
+        console.warn('⚠️ Budget generation failed but order was created successfully');
+      }
+
+    } catch (err) {
+      console.error('💥 Error in auto budget generation:', err);
+      // No mostrar error al usuario para no interrumpir el flujo de creación de orden
+      console.warn('⚠️ Budget generation failed but order was created successfully');
+    }
+  };
+
+  const handleGenerateBudget = async () => {
+    try {
+      setBudgetLoading(true);
+      setBudgetError(null);
+      setBudgetSuccess(null);
+
+      // Validate form data first
+      if (!formData.customer_id || formData.line_items.length === 0) {
+        setBudgetError('Por favor seleccione un cliente y agregue productos antes de generar el presupuesto');
+        return;
+      }
+
+      // Prepare budget data in the same format as order creation
+      const budgetData = {
+        order_id: Math.floor(Math.random() * 1000000), // Temporary ID for budget (smaller range)
+        customer_id: formData.customer_id,
+        status: 'on-hold',
+        billing: {
+          first_name: formData.billing.first_name,
+          last_name: formData.billing.last_name,
+          company: formData.billing.company,
+          email: formData.billing.email,
+          phone: formData.billing.phone,
+          address_1: formData.billing.address_1,
+          city: formData.billing.city
+        },
+        metadata: {
+          order_proyecto: formData.metadata.order_proyecto,
+          order_fecha_inicio: formData.metadata.order_fecha_inicio,
+          order_fecha_termino: formData.metadata.order_fecha_termino,
+          num_jornadas: formData.metadata.num_jornadas,
+          company_rut: formData.metadata.company_rut,
+          calculated_subtotal: formData.metadata.calculated_subtotal,
+          calculated_discount: formData.metadata.calculated_discount,
+          calculated_iva: formData.metadata.calculated_iva,
+          calculated_total: formData.metadata.calculated_total
+        },
+        line_items: formData.line_items,
+        coupon_lines: formData.metadata.applied_coupon ? [{
+          code: formData.metadata.applied_coupon.code,
+          discount: formData.metadata.coupon_discount_amount?.toString() || '0',
+          discount_type: formData.metadata.applied_coupon.discount_type,
+          metadata: {
+            coupon_amount: formData.metadata.applied_coupon.amount?.toString() || '0',
+            coupon_id: formData.metadata.applied_coupon.id?.toString() || '0'
+          }
+        }] : []
+      };
+
+      console.log('🚀 Generating budget with data:', budgetData);
+
+      // Generate budget PDF and send email
+      const result = await generateBudgetWithOrderData(budgetData, true, true);
+
+      if (result.success) {
+        setBudgetSuccess(`Presupuesto generado exitosamente. ${result.budgetUrl ? 'PDF enviado por correo.' : ''}`);
+        console.log('✅ Budget generated successfully:', result.budgetUrl);
+      } else {
+        setBudgetError(result.message || 'Error al generar el presupuesto');
+        console.error('❌ Budget generation failed:', result.error);
+      }
+
+    } catch (err) {
+      setBudgetError(err instanceof Error ? err.message : 'Error al generar el presupuesto');
+      console.error('💥 Budget generation error:', err);
+    } finally {
+      setBudgetLoading(false);
+    }
+  };
+
   const handleCreateOrder = async () => {
     try {
       setLoading(true);
@@ -513,7 +678,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData }: CreateOrderFormProps) 
           amount: formData.metadata.applied_coupon.amount
         }] : [],
         line_items: formData.line_items,
-        status: 'pending'
+        status: 'on-hold' // Cambiar a on-hold para generar presupuesto automáticamente
       };
 
       const response = await fetch('/api/orders', {
@@ -530,6 +695,12 @@ const CreateOrderForm = ({ onOrderCreated, sessionData }: CreateOrderFormProps) 
       const data = await response.json();
 
       if (data.success) {
+        console.log('✅ Order created successfully:', data.data);
+        
+        // Generar presupuesto automáticamente después de crear la orden
+        console.log('🚀 Auto-generating budget for created order...');
+        await generateBudgetForCreatedOrder(data.data);
+        
         onOrderCreated(data.data);
         setIsOpen(false);
         setFormData(initialFormState);
@@ -570,13 +741,31 @@ const CreateOrderForm = ({ onOrderCreated, sessionData }: CreateOrderFormProps) 
         <SheetHeader>
           <SheetTitle>Crear Nuevo Pedido</SheetTitle>
           <SheetDescription>
-            Complete los datos del nuevo pedido
+            Complete los datos del nuevo pedido. Al crear el pedido se generará automáticamente el presupuesto PDF y se enviará por correo al cliente.
           </SheetDescription>
         </SheetHeader>
 
         {error && (
           <div className="bg-destructive/10 text-destructive px-4 py-2 rounded-md mt-4">
             {error}
+          </div>
+        )}
+
+        {budgetError && (
+          <div className="bg-destructive/10 text-destructive px-4 py-2 rounded-md mt-4">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              {budgetError}
+            </div>
+          </div>
+        )}
+
+        {budgetSuccess && (
+          <div className="bg-green-50 text-green-700 px-4 py-2 rounded-md mt-4">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              {budgetSuccess}
+            </div>
           </div>
         )}
 
@@ -592,7 +781,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData }: CreateOrderFormProps) 
                     const user = users.find(u => u.user_id.toString() === selectedUserId);
                     if (!user) return '';
                     const name = `${user.nombre} ${user.apellido}`;
-                    return user.empresa ? `${name} (${user.empresa})` : name;
+                    return user.empresa_nombre ? `${name} (${user.empresa_nombre})` : name;
                   })() 
                   : ''}
                 onClick={() => setIsCommandOpen(true)}
@@ -614,7 +803,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData }: CreateOrderFormProps) 
                       return (
                         <CommandItem
                           key={user.user_id}
-                          value={`${displayName} ${user.email} ${user.empresa || ''}`}
+                          value={`${displayName} ${user.email} ${user.empresa_nombre || ''}`}
                           onSelect={() => {
                             handleUserSelect(user.user_id.toString());
                             setIsCommandOpen(false);
@@ -624,8 +813,8 @@ const CreateOrderForm = ({ onOrderCreated, sessionData }: CreateOrderFormProps) 
                           <div className="flex items-center w-full">
                             <Search className="mr-2 h-4 w-4 shrink-0" />
                             <span className="font-medium">{displayName}</span>
-                            {user.empresa && (
-                              <span className="ml-2 text-muted-foreground">({user.empresa})</span>
+                            {user.empresa_nombre && (
+                              <span className="ml-2 text-muted-foreground">({user.empresa_nombre})</span>
                             )}
                           </div>
                           <span className="text-sm text-muted-foreground ml-6">{user.email}</span>
@@ -880,13 +1069,44 @@ const CreateOrderForm = ({ onOrderCreated, sessionData }: CreateOrderFormProps) 
 
         </div>
 
-        <SheetFooter className="mt-4">
+        <SheetFooter className="mt-4 flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleGenerateBudget}
+            disabled={budgetLoading || loading || formData.line_items.length === 0 || !formData.customer_id}
+            className="flex items-center gap-2"
+            title="Generar solo presupuesto sin crear orden"
+          >
+            {budgetLoading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                Generando...
+              </>
+            ) : (
+              <>
+                <FileText className="h-4 w-4" />
+                Solo Presupuesto
+              </>
+            )}
+          </Button>
           <Button
             type="submit"
             onClick={handleCreateOrder}
             disabled={loading || formData.line_items.length === 0}
+            className="flex items-center gap-2"
           >
-            {loading ? 'Creando...' : 'Crear Pedido'}
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                Creando...
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                Crear Pedido + Presupuesto
+              </>
+            )}
           </Button>
         </SheetFooter>
       </SheetContent>

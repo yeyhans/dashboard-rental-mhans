@@ -1,0 +1,576 @@
+---
+import { getServerUser, getServerUserProfile } from '../../lib/supabase';
+
+let { orderId } = Astro.params;
+
+if (!orderId) {
+  return new Response('Order ID is required', { status: 400 });
+}
+
+// Remove .pdf extension if present
+if (orderId.endsWith('.pdf')) {
+  orderId = orderId.replace('.pdf', '');
+}
+
+// Check if it's an internal API request
+const isInternalRequest = Astro.request.headers.get('X-Internal-Request') === 'true';
+const requestedOrderIdFromHeader = Astro.request.headers.get('X-Requested-Order-Id');
+
+if (isInternalRequest) {
+  // Validate internal request
+  if (requestedOrderIdFromHeader !== orderId) {
+    console.error(`Internal request orderId mismatch: header=${requestedOrderIdFromHeader}, param=${orderId}`);
+    return new Response('Internal request validation failed', { status: 400 });
+  }
+  console.log('✅ Internal request validated for orderId:', orderId);
+} else {
+  // For direct requests, verify authentication using server-side method
+  const user = await getServerUser(Astro);
+  
+  if (!user) {
+    console.log('No authenticated user found');
+    return Astro.redirect('/login');
+  }
+
+  // Get current user profile for authorization
+  console.log('🔍 Getting current user profile for authorization...');
+  console.log('🔍 Current user from getServerUser:', { id: user.id, email: user.email });
+  console.log('🔍 Requested orderId:', orderId);
+  
+  const currentUserProfile = await getServerUserProfile(Astro);
+  console.log('🔍 Current user profile result:', {
+    hasProfile: !!currentUserProfile,
+    hasProfileData: !!currentUserProfile?.profile,
+    profileUserId: currentUserProfile?.profile?.user_id,
+    profileAuthUid: currentUserProfile?.profile?.auth_uid
+  });
+  
+  if (!currentUserProfile || !currentUserProfile.profile) {
+    console.error('❌ No user profile found for current user');
+    return new Response('User profile not found', { status: 404 });
+  }
+}
+
+// Get order data
+let orderData;
+try {
+  if (isInternalRequest) {
+    // For internal requests, use service role key to get order data directly
+    console.log('🔧 Internal request: fetching order data with service role key');
+    const { createClient } = await import('@supabase/supabase-js');
+    const serviceSupabase = createClient(
+      import.meta.env.PUBLIC_SUPABASE_URL!,
+      import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
+    );
+    
+    const { data: order, error } = await serviceSupabase
+      .from('orders')
+      .select('*')
+      .eq('id', parseInt(orderId))
+      .single();
+    
+    if (error || !order) {
+      console.error('Error fetching order data for internal request:', error);
+      return new Response('Order not found', { status: 404 });
+    }
+    
+    orderData = order;
+    console.log('✅ Internal request: order data fetched successfully');
+  } else {
+    // For regular requests, use the server method with authorization check
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      import.meta.env.PUBLIC_SUPABASE_URL!,
+      import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
+    );
+    
+    const { data: order, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', parseInt(orderId))
+      .single();
+      
+    if (error || !order) {
+      console.error('Error fetching order data:', error);
+      return new Response('Order not found', { status: 404 });
+    }
+    
+    // Verify user can only access their own orders
+    const currentUserProfile = await getServerUserProfile(Astro);
+    if (!currentUserProfile?.profile) {
+      return new Response('User profile not found', { status: 404 });
+    }
+    
+    // Check if the order belongs to the current user
+    const userMatches = order.customer_id === currentUserProfile.profile.user_id?.toString() ||
+                       order.customer_id === currentUserProfile.profile.auth_uid ||
+                       order.customer_id === currentUserProfile.auth?.id;
+    
+    if (!userMatches) {
+      console.warn(`❌ Unauthorized access attempt to order ${orderId} by user ${currentUserProfile.profile.user_id}`);
+      return Astro.redirect('/404');
+    }
+    
+    orderData = order;
+  }
+} catch (error) {
+  console.error('Error fetching order data:', error);
+  return new Response('Error fetching order data', { status: 500 });
+}
+
+// Set security headers
+Astro.response.headers.set('X-Frame-Options', 'DENY');
+Astro.response.headers.set('X-Content-Type-Options', 'nosniff');
+Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+
+// Generate current date
+const currentDate = new Date().toLocaleDateString('es-CL', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric'
+});
+
+// Parse order data with fallbacks for all column formats
+const billing = orderData.billing || {};
+const metadata = orderData.metadata || {};
+const lineItems = orderData.line_items || [];
+const couponLines = orderData.coupon_lines || [];
+
+// Extract data with fallbacks (supports both nested and flat structures)
+const customerFirstName = billing.first_name || orderData.billing_first_name || '';
+const customerLastName = billing.last_name || orderData.billing_last_name || '';
+const customerCompany = billing.company || orderData.billing_company || '';
+const customerEmail = billing.email || orderData.billing_email || '';
+const customerPhone = billing.phone || orderData.billing_phone || '';
+const customerAddress = billing.address_1 || orderData.billing_address_1 || '';
+const customerCity = billing.city || orderData.billing_city || '';
+const customerRut = billing.rut || orderData.billing_rut || '';
+
+// Project information with fallbacks
+const projectName = metadata.order_proyecto || orderData.order_proyecto || 'Proyecto de Arriendo';
+const startDate = metadata.order_fecha_inicio || orderData.order_fecha_inicio || '';
+const endDate = metadata.order_fecha_termino || orderData.order_fecha_termino || '';
+const numJornadas = parseInt(metadata.num_jornadas || orderData.num_jornadas || '1');
+const companyRut = metadata.company_rut || orderData.company_rut || '';
+
+// Additional order information (for future use)
+// const retireName = metadata.order_retire_name || orderData.order_retire_name || '';
+// const retirePhone = metadata.order_retire_phone || orderData.order_retire_phone || '';
+// const retireRut = metadata.order_retire_rut || orderData.order_retire_rut || '';
+// const comments = metadata.order_comments || orderData.order_comments || '';
+
+// Calculate totals with fallbacks
+const subtotal = parseFloat(metadata.calculated_subtotal || orderData.calculated_subtotal || '0');
+const discount = parseFloat(metadata.calculated_discount || orderData.calculated_discount || '0');
+const iva = parseFloat(metadata.calculated_iva || orderData.calculated_iva || '0');
+const total = parseFloat(metadata.calculated_total || orderData.calculated_total || '0');
+const reserve = total * 0.25;
+
+// Additional order information
+const orderIdNum = orderData.id || orderData.order_id;
+const orderStatus = orderData.status || 'on-hold';
+const paymentMethod = orderData.payment_method || orderData.payment_method_title || 'Por definir';
+
+// Format currency
+const formatCLP = (amount: number) => {
+  return new Intl.NumberFormat('es-CL', { 
+    style: 'currency', 
+    currency: 'CLP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(amount);
+};
+
+// Generate budget number
+const budgetNumber = `PRES-${orderIdNum}-${Date.now().toString().slice(-6)}`;
+---
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Presupuesto de Arriendo - {customerFirstName} {customerLastName}</title>
+  <style>
+    body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f8f9fa;
+    }
+    
+    .container {
+        background-color: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .header {
+        text-align: center;
+        margin-bottom: 30px;
+        border-bottom: 3px solid #007bff;
+        padding-bottom: 20px;
+    }
+    
+    .header h1 {
+        color: #007bff;
+        margin: 0;
+        font-size: 2.2em;
+        font-weight: bold;
+    }
+    
+    .client-info {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 6px;
+        margin-bottom: 25px;
+    }
+    
+    .client-info h2 {
+        color: #333;
+        margin-top: 0;
+        margin-bottom: 15px;
+        font-size: 1.3em;
+    }
+    
+    .info-row {
+        display: flex;
+        margin-bottom: 8px;
+    }
+    
+    .info-label {
+        font-weight: bold;
+        min-width: 120px;
+        color: #555;
+    }
+    
+    .info-value {
+        color: #333;
+    }
+    
+    .project-info {
+        background-color: #e3f2fd;
+        padding: 20px;
+        border-radius: 6px;
+        margin-bottom: 25px;
+    }
+    
+    .project-info h2 {
+        color: #1976d2;
+        margin-top: 0;
+        margin-bottom: 15px;
+        font-size: 1.3em;
+    }
+    
+    .details-section h2 {
+        color: #333;
+        border-bottom: 2px solid #007bff;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+    
+    .items-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 25px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .items-table th {
+        background-color: #007bff;
+        color: white;
+        padding: 12px 8px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 0.9em;
+    }
+    
+    .items-table td {
+        padding: 12px 8px;
+        text-align: center;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .items-table tr:nth-child(even) {
+        background-color: #f8f9fa;
+    }
+    
+    .items-table tr:hover {
+        background-color: #e3f2fd;
+    }
+    
+    .item-name {
+        text-align: left !important;
+        font-weight: 500;
+    }
+    
+    .summary-table {
+        width: 100%;
+        max-width: 400px;
+        margin-left: auto;
+        border-collapse: collapse;
+        margin-bottom: 25px;
+    }
+    
+    .summary-table td {
+        padding: 10px 15px;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .summary-label {
+        font-weight: bold;
+        text-align: right;
+        background-color: #f8f9fa;
+        color: #555;
+    }
+    
+    .summary-value {
+        text-align: right;
+        font-weight: bold;
+        color: #333;
+    }
+    
+    .total-row {
+        background-color: #007bff !important;
+        color: white !important;
+    }
+    
+    .reserve-row {
+        background-color: #28a745 !important;
+        color: white !important;
+    }
+    
+    .company-info {
+        background-color: #f1f3f4;
+        padding: 20px;
+        border-radius: 6px;
+        margin-bottom: 25px;
+        border-left: 4px solid #007bff;
+    }
+    
+    .company-info h3 {
+        margin-top: 0;
+        color: #333;
+        font-size: 1.2em;
+    }
+    
+    .bank-info {
+        margin-top: 15px;
+    }
+    
+    .status-message {
+        background-color: #fff3cd;
+        color: #856404;
+        padding: 15px;
+        border-radius: 6px;
+        border-left: 4px solid #ffc107;
+        margin-bottom: 20px;
+        font-style: italic;
+    }
+    
+    .footer {
+        text-align: center;
+        color: #6c757d;
+        font-size: 0.8em;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #ddd;
+    }
+    
+    .currency {
+        font-weight: bold;
+        color: #28a745;
+    }
+    
+    @media print {
+        body {
+            background-color: white;
+        }
+        
+        .container {
+            box-shadow: none;
+            padding: 0;
+        }
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Presupuesto #{budgetNumber}</h1>
+        <p style="color: #666; margin: 10px 0 0 0;">Orden #{orderId} - {currentDate}</p>
+    </div>
+    
+    <div class="client-info">
+        <h2>Información del Cliente</h2>
+        <div class="info-row">
+            <span class="info-label">Nombre:</span>
+            <span class="info-value">{customerFirstName} {customerLastName}</span>
+        </div>
+        {customerRut && (<div class="info-row">
+            <span class="info-label">RUT:</span>
+            <span class="info-value">{customerRut}</span>
+        </div>)}
+        <div class="info-row">
+            <span class="info-label">Email:</span>
+            <span class="info-value">{customerEmail}</span>
+        </div>
+        {customerCompany && (<div class="info-row">
+            <span class="info-label">Empresa:</span>
+            <span class="info-value">{customerCompany}</span>
+        </div>)}
+        {customerAddress && (<div class="info-row">
+            <span class="info-label">Dirección:</span>
+            <span class="info-value">{customerAddress}</span>
+        </div>)}
+        {customerCity && (<div class="info-row">
+            <span class="info-label">Ciudad:</span>
+            <span class="info-value">{customerCity}</span>
+        </div>)}
+        {customerPhone && (<div class="info-row">
+            <span class="info-label">Teléfono:</span>
+            <span class="info-value">{customerPhone}</span>
+        </div>)}
+    </div>
+    
+    <div class="project-info">
+        <h2>Información del Proyecto</h2>
+        <div class="info-row">
+            <span class="info-label">Proyecto:</span>
+            <span class="info-value">{projectName}</span>
+        </div>
+        {companyRut && (<div class="info-row">
+          <span class="info-label">RUT Empresa:</span>
+          <span class="info-value">{companyRut}</span>
+        </div>)}
+        {startDate && (<div class="info-row">
+            <span class="info-label">Fecha Inicio:</span>
+            <span class="info-value">{startDate}</span>
+        </div>)}
+        {endDate && (<div class="info-row">
+            <span class="info-label">Fecha Término:</span>
+            <span class="info-value">{endDate}</span>
+        </div>)}
+        <div class="info-row">
+            <span class="info-label">Jornadas:</span>
+            <span class="info-value">{numJornadas}</span>
+        </div>
+    </div>
+    
+    <div class="details-section">
+        <h2>Detalles del Presupuesto</h2>
+        
+        {lineItems.length > 0 ? (
+          <table class="items-table">
+              <thead>
+                  <tr>
+                      <th>ITEM</th>
+                      <th>SKU</th>
+                      <th>Valor Diario</th>
+                      <th>Cantidad</th>
+                      <th>Jornadas</th>
+                      <th>SUBTOTAL</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  {lineItems.map((item: any) => {
+                    const itemPrice = parseFloat(item.price || '0');
+                    const itemQuantity = parseInt(item.quantity || '1');
+                    const itemSubtotal = itemPrice * itemQuantity * numJornadas;
+                    
+                    return (
+                      <tr>
+                          <td class="item-name">{item.name || 'Producto'}</td>
+                          <td>{item.sku || '-'}</td>
+                          <td class="currency">{formatCLP(itemPrice)}</td>
+                          <td>{itemQuantity}</td>
+                          <td>{numJornadas}</td>
+                          <td class="currency">{formatCLP(itemSubtotal)}</td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+          </table>
+        ) : (
+          <div class="status-message">
+            No hay productos especificados en este presupuesto.
+          </div>
+        )}
+        
+        <table class="summary-table">
+            <tr>
+                <td class="summary-label">Subtotal</td>
+                <td class="summary-value currency">{formatCLP(subtotal)}</td>
+            </tr>
+            {discount > 0 && (
+                <tr>
+                    <td class="summary-label">Descuento</td>
+                    <td class="summary-value currency">-{formatCLP(discount)}</td>
+                </tr>
+            )}
+            <tr>
+                <td class="summary-label">IVA (19%)</td>
+                <td class="summary-value currency">{formatCLP(iva)}</td>
+            </tr>
+            <tr class="total-row">
+                <td class="summary-label">Total</td>
+                <td class="summary-value currency">{formatCLP(total)}</td>
+            </tr>
+            <tr class="reserve-row">
+                <td class="summary-label">Reserva (25%)</td>
+                <td class="summary-value currency">{formatCLP(reserve)}</td>
+            </tr>
+        </table>
+
+        {couponLines.length > 0 && (
+          <div style="margin-bottom: 20px;">
+            <h3 style="color: #333; margin-bottom: 10px;">Cupones Aplicados:</h3>
+            {couponLines.map((coupon: any) => (
+              <div style="background-color: #d4edda; padding: 10px; border-radius: 4px; margin-bottom: 5px;">
+                <strong>Código:</strong> {coupon.code} - 
+                <strong>Descuento:</strong> {formatCLP(parseFloat(coupon.discount || '0'))}
+              </div>
+            ))}
+          </div>
+        )}
+    </div>
+    
+    <div class="company-info">
+        <h3>HANS SALINAS SpA</h3>
+        <div class="info-row">
+            <span class="info-label">RUT:</span>
+            <span class="info-value">77.892.569-9</span>
+        </div>
+        <div class="bank-info">
+            <div class="info-row">
+                <span class="info-label">Banco:</span>
+                <span class="info-value">Banco de Chile</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Cuenta:</span>
+                <span class="info-value">FAN Emprende, Cuenta vista</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Número:</span>
+                <span class="info-value">306024355</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Email:</span>
+                <span class="info-value">pagos@mariohans.cl</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="status-message">
+      Estamos revisando la disponibilidad de los equipos que seleccionaste, muy pronto confirmando su disponibilidad.
+    </div>
+    
+    <div class="footer">
+      <p>Rental Mhans - Presupuesto de Arriendo | Este documento fue generado electrónicamente el {currentDate}</p>
+      <p>Estado: {orderStatus.toUpperCase()} | Método de Pago: {paymentMethod}</p>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contrato Generado - {{companyName}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            background-color: #f8fafc;
+        }
+        
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .header h2 {
+            font-size: 18px;
+            font-weight: 400;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #1f2937;
+        }
+        
+        .intro-text {
+            font-size: 16px;
+            margin-bottom: 30px;
+            color: #4b5563;
+        }
+        
+        .contract-details {
+            background-color: #f3f4f6;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+        
+        .contract-details h3 {
+            color: #1f2937;
+            font-size: 18px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 8px;
+        }
+        
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            color: #374151;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        
+        .detail-value {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        
+        .company-section {
+            background-color: #eff6ff;
+            border-left: 4px solid #2563eb;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .documents-section {
+            background-color: #f0fdf4;
+            border-left: 4px solid #10b981;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .documents-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .document-status {
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+        }
+        
+        .status-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-uploaded {
+            background-color: #10b981;
+        }
+        
+        .status-missing {
+            background-color: #ef4444;
+        }
+        
+        .cta-section {
+            text-align: center;
+            margin: 40px 0;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: transform 0.2s ease;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .secondary-button {
+            display: inline-block;
+            background-color: transparent;
+            color: #2563eb;
+            border: 2px solid #2563eb;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            margin-left: 15px;
+        }
+        
+        .important-note {
+            background-color: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        
+        .important-note h4 {
+            color: #92400e;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .important-note p {
+            color: #a16207;
+            font-size: 14px;
+        }
+        
+        .footer {
+            background-color: #1f2937;
+            color: #d1d5db;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        
+        .footer-content {
+            margin-bottom: 20px;
+        }
+        
+        .footer-links {
+            margin: 20px 0;
+        }
+        
+        .footer-links a {
+            color: #9ca3af;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 14px;
+        }
+        
+        .footer-links a:hover {
+            color: #ffffff;
+        }
+        
+        .copyright {
+            font-size: 12px;
+            color: #9ca3af;
+            border-top: 1px solid #374151;
+            padding-top: 20px;
+        }
+        
+        @media (max-width: 600px) {
+            .email-container {
+                margin: 0;
+            }
+            
+            .content {
+                padding: 30px 20px;
+            }
+            
+            .details-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .documents-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .secondary-button {
+                display: block;
+                margin: 15px 0 0 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>{{companyName}}</h1>
+            <h2>✅ Contrato Generado Exitosamente</h2>
+        </div>
+        
+        <!-- Content -->
+        <div class="content">
+            <div class="greeting">
+                ¡Hola <strong>{{nombreCompleto}}</strong>! 👋
+            </div>
+            
+            <div class="intro-text">
+                Nos complace informarte que tu contrato ha sido generado exitosamente y está listo para su revisión. 
+                Todos los datos han sido procesados correctamente y el documento está disponible para su descarga.
+            </div>
+            
+            <!-- Contract Details -->
+            <div class="contract-details">
+                <h3>📋 Detalles del Contrato</h3>
+                
+                <div class="details-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Nombre Completo</span>
+                        <span class="detail-value">{{nombreCompleto}}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">RUT</span>
+                        <span class="detail-value">{{rut}}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Email</span>
+                        <span class="detail-value">{{email}}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Teléfono</span>
+                        <span class="detail-value">{{telefono}}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Dirección</span>
+                        <span class="detail-value">{{direccion}}, {{ciudad}}, {{pais}}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Tipo de Cliente</span>
+                        <span class="detail-value">{{tipoCliente}}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Fecha de Generación</span>
+                        <span class="detail-value">{{fechaGeneracion}}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Términos Aceptados</span>
+                        <span class="detail-value">{{terminosAceptados}}</span>
+                    </div>
+                </div>
+                
+                <!-- Company Information (if applicable) -->
+                {{#if empresaNombre}}
+                <div class="company-section">
+                    <h4 style="color: #1e40af; margin-bottom: 15px;">🏢 Información de Empresa</h4>
+                    <div class="details-grid">
+                        <div class="detail-item">
+                            <span class="detail-label">Nombre de Empresa</span>
+                            <span class="detail-value">{{empresaNombre}}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">RUT Empresa</span>
+                            <span class="detail-value">{{empresaRut}}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Ciudad</span>
+                            <span class="detail-value">{{empresaCiudad}}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Dirección</span>
+                            <span class="detail-value">{{empresaDireccion}}</span>
+                        </div>
+                    </div>
+                </div>
+                {{/if}}
+            </div>
+            
+            <!-- Documents Status -->
+            <div class="documents-section">
+                <h4 style="color: #059669; margin-bottom: 15px;">📁 Estado de Documentos</h4>
+                <div class="documents-grid">
+                    <div class="document-status">
+                        <span class="status-icon {{#if url_rut_anverso}}status-uploaded{{else}}status-missing{{/if}}"></span>
+                        <span>RUT Anverso: {{documentoRutAnverso}}</span>
+                    </div>
+                    <div class="document-status">
+                        <span class="status-icon {{#if url_rut_reverso}}status-uploaded{{else}}status-missing{{/if}}"></span>
+                        <span>RUT Reverso: {{documentoRutReverso}}</span>
+                    </div>
+                    <div class="document-status">
+                        <span class="status-icon {{#if url_firma}}status-uploaded{{else}}status-missing{{/if}}"></span>
+                        <span>Firma Digital: {{documentoFirma}}</span>
+                    </div>
+                    {{#if empresaNombre}}
+                    <div class="document-status">
+                        <span class="status-icon {{#if url_empresa_erut}}status-uploaded{{else}}status-missing{{/if}}"></span>
+                        <span>E-RUT Empresa: {{documentoEmpresaErut}}</span>
+                    </div>
+                    {{/if}}
+                </div>
+            </div>
+            
+            <!-- Call to Action -->
+            <div class="cta-section">
+                <a href="{{contractUrl}}" class="cta-button">
+                    📄 Ver Mi Contrato
+                </a>
+                <a href="{{contractUrl}}" class="secondary-button">
+                    💾 Descargar PDF
+                </a>
+            </div>
+            
+            <!-- Important Note -->
+            <div class="important-note">
+                <h4>⚠️ Información Importante</h4>
+                <p>
+                    Este contrato es un documento legal válido. Te recomendamos guardarlo en un lugar seguro 
+                    y conservar una copia impresa para tus registros. Si tienes alguna pregunta o necesitas 
+                    realizar algún cambio, no dudes en contactarnos.
+                </p>
+            </div>
+            
+            <div style="margin-top: 30px; font-size: 16px; color: #4b5563;">
+                <p>Si tienes alguna pregunta o necesitas asistencia, nuestro equipo está aquí para ayudarte.</p>
+                <p style="margin-top: 15px;">
+                    <strong>Saludos cordiales,</strong><br>
+                    El equipo de {{companyName}}
+                </p>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-content">
+                <strong>{{companyName}}</strong><br>
+                Sistema de Gestión de Contratos
+            </div>
+            
+            <div class="footer-links">
+                <a href="#">Términos de Servicio</a>
+                <a href="#">Política de Privacidad</a>
+                <a href="#">Contacto</a>
+                <a href="#">Soporte</a>
+            </div>
+            
+            <div class="copyright">
+                &copy; {{currentYear}} {{companyName}}. Todos los derechos reservados.<br>
+                Este correo fue enviado automáticamente. Por favor, no respondas a este mensaje.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

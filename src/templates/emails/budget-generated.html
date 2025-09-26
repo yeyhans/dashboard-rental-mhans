@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Presupuesto Generado</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+    .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+    .highlight { background: #e8f4f8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 5px solid #3498db; }
+    .button { display: inline-block; background: #27ae60; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; }
+    .details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
+    .footer { text-align: center; color: #666; font-size: 12px; margin-top: 30px; }
+    .order-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0; }
+    .summary-item { background: white; padding: 15px; border-radius: 5px; text-align: center; }
+    .summary-label { font-size: 12px; color: #666; text-transform: uppercase; }
+    .summary-value { font-size: 18px; font-weight: bold; color: #2c3e50; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🎉 ¡Presupuesto Generado!</h1>
+    <p>Su presupuesto de arriendo está listo</p>
+  </div>
+  
+  <div class="content">
+    <h2>Estimado/a {{customerName}},</h2>
+    
+    <p>Nos complace informarle que hemos generado exitosamente el presupuesto para su proyecto de arriendo.</p>
+    
+    <div class="highlight">
+      <h3>📋 Detalles del Proyecto</h3>
+      <p><strong>Proyecto:</strong> {{projectName}}</p>
+      <p><strong>Orden:</strong> #{{orderId}}</p>
+      <p><strong>Período:</strong> {{startDate}} - {{endDate}}</p>
+      <p><strong>Duración:</strong> {{numJornadas}} {{jornadasText}}</p>
+    </div>
+    
+    <div class="order-summary">
+      <div class="summary-item">
+        <div class="summary-label">Total del Presupuesto</div>
+        <div class="summary-value">{{totalAmount}}</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">Productos</div>
+        <div class="summary-value">{{lineItemsCount}} items</div>
+      </div>
+    </div>
+    
+    <div style="text-align: center;">
+      <a href="{{budgetUrl}}" class="button">📄 Ver Presupuesto Completo</a>
+    </div>
+    
+    <div class="details">
+      <h3>📞 Próximos Pasos</h3>
+      <ul>
+        <li>Revise el presupuesto detallado haciendo clic en el botón superior</li>
+        <li>El presupuesto tiene una validez de 30 días</li>
+        <li>Para confirmar su pedido, responda este email o contáctenos</li>
+        <li>Nuestro equipo se pondrá en contacto para coordinar los detalles</li>
+      </ul>
+    </div>
+    
+    {{#if couponCode}}
+    <div class="highlight">
+      <h3>🎟️ Cupón Aplicado</h3>
+      <p>Se ha aplicado el cupón <strong>{{couponCode}}</strong> a su presupuesto.</p>
+    </div>
+    {{/if}}
+    
+    <div class="details">
+      <h3>📞 Información de Contacto</h3>
+      <p><strong>Email:</strong> rental.mariohans@gmail.com</p>
+      <p><strong>Teléfono:</strong> +56 9 XXXX XXXX</p>
+      <p><strong>Horario:</strong> Lunes a Viernes, 9:00 - 18:00</p>
+    </div>
+    
+    {{#if customMessage}}
+    <div class="highlight">
+      <h3>💬 Mensaje Adicional</h3>
+      <p>{{customMessage}}</p>
+    </div>
+    {{/if}}
+  </div>
+  
+  <div class="footer">
+    <p>© 2024 Rental Mhans - Equipos y Productos para Eventos</p>
+    <p>Este es un email automático, pero puede responder para contactarnos directamente.</p>
+  </div>
+</body>
+</html>
