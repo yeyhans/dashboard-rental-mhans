@@ -17,27 +17,20 @@ let initialData = null;
 let error = null;
 
 try {
-  // Obtener las primeras 20 categorías y estadísticas básicas
-  const categoriesResult = await CategoryService.getAllCategories(1, 20);
-  
-  // Obtener estadísticas básicas
-  const allCategories = await CategoryService.getAllCategories(1, 1000); // Para contar
+  // Load ALL categories for client-side pagination and filtering
+  // This ensures we have all data available for proper pagination
+  const allCategories = await CategoryService.getAllCategories(1, 1000); // Load up to 1000 categories
   const hierarchyData = await CategoryService.getCategoriesHierarchy();
   
-  // Calcular estadísticas
+  // Calculate statistics
   const totalCategories = allCategories.total;
-  const mainCategories = hierarchyData.length; // Categorías sin padre
+  const mainCategories = hierarchyData.length; // Categories without parent
   const subCategories = totalCategories - mainCategories;
   const withImages = allCategories.categories?.filter(cat => cat.image_src).length || 0;
   
   initialData = {
-    categories: categoriesResult.categories || [],
-    pagination: {
-      page: categoriesResult.page,
-      limit: categoriesResult.limit,
-      total: categoriesResult.total,
-      totalPages: categoriesResult.totalPages
-    },
+    categories: allCategories.categories || [],
+    total: totalCategories,
     stats: {
       total: totalCategories,
       main: mainCategories,
@@ -50,7 +43,7 @@ try {
   error = 'Error al cargar las categorías iniciales';
   initialData = {
     categories: [],
-    pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+    total: 0,
     stats: { total: 0, main: 0, sub: 0, withImages: 0 }
   };
 }
@@ -68,7 +61,8 @@ try {
       <CategoriesDashboard 
         client:load
         initialCategories={initialData?.categories || []}
-        initialTotal={initialData?.pagination?.total || 0}
+        initialTotal={initialData?.total || 0}
+        initialStats={initialData?.stats}
       />
       
       <Toaster 

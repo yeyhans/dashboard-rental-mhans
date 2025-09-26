@@ -47,22 +47,19 @@ const ProductsDashboard = ({
   initialTotal,
   initialCategories = []
 }: ProductsDashboardProps) => {
-  const [products, setProducts] = useState<Product[]>(initialProducts);
+  // All products loaded from server
+  const [allProducts] = useState<Product[]>(initialProducts);
   const [loading, setLoading] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [categories] = useState<ProductCategory[]>(initialCategories);
-  const [productCategories, setProductCategories] = useState<Set<string>>(new Set());
   const [isMobileView, setIsMobileView] = useState(false);
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'ascending' | 'descending'} | null>(null);
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalProducts, setTotalProducts] = useState(initialTotal);
-  const [totalPages, setTotalPages] = useState(Math.ceil(initialTotal / 50));
-  const [itemsPerPage] = useState(50);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Detect mobile view
   useEffect(() => {
@@ -79,9 +76,9 @@ const ProductsDashboard = ({
   }, []);
 
   // Extract unique category names from products for the filter dropdown
-  useEffect(() => {
+  const productCategories = React.useMemo(() => {
     const categorySet = new Set<string>();
-    products.forEach(product => {
+    allProducts.forEach(product => {
       if (product.categories_name) {
         // Split categories_name by comma and add each category
         const categoryNames = product.categories_name.split(',').map(name => name.trim());
@@ -90,72 +87,32 @@ const ProductsDashboard = ({
         });
       }
     });
-    setProductCategories(categorySet);
-  }, [products]);
+    return categorySet;
+  }, [allProducts]);
 
-  // Function to load data with filters and pagination
-  const loadProducts = async (category: string = 'all', page: number = 1, search: string = '') => {
-    try {
-      setIsInitialLoad(false);
-      setLoading(true);
-      setError(null);
+  // Filter products based on search and category
+  const filteredProducts = React.useMemo(() => {
+    return allProducts.filter(product => {
+      // Filter by search term
+      const matchesSearch = !searchTerm || 
+        (product.name && product.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (product.slug && product.slug.toLowerCase().includes(searchTerm.toLowerCase()));
       
-      const params = new URLSearchParams();
-      params.append('page', page.toString());
-      params.append('limit', itemsPerPage.toString());
-
-      const searchTerm = search.trim();
-      if (searchTerm) {
-        params.append('search', searchTerm);
-      }
-
-      if (category && category !== 'all') {
-        // Use the category ID directly if it's a number, otherwise find by name
-        const categoryId = parseInt(category, 10);
-        if (!isNaN(categoryId)) {
-          params.append('categoryId', categoryId.toString());
-        } else {
-          const categoryObj = categories.find(cat => cat.name === category);
-          if (categoryObj) {
-            params.append('categoryId', categoryObj.id.toString());
-          }
-        }
-      }
-
-      const response = await fetch(`/api/products/search?${params.toString()}`);
-      const data = await response.json();
+      // Filter by category
+      const matchesCategory = categoryFilter === 'all' || 
+        (product.categories_name && product.categories_name.includes(categoryFilter));
       
-      if (data.success) {
-        setProducts(data.data.products);
-        setTotalProducts(data.data.total);
-        setTotalPages(data.data.totalPages);
-        setCurrentPage(data.data.page);
-      } else {
-        setError(data.message || 'Error al cargar los productos');
-      }
-    } catch (err) {
-      setError('Error al cargar los productos');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return matchesSearch && matchesCategory;
+    });
+  }, [allProducts, searchTerm, categoryFilter]);
 
-  // Función para recargar los datos
-  const refreshData = () => {
-    loadProducts(categoryFilter, currentPage, searchTerm);
-  };
-
-  // Add debounce for search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!isInitialLoad) {
-        loadProducts(categoryFilter, currentPage, searchTerm);
-      }
-    }, 500); // 500ms debounce delay
-    
-    return () => clearTimeout(timer);
-  }, [searchTerm, categoryFilter, currentPage]);
+  // Calculate pagination
+  const totalFilteredProducts = filteredProducts.length;
+  const totalPages = Math.ceil(totalFilteredProducts / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentProducts = filteredProducts.slice(startIndex, endIndex);
 
   // Handle search input change
   const handleSearch = (term: string) => {
@@ -174,25 +131,27 @@ const ProductsDashboard = ({
     setCurrentPage(page);
   };
 
-  // Filter products based on search and category
-  const filteredProducts = React.useMemo(() => {
-    return products.filter(product => {
-      // Filter by search term
-      const matchesSearch = !searchTerm || 
-        (product.name && product.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()));
-      
-      // Filter by category
-      const matchesCategory = categoryFilter === 'all' || 
-        (product.categories_name && product.categories_name.includes(categoryFilter));
-      
-      return matchesSearch && matchesCategory;
-    });
-  }, [products, searchTerm, categoryFilter]);
+  // Handle items per page change
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1);
+  };
+
+  // Reset page when search or category changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, categoryFilter]);
+
+  // Refresh data - reload the page to get fresh server-side data
+  const refreshData = () => {
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
+  };
 
   // Sort function for table columns
   const sortedProducts = React.useMemo(() => {
-    let sortableProducts = [...filteredProducts];
+    let sortableProducts = [...currentProducts];
     if (sortConfig !== null) {
       sortableProducts.sort((a, b) => {
         let aValue, bValue;
@@ -232,7 +191,7 @@ const ProductsDashboard = ({
       });
     }
     return sortableProducts;
-  }, [filteredProducts, sortConfig]);
+  }, [currentProducts, sortConfig]);
 
   // Request sort function
   const requestSort = (key: string) => {
@@ -281,28 +240,21 @@ const ProductsDashboard = ({
     );
   };
 
-  // Render loading state
-  if (loading && !isInitialLoad) {
-    return (
-      <div className="space-y-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-foreground text-base">Productos</CardTitle>
-            <CardDescription className="text-xs">Cargando productos...</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <div className="space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 w-full" />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Loading skeleton component
+  const LoadingSkeleton = () => (
+    <div className="space-y-4">
+      {[...Array(5)].map((_, i) => (
+        <div key={i} className="flex items-center space-x-4 p-4 border rounded-lg">
+          <Skeleton className="h-12 w-12 rounded" />
+          <div className="space-y-2 flex-1">
+            <Skeleton className="h-4 w-[250px]" />
+            <Skeleton className="h-4 w-[200px]" />
+          </div>
+          <Skeleton className="h-8 w-[100px]" />
+        </div>
+      ))}
+    </div>
+  );
 
   // Render error state
   if (error) {
@@ -315,10 +267,21 @@ const ProductsDashboard = ({
 
   // Render the table rows or mobile cards for each product
   const renderProductItems = () => {
-    if (filteredProducts.length === 0) {
+    if (loading) {
+      return <LoadingSkeleton />;
+    }
+
+    if (sortedProducts.length === 0) {
       return (
-        <div className="text-center py-6 text-muted-foreground text-sm">
-          No se encontraron productos
+        <div className="text-center py-8 text-muted-foreground">
+          <div className="text-sm">
+            {searchTerm || categoryFilter !== 'all' 
+              ? 'No se encontraron productos que coincidan con los filtros' 
+              : 'No hay productos disponibles'}
+          </div>
+          {(searchTerm || categoryFilter !== 'all') && (
+            <p className="text-xs mt-2">Intenta con otros términos de búsqueda o filtros</p>
+          )}
         </div>
       );
     }
@@ -507,8 +470,17 @@ const ProductsDashboard = ({
         <CardHeader className="pb-2 space-y-1">
           <CardTitle className="text-foreground text-base md:text-lg">Productos</CardTitle>
           <CardDescription className="text-xs">
-            {totalProducts > 0 ? `${totalProducts} productos registrados` : 'Productos registrados'}
-            {totalPages > 1 && ` - Página ${currentPage} de ${totalPages}`}
+            {initialTotal > 0 ? `${initialTotal} productos registrados` : 'Productos registrados'}
+            {searchTerm && (
+              <span className="block mt-1">
+                Mostrando {totalFilteredProducts} resultados para "{searchTerm}"
+              </span>
+            )}
+            {categoryFilter !== 'all' && (
+              <span className="block mt-1">
+                Filtrado por categoría: {categoryFilter}
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-2">
@@ -593,66 +565,150 @@ const ProductsDashboard = ({
             {renderProductItems()}
           </div>
 
+          {/* Pagination and Controls */}
+          <div className="mt-6 space-y-4">
+            {/* Items per page selector */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-muted-foreground">Mostrar:</Label>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                  className="px-3 py-1 border rounded-md text-sm bg-background"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span className="text-sm text-muted-foreground">por página</span>
+              </div>
+              
+              <div className="text-sm text-muted-foreground">
+                Mostrando {startIndex + 1}-{Math.min(endIndex, totalFilteredProducts)} de {totalFilteredProducts} productos
+                {(searchTerm || categoryFilter !== 'all') && ` (filtrados de ${initialTotal} total)`}
+              </div>
+            </div>
+
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex flex-col sm:flex-row items-center justify-between pt-4 mt-4 border-t gap-4">
-                <div className="text-xs text-muted-foreground">
-                  Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalProducts)} de {totalProducts} productos
-                </div>
-                <div className="flex flex-col sm:flex-row items-center gap-2">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage <= 1 || loading}
-                      className="h-8 text-xs"
-                    >
-                      Anterior
-                    </Button>
-                    
-                    <div className="flex items-center gap-1">
-                      {/* Show page numbers */}
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum;
-                        if (totalPages <= 5) {
-                          pageNum = i + 1;
-                        } else if (currentPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i;
-                        } else {
-                          pageNum = currentPage - 2 + i;
-                        }
-                        
-                        return (
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(1)}
+                    disabled={currentPage === 1 || loading}
+                  >
+                    Primera
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1 || loading}
+                  >
+                    Anterior
+                  </Button>
+                  
+                  {/* Page numbers */}
+                  <div className="flex items-center gap-1 mx-2">
+                    {(() => {
+                      const pages = [];
+                      const maxVisiblePages = 5;
+                      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                      
+                      // Adjust start if we're near the end
+                      if (endPage - startPage + 1 < maxVisiblePages) {
+                        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                      }
+                      
+                      // Show first page and ellipsis if needed
+                      if (startPage > 1) {
+                        pages.push(
                           <Button
-                            key={pageNum}
-                            variant={currentPage === pageNum ? "default" : "outline"}
+                            key={1}
+                            variant={1 === currentPage ? "default" : "outline"}
                             size="sm"
-                            onClick={() => handlePageChange(pageNum)}
-                            disabled={loading}
-                            className="h-8 w-8 text-xs p-0"
+                            onClick={() => handlePageChange(1)}
+                            className="w-9 h-9 p-0"
                           >
-                            {pageNum}
+                            1
                           </Button>
                         );
-                      })}
-                    </div>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage >= totalPages || loading}
-                      className="h-8 text-xs"
-                    >
-                      Siguiente
-                    </Button>
+                        if (startPage > 2) {
+                          pages.push(
+                            <span key="ellipsis1" className="px-2 text-muted-foreground">
+                              ...
+                            </span>
+                          );
+                        }
+                      }
+                      
+                      // Show visible page range
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(
+                          <Button
+                            key={i}
+                            variant={i === currentPage ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handlePageChange(i)}
+                            className="w-9 h-9 p-0"
+                          >
+                            {i}
+                          </Button>
+                        );
+                      }
+                      
+                      // Show last page and ellipsis if needed
+                      if (endPage < totalPages) {
+                        if (endPage < totalPages - 1) {
+                          pages.push(
+                            <span key="ellipsis2" className="px-2 text-muted-foreground">
+                              ...
+                            </span>
+                          );
+                        }
+                        pages.push(
+                          <Button
+                            key={totalPages}
+                            variant={totalPages === currentPage ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handlePageChange(totalPages)}
+                            className="w-9 h-9 p-0"
+                          >
+                            {totalPages}
+                          </Button>
+                        );
+                      }
+                      
+                      return pages;
+                    })()}
                   </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages || loading}
+                  >
+                    Siguiente
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(totalPages)}
+                    disabled={currentPage === totalPages || loading}
+                  >
+                    Última
+                  </Button>
                 </div>
               </div>
             )}
+          </div>
           </CardContent>
         </Card>
       </div>

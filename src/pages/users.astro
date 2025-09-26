@@ -15,18 +15,13 @@ if (!session) {
   return Astro.redirect("/");
 }
 
-// Fetch users data using the professional service
-const url = new URL(Astro.request.url);
-const page = parseInt(url.searchParams.get('page') || '1', 10);
-const limit = parseInt(url.searchParams.get('limit') || '10', 10);
-const search = url.searchParams.get('search') || '';
-
-const { users, total, totalPages } = await UserService.searchUsers(search, page, limit);
+// Load ALL users for client-side pagination and filtering
+// This ensures we have all data available for proper pagination
+const { users, total } = await UserService.searchUsers('', 1, 1000); // Load up to 1000 users
 
 const usersData = {
   users: users || [],
-  total: total || 0,
-  totalPages: totalPages || 0
+  total: total || 0
 };
 
 const title = "Gestión de Usuarios";
@@ -38,7 +33,6 @@ const title = "Gestión de Usuarios";
       client:load
       initialUsers={usersData.users}
       initialTotal={usersData.total}
-      initialTotalPages={usersData.totalPages}
     />
   </div>
 </Base>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Card, 
   CardContent, 
@@ -76,10 +76,6 @@ interface SessionData {
 interface OrdersDashboardProps {
   initialOrders: Order[];
   initialTotal: string;
-  initialTotalPages: string;
-  initialPage?: string;
-  initialStatus?: string;
-  initialPerPage?: string;
   sessionData: SessionData;
 }
 
@@ -118,27 +114,20 @@ interface NewOrderForm {
 const OrdersDashboard = ({ 
   initialOrders,
   initialTotal,
-  initialTotalPages,
-  initialPage = '1',
-  initialStatus = '',
-  initialPerPage = '10',
   sessionData
 }: OrdersDashboardProps) => {
-  const [orders, setOrders] = useState<Order[]>(initialOrders);
+  // All orders loaded from server
+  const [allOrders, setAllOrders] = useState<Order[]>(initialOrders);
   const [loading, setLoading] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
-  const [currentPage, setCurrentPage] = useState(parseInt(initialPage));
-  const [totalPages, setTotalPages] = useState(parseInt(initialTotalPages));
-  const [total, setTotal] = useState(parseInt(initialTotal));
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isMobileView, setIsMobileView] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
-
-  const perPage = parseInt(initialPerPage);
+  const [total, setTotal] = useState(parseInt(initialTotal));
 
   // Detect mobile view
   useEffect(() => {
@@ -154,106 +143,81 @@ const OrdersDashboard = ({
     };
   }, []);
 
-  // Función para cargar los datos con filtros
-  const loadOrders = async (page: number, status: string = '', search: string = '') => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams({
-        page: page.toString(),
-        per_page: perPage.toString(),
-      });
-
-      if (status) {
-        params.append('status', status);
-      }
-
-      if (search) {
-        params.append('search', search);
-      }
-
-      console.log('Fetching orders with params:', params.toString());
+  // Filter orders based on search and status
+  const filteredOrders = React.useMemo(() => {
+    return allOrders.filter(order => {
+      // Filter by search term
+      const matchesSearch = !searchTerm || 
+        (order.billing?.first_name && order.billing.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (order.billing?.last_name && order.billing.last_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (order.billing?.email && order.billing.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (order.metadata?.order_proyecto && order.metadata.order_proyecto.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (order.id && order.id.toString().includes(searchTerm));
       
-      // Fetch orders data from new Supabase API
-      const response = await fetch(`/api/orders?${params}`);
-      const data = await response.json();
+      // Filter by status
+      const matchesStatus = !statusFilter || order.status === statusFilter;
       
-      if (data.success) {
-        console.log('Orders received:', data.data.orders.length);
-        console.log('Total pages:', data.data.totalPages);
-        console.log('Total orders:', data.data.total);
-        
-        // Transform orders to match expected structure
-        const transformedOrders = data.data.orders.map((order: any) => {
-          return {
-            ...order,
-            // Create metadata object from direct properties for backward compatibility
-            metadata: {
-              order_proyecto: order.order_proyecto || '',
-              order_fecha_inicio: order.order_fecha_inicio || '',
-              order_fecha_termino: order.order_fecha_termino || '',
-              num_jornadas: order.num_jornadas || '',
-              calculated_subtotal: order.calculated_subtotal || '0',
-              calculated_discount: order.calculated_discount || '0',
-              calculated_iva: order.calculated_iva || '0',
-              calculated_total: order.calculated_total || '0',
-              company_rut: order.company_rut || '',
-              pdf_on_hold_url: order.pdf_on_hold_url || '',
-              pdf_processing_url: order.pdf_processing_url || '',
-              order_retire_name: order.order_retire_name || '',
-              order_retire_rut: order.order_retire_rut || '',
-              order_retire_phone: order.order_retire_phone || '',
-              order_comments: order.order_comments || ''
-            },
-            // Create billing object from direct properties
-            billing: {
-              first_name: order.billing_first_name || '',
-              last_name: order.billing_last_name || '',
-              company: order.billing_company || '',
-              address_1: order.billing_address_1 || '',
-              city: order.billing_city || '',
-              email: order.billing_email || '',
-              phone: order.billing_phone || ''
-            },
-            // Set default values for missing properties
-            fotos_garantia: order.fotos_garantia || [],
-            correo_enviado: order.correo_enviado || false,
-            pago_completo: order.pago_completo ? 'true' : 'false'
-          };
-        });
-        
-        setOrders(transformedOrders);
-        setTotal(parseInt(data.data.total));
-        setTotalPages(parseInt(data.data.totalPages));
-        
-        // Scroll al inicio de la tabla/listado cuando cambia la página
-        const tableElement = document.querySelector('.border.overflow-hidden');
-        if (tableElement) {
-          tableElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      } else {
-        setError(data.error || 'Error al cargar los pedidos');
-      }
-    } catch (err) {
-      setError('Error al cargar los pedidos');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+      return matchesSearch && matchesStatus;
+    });
+  }, [allOrders, searchTerm, statusFilter]);
+
+  // Calculate pagination
+  const totalFilteredOrders = filteredOrders.length;
+  const totalPages = Math.ceil(totalFilteredOrders / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentOrders = filteredOrders.slice(startIndex, endIndex);
+
+  // Handle items per page change
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1);
   };
 
-  // Función para actualizar la URL con los parámetros actuales
-  const updateURL = (page: number, status: string = '', search: string = '') => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('page', page.toString());
+  // Initialize filters from URL on component mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const pageParam = urlParams.get('page');
+    const statusParam = urlParams.get('status');
+    const searchParam = urlParams.get('search');
     
-    if (status) {
-      url.searchParams.set('status', status);
+    if (pageParam) {
+      const page = parseInt(pageParam);
+      if (page > 0) setCurrentPage(page);
+    }
+    if (statusParam) setStatusFilter(statusParam);
+    if (searchParam) setSearchTerm(searchParam);
+  }, []);
+
+  // Reset page when search or status changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
+
+
+  // Get unique statuses from filtered orders
+  const uniqueStatuses = Array.from(new Set(allOrders.map(order => order.status)));
+
+  // Function to refresh data (placeholder for future implementation)
+  const refreshData = () => {
+    // For now, this is a placeholder since we're using static data
+    // In a real implementation, this would reload data from the server
+    console.log('Refreshing data...');
+  };
+
+  // Function to update URL with current filters
+  const updateURLWithFilters = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('page', currentPage.toString());
+    
+    if (statusFilter) {
+      url.searchParams.set('status', statusFilter);
     } else {
       url.searchParams.delete('status');
     }
     
-    if (search) {
-      url.searchParams.set('search', search);
+    if (searchTerm) {
+      url.searchParams.set('search', searchTerm);
     } else {
       url.searchParams.delete('search');
     }
@@ -261,28 +225,10 @@ const OrdersDashboard = ({
     window.history.pushState({}, '', url.toString());
   };
 
-  // Efecto para cargar datos cuando cambian los filtros o la página
+  // Update URL when filters change
   useEffect(() => {
-    if (!isInitialLoad) {
-      loadOrders(currentPage, statusFilter, searchTerm);
-      updateURL(currentPage, statusFilter, searchTerm);
-    } else {
-      // Asegurarse de que la URL refleja los valores iniciales en la carga inicial
-      updateURL(currentPage, statusFilter, searchTerm);
-      setIsInitialLoad(false);
-    }
+    updateURLWithFilters();
   }, [currentPage, statusFilter, searchTerm]);
-
-  // Función para recargar los datos
-  const refreshData = () => {
-    loadOrders(currentPage, statusFilter, searchTerm);
-  };
-
-  // No need to filter orders locally as they are filtered on the server
-  const filteredOrders = orders;
-
-  // Get unique statuses from orders
-  const uniqueStatuses = Array.from(new Set(orders.map(order => order.status)));
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -312,7 +258,7 @@ const OrdersDashboard = ({
       
       if (data.success) {
         // Update the order in the local state
-        setOrders(orders.map(order => 
+        setAllOrders(allOrders.map((order: Order) => 
           order.id === orderId ? { ...order, status: newStatus } : order
         ));
       } else {
@@ -326,45 +272,6 @@ const OrdersDashboard = ({
     }
   };
 
-  // Add new function to handle payment status update
-  const handleUpdatePaymentStatus = async (orderId: number, currentStatus: string) => {
-    try {
-      setUpdatingOrderId(orderId);
-      // Invert the current status
-      const newStatus = currentStatus === 'true' ? false : true;
-      
-      const response = await fetch(`/api/orders/${orderId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          pago_completo: newStatus
-        })
-      });
-
-      if (response.ok) {
-        // Update local state
-        setOrders(prevOrders => 
-          prevOrders.map(order => 
-            order.id === orderId 
-              ? { ...order, pago_completo: newStatus ? 'true' : 'false' } 
-              : order
-          )
-        );
-        console.log(`Payment status updated for order ${orderId}`);
-      } else {
-        const errorData = await response.json();
-        console.error('Error updating payment status:', errorData);
-        setError(`Error updating payment status: ${errorData.error || 'Unknown error'}`);
-      }
-    } catch (err) {
-      console.error('Error:', err);
-      setError('Error updating payment status');
-    } finally {
-      setUpdatingOrderId(null);
-    }
-  };
 
   const handleOrderCreated = (newOrder: any) => {
     // Transform the new order to match the expected structure
@@ -401,39 +308,22 @@ const OrdersDashboard = ({
       // Set default values for missing properties
       fotos_garantia: newOrder.fotos_garantia || [],
       correo_enviado: newOrder.correo_enviado || false,
-      pago_completo: newOrder.pago_completo ? 'true' : 'false'
+      pago_completo: newOrder.pago_completo || false
     };
 
-    setOrders([transformedOrder, ...orders]);
+    setAllOrders([transformedOrder, ...allOrders]);
     setTotal(total + 1);
   };
 
   // Función para manejar el cambio de página
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage && !loading) {
-      // Crear una nueva URL con los parámetros actuales
-      const url = new URL(window.location.href);
-      url.searchParams.set('page', newPage.toString());
-      
-      if (statusFilter) {
-        url.searchParams.set('status', statusFilter);
-      } else {
-        url.searchParams.delete('status');
-      }
-      
-      if (searchTerm) {
-        url.searchParams.set('search', searchTerm);
-      } else {
-        url.searchParams.delete('search');
-      }
-      
-      // Redirigir a la nueva URL para forzar una recarga completa
-      window.location.href = url.toString();
+      setCurrentPage(newPage);
     }
   };
 
   // Render loading state
-  if (loading && !isInitialLoad) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
@@ -467,7 +357,7 @@ const OrdersDashboard = ({
     if (isMobileView) {
       return (
         <div className="space-y-4">
-          {filteredOrders.map((order) => (
+          {currentOrders.map((order) => (
             <Card key={`${order.customer_id}-${order.date_created}`} className="overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex justify-between items-start mb-3">
@@ -547,7 +437,7 @@ const OrdersDashboard = ({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredOrders.map((order) => (
+            {currentOrders.map((order) => (
               <TableRow key={`${order.customer_id}-${order.date_created}`}>
                 <TableCell>
                   <Dialog>
@@ -665,10 +555,7 @@ const OrdersDashboard = ({
                   id="status"
                   className="flex h-9 w-full border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
                   value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
+                  onChange={(e) => setStatusFilter(e.target.value)}
                 >
                   <option value="">Todos los estados</option>
                   {uniqueStatuses.map(status => (
@@ -697,7 +584,7 @@ const OrdersDashboard = ({
           {/* Pagination */}
           <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="text-sm text-muted-foreground order-2 sm:order-1">
-              Mostrando {filteredOrders.length} de {total} pedidos
+              Mostrando {Math.min(startIndex + 1, totalFilteredOrders)}-{Math.min(endIndex, totalFilteredOrders)} de {totalFilteredOrders} pedidos filtrados ({total} total)
             </div>
             
             <div className="flex flex-wrap justify-center gap-2 order-1 sm:order-2">

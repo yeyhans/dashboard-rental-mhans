@@ -46,7 +46,6 @@ import {
 interface UsersDashboardProps {
   initialUsers: UserProfile[];
   initialTotal: number;
-  initialTotalPages: number;
 }
 
 // Helper function to enhance user data with computed properties
@@ -81,16 +80,15 @@ const statusColors: Record<string, string> = {
 
 const UsersDashboard = ({ 
   initialUsers,
-  initialTotal,
-  initialTotalPages 
+  initialTotal
 }: UsersDashboardProps) => {
-  const [users, setUsers] = useState<UserProfile[]>(initialUsers);
+  // All users loaded from server
+  const [allUsers] = useState<UserProfile[]>(initialUsers);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(initialTotalPages);
-  const [total, setTotal] = useState(initialTotal);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [isMobileView, setIsMobileView] = useState(false);
@@ -109,55 +107,9 @@ const UsersDashboard = ({
     };
   }, []);
 
-  // Load users from API - disabled for now due to authentication issues
-  const loadUsers = useCallback(async (page: number = 1, search: string = '') => {
-    console.log('loadUsers called but disabled due to authentication issues', { page, search });
-    // TODO: Re-enable when authentication is properly configured
-    return;
-  }, []);
-
-  // Load user statistics - disabled for now due to authentication issues
-  const loadStats = useCallback(async () => {
-    console.log('loadStats called but disabled due to authentication issues');
-    // TODO: Re-enable when authentication is properly configured
-    return;
-  }, []);
-
-  // Load stats on mount - disabled for now due to authentication issues
-  useEffect(() => {
-    // TODO: Re-enable when authentication is properly configured
-    // For now, we'll use mock stats or hide the stats section
-    console.log('Stats loading disabled due to authentication issues');
-  }, []);
-
-  // Handle search with debouncing - client-side only for now
-  useEffect(() => {
-    // For now, we'll only do client-side filtering to avoid authentication issues
-    // Server-side search can be implemented later when authentication is properly set up
-    console.log('Search term changed:', searchTerm);
-  }, [searchTerm]);
-
-  // Handle page change - navigate to new URL with page parameter
-  const handlePageChange = (newPage: number) => {
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('page', newPage.toString());
-      if (searchTerm) {
-        url.searchParams.set('search', searchTerm);
-      }
-      window.location.href = url.toString();
-    }
-  };
-
-  // Refresh data - reload the page to get fresh server-side data
-  const refreshData = () => {
-    if (typeof window !== 'undefined') {
-      window.location.reload();
-    }
-  };
-
-  // Filter users based on search term (client-side filtering for better UX)
-  const filteredUsers = users.filter(user => {
+  // Filter users based on search term
+  const filteredUsers = allUsers.filter(user => {
+    if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     return (
       user.nombre?.toLowerCase().includes(searchLower) ||
@@ -172,6 +124,36 @@ const UsersDashboard = ({
       user.tipo_cliente?.toLowerCase().includes(searchLower)
     );
   });
+
+  // Calculate pagination
+  const totalFilteredUsers = filteredUsers.length;
+  const totalPages = Math.ceil(totalFilteredUsers / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentUsers = filteredUsers.slice(startIndex, endIndex);
+
+  // Handle page change
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+  };
+
+  // Handle items per page change
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1); // Reset to first page
+  };
+
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Refresh data - reload the page to get fresh server-side data
+  const refreshData = () => {
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
+  };
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -503,7 +485,7 @@ const UsersDashboard = ({
               <Users className="h-5 w-5 text-blue-600" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Usuarios</p>
-                <p className="text-2xl font-bold">{total}</p>
+                <p className="text-2xl font-bold">{initialTotal}</p>
               </div>
             </div>
           </CardContent>
@@ -516,7 +498,7 @@ const UsersDashboard = ({
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Con Contratos</p>
                 <p className="text-2xl font-bold">
-                  {users.filter(u => u.url_user_contrato).length}
+                  {allUsers.filter(u => u.url_user_contrato).length}
                 </p>
               </div>
             </div>
@@ -530,7 +512,7 @@ const UsersDashboard = ({
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Términos Aceptados</p>
                 <p className="text-2xl font-bold">
-                  {users.filter(u => u.terminos_aceptados).length}
+                  {allUsers.filter(u => u.terminos_aceptados).length}
                 </p>
               </div>
             </div>
@@ -558,11 +540,14 @@ const UsersDashboard = ({
       return <LoadingSkeleton />;
     }
 
-    if (filteredUsers.length === 0) {
+    if (currentUsers.length === 0) {
       return (
         <div className="text-center py-8 text-muted-foreground">
           <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>No se encontraron usuarios</p>
+          <p>{searchTerm ? 'No se encontraron usuarios que coincidan con la búsqueda' : 'No hay usuarios disponibles'}</p>
+          {searchTerm && (
+            <p className="text-sm mt-2">Intenta con otros términos de búsqueda</p>
+          )}
         </div>
       );
     }
@@ -571,7 +556,7 @@ const UsersDashboard = ({
     if (isMobileView) {
       return (
         <div className="space-y-4">
-          {filteredUsers.map((user) => {
+          {currentUsers.map((user) => {
             const enhanced = enhanceUser(user);
             return (
               <Card key={user.user_id} className="overflow-hidden">
@@ -634,7 +619,7 @@ const UsersDashboard = ({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredUsers.map((user) => {
+            {currentUsers.map((user) => {
               const enhanced = enhanceUser(user);
               return (
                 <TableRow key={user.user_id}>
@@ -696,7 +681,12 @@ const UsersDashboard = ({
             Gestión de Usuarios
           </CardTitle>
           <CardDescription>
-            Gestiona y visualiza todos los usuarios registrados {total > 0 ? `(${total} en total)` : ''}
+            Gestiona y visualiza todos los usuarios registrados {initialTotal > 0 ? `(${initialTotal} en total)` : ''}
+            {searchTerm && (
+              <span className="block text-sm mt-1">
+                Mostrando {totalFilteredUsers} resultados para "{searchTerm}"
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -727,39 +717,151 @@ const UsersDashboard = ({
           {/* Users table or cards */}
           {renderUserItems()}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="text-sm text-muted-foreground order-2 sm:order-1">
-                Mostrando {filteredUsers.length} de {total} usuarios
+          {/* Pagination and Controls */}
+          <div className="mt-6 space-y-4">
+            {/* Items per page selector */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-muted-foreground">Mostrar:</Label>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                  className="px-3 py-1 border rounded-md text-sm bg-background"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span className="text-sm text-muted-foreground">por página</span>
               </div>
-              <div className="flex gap-2 order-1 sm:order-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1 || loading}
-                >
-                  Anterior
-                </Button>
-                
-                <div className="flex items-center px-3 h-9 border rounded-md">
-                  <span className="text-sm font-medium">
-                    {currentPage} / {totalPages}
-                  </span>
-                </div>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                  disabled={currentPage === totalPages || loading}
-                >
-                  Siguiente
-                </Button>
+              
+              <div className="text-sm text-muted-foreground">
+                Mostrando {startIndex + 1}-{Math.min(endIndex, totalFilteredUsers)} de {totalFilteredUsers} usuarios
+                {searchTerm && ` (filtrados de ${initialTotal} total)`}
               </div>
             </div>
-          )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(1)}
+                    disabled={currentPage === 1 || loading}
+                  >
+                    Primera
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1 || loading}
+                  >
+                    Anterior
+                  </Button>
+                  
+                  {/* Page numbers */}
+                  <div className="flex items-center gap-1 mx-2">
+                    {(() => {
+                      const pages = [];
+                      const maxVisiblePages = 5;
+                      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                      
+                      // Adjust start if we're near the end
+                      if (endPage - startPage + 1 < maxVisiblePages) {
+                        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                      }
+                      
+                      // Show first page and ellipsis if needed
+                      if (startPage > 1) {
+                        pages.push(
+                          <Button
+                            key={1}
+                            variant={1 === currentPage ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handlePageChange(1)}
+                            className="w-9 h-9 p-0"
+                          >
+                            1
+                          </Button>
+                        );
+                        if (startPage > 2) {
+                          pages.push(
+                            <span key="ellipsis1" className="px-2 text-muted-foreground">
+                              ...
+                            </span>
+                          );
+                        }
+                      }
+                      
+                      // Show visible page range
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(
+                          <Button
+                            key={i}
+                            variant={i === currentPage ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handlePageChange(i)}
+                            className="w-9 h-9 p-0"
+                          >
+                            {i}
+                          </Button>
+                        );
+                      }
+                      
+                      // Show last page and ellipsis if needed
+                      if (endPage < totalPages) {
+                        if (endPage < totalPages - 1) {
+                          pages.push(
+                            <span key="ellipsis2" className="px-2 text-muted-foreground">
+                              ...
+                            </span>
+                          );
+                        }
+                        pages.push(
+                          <Button
+                            key={totalPages}
+                            variant={totalPages === currentPage ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handlePageChange(totalPages)}
+                            className="w-9 h-9 p-0"
+                          >
+                            {totalPages}
+                          </Button>
+                        );
+                      }
+                      
+                      return pages;
+                    })()}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages || loading}
+                  >
+                    Siguiente
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(totalPages)}
+                    disabled={currentPage === totalPages || loading}
+                  >
+                    Última
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

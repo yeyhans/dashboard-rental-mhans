@@ -77,7 +77,6 @@ const getPaymentStatusKey = (status: boolean | string): string => {
 interface PaymentsTableProps {
   initialOrders: Order[];
   initialTotal: string;
-  initialStatus?: string;
 }
 
 const PaymentsTable = ({ 
@@ -106,7 +105,7 @@ const PaymentsTable = ({
   
   // Client-side pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(20); // Items per page
+  const [pageSize, setPageSize] = useState(20); // Items per page
 
   // Filter and sort orders on the client side
   const filteredAndSortedOrders = useMemo(() => {
@@ -238,34 +237,48 @@ const PaymentsTable = ({
     }
   };
 
+  // Handle items per page change
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize);
+    setCurrentPage(1); // Reset to first page
+  };
+
   const handleFirstPage = () => handlePageChange(1);
   const handleLastPage = () => handlePageChange(totalPages);
   const handlePreviousPage = () => handlePageChange(currentPage - 1);
   const handleNextPage = () => handlePageChange(currentPage + 1);
 
-  // Generate page numbers for pagination controls
-  const getPageNumbers = () => {
+  // Generate professional page numbers with ellipsis
+  const generatePageNumbers = () => {
     const pages = [];
     const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
     
-    if (totalPages <= maxVisiblePages) {
-      // Show all pages if total is small
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
+    // Adjust start if we're near the end
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    // Show first page and ellipsis if needed
+    if (startPage > 1) {
+      pages.push({ type: 'page', number: 1 });
+      if (startPage > 2) {
+        pages.push({ type: 'ellipsis', key: 'ellipsis1' });
       }
-    } else {
-      // Show pages around current page
-      let start = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-      let end = Math.min(totalPages, start + maxVisiblePages - 1);
-      
-      // Adjust start if we're near the end
-      if (end === totalPages) {
-        start = Math.max(1, end - maxVisiblePages + 1);
+    }
+    
+    // Show visible page range
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push({ type: 'page', number: i });
+    }
+    
+    // Show last page and ellipsis if needed
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        pages.push({ type: 'ellipsis', key: 'ellipsis2' });
       }
-      
-      for (let i = start; i <= end; i++) {
-        pages.push(i);
-      }
+      pages.push({ type: 'page', number: totalPages });
     }
     
     return pages;
@@ -415,18 +428,43 @@ const PaymentsTable = ({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="mb-4">
-            <form onSubmit={handleSearch} className="flex gap-2">
-              <Input
-                placeholder="Buscar por cliente, proyecto o ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
-              />
-              <Button type="submit" size="icon" variant="ghost">
-                <Search className="h-4 w-4" />
-              </Button>
-            </form>
+          <div className="mb-6 space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <form onSubmit={handleSearch} className="flex gap-2">
+                  <Input
+                    placeholder="Buscar por cliente, proyecto o ID..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="max-w-sm"
+                  />
+                  <Button type="submit" size="icon" variant="ghost">
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </form>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Mostrar:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                  className="px-3 py-1 border rounded-md text-sm bg-background"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span className="text-sm text-muted-foreground">por página</span>
+              </div>
+            </div>
+            
+            {searchTerm && (
+              <div className="text-sm text-muted-foreground">
+                Mostrando {filteredAndSortedOrders.length} resultados para "{searchTerm}" (de {allOrders.length} total)
+              </div>
+            )}
           </div>
 
           {error && <div className="text-red-500 mb-4">{error}</div>}
@@ -553,70 +591,94 @@ const PaymentsTable = ({
             </Table>
           </div>
 
-          {/* Información de resultados */}
-          <div className="flex items-center justify-between mt-4">
-            <div className="text-sm text-muted-foreground">
-              Mostrando {paginatedOrders.length} de {filteredAndSortedOrders.length} resultados
-              {searchTerm && (
-                <span className="ml-2">
-                  (filtrados de {allOrders.length} total)
-                </span>
-              )}
+          {/* Pagination and Controls */}
+          <div className="mt-6 space-y-4">
+            {/* Status information */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="text-sm text-muted-foreground">
+                Mostrando {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, filteredAndSortedOrders.length)} de {filteredAndSortedOrders.length} órdenes
+                {searchTerm && ` (filtradas de ${allOrders.length} total)`}
+              </div>
+              
               {totalPages > 1 && (
-                <span className="ml-2">
-                  - Página {currentPage} de {totalPages}
-                </span>
+                <div className="text-sm text-muted-foreground">
+                  Página {currentPage} de {totalPages}
+                </div>
               )}
             </div>
-          </div>
 
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleFirstPage}
-                disabled={currentPage === 1}
-              >
-                <ChevronsLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handlePreviousPage}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              {getPageNumbers().map((page) => (
-                <Button
-                  key={page}
-                  variant={page === currentPage ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => handlePageChange(page)}
-                >
-                  {page}
-                </Button>
-              ))}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleNextPage}
-                disabled={currentPage === totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLastPage}
-                disabled={currentPage === totalPages}
-              >
-                <ChevronsRight className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+            {/* Professional Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleFirstPage}
+                    disabled={currentPage === 1}
+                    title="Primera página"
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    title="Página anterior"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  
+                  {/* Page numbers with ellipsis */}
+                  <div className="flex items-center gap-1 mx-2">
+                    {generatePageNumbers().map((item, index) => {
+                      if (item.type === 'ellipsis') {
+                        return (
+                          <span key={item.key} className="px-2 text-muted-foreground">
+                            ...
+                          </span>
+                        );
+                      }
+                      
+                      return (
+                        <Button
+                          key={item.number}
+                          variant={item.number === currentPage ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handlePageChange(item.number!)}
+                          className="w-9 h-9 p-0"
+                        >
+                          {item.number}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    title="Página siguiente"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleLastPage}
+                    disabled={currentPage === totalPages}
+                    title="Última página"
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </TooltipProvider>

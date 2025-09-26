@@ -64,23 +64,29 @@ interface CategoriesResponse {
 interface CategoriesDashboardProps {
   initialCategories?: Category[];
   initialTotal?: number;
+  initialStats?: {
+    total: number;
+    main: number;
+    sub: number;
+    withImages: number;
+  };
 }
 
 const CategoriesDashboard = ({ 
   initialCategories = [],
-  initialTotal = 0
+  initialTotal = 0,
+  initialStats
 }: CategoriesDashboardProps) => {
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [loading, setLoading] = useState(initialCategories.length === 0);
+  // All categories loaded from server
+  const [allCategories] = useState<Category[]>(initialCategories);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isMobileView, setIsMobileView] = useState(false);
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalCategories, setTotalCategories] = useState(initialTotal);
-  const [totalPages, setTotalPages] = useState(Math.ceil(initialTotal / 20));
-  const [itemsPerPage] = useState(20);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // Form states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -108,12 +114,23 @@ const CategoriesDashboard = ({
     };
   }, []);
 
-  // Load initial data if not provided
-  useEffect(() => {
-    if (initialCategories.length === 0) {
-      loadCategories(1, '');
-    }
-  }, [initialCategories.length]);
+  // Filter categories based on search term
+  const filteredCategories = React.useMemo(() => {
+    if (!searchTerm) return allCategories;
+    const searchLower = searchTerm.toLowerCase();
+    return allCategories.filter(category => 
+      category.name.toLowerCase().includes(searchLower) ||
+      category.slug.toLowerCase().includes(searchLower) ||
+      (category.description && category.description.toLowerCase().includes(searchLower))
+    );
+  }, [allCategories, searchTerm]);
+
+  // Calculate pagination
+  const totalFilteredCategories = filteredCategories.length;
+  const totalPages = Math.ceil(totalFilteredCategories / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentCategories = filteredCategories.slice(startIndex, endIndex);
 
   // Auto-generate slug from name
   const generateSlug = (name: string) => {
@@ -141,39 +158,21 @@ const CategoriesDashboard = ({
     }
   };
 
-  // Load categories with filters and pagination
-  const loadCategories = async (page: number = 1, search: string = '') => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Handle items per page change
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1); // Reset to first page
+  };
 
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: itemsPerPage.toString(),
-      });
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
-      if (search.trim()) {
-        params.append('search', search.trim());
-      }
-
-      const response = await fetch(`/api/categories?${params}`);
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Error al cargar categorías');
-      }
-
-      const data: CategoriesResponse = result.data;
-      setCategories(data.categories);
-      setTotalCategories(data.total);
-      setTotalPages(data.totalPages);
-      setCurrentPage(data.page);
-    } catch (err) {
-      console.error('Error loading categories:', err);
-      setError(err instanceof Error ? err.message : 'Error desconocido');
-      toast.error('Error al cargar las categorías');
-    } finally {
-      setLoading(false);
+  // Refresh data - reload the page to get fresh server-side data
+  const refreshData = () => {
+    if (typeof window !== 'undefined') {
+      window.location.reload();
     }
   };
 
@@ -203,7 +202,7 @@ const CategoriesDashboard = ({
       toast.success('Categoría creada exitosamente');
       setIsCreateDialogOpen(false);
       resetForm();
-      await loadCategories(currentPage, searchTerm);
+      refreshData();
     } catch (err) {
       console.error('Error creating category:', err);
       toast.error(err instanceof Error ? err.message : 'Error al crear categoría');
@@ -239,7 +238,7 @@ const CategoriesDashboard = ({
       setIsEditDialogOpen(false);
       setEditingCategory(null);
       resetForm();
-      await loadCategories(currentPage, searchTerm);
+      refreshData();
     } catch (err) {
       console.error('Error updating category:', err);
       toast.error(err instanceof Error ? err.message : 'Error al actualizar categoría');
@@ -267,7 +266,7 @@ const CategoriesDashboard = ({
       }
 
       toast.success('Categoría eliminada exitosamente');
-      await loadCategories(currentPage, searchTerm);
+      refreshData();
     } catch (err) {
       console.error('Error deleting category:', err);
       toast.error(err instanceof Error ? err.message : 'Error al eliminar categoría');
@@ -301,21 +300,56 @@ const CategoriesDashboard = ({
   };
 
   // Handle search
-  const handleSearch = async () => {
+  const handleSearch = () => {
     setCurrentPage(1);
-    await loadCategories(1, searchTerm);
   };
 
   // Handle pagination
-  const handlePageChange = async (page: number) => {
-    await loadCategories(page, searchTerm);
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
 
   // Get parent category name
   const getParentCategoryName = (parentId: number | null) => {
     if (!parentId) return 'Ninguna';
-    const parent = categories.find(cat => cat.id === parentId);
+    const parent = allCategories.find(cat => cat.id === parentId);
     return parent ? parent.name : `ID: ${parentId}`;
+  };
+
+  // Generate professional page numbers with ellipsis
+  const generatePageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    // Adjust start if we're near the end
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    // Show first page and ellipsis if needed
+    if (startPage > 1) {
+      pages.push({ type: 'page', number: 1 });
+      if (startPage > 2) {
+        pages.push({ type: 'ellipsis', key: 'ellipsis1' });
+      }
+    }
+    
+    // Show visible page range
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push({ type: 'page', number: i });
+    }
+    
+    // Show last page and ellipsis if needed
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        pages.push({ type: 'ellipsis', key: 'ellipsis2' });
+      }
+      pages.push({ type: 'page', number: totalPages });
+    }
+    
+    return pages;
   };
 
   // Format date
@@ -396,7 +430,7 @@ const CategoriesDashboard = ({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Ninguna (Categoría principal)</SelectItem>
-                    {categories.map((category) => (
+                    {allCategories.map((category) => (
                       <SelectItem key={category.id} value={category.id.toString()}>
                         {category.name}
                       </SelectItem>
@@ -437,7 +471,7 @@ const CategoriesDashboard = ({
             <FolderTree className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalCategories}</div>
+            <div className="text-2xl font-bold">{initialStats?.total || initialTotal}</div>
             <p className="text-xs text-muted-foreground">
               Categorías registradas
             </p>
@@ -451,7 +485,7 @@ const CategoriesDashboard = ({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {categories.filter(cat => !cat.parent).length}
+              {initialStats?.main || allCategories.filter(cat => !cat.parent).length}
             </div>
             <p className="text-xs text-muted-foreground">
               Categorías principales
@@ -466,7 +500,7 @@ const CategoriesDashboard = ({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {categories.filter(cat => cat.parent).length}
+              {initialStats?.sub || allCategories.filter(cat => cat.parent).length}
             </div>
             <p className="text-xs text-muted-foreground">
               Categorías anidadas
@@ -481,7 +515,7 @@ const CategoriesDashboard = ({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {categories.filter(cat => cat.image_src).length}
+              {initialStats?.withImages || allCategories.filter(cat => cat.image_src).length}
             </div>
             <p className="text-xs text-muted-foreground">
               Categorías con imagen
@@ -518,10 +552,7 @@ const CategoriesDashboard = ({
               </Button>
               <Button 
                 variant="outline" 
-                onClick={() => {
-                  setSearchTerm('');
-                  loadCategories(1, '');
-                }}
+                onClick={() => setSearchTerm('')}
               >
                 Limpiar
               </Button>
@@ -533,9 +564,14 @@ const CategoriesDashboard = ({
       {/* Categories Table/Cards */}
       <Card>
         <CardHeader>
-          <CardTitle>Categorías ({totalCategories})</CardTitle>
+          <CardTitle>Categorías ({initialStats?.total || initialTotal})</CardTitle>
           <CardDescription>
             Lista de todas las categorías de productos
+            {searchTerm && (
+              <span className="block mt-1 text-sm">
+                Mostrando {totalFilteredCategories} resultados para "{searchTerm}"
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -545,7 +581,7 @@ const CategoriesDashboard = ({
             </div>
           )}
 
-          {loading && categories.length === 0 ? (
+          {loading ? (
             <div className="space-y-3">
               {[...Array(5)].map((_, i) => (
                 <div key={i} className="flex items-center space-x-4">
@@ -560,7 +596,7 @@ const CategoriesDashboard = ({
           ) : isMobileView ? (
             // Mobile Card View
             <div className="space-y-4">
-              {categories.map((category) => (
+              {currentCategories.map((category) => (
                 <Card key={category.id} className="p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -633,7 +669,7 @@ const CategoriesDashboard = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {categories.map((category) => (
+                {currentCategories.map((category) => (
                   <TableRow key={category.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -690,32 +726,102 @@ const CategoriesDashboard = ({
             </Table>
           )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-6">
-              <div className="text-sm text-muted-foreground">
-                Página {currentPage} de {totalPages} ({totalCategories} categorías)
+          {/* Pagination and Controls */}
+          <div className="mt-6 space-y-4">
+            {/* Items per page selector */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-muted-foreground">Mostrar:</Label>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                  className="px-3 py-1 border rounded-md text-sm bg-background"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span className="text-sm text-muted-foreground">por página</span>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1 || loading}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages || loading}
-                >
-                  Siguiente
-                </Button>
+              
+              <div className="text-sm text-muted-foreground">
+                Mostrando {startIndex + 1}-{Math.min(endIndex, totalFilteredCategories)} de {totalFilteredCategories} categorías
+                {searchTerm && ` (filtradas de ${initialStats?.total || initialTotal} total)`}
               </div>
             </div>
-          )}
+
+            {/* Professional Pagination */}
+            {totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(1)}
+                    disabled={currentPage === 1 || loading}
+                  >
+                    Primera
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1 || loading}
+                  >
+                    Anterior
+                  </Button>
+                  
+                  {/* Page numbers */}
+                  <div className="flex items-center gap-1 mx-2">
+                    {(() => {
+                      const pages = generatePageNumbers();
+                      return pages.map((item, index) => {
+                        if (item.type === 'ellipsis') {
+                          return (
+                            <span key={item.key} className="px-2 text-muted-foreground">
+                              ...
+                            </span>
+                          );
+                        }
+                        
+                        return (
+                          <Button
+                            key={item.number}
+                            variant={item.number === currentPage ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handlePageChange(item.number!)}
+                            className="w-9 h-9 p-0"
+                          >
+                            {item.number}
+                          </Button>
+                        );
+                      });
+                    })()}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages || loading}
+                  >
+                    Siguiente
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(totalPages)}
+                    disabled={currentPage === totalPages || loading}
+                  >
+                    Última
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -770,16 +876,16 @@ const CategoriesDashboard = ({
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar categoría padre" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Ninguna (Categoría principal)</SelectItem>
-                  {categories
-                    .filter(cat => cat.id !== editingCategory?.id) // Evitar auto-referencia
-                    .map((category) => (
-                    <SelectItem key={category.id} value={category.id.toString()}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                  <SelectContent>
+                    <SelectItem value="none">Ninguna (Categoría principal)</SelectItem>
+                    {allCategories
+                      .filter(cat => cat.id !== editingCategory?.id) // Evitar auto-referencia
+                      .map((category) => (
+                      <SelectItem key={category.id} value={category.id.toString()}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
               </Select>
             </div>
             

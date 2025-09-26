@@ -16,29 +16,18 @@ if (!session) {
   return Astro.redirect("/");
 }
 
-// Get URL parameters for initial load
-const url = new URL(Astro.request.url);
-const page = parseInt(url.searchParams.get('page') || '1', 10);
-const limit = parseInt(url.searchParams.get('limit') || '50', 10);
-const search = url.searchParams.get('search') || '';
-const categoryIdString = url.searchParams.get('categoryId');
-const categoryId = categoryIdString ? parseInt(categoryIdString, 10) : undefined;
-
-// Fetch products and categories data using the professional services
-const { products, total } = await ProductService.searchProducts(search, page, limit, categoryId);
-const { categories } = await CategoryService.getAllCategories(1, 100); // Fetch all categories
+// Load ALL products and categories for client-side pagination and filtering
+// This ensures we have all data available for proper pagination
+const { products, total } = await ProductService.searchProducts('', 1, 1000); // Load up to 1000 products
+const { categories } = await CategoryService.getAllCategories(1, 100); // Load all categories
 
 const productsData = {
-  data: {
-    products: products || [],
-    total: total || 0
-  }
+  products: products || [],
+  total: total || 0
 };
 
 const categoriesData = {
-  data: {
-    categories: categories || []
-  }
+  categories: categories || []
 };
 
 const title = "Gestión de Productos";
@@ -48,9 +37,9 @@ const title = "Gestión de Productos";
   <div class="container py-6">
     <ProductsDashboard 
       client:load
-      initialProducts={productsData.data.products as any}
-      initialTotal={productsData.data.total}
-      initialCategories={categoriesData.data.categories as any}
+      initialProducts={productsData.products as any}
+      initialTotal={productsData.total}
+      initialCategories={categoriesData.categories as any}
     />
   </div>
 </Base>

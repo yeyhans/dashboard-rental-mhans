@@ -2,6 +2,19 @@
 import "../styles/globals.css";
 import { supabase } from "../lib/supabase";
 import { ModeToggle } from "../components/ModeToggle";
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Home, 
+  ShoppingBag, 
+  Users, 
+  Package, 
+  ClipboardList, 
+  Tag, 
+  CreditCard, 
+  LogOut, 
+  Grid3X3 
+} from "lucide-react";
 interface Props {
   title: string;
 }
@@ -135,12 +148,8 @@ const { data: { session } } = await supabase.auth.getSession();
           style="left: 240px"
           aria-label="Toggle Sidebar"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon-collapse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-          </svg>
-          <svg xmlns="http://www.w3.org/_2000/svg" class="h-5 w-5 sidebar-icon-expand hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-          </svg>
+          <ChevronLeft className="h-5 w-5 sidebar-icon-collapse" />
+          <ChevronRight className="h-5 w-5 sidebar-icon-expand hidden" />
         </button>
         
         <div class="w-64 h-full shadow transition-all duration-300 pointer-events-auto" id="sidebar-content">
@@ -153,9 +162,7 @@ const { data: { session } } = await supabase.auth.getSession();
                 href="/dashboard" 
                 class="flex items-center px-4 py-2 rounded-lg"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
+                <Home className="h-5 w-5 sidebar-icon" />
                 <span class="sidebar-text ml-3">Dashboard</span>
               </a>
               <!-- Orders Section with Sub-menu -->
@@ -165,26 +172,24 @@ const { data: { session } } = await supabase.auth.getSession();
                   class="flex items-center justify-between px-4 py-2 rounded-lg w-full text-left"
                 >
                   <div class="flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                    </svg>
+                    <ShoppingBag className="h-5 w-5 sidebar-icon" />
                     <span class="sidebar-text ml-3">Pedidos</span>
                   </div>
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sidebar-icon transition-transform duration-200 submenu-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                  </svg>
+                  <ChevronRight className="h-4 w-4 sidebar-icon transition-transform duration-200 submenu-arrow" />
                 </button>
                 <div class="submenu ml-8 mt-1 space-y-1 hidden" id="orders-submenu">
                   <a 
                     href="/orders" 
                     class="flex items-center px-4 py-2 rounded-lg text-sm"
                   >
+                    <ClipboardList className="h-4 w-4 sidebar-icon mr-2" />
                     <span class="sidebar-text">Todos los Pedidos</span>
                   </a>
                   <a 
                     href="/orders/coupons" 
                     class="flex items-center px-4 py-2 rounded-lg text-sm"
                   >
+                    <Tag className="h-4 w-4 sidebar-icon mr-2" />
                     <span class="sidebar-text">Cupones</span>
                   </a>
                 </div>
@@ -193,9 +198,7 @@ const { data: { session } } = await supabase.auth.getSession();
                 href="/users" 
                 class="flex items-center px-4 py-2 rounded-lg"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
+                <Users className="h-5 w-5 sidebar-icon" />
                 <span class="sidebar-text ml-3">Usuarios</span>
               </a>
               <!-- Products Section with Sub-menu -->
@@ -205,26 +208,24 @@ const { data: { session } } = await supabase.auth.getSession();
                   class="flex items-center justify-between px-4 py-2 rounded-lg w-full text-left"
                 >
                   <div class="flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
+                    <Package className="h-5 w-5 sidebar-icon" />
                     <span class="sidebar-text ml-3">Productos</span>
                   </div>
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sidebar-icon transition-transform duration-200 submenu-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                  </svg>
+                  <ChevronRight className="h-4 w-4 sidebar-icon transition-transform duration-200 submenu-arrow" />
                 </button>
                 <div class="submenu ml-8 mt-1 space-y-1 hidden" id="products-submenu">
                   <a 
                     href="/products" 
                     class="flex items-center px-4 py-2 rounded-lg text-sm"
                   >
+                    <Package className="h-4 w-4 sidebar-icon mr-2" />
                     <span class="sidebar-text">Todos los Productos</span>
                   </a>
                   <a 
                     href="/products/categories" 
                     class="flex items-center px-4 py-2 rounded-lg text-sm"
                   >
+                    <Grid3X3 className="h-4 w-4 sidebar-icon mr-2" />
                     <span class="sidebar-text">Categorías</span>
                   </a>
                 </div>
@@ -233,9 +234,7 @@ const { data: { session } } = await supabase.auth.getSession();
                 href="/payments-table" 
                 class="flex items-center px-4 py-2 rounded-lg"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2" />
-                </svg>
+                <CreditCard className="h-5 w-5 sidebar-icon" />
                 <span class="sidebar-text ml-3">Pagos</span>
               </a>
               
@@ -244,9 +243,7 @@ const { data: { session } } = await supabase.auth.getSession();
                 onclick="handleLogout()"
                 class="flex items-center px-4 py-2 rounded-lg w-full text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 mt-4 border-t border-gray-200 dark:border-gray-700 pt-4"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sidebar-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
+                <LogOut className="h-5 w-5 sidebar-icon" />
                 <span class="sidebar-text ml-3">Cerrar Sesión</span>
               </button>
             </nav>
@@ -265,9 +262,7 @@ const { data: { session } } = await supabase.auth.getSession();
                 href="/dashboard" 
                 class="p-2 rounded-lg"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
+                <Home className="h-6 w-6" />
               </a>
               <!-- Orders with tooltip for submenu -->
               <div class="relative group">
@@ -276,25 +271,34 @@ const { data: { session } } = await supabase.auth.getSession();
                   class="p-2 rounded-lg block"
                   title="Pedidos"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                  </svg>
+                  <ShoppingBag className="h-6 w-6" />
                 </a>
                 <!-- Tooltip for collapsed sidebar -->
                 <div class="absolute left-full ml-2 top-0 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
                   <div class="font-medium">Pedidos</div>
-                  <div class="text-xs opacity-75">• Todos los Pedidos</div>
-                  <div class="text-xs opacity-75">• Cupones</div>
+                  <div class="text-xs opacity-75 flex items-center">
+                    <ClipboardList className="h-3 w-3 mr-1" />
+                    Todos los Pedidos
+                  </div>
+                  <div class="text-xs opacity-75 flex items-center">
+                    <Tag className="h-3 w-3 mr-1" />
+                    Cupones
+                  </div>
                 </div>
               </div>
+
+              <a
+              href="/orders/coupons"
+              class="p-2 rounded-lg"
+              >
+                <Tag className="h-6 w-6" />
+              </a>
 
               <a 
                 href="/users" 
                 class="p-2 rounded-lg"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
+                <Users className="h-6 w-6" />
               </a>
               <!-- Products with tooltip for submenu -->
               <div class="relative group">
@@ -303,24 +307,26 @@ const { data: { session } } = await supabase.auth.getSession();
                   class="p-2 rounded-lg block"
                   title="Productos"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                  </svg>
+                  <Package className="h-6 w-6" />
                 </a>
                 <!-- Tooltip for collapsed sidebar -->
                 <div class="absolute left-full ml-2 top-0 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
                   <div class="font-medium">Productos</div>
-                  <div class="text-xs opacity-75">• Todos los Productos</div>
-                  <div class="text-xs opacity-75">• Categorías</div>
+                  <div class="text-xs opacity-75 flex items-center">
+                    <Package className="h-3 w-3 mr-1" />
+                    Todos los Productos
+                  </div>
+                  <div class="text-xs opacity-75 flex items-center">
+                    <Grid3X3 className="h-3 w-3 mr-1" />
+                    Categorías
+                  </div>
                 </div>
               </div>
               <a 
                 href="/payments-table" 
                 class="p-2 rounded-lg"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2" />
-                </svg>
+                <CreditCard className="h-6 w-6" />
               </a>
               <!-- Logout Button for collapsed sidebar -->
               <button 
@@ -328,9 +334,7 @@ const { data: { session } } = await supabase.auth.getSession();
                 class="p-2 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 mt-4 border-t border-gray-200 dark:border-gray-700 pt-4"
                 title="Cerrar Sesión"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
+                <LogOut className="h-6 w-6" />
               </button>
             </nav>
           </div>
