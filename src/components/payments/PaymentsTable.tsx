@@ -83,8 +83,8 @@ const PaymentsTable = ({
   initialOrders,
   initialTotal
 }: PaymentsTableProps) => {
-  // State for all orders (never changes after initial load)
-  const [allOrders] = useState<Order[]>(initialOrders);
+  // State for all orders (can be updated after successful operations)
+  const [allOrders, setAllOrders] = useState<Order[]>(initialOrders);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -314,14 +314,18 @@ const PaymentsTable = ({
       });
 
       if (response.ok) {
-        // Update the order in allOrders state to reflect the change
-        // Since we can't directly mutate allOrders (it's const), we need to update the component
-        // The change will be reflected when the user refreshes or navigates
-        console.log(`Estado de pago actualizado para la orden ${orderId}`);
+        // Update the order in allOrders state to reflect the change immediately
+        setAllOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.id === orderId 
+              ? { ...order, pago_completo: newStatus }
+              : order
+          )
+        );
         
         // Show success message
         setError(null);
-        console.log(`Estado de pago actualizado para la orden ${orderId}`);
+        console.log(`Estado de pago actualizado para la orden ${orderId}: ${newStatus ? 'Pagado' : 'Pendiente'}`);
       } else {
         const errorData = await response.json();
         console.error('Error al actualizar estado de pago:', errorData);
@@ -361,8 +365,14 @@ const PaymentsTable = ({
         const ocValue = orderFields.oc || '';
         const facturaValue = orderFields.factura || '';
         
-        // The changes are saved to the database
-        // Local state for editable fields is already updated
+        // Update the order in allOrders state to reflect the changes
+        setAllOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.id === orderId 
+              ? { ...order, orden_compra: ocValue, numero_factura: facturaValue }
+              : order
+          )
+        );
         
         // También actualizar el estado de campos editables para que se refleje en la UI
         setEditableFields(prev => ({
