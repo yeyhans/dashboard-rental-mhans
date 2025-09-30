@@ -4,7 +4,7 @@ import micromatch from "micromatch";
 
 const { isMatch } = micromatch;
 
-const protectedRoutes = ["/dashboard(|/)", "/orders(|/)", "/users(|/)", "/payments-table(|/)", "/products(|/)"];
+const protectedRoutes = ["/dashboard(|/)", "/orders/**", "/users/**", "/payments-table(|/)", "/products/**"];
 const authRoutes = ["/api/auth/signin", "/api/auth/signout"];
 const homeRoute = "/";
 const dashboardRoute = "/dashboard";
@@ -31,8 +31,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
   
   // From here, we are dealing with a protected route
+  console.log('🔒 Checking auth for protected route:', url.pathname);
   
   if (!accessToken || !refreshToken) {
+    console.log('🔒 Access denied: No tokens found');
+    return redirect(homeRoute);
+  }
+
+  if (!supabase) {
+    console.error('Supabase client not available in middleware');
     return redirect(homeRoute);
   }
 
@@ -42,14 +49,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
   });
 
   if (error) {
+    console.log('🔒 Access denied: Invalid session', error.message);
     // Clear cookies on error and redirect
     cookies.delete("sb-access-token", { path: "/" });
     cookies.delete("sb-refresh-token", { path: "/" });
     return redirect(homeRoute);
   }
 
+  console.log('✅ Auth successful for user:', data.user?.email);
+
   // Set local user data
   locals.email = data.user?.email ?? "";
+  locals.user = data.user;
 
   // Refresh cookies with new tokens
   const accessTokenExpiresIn = data.session?.expires_in ?? 3600;

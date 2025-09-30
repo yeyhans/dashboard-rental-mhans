@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Edit, Package, Image as ImageIcon, Hash, AlertTriangle, Save, X, Tag, Truck, Plus, Minus, Trash2, Upload } from 'lucide-react';
+import { Edit, Package, Image as ImageIcon, Hash, AlertTriangle, Save, X, Tag, Truck, Plus, Minus, Trash2, Upload, File, FileText, FileCheck } from 'lucide-react';
 import EditOrderForm from './EditOrderForm';
 import { CouponSelector } from './CouponSelector';
 import { ProductSelector } from './ProductSelector';
@@ -13,6 +13,7 @@ import { apiClient } from '@/services/apiClient';
 import type { Database } from '@/types/database';
 import { toast } from 'sonner';
 import { warrantyPhotosService, type WarrantyPhotosUploadResult } from '@/services/warrantyPhotosService';
+import { generateOrderProcessingPdfFromId, generateBudgetPdfFromId } from '@/lib/orderPdfGenerationService';
 
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
@@ -126,6 +127,10 @@ function ProcessOrder({ order, sessionData }: { order: WPOrderResponse, sessionD
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Order PDF generation states
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [generatingBudget, setGeneratingBudget] = useState(false);
   
   // Initialize coupon and product state from order data
   useEffect(() => {
@@ -715,6 +720,78 @@ function ProcessOrder({ order, sessionData }: { order: WPOrderResponse, sessionD
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Order PDF generation function
+  const handleGenerateOrderPdf = async () => {
+    if (!orderData?.id) {
+      toast.error('ID de orden no disponible');
+      return;
+    }
+
+    setGeneratingPdf(true);
+    try {
+      console.log('🚀 Generating order processing PDF for order:', orderData.id);
+      
+      const result = await generateOrderProcessingPdfFromId(
+        orderData.id,
+        true, // uploadToR2
+        false // sendEmail (not needed for admin generation)
+      );
+
+      if (result.success) {
+        toast.success('Contrato de procesamiento generado exitosamente');
+        console.log('✅ PDF generated successfully:', result.pdfUrl);
+        
+        // Reload the page to show the new PDF URL
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        throw new Error(result.message || 'Error al generar el contrato');
+      }
+    } catch (error) {
+      console.error('💥 Error generating order PDF:', error);
+      toast.error(error instanceof Error ? error.message : 'Error al generar el contrato');
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
+  // Budget PDF generation function
+  const handleGenerateBudgetPdf = async () => {
+    if (!orderData?.id) {
+      toast.error('ID de orden no disponible');
+      return;
+    }
+
+    setGeneratingBudget(true);
+    try {
+      console.log('🚀 Generating budget PDF for order:', orderData.id);
+      
+      const result = await generateBudgetPdfFromId(
+        orderData.id,
+        true, // uploadToR2
+        false // sendEmail (not needed for admin generation)
+      );
+
+      if (result.success) {
+        toast.success('Presupuesto generado exitosamente');
+        console.log('✅ Budget PDF generated successfully:', result.pdfUrl);
+        
+        // Reload the page to show the new PDF URL
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        throw new Error(result.message || 'Error al generar el presupuesto');
+      }
+    } catch (error) {
+      console.error('💥 Error generating budget PDF:', error);
+      toast.error(error instanceof Error ? error.message : 'Error al generar el presupuesto');
+    } finally {
+      setGeneratingBudget(false);
+    }
+  };
+
   if (!orderData) {
     console.log('No order found in array');
     return (
@@ -898,6 +975,89 @@ function ProcessOrder({ order, sessionData }: { order: WPOrderResponse, sessionD
           </CardContent>
         </Card>
       )}
+
+      {/*PDF View */}
+      <Card>
+          <CardHeader>
+            <CardTitle>Documentación</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3 flex-wrap">
+              {orderData.new_pdf_on_hold_url && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  className="bg-blue-200 text-blue-900 hover:bg-blue-300"
+                  onClick={() => window.open(orderData.new_pdf_on_hold_url, '_blank')}
+                  title="Ver presupuesto"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Presupuesto
+                </Button>
+              )}
+              
+              {orderData.new_pdf_processing_url && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  className="bg-green-200 text-green-900 hover:bg-green-300"
+                  onClick={() => window.open(orderData.new_pdf_processing_url, '_blank')}
+                  title="Ver contrato de procesamiento"
+                >
+                  <FileCheck className="h-4 w-4 mr-2" />
+                  Contrato
+                </Button>
+              )}
+              
+              {!orderData.new_pdf_processing_url && (
+                <Button 
+                  variant="default" 
+                  size="sm"
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 shadow-lg"
+                  onClick={handleGenerateOrderPdf}
+                  disabled={generatingPdf}
+                  title="Generar contrato de procesamiento"
+                >
+                  {generatingPdf ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Generando...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Generar Contrato
+                    </>
+                  )}
+                </Button>
+              )}
+              
+              {!orderData.new_pdf_on_hold_url && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="bg-gradient-to-r from-green-600 to-teal-600 text-white hover:from-green-700 hover:to-teal-700 shadow-lg border-0"
+                  onClick={handleGenerateBudgetPdf}
+                  disabled={generatingBudget}
+                  title="Generar presupuesto"
+                >
+                  {generatingBudget ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Generando...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Generar Presupuesto
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
             {/* Enhanced Products Section */}
             <Card>
         <CardHeader>

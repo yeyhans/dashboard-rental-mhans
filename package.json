@@ -41,6 +41,7 @@
     "lucide-react": "^0.486.0",
     "micromatch": "^4.0.8",
     "next-themes": "^0.4.6",
+    "puppeteer": "^23.11.1",
     "react": "^18.3.1",
     "react-day-picker": "8.10.1",
     "react-dom": "^18.3.1",
@@ -50,8 +51,7 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
-    "zod": "^3.25.76",
-    "puppeteer": "^23.0.0"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/micromatch": "^4.0.9",

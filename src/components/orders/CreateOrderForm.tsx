@@ -1104,7 +1104,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
             ) : (
               <>
                 <Plus className="h-4 w-4" />
-                Crear Pedido + Presupuesto
+                Crear Pedido
               </>
             )}
           </Button>

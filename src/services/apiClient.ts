@@ -15,32 +15,48 @@ class ApiClient {
    */
   private async getAuthToken(): Promise<string | null> {
     if (!supabase) {
-      console.warn('Supabase client not available');
+      // Solo mostrar warning en el cliente, no en el servidor
+      if (typeof window !== 'undefined') {
+        console.warn('Supabase client not available');
+      }
       return null;
     }
     
     try {
-      console.log('Getting auth session...');
+      // Solo mostrar logs detallados en el cliente
+      if (typeof window !== 'undefined') {
+        console.log('Getting auth session...');
+      }
+      
       const { data: { session }, error } = await supabase.auth.getSession();
       
       if (error) {
-        console.error('Error getting session:', error);
+        if (typeof window !== 'undefined') {
+          console.error('Error getting session:', error);
+        }
         return null;
       }
       
       if (!session) {
-        console.warn('No active session found');
+        // En el contexto del servidor, esto es completamente normal
+        if (typeof window !== 'undefined') {
+          console.log('No active session found');
+        }
         return null;
       }
       
-      console.log('Session found:', { 
-        user: session.user?.email, 
-        hasToken: !!session.access_token 
-      });
+      if (typeof window !== 'undefined') {
+        console.log('Session found:', { 
+          user: session.user?.email, 
+          hasToken: !!session.access_token 
+        });
+      }
       
       return session.access_token || null;
     } catch (error) {
-      console.error('Error getting auth token:', error);
+      if (typeof window !== 'undefined') {
+        console.error('Error getting auth token:', error);
+      }
       return null;
     }
   }
@@ -62,6 +78,9 @@ class ApiClient {
     // Agregar token de autorización si está disponible
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    } else if (typeof window !== 'undefined') {
+      // Solo mostrar este mensaje en el cliente
+      console.log('🔧 Making request without auth token');
     }
 
     const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
@@ -124,10 +143,13 @@ class ApiClient {
       // Manejar errores de autenticación específicamente
       if (response.status === 401) {
         const authError = errorData.error || 'Token de autorización requerido';
-        console.error('Authentication error:', authError);
         
-        // Opcional: redirigir al login o mostrar modal de autenticación
-        if (typeof window !== 'undefined') {
+        // En el contexto del servidor, los errores 401 pueden ser normales
+        // si el endpoint no requiere autenticación pero el cliente intenta enviar token
+        if (typeof window === 'undefined') {
+          console.log('🔧 401 error in server context - endpoint may not require auth');
+        } else {
+          console.error('Authentication error:', authError);
           console.warn('Usuario no autenticado. Considere redirigir al login.');
         }
         

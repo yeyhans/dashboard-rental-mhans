@@ -20,7 +20,10 @@ const sessionData = {
 
 // Load ALL orders for client-side pagination and filtering
 // This ensures we have all data available for proper pagination
-let ordersData = {
+let ordersData: {
+  orders: any[];
+  total: number;
+} = {
   orders: [],
   total: 0
 };
@@ -29,44 +32,37 @@ try {
   // Use OrderService to get all orders
   const { orders, total } = await OrderService.getAllOrders(1, 1000); // Load up to 1000 orders
   
-  // Transform orders to match expected structure for backward compatibility
-  const transformedOrders = orders.map((order: any) => {
-    return {
-      ...order,
-      // Create metadata object from direct properties for backward compatibility
-      metadata: {
-        order_proyecto: order.order_proyecto || '',
-        order_fecha_inicio: order.order_fecha_inicio || '',
-        order_fecha_termino: order.order_fecha_termino || '',
-        num_jornadas: order.num_jornadas || '',
-        calculated_subtotal: order.calculated_subtotal || '0',
-        calculated_discount: order.calculated_discount || '0',
-        calculated_iva: order.calculated_iva || '0',
-        calculated_total: order.calculated_total || '0',
-        company_rut: order.company_rut || '',
-        pdf_on_hold_url: order.new_pdf_on_hold_url || '',
-        pdf_processing_url: order.new_pdf_processing_url || '',
-        order_retire_name: order.order_retire_name || '',
-        order_retire_rut: order.order_retire_rut || '',
-        order_retire_phone: order.order_retire_phone || '',
-        order_comments: order.order_comments || ''
-      },
-      // Create billing object from direct properties
-      billing: {
-        first_name: order.billing_first_name || '',
-        last_name: order.billing_last_name || '',
-        company: order.billing_company || '',
-        address_1: order.billing_address_1 || '',
-        city: order.billing_city || '',
-        email: order.billing_email || '',
-        phone: order.billing_phone || ''
-      },
-      // Set default values for missing properties
-      fotos_garantia: order.fotos_garantia || [],
-      correo_enviado: order.correo_enviado || false,
-      pago_completo: order.pago_completo ? 'true' : 'false'
-    };
-  });
+  // Usar los datos directamente de la base de datos con compatibilidad mínima
+  const transformedOrders = orders.map((order: any) => ({
+    ...order, // Todas las columnas de la tabla orders están disponibles directamente
+    // Solo agregar objetos de compatibilidad para componentes legacy
+    metadata: {
+      order_proyecto: order.order_proyecto,
+      order_fecha_inicio: order.order_fecha_inicio,
+      order_fecha_termino: order.order_fecha_termino,
+      num_jornadas: order.num_jornadas,
+      calculated_subtotal: order.calculated_subtotal,
+      calculated_discount: order.calculated_discount,
+      calculated_iva: order.calculated_iva,
+      calculated_total: order.calculated_total,
+      company_rut: order.company_rut,
+      pdf_on_hold_url: order.new_pdf_on_hold_url,
+      pdf_processing_url: order.new_pdf_processing_url,
+      order_retire_name: order.order_retire_name,
+      order_retire_rut: order.order_retire_rut,
+      order_retire_phone: order.order_retire_phone,
+      order_comments: order.order_comments
+    },
+    billing: {
+      first_name: order.billing_first_name,
+      last_name: order.billing_last_name,
+      company: order.billing_company,
+      address_1: order.billing_address_1,
+      city: order.billing_city,
+      email: order.billing_email,
+      phone: order.billing_phone
+    }
+  }));
 
   ordersData = {
     orders: transformedOrders,

@@ -145,15 +145,15 @@ const OrdersDashboard = ({
     };
   }, []);
 
-  // Filter orders based on search and status
+  // Filter orders based on search and status usando campos directos de la DB
   const filteredOrders = React.useMemo(() => {
     return allOrders.filter(order => {
-      // Filter by search term
+      // Filter by search term usando campos directos
       const matchesSearch = !searchTerm || 
-        (order.billing?.first_name && order.billing.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (order.billing?.last_name && order.billing.last_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (order.billing?.email && order.billing.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (order.metadata?.order_proyecto && order.metadata.order_proyecto.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (order.billing_first_name && order.billing_first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (order.billing_last_name && order.billing_last_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (order.billing_email && order.billing_email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (order.order_proyecto && order.order_proyecto.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (order.id && order.id.toString().includes(searchTerm));
       
       // Filter by status
@@ -340,38 +340,38 @@ const OrdersDashboard = ({
                   </div>
                 </div>
                 
-                <h3 className="font-semibold text-foreground text-lg mb-1">{order.billing.first_name} {order.billing.last_name}</h3>
-                <p className="text-sm text-muted-foreground mb-2">{order.billing.email}</p>
+                <h3 className="font-semibold text-foreground text-lg mb-1">{order.billing_first_name} {order.billing_last_name}</h3>
+                <p className="text-sm text-muted-foreground mb-2">{order.billing_email}</p>
                 
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <div>
                     <p className="text-xs text-muted-foreground">Proyecto</p>
-                    <p className="text-sm font-medium text-foreground truncate">{order.metadata?.order_proyecto || ''}</p>
+                    <p className="text-sm font-medium text-foreground truncate">{order.order_proyecto || ''}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-muted-foreground">Total</p>
-                    <p className="text-lg font-bold text-foreground">${formatCurrency(order.metadata?.calculated_total || '0')}</p>
+                    <p className="text-lg font-bold text-foreground">${formatCurrency(order.calculated_total || '0')}</p>
                   </div>
                 </div>
                 
                 <div className="mt-2 flex gap-2">
 
-                  {order.metadata?.pdf_on_hold_url && (
+                  {order.new_pdf_on_hold_url && (
                     <Button 
                       variant="ghost" 
                       size="sm"
                       className="flex-1 bg-blue-200 text-blue-900 hover:bg-blue-300"
-                      onClick={() => window.open(order.metadata.pdf_on_hold_url, '_blank')}
+                      onClick={() => window.open(order.new_pdf_on_hold_url, '_blank')}
                     >
                       <FileText className="h-4 w-4" />
                     </Button>
                   )}
-                  {order.metadata?.pdf_processing_url && (
+                  {order.new_pdf_processing_url && (
                     <Button 
                       variant="ghost" 
                       size="sm"
                       className="flex-1 bg-green-200 text-green-900 hover:bg-green-300"
-                      onClick={() => window.open(order.metadata.pdf_processing_url, '_blank')}
+                      onClick={() => window.open(order.new_pdf_processing_url, '_blank')}
                     >
                       <FileCheck className="h-4 w-4" />
                     </Button>
@@ -431,18 +431,13 @@ const OrdersDashboard = ({
                           orders: {
                             success: true,
                             orders: [{
-                              id: order.id,
-                              status: order.status,
-                              date_created: order.date_created,
-                              total: order.metadata?.calculated_total || '0',
+                              ...order, // Usar todos los campos directos de la DB
                               customer: {
-                                first_name: order.billing.first_name,
-                                last_name: order.billing.last_name,
-                                email: order.billing.email
-                              },
-                              fotos_garantia: [],
-                              correo_enviado: false,
-                              pago_completo: (order.status === 'completed').toString()
+                                id: order.customer_id,
+                                first_name: order.billing_first_name,
+                                last_name: order.billing_last_name,
+                                email: order.billing_email
+                              }
                             }]
                           }
                         }}
@@ -451,30 +446,30 @@ const OrdersDashboard = ({
                   </Dialog>
                 </TableCell>
                 <TableCell className="text-foreground">
-                  <div className="font-medium">{order.billing.first_name} {order.billing.last_name}</div>
-                  <div className="text-sm text-muted-foreground">{order.billing.email}</div>
+                  <div className="font-medium">{order.billing_first_name} {order.billing_last_name}</div>
+                  <div className="text-sm text-muted-foreground">{order.billing_email}</div>
                 </TableCell>
-                <TableCell className="text-foreground font-medium">{order.metadata?.order_proyecto || ''}</TableCell>
+                <TableCell className="text-foreground font-medium">{order.order_proyecto || ''}</TableCell>
                 <TableCell className="text-foreground">{formatDate(order.date_created)}</TableCell>
-                <TableCell className="text-foreground text-right font-bold">${formatCurrency(order.metadata?.calculated_total || '0')}</TableCell>
+                <TableCell className="text-foreground text-right font-bold">${formatCurrency(order.calculated_total || '0')}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex flex-row gap-2 justify-end">
-                    {order.metadata?.pdf_on_hold_url && (
+                    {order.new_pdf_on_hold_url && (
                       <Button 
                         variant="ghost" 
                         size="sm"
                         className="bg-blue-200 text-blue-900 hover:bg-blue-300"
-                        onClick={() => window.open(order.metadata.pdf_on_hold_url, '_blank')}
+                        onClick={() => window.open(order.new_pdf_on_hold_url, '_blank')}
                       >
                         <FileText className="h-4 w-4" />
                       </Button>
                     )}
-                    {order.metadata?.pdf_processing_url && (
+                    {order.new_pdf_processing_url && (
                       <Button 
                         variant="ghost" 
                         size="sm"
                         className="bg-green-200 text-green-900 hover:bg-green-300"
-                        onClick={() => window.open(order.metadata.pdf_processing_url, '_blank')}
+                        onClick={() => window.open(order.new_pdf_processing_url, '_blank')}
                       >
                         <FileCheck className="h-4 w-4" />
                       </Button>

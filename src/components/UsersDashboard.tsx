@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Card, 
   CardContent, 
@@ -28,7 +28,9 @@ import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Skeleton } from './ui/skeleton';
 import { Alert, AlertDescription } from './ui/alert';
-import type { UserProfile, UserStats } from '../types/user';
+import EditUserDialog from './EditUserDialog';
+import { toast } from 'sonner';
+import type { UserProfile } from '../types/user';
 import { 
   ChevronRight, 
   ExternalLink, 
@@ -39,13 +41,14 @@ import {
   CheckCircle, 
   Clock,
   AlertCircle,
-  TrendingUp,
-  UserCheck
+  UserCheck,
+  Edit
 } from 'lucide-react';
 
 interface UsersDashboardProps {
   initialUsers: UserProfile[];
   initialTotal: number;
+  sessionToken: string;
 }
 
 // Helper function to enhance user data with computed properties
@@ -80,17 +83,18 @@ const statusColors: Record<string, string> = {
 
 const UsersDashboard = ({ 
   initialUsers,
-  initialTotal
+  initialTotal,
+  sessionToken
 }: UsersDashboardProps) => {
   // All users loaded from server
-  const [allUsers] = useState<UserProfile[]>(initialUsers);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>(initialUsers);
+  const [loading] = useState(false);
+  const [error] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
-  const [stats, setStats] = useState<UserStats | null>(null);
+  // const [stats] = useState<UserStats | null>(null);
   const [isMobileView, setIsMobileView] = useState(false);
 
   // Detect mobile view
@@ -148,6 +152,16 @@ const UsersDashboard = ({
     setCurrentPage(1);
   }, [searchTerm]);
 
+  // Handle user update
+  const handleUserUpdated = (updatedUser: UserProfile) => {
+    setAllUsers(prevUsers => 
+      prevUsers.map(user => 
+        user.user_id === updatedUser.user_id ? updatedUser : user
+      )
+    );
+    toast.success('Usuario actualizado correctamente');
+  };
+
   // Refresh data - reload the page to get fresh server-side data
   const refreshData = () => {
     if (typeof window !== 'undefined') {
@@ -156,7 +170,7 @@ const UsersDashboard = ({
   };
 
   // Format date
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
     return date.toLocaleDateString('es-ES', {
@@ -193,7 +207,7 @@ const UsersDashboard = ({
             Detalles del Usuario - {enhanced.fullName}
           </DialogTitle>
           <DialogDescription>
-            Información completa del usuario registrado el {formatDate(user.fecha_creacion)}
+            Información completa del usuario registrado el {formatDate(user.created_at)}
           </DialogDescription>
         </DialogHeader>
 
@@ -339,7 +353,7 @@ const UsersDashboard = ({
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => window.open(user.url_empresa_erut, '_blank')}
+                      onClick={() => user.url_empresa_erut && window.open(user.url_empresa_erut, '_blank')}
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Ver E-RUT
@@ -354,7 +368,7 @@ const UsersDashboard = ({
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => window.open(user.new_url_e_rut_empresa, '_blank')}
+                      onClick={() => user.new_url_e_rut_empresa && window.open(user.new_url_e_rut_empresa, '_blank')}
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Ver Nuevo E-RUT
@@ -369,7 +383,7 @@ const UsersDashboard = ({
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => window.open(user.url_rut_anverso, '_blank')}
+                      onClick={() => user.url_rut_anverso && window.open(user.url_rut_anverso, '_blank')}
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Ver RUT Anverso
@@ -384,7 +398,7 @@ const UsersDashboard = ({
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => window.open(user.url_rut_reverso, '_blank')}
+                      onClick={() => user.url_rut_reverso && window.open(user.url_rut_reverso, '_blank')}
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Ver RUT Reverso
@@ -399,7 +413,7 @@ const UsersDashboard = ({
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => window.open(user.url_firma, '_blank')}
+                      onClick={() => user.url_firma && window.open(user.url_firma, '_blank')}
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Ver Firma
@@ -458,7 +472,7 @@ const UsersDashboard = ({
                     <Button 
                       variant="outline" 
                       className="w-full justify-start"
-                      onClick={() => window.open(user.url_user_contrato, '_blank')}
+                      onClick={() => user.url_user_contrato && window.open(user.url_user_contrato, '_blank')}
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Ver Contrato
@@ -587,14 +601,26 @@ const UsersDashboard = ({
                     )}
                   </div>
                   
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="w-full" onClick={() => setSelectedUser(user)}>
-                        Ver detalles <ChevronRight className="h-4 w-4 ml-2" />
-                      </Button>
-                    </DialogTrigger>
-                    {selectedUser && <UserDetailsDialog user={selectedUser} />}
-                  </Dialog>
+                  <div className="flex gap-2">
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => setSelectedUser(user)}>
+                          Ver detalles <ChevronRight className="h-4 w-4 ml-2" />
+                        </Button>
+                      </DialogTrigger>
+                      {selectedUser && <UserDetailsDialog user={selectedUser} />}
+                    </Dialog>
+                    <EditUserDialog 
+                      user={user} 
+                      onUserUpdated={handleUserUpdated}
+                      sessionToken={sessionToken}
+                      trigger={
+                        <Button variant="outline" size="sm">
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      }
+                    />
+                  </div>
                 </CardContent>
               </Card>
             );
@@ -640,14 +666,27 @@ const UsersDashboard = ({
                   <TableCell className="text-foreground">{user.empresa_nombre || '-'}</TableCell>
                   <TableCell className="text-foreground">{formatDate(user.created_at)}</TableCell>
                   <TableCell className="text-right">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" onClick={() => setSelectedUser(user)}>
-                          Ver detalles
-                        </Button>
-                      </DialogTrigger>
-                      {selectedUser && <UserDetailsDialog user={selectedUser} />}
-                    </Dialog>
+                    <div className="flex gap-2 justify-end">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" onClick={() => setSelectedUser(user)}>
+                            Ver detalles
+                          </Button>
+                        </DialogTrigger>
+                        {selectedUser && <UserDetailsDialog user={selectedUser} />}
+                      </Dialog>
+                      <EditUserDialog 
+                        user={user} 
+                        onUserUpdated={handleUserUpdated}
+                        sessionToken={sessionToken}
+                        trigger={
+                          <Button variant="outline" size="sm">
+                            <Edit className="h-4 w-4 mr-2" />
+                            Editar
+                          </Button>
+                        }
+                      />
+                    </div>
                   </TableCell>
                 </TableRow>
               );

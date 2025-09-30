@@ -3,6 +3,11 @@
 declare namespace App {
   interface Locals {
     email: string;
+    user?: {
+      id: string;
+      email?: string;
+      [key: string]: any;
+    };
   }
 }
 
