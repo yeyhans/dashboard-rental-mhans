@@ -676,52 +676,32 @@ async function generateBudgetPDFWithPuppeteer(orderData: BudgetData): Promise<{
     
     console.log('✅ Budget HTML generated successfully, size:', htmlContent.length, 'characters');
 
-    // Generate PDF using Puppeteer
-    console.log('🔄 Generating budget PDF with Puppeteer...');
-    let puppeteer;
+    // Generate PDF using our PDF service (supports both development and Vercel)
+    console.log('🔄 Generating budget PDF with PDF service...');
+    
     try {
-      puppeteer = await import('puppeteer');
+      const { generatePdfFromHtml } = await import('../../../lib/pdfService');
+      
+      const pdfBuffer = await generatePdfFromHtml({
+        htmlContent,
+        format: 'A4',
+        margin: { top: '20mm', right: '20mm', bottom: '20mm', left: '20mm' },
+        printBackground: true
+      });
+      
+      console.log('✅ Budget PDF generated successfully with PDF service, size:', pdfBuffer.byteLength, 'bytes');
+
+      return {
+        success: true,
+        pdfBuffer: pdfBuffer.buffer as ArrayBuffer
+      };
     } catch (error) {
-      console.error('❌ Puppeteer not available, using fallback method');
+      console.error('❌ PDF service not available or failed:', error);
       return {
         success: false,
-        message: 'PDF generation service not available'
+        message: 'PDF generation service failed: ' + (error instanceof Error ? error.message : 'Unknown error')
       };
     }
-    
-    const browser = await puppeteer.default.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-    
-    const page = await browser.newPage();
-    
-    // Set content and wait for images to load
-    await page.setContent(htmlContent, { 
-      waitUntil: 'networkidle2',
-      timeout: 30000 
-    });
-    
-    // Generate PDF
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: {
-        top: '20mm',
-        bottom: '20mm',
-        left: '20mm',
-        right: '20mm'
-      }
-    });
-    
-    await browser.close();
-    
-    console.log('✅ Budget PDF generated successfully with Puppeteer, size:', pdfBuffer.byteLength, 'bytes');
-
-    return {
-      success: true,
-      pdfBuffer: pdfBuffer.buffer as ArrayBuffer
-    };
 
   } catch (error) {
     console.error('Error generating budget PDF with Puppeteer:', error);
