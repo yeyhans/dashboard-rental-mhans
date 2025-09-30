@@ -31,7 +31,7 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    // Generate PDF using HTML template + Puppeteer (same as frontend)
+    // Generate PDF using HTML template + Puppeteer service
     console.log('📄 Making internal request to order-pdf page...');
     
     const baseUrl = new URL(request.url).origin;
@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ request }) => {
     
     console.log('🔗 HTML URL:', htmlUrl);
     
-    // Get HTML content
+    // Get HTML content (not .pdf extension, just HTML)
     const htmlResponse = await fetch(htmlUrl, {
       method: 'GET',
       headers: {
@@ -67,26 +67,37 @@ export const POST: APIRoute = async ({ request }) => {
     const htmlContent = await htmlResponse.text();
     console.log('✅ HTML template loaded successfully, size:', htmlContent.length, 'characters');
 
-    // Generate PDF using Puppeteer
-    console.log('🔄 Generating PDF with Puppeteer...');
-    const puppeteer = await import('puppeteer');
+    // Generate PDF using Puppeteer service
+    console.log('🔄 Generating PDF with Puppeteer service...');
     
-    const browser = await puppeteer.default.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    const { generatePdfFromHtml } = await import('../../../lib/pdfService');
     
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'networkidle2' });
-    
-    const pdfBuffer = await page.pdf({
+    const pdfBuffer = await generatePdfFromHtml({
+      htmlContent,
       format: 'A4',
       margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' },
       printBackground: true
     });
-    
-    await browser.close();
     console.log('✅ PDF generated successfully, size:', pdfBuffer.byteLength);
+
+    // Verify PDF content is valid
+    const pdfUint8Array = new Uint8Array(pdfBuffer);
+    const pdfHeader = pdfUint8Array.slice(0, 4);
+    const pdfHeaderString = String.fromCharCode(...pdfHeader);
+    console.log('📄 PDF header check:', pdfHeaderString, '(should start with %PDF)');
+    
+    if (!pdfHeaderString.startsWith('%PDF')) {
+      console.error('❌ Invalid PDF content detected!');
+      console.log('First 100 bytes:', String.fromCharCode(...pdfUint8Array.slice(0, 100)));
+      return new Response(JSON.stringify({
+        success: false,
+        message: 'PDF generado es inválido',
+        error: 'Generated content is not a valid PDF'
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
     let finalPdfUrl = htmlUrl;
 
@@ -100,17 +111,28 @@ export const POST: APIRoute = async ({ request }) => {
         finalPdfUrl = htmlUrl; // Use local HTML URL
       } else {
         try {
-          // Create FormData for Cloudflare Worker
+          // Create FormData for Cloudflare Worker with proper PDF content
           const formData = new FormData();
           const fileName = `order_processing_${orderId}_${Date.now()}.pdf`;
-          const pdfBlob = new Blob([pdfBuffer], { type: 'application/pdf' });
+          
+          // Create blob with explicit PDF content type and proper buffer
+          const pdfBlob = new Blob([pdfBuffer], { 
+            type: 'application/pdf'
+          });
+          
+          console.log('📦 Blob created - size:', pdfBlob.size, 'type:', pdfBlob.type);
+          
           formData.append('file', pdfBlob, fileName);
           formData.append('userId', orderData.customer_id.toString());
           
-          // Upload to Cloudflare Worker
+          // Upload to Cloudflare Worker with proper headers
           const uploadResponse = await fetch(`${cloudflareWorkerUrl}/upload-pdf-only`, {
             method: 'POST',
-            body: formData
+            body: formData,
+            headers: {
+              // Don't set Content-Type, let browser set it with boundary for multipart/form-data
+              'Accept': 'application/json'
+            }
           });
 
         if (uploadResponse.ok) {
