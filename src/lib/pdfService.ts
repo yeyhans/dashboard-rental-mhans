@@ -1,4 +1,5 @@
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 
 export interface PdfGenerationOptions {
   htmlContent: string;
@@ -29,25 +30,18 @@ export async function generatePdfFromHtml(options: PdfGenerationOptions): Promis
   
   try {
     if (isVercel) {
-      // Vercel configuration - use chrome-aws-lambda if available
-      console.log('🌐 Using Vercel/serverless configuration');
+      // Vercel configuration - use @sparticuz/chromium
+      console.log('🌐 Using Vercel/serverless configuration with @sparticuz/chromium');
       browser = await puppeteer.launch({
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process',
-          '--disable-gpu'
-        ],
-        headless: true
+        args: chromium.args,
+        executablePath: await chromium.executablePath(),
+        headless: true,
       });
     } else {
-      // Local development configuration
+      // Local development configuration - use system Chrome
       console.log('💻 Using local development configuration');
-      browser = await puppeteer.launch({
+      const puppeteerFull = await import('puppeteer');
+      browser = await puppeteerFull.default.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
       });
@@ -98,21 +92,18 @@ export async function generatePdfFromUrl(url: string, headers?: Record<string, s
   
   try {
     if (isVercel) {
+      // Vercel configuration - use @sparticuz/chromium
+      console.log('🌐 Using Vercel/serverless configuration with @sparticuz/chromium');
       browser = await puppeteer.launch({
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process',
-          '--disable-gpu'
-        ],
-        headless: true
+        args: chromium.args,
+        executablePath: await chromium.executablePath(),
+        headless: true,
       });
     } else {
-      browser = await puppeteer.launch({
+      // Local development configuration - use system Chrome
+      console.log('💻 Using local development configuration');
+      const puppeteerFull = await import('puppeteer');
+      browser = await puppeteerFull.default.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
       });
