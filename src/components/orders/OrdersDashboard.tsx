@@ -356,16 +356,42 @@ const OrdersDashboard = ({
                 
                 <div className="mt-2 flex gap-2">
 
-                  {order.new_pdf_on_hold_url && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      className="flex-1 bg-blue-200 text-blue-900 hover:bg-blue-300"
-                      onClick={() => window.open(order.new_pdf_on_hold_url, '_blank')}
-                    >
-                      <FileText className="h-4 w-4" />
-                    </Button>
-                  )}
+                  {order.new_pdf_on_hold_url && (() => {
+                    const budgetUrls = order.new_pdf_on_hold_url.split(',').filter(url => url.trim());
+                    const latestUrl = budgetUrls[budgetUrls.length - 1]?.trim();
+                    
+                    return (
+                      <div className="flex items-center gap-1 flex-1">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="bg-blue-200 text-blue-900 hover:bg-blue-300"
+                          onClick={() => window.open(latestUrl, '_blank')}
+                          title={`Ver presupuesto más reciente ${budgetUrls.length > 1 ? `(v${budgetUrls.length})` : ''}`}
+                        >
+                          <FileText className="h-4 w-4" />
+                          {budgetUrls.length > 1 && <span className="ml-1 text-xs">v{budgetUrls.length}</span>}
+                        </Button>
+                        
+                        {budgetUrls.length > 1 && (
+                          <div className="flex gap-1">
+                            {budgetUrls.slice(0, -1).map((url, index) => (
+                              <Button
+                                key={index}
+                                variant="outline"
+                                size="sm"
+                                className="h-6 w-6 p-0 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                onClick={() => window.open(url.trim(), '_blank')}
+                                title={`Ver versión ${index + 1} del presupuesto`}
+                              >
+                                {index + 1}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {order.new_pdf_processing_url && (
                     <Button 
                       variant="ghost" 
@@ -454,16 +480,42 @@ const OrdersDashboard = ({
                 <TableCell className="text-foreground text-right font-bold">${formatCurrency(order.calculated_total || '0')}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex flex-row gap-2 justify-end">
-                    {order.new_pdf_on_hold_url && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        className="bg-blue-200 text-blue-900 hover:bg-blue-300"
-                        onClick={() => window.open(order.new_pdf_on_hold_url, '_blank')}
-                      >
-                        <FileText className="h-4 w-4" />
-                      </Button>
-                    )}
+                    {order.new_pdf_on_hold_url && (() => {
+                      const budgetUrls = order.new_pdf_on_hold_url.split(',').filter(url => url.trim());
+                      const latestUrl = budgetUrls[budgetUrls.length - 1]?.trim();
+                      
+                      return (
+                        <div className="flex items-center gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            className="bg-blue-200 text-blue-900 hover:bg-blue-300"
+                            onClick={() => window.open(latestUrl, '_blank')}
+                            title={`Ver presupuesto más reciente ${budgetUrls.length > 1 ? `(v${budgetUrls.length})` : ''}`}
+                          >
+                            <FileText className="h-4 w-4" />
+                            {budgetUrls.length > 1 && <span className="ml-1 text-xs">v{budgetUrls.length}</span>}
+                          </Button>
+                          
+                          {budgetUrls.length > 1 && (
+                            <div className="flex gap-1">
+                              {budgetUrls.slice(0, -1).map((url, index) => (
+                                <Button
+                                  key={index}
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                  onClick={() => window.open(url.trim(), '_blank')}
+                                  title={`Ver versión ${index + 1} del presupuesto`}
+                                >
+                                  {index + 1}
+                                </Button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {order.new_pdf_processing_url && (
                       <Button 
                         variant="ghost" 
