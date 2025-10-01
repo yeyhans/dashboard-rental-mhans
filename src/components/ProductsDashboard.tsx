@@ -26,9 +26,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "./ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 import type { Product, ProductCategory } from '../types/product';
-import { ExternalLink, RefreshCw } from 'lucide-react';
+import { ExternalLink, RefreshCw, Plus, Trash2 } from 'lucide-react';
 import React from 'react';
+import ProductForm from './products/ProductForm';
 
 // Helper function to format currency with thousands separator
 const formatCurrency = (value: string | number) => {
@@ -40,17 +60,24 @@ interface ProductsDashboardProps {
   initialProducts: Product[];
   initialTotal: number;
   initialCategories?: ProductCategory[];
+  accessToken: string;
 }
 
 const ProductsDashboard = ({ 
   initialProducts,
   initialTotal,
-  initialCategories = []
+  initialCategories = [],
+  accessToken
 }: ProductsDashboardProps) => {
   // All products loaded from server
-  const [allProducts] = useState<Product[]>(initialProducts);
+  const [allProducts, setAllProducts] = useState<Product[]>(initialProducts);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [deletingProductId, setDeletingProductId] = useState<number | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [categories] = useState<ProductCategory[]>(initialCategories);
@@ -146,6 +173,110 @@ const ProductsDashboard = ({
   const refreshData = () => {
     if (typeof window !== 'undefined') {
       window.location.reload();
+    }
+  };
+
+  // Handle product deletion
+  const handleDeleteProduct = async (product: Product) => {
+    if (!product.id) {
+      console.error('❌ Dashboard: Product ID is missing');
+      alert('Error: ID del producto no encontrado');
+      return;
+    }
+
+    if (!accessToken) {
+      console.error('❌ Dashboard: Access token not available');
+      alert('Error: No se encontró token de autenticación. Por favor, inicia sesión nuevamente.');
+      return;
+    }
+
+    setDeletingProductId(product.id);
+    try {
+      console.log('🗑️ Dashboard: Eliminando producto via API:', product.id);
+      const response = await fetch(`/api/products/${product.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al eliminar el producto');
+      }
+
+      console.log('✅ Dashboard: Producto eliminado exitosamente:', product.id);
+      
+      // Remove product from the list
+      setAllProducts(prev => prev.filter(p => p.id !== product.id));
+      
+      // Show success message
+      console.log('🎉 Dashboard: Mostrando mensaje de éxito de eliminación');
+      alert(`Producto "${product.name}" eliminado exitosamente`);
+      
+    } catch (error) {
+      console.error('❌ Dashboard: Error deleting product:', error);
+      alert(error instanceof Error ? error.message : 'Error al eliminar el producto');
+    } finally {
+      setDeletingProductId(null);
+      setShowDeleteDialog(false);
+      setProductToDelete(null);
+    }
+  };
+
+  // Show delete confirmation dialog
+  const confirmDeleteProduct = (product: Product) => {
+    setProductToDelete(product);
+    setShowDeleteDialog(true);
+  };
+
+  // Handle product creation
+  const handleCreateProduct = async (productData: any) => {
+    if (!accessToken) {
+      console.error('❌ Dashboard: Access token not available');
+      alert('Error: No se encontró token de autenticación. Por favor, inicia sesión nuevamente.');
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      console.log('📎 Dashboard: Creando producto via API');
+      const response = await fetch('/api/products/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(productData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Error al crear el producto');
+      }
+
+      console.log('✅ Dashboard: Producto creado exitosamente:', result.data);
+      
+      // Add new product to the list
+      setAllProducts(prev => [result.data, ...prev]);
+      setShowCreateForm(false);
+      
+      // Show success message
+      console.log('🎉 Dashboard: Mostrando mensaje de éxito');
+      alert('Producto creado exitosamente');
+      
+      // Return the created product so ProductForm can handle images
+      return result.data;
+      
+    } catch (error) {
+      console.error('❌ Dashboard: Error creating product:', error);
+      alert(error instanceof Error ? error.message : 'Error al crear el producto');
+      throw error; // Re-throw so ProductForm can handle it
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -343,11 +474,23 @@ const ProductsDashboard = ({
                   </div>
                 </div>
                 
-                <Button variant="outline" size="sm" className="w-full h-7 text-xs" asChild>
-                  <a href={`/products/${product.id}`}>
-                    Ver detalles
-                  </a>
-                </Button>
+                <div className="flex gap-1">
+                  <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" asChild>
+                    <a href={`/products/${product.id}`}>
+                      Ver detalles
+                    </a>
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => confirmDeleteProduct(product)}
+                    disabled={deletingProductId === product.id}
+                    title="Eliminar producto"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -449,11 +592,27 @@ const ProductsDashboard = ({
                   </div>
                 </TableCell>
                 <TableCell className="text-right p-2">
-                  <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
-                    <a href={`/products/${product.id}`}>
-                      Ver detalles
-                    </a>
-                  </Button>
+                  <div className="flex gap-1 justify-end">
+                    <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                      <a href={`/products/${product.id}`}>
+                        Ver detalles
+                      </a>
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => confirmDeleteProduct(product)}
+                      disabled={deletingProductId === product.id}
+                      title="Eliminar producto"
+                    >
+                      {deletingProductId === product.id ? (
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -548,6 +707,29 @@ const ProductsDashboard = ({
                 </SelectContent>
               </Select>
               
+              <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
+                <DialogTrigger asChild>
+                  <Button className="h-10 text-xs">
+                    <Plus className="h-3 w-3 mr-1" />
+                    Crear Producto
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Crear Nuevo Producto</DialogTitle>
+                    <DialogDescription>
+                      Completa la información del producto. Los campos marcados con * son obligatorios.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <ProductForm
+                    onSubmit={handleCreateProduct}
+                    onCancel={() => setShowCreateForm(false)}
+                    categories={categories}
+                    loading={isCreating}
+                  />
+                </DialogContent>
+              </Dialog>
+
               <Button 
                 variant="outline"
                 className="h-10 text-xs" 
@@ -711,6 +893,50 @@ const ProductsDashboard = ({
           </div>
           </CardContent>
         </Card>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar producto?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción no se puede deshacer. Se eliminará permanentemente el producto:
+                <br />
+                <strong className="text-foreground">"{productToDelete?.name}"</strong>
+                <br />
+                SKU: <strong className="text-foreground">{productToDelete?.sku || 'N/A'}</strong>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel 
+                onClick={() => {
+                  setShowDeleteDialog(false);
+                  setProductToDelete(null);
+                }}
+                disabled={deletingProductId !== null}
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => productToDelete && handleDeleteProduct(productToDelete)}
+                disabled={deletingProductId !== null}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deletingProductId !== null ? (
+                  <>
+                    <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                    Eliminando...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Eliminar
+                  </>
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
   );
 };

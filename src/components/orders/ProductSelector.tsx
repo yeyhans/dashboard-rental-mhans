@@ -172,6 +172,12 @@ export const ProductSelector = ({
   validateStock = true,
   validatePriceInput = true
 }: ProductSelectorProps) => {
+  // Debug logging
+  console.log('🔍 ProductSelector Debug Info:');
+  console.log('  - Total products received:', products?.length || 0);
+  console.log('  - Products array:', products);
+  console.log('  - Loading state:', loading);
+  console.log('  - Mode:', mode);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
   const [editingItem, setEditingItem] = useState<number | null>(null);
@@ -267,18 +273,24 @@ export const ProductSelector = ({
   }, []);
 
   const filteredProducts = useMemo(() => {
-    let filtered = products;
+    console.log('🔍 Filtering products...');
+    console.log('  - Initial products count:', products?.length || 0);
+    
+    let filtered = products || [];
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
+      const beforeSearch = filtered.length;
       filtered = filtered.filter(product => 
         product.name?.toLowerCase().includes(query) ||
         product.sku?.toLowerCase().includes(query) ||
         product.description?.toLowerCase().includes(query)
       );
+      console.log(`  - After search filter "${query}":`, filtered.length, '(was', beforeSearch, ')');
     }
 
     if (enableStockFilter && stockFilter !== 'all') {
+      const beforeStock = filtered.length;
       filtered = filtered.filter(product => {
         if (stockFilter === 'in_stock') {
           return product.stock_status === 'instock';
@@ -287,9 +299,31 @@ export const ProductSelector = ({
         }
         return true;
       });
+      console.log(`  - After stock filter "${stockFilter}":`, filtered.length, '(was', beforeStock, ')');
     }
 
+    const beforeStatus = filtered.length;
     filtered = filtered.filter(product => product.status === 'publish');
+    console.log('  - After status filter (publish only):', filtered.length, '(was', beforeStatus, ')');
+    
+    // Log some sample products for debugging
+    if (filtered.length > 0) {
+      console.log('  - Sample filtered products:', filtered.slice(0, 3).map(p => ({
+        id: p.id,
+        name: p.name,
+        status: p.status,
+        stock_status: p.stock_status,
+        price: p.price
+      })));
+    } else {
+      console.log('  - No products after filtering. Sample original products:', products?.slice(0, 3).map(p => ({
+        id: p.id,
+        name: p.name,
+        status: p.status,
+        stock_status: p.stock_status,
+        price: p.price
+      })));
+    }
 
     return filtered;
   }, [products, searchQuery, stockFilter, enableStockFilter]);
@@ -343,6 +377,33 @@ export const ProductSelector = ({
           </Alert>
         )}
 
+        {/* Debug info for products */}
+        {!loading && (
+          <Alert>
+            <AlertDescription>
+              <div className="text-sm">
+                <strong>Estado de productos:</strong>
+                <ul className="mt-1 space-y-1">
+                  <li>• Total productos recibidos: {products?.length || 0}</li>
+                  <li>• Productos después de filtros: {filteredProducts.length}</li>
+                  <li>• Filtro de stock actual: {stockFilter}</li>
+                  <li>• Búsqueda actual: {searchQuery || 'ninguna'}</li>
+                </ul>
+                {products?.length === 0 && (
+                  <p className="mt-2 text-amber-600">
+                    ⚠️ No se recibieron productos del servidor. Verifique la carga de datos.
+                  </p>
+                )}
+                {products?.length > 0 && filteredProducts.length === 0 && (
+                  <p className="mt-2 text-blue-600">
+                    ℹ️ Hay productos disponibles pero están siendo filtrados. Intente cambiar los filtros.
+                  </p>
+                )}
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {mode !== 'view' && (
           <div className="space-y-4">
             <div className="flex flex-col md:flex-row gap-2">
@@ -360,20 +421,32 @@ export const ProductSelector = ({
                   {selectedProduct ? (
                     <div className="flex items-center gap-2">
                       {showProductImages && selectedProduct.images?.[0] && (
-                        <img 
-                          src={selectedProduct.images[0].src} 
-                          alt={selectedProduct.images[0].alt || selectedProduct.name || ''} 
-                          className="w-6 h-6 object-cover rounded"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
+                        <div className="w-6 h-6 flex-shrink-0">
+                          <img 
+                            src={typeof selectedProduct.images[0] === 'string' ? selectedProduct.images[0] : selectedProduct.images[0].src} 
+                            alt={typeof selectedProduct.images[0] === 'string' ? selectedProduct.name || '' : (selectedProduct.images[0].alt || selectedProduct.name || '')} 
+                            className="w-full h-full object-cover rounded border"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        </div>
                       )}
-                      <span className="truncate">
-                        {selectedProduct.name} - {formatCurrency(selectedProduct.price || 0, currency)}
-                      </span>
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-medium">{selectedProduct.name}</span>
+                          {selectedProduct.sku && (
+                            <Badge variant="secondary" className="text-xs font-mono bg-blue-100 text-blue-800">
+                              {selectedProduct.sku}
+                            </Badge>
+                          )}
+                        </div>
+                        <span className="text-sm text-green-600 font-semibold">
+                          {formatCurrency(selectedProduct.price || 0, currency)}
+                        </span>
+                      </div>
                       {validateStock && selectedProduct.stock_status === 'outofstock' && (
-                        <Badge variant="destructive" className="text-xs">Sin Stock</Badge>
+                        <Badge variant="destructive" className="text-xs">❌ Sin Stock</Badge>
                       )}
                     </div>
                   ) : (
@@ -388,31 +461,50 @@ export const ProductSelector = ({
                       <DialogTitle>Buscar Productos</DialogTitle>
                     </DialogHeader>
                     
-                    {enableStockFilter && (
-                      <div className="flex gap-2">
-                        <Button
-                          variant={stockFilter === 'all' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setStockFilter('all')}
-                        >
-                          Todos
-                        </Button>
-                        <Button
-                          variant={stockFilter === 'in_stock' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setStockFilter('in_stock')}
-                        >
-                          En Stock
-                        </Button>
-                        <Button
-                          variant={stockFilter === 'out_of_stock' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setStockFilter('out_of_stock')}
-                        >
-                          Sin Stock
-                        </Button>
-                      </div>
-                    )}
+                    <div className="flex flex-col gap-2">
+                      {enableStockFilter && (
+                        <div className="flex gap-2">
+                          <Button
+                            variant={stockFilter === 'all' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setStockFilter('all')}
+                          >
+                            Todos
+                          </Button>
+                          <Button
+                            variant={stockFilter === 'in_stock' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setStockFilter('in_stock')}
+                          >
+                            En Stock
+                          </Button>
+                          <Button
+                            variant={stockFilter === 'out_of_stock' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setStockFilter('out_of_stock')}
+                          >
+                            Sin Stock
+                          </Button>
+                        </div>
+                      )}
+                      
+                      {/* Clear filters button when no products are visible */}
+                      {products?.length > 0 && filteredProducts.length === 0 && (searchQuery || stockFilter !== 'all') && (
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSearchQuery('');
+                              setStockFilter('all');
+                            }}
+                            className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                          >
+                            Limpiar Filtros
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                     
                     <Command className="rounded-lg border shadow-md">
                       <CommandInput 
@@ -422,10 +514,30 @@ export const ProductSelector = ({
                       />
                       <CommandList className="max-h-[400px]">
                         <CommandEmpty>
-                          {filteredProducts.length === 0 && products.length > 0 
-                            ? 'No se encontraron productos con los filtros aplicados.'
-                            : 'No hay productos disponibles.'
-                          }
+                          <div className="py-6 text-center">
+                            <div className="text-muted-foreground">
+                              {products?.length === 0 ? (
+                                <div>
+                                  <p className="font-medium">No hay productos disponibles</p>
+                                  <p className="text-sm mt-1">No se cargaron productos del servidor</p>
+                                </div>
+                              ) : filteredProducts.length === 0 && products.length > 0 ? (
+                                <div>
+                                  <p className="font-medium">No se encontraron productos</p>
+                                  <p className="text-sm mt-1">
+                                    {searchQuery ? `Búsqueda: "${searchQuery}"` : ''}
+                                    {searchQuery && stockFilter !== 'all' ? ' • ' : ''}
+                                    {stockFilter !== 'all' ? `Filtro: ${stockFilter === 'in_stock' ? 'En Stock' : 'Sin Stock'}` : ''}
+                                  </p>
+                                  <p className="text-xs mt-2 text-blue-600">
+                                    Intente cambiar los filtros o limpiar la búsqueda
+                                  </p>
+                                </div>
+                              ) : (
+                                <p>No hay productos disponibles</p>
+                              )}
+                            </div>
+                          </div>
                         </CommandEmpty>
                         <CommandGroup heading={`Productos (${filteredProducts.length})`}>
                           {filteredProducts.map((product) => (
@@ -437,26 +549,28 @@ export const ProductSelector = ({
                             >
                               <div className="flex items-center gap-3 w-full">
                                 {showProductImages && product.images?.[0] && (
-                                  <img 
-                                    src={product.images[0].src} 
-                                    alt={product.images[0].alt || product.name || ''} 
-                                    className="w-10 h-10 object-cover rounded flex-shrink-0"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = 'none';
-                                    }}
-                                  />
+                                  <div className="w-10 h-10 flex-shrink-0">
+                                    <img 
+                                      src={typeof product.images[0] === 'string' ? product.images[0] : product.images[0].src} 
+                                      alt={typeof product.images[0] === 'string' ? product.name || '' : (product.images[0].alt || product.name || '')} 
+                                      className="w-full h-full object-cover rounded border"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                      }}
+                                    />
+                                  </div>
                                 )}
                                 <div className="flex flex-col flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 mb-1">
                                     <span className="font-medium truncate">{product.name}</span>
                                     {product.sku && (
-                                      <Badge variant="outline" className="text-xs">
-                                        {product.sku}
+                                      <Badge variant="secondary" className="text-xs font-mono bg-blue-100 text-blue-800">
+                                        SKU: {product.sku}
                                       </Badge>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <span className="font-medium">
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <span className="font-semibold text-green-600">
                                       {formatCurrency(product.price || 0, currency)}
                                     </span>
                                     {validateStock && (
@@ -464,15 +578,10 @@ export const ProductSelector = ({
                                         variant={product.stock_status === 'instock' ? 'default' : 'destructive'}
                                         className="text-xs"
                                       >
-                                        {product.stock_status === 'instock' ? 'En Stock' : 'Sin Stock'}
+                                        {product.stock_status === 'instock' ? '✅ En Stock' : '❌ Sin Stock'}
                                       </Badge>
                                     )}
                                   </div>
-                                  {product.short_description && (
-                                    <p className="text-xs text-muted-foreground truncate">
-                                      {product.short_description}
-                                    </p>
-                                  )}
                                 </div>
                               </div>
                             </CommandItem>

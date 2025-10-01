@@ -16,6 +16,9 @@ if (!session) {
   return Astro.redirect("/");
 }
 
+// Get the access token from the session
+const accessToken = session.access_token;
+
 // Load ALL products and categories for client-side pagination and filtering
 // This ensures we have all data available for proper pagination
 const { products, total } = await ProductService.searchProducts('', 1, 1000); // Load up to 1000 products
@@ -40,6 +43,7 @@ const title = "Gestión de Productos";
       initialProducts={productsData.products as any}
       initialTotal={productsData.total}
       initialCategories={categoriesData.categories as any}
+      accessToken={accessToken}
     />
   </div>
 </Base>

@@ -19,7 +19,7 @@ export class ProductService {
   /**
    * Obtener todos los productos con paginación
    */
-  static async getAllProducts(page: number = 1, limit: number = 1000, includeInactive: boolean = false) {
+  static async getAllProducts(page: number = 1, limit: number = 1000) {
     try {
       const client = this.ensureSupabaseAdmin();
       const offset = (page - 1) * limit;
@@ -29,9 +29,7 @@ export class ProductService {
         .select('*', { count: 'exact' })
         .order('created_at', { ascending: false });
 
-      if (!includeInactive) {
-        query = query.eq('status', 'publish');
-      }
+
 
       const { data, error, count } = await query
         .range(offset, offset + limit - 1);
@@ -89,7 +87,6 @@ export class ProductService {
         .from('products')
         .select('*')
         .eq('slug', slug)
-        .eq('status', 'publish')
         .single();
 
       if (error) {
@@ -212,7 +209,6 @@ export class ProductService {
       let query = client
         .from('products')
         .select('*', { count: 'exact' })
-        .eq('status', 'publish');
 
       // Add search filter if searchTerm is provided
       if (searchTerm && searchTerm.trim()) {

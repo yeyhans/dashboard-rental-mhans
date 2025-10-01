@@ -178,59 +178,6 @@ const EditOrderForm: React.FC<EditOrderFormProps> = ({ order, onSave, onCancel, 
     }));
   };
 
-  const handleAddProduct = () => {
-    if (!selectedProduct || productQuantity <= 0) return;
-    
-    // Find the selected product (this would need to be implemented)
-    const product = products.find(p => p.id.toString() === selectedProduct);
-    if (!product) return;
-    
-    const newItem: LineItem = {
-      id: Date.now(), // Temporary ID
-      name: product.name,
-      product_id: product.id,
-      quantity: productQuantity,
-      price: product.price,
-      subtotal: product.price * productQuantity,
-      total: product.price * productQuantity,
-      sku: product.sku || ''
-    };
-    
-    setFormData(prev => ({
-      ...prev,
-      line_items: [...(prev.line_items || []), newItem]
-    }));
-    
-    setSelectedProduct('');
-    setProductQuantity(1);
-  };
-
-  const handleRemoveProduct = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      line_items: prev.line_items?.filter((_, i) => i !== index) || []
-    }));
-  };
-
-  const handleUpdateProductQuantity = (index: number, quantity: number) => {
-    if (quantity <= 0) return;
-    
-    setFormData(prev => ({
-      ...prev,
-      line_items: prev.line_items?.map((item, i) => {
-        if (i === index) {
-          const price = typeof item.price === 'string' ? parseFloat(item.price) : (item.price || 0);
-          return {
-            ...item,
-            quantity,
-            subtotal: price * quantity,
-            total: price * quantity
-          };
-        }
-        return item;
-      }) || []
-    }));
-  };
 
   const handleSave = async () => {
     try {
@@ -257,19 +204,18 @@ const EditOrderForm: React.FC<EditOrderFormProps> = ({ order, onSave, onCancel, 
       </div>
 
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="customer">Cliente</TabsTrigger>
-          <TabsTrigger value="products">Productos</TabsTrigger>
           <TabsTrigger value="project">Proyecto</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="space-y-4">
+        <TabsContent value="general" className="space-y-3">
           <Card>
             <CardHeader>
               <CardTitle>Información General</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="status">Estado</Label>
@@ -415,102 +361,6 @@ const EditOrderForm: React.FC<EditOrderFormProps> = ({ order, onSave, onCancel, 
                     value={formData.company_rut || ''}
                     onChange={(e) => handleInputChange('company_rut', e.target.value)}
                   />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="products" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Productos del Pedido</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Add Product Section */}
-              <div className="border rounded-lg p-4 bg-gray-50">
-                <h4 className="font-medium mb-3">Agregar Producto</h4>
-                <div className="flex gap-2">
-                  <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Seleccionar producto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id.toString()}>
-                          {product.name} - ${product.price}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={productQuantity}
-                    onChange={(e) => setProductQuantity(parseInt(e.target.value) || 1)}
-                    className="w-20"
-                    placeholder="Cant."
-                  />
-                  <Button onClick={handleAddProduct} disabled={!selectedProduct}>
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Current Products */}
-              <div className="space-y-2">
-                {formData.line_items?.map((item, index) => (
-                  <div key={index} className="flex items-center gap-4 p-3 border rounded-lg">
-                    <div className="flex-1">
-                      <p className="font-medium">{item.name}</p>
-                      <p className="text-sm text-gray-500">SKU: {item.sku || 'N/A'}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => handleUpdateProductQuantity(index, parseInt(e.target.value) || 1)}
-                        className="w-20"
-                      />
-                      <span className="text-sm text-gray-500">x ${item.price}</span>
-                      <span className="font-medium">${item.total}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveProduct(index)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Totals */}
-              <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span>${formData.calculated_subtotal?.toFixed(2) || '0.00'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Descuento:</span>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.calculated_discount || 0}
-                    onChange={(e) => handleInputChange('calculated_discount', parseFloat(e.target.value) || 0)}
-                    className="w-24 text-right"
-                  />
-                </div>
-                <div className="flex justify-between">
-                  <span>IVA (19%):</span>
-                  <span>${formData.calculated_iva?.toFixed(2) || '0.00'}</span>
-                </div>
-                <div className="flex justify-between font-bold text-lg border-t pt-2">
-                  <span>Total:</span>
-                  <span>${formData.calculated_total?.toFixed(2) || '0.00'}</span>
                 </div>
               </div>
             </CardContent>

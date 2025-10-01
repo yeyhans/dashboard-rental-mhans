@@ -72,10 +72,10 @@ interface NewOrderForm {
     coupon_discount_amount?: number;
   };
   line_items: Array<{
-    product_id: string;
+    product_id: number;
     quantity: number;
     sku: string;
-    price: string;
+    price: number;
     name: string;
     image: string;
   }>;
@@ -108,10 +108,10 @@ const initialFormState: NewOrderForm = {
     coupon_discount_amount: 0
   },
   line_items: [] as Array<{
-    product_id: string;
+    product_id: number;
     quantity: number;
     sku: string;
-    price: string;
+    price: number;
     name: string;
     image: string;
   }>
@@ -295,7 +295,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
 
   // Funciones de cálculo actualizadas
   const calculateBaseSubtotal = (lineItems: NewOrderForm['line_items']) => {
-    return lineItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
+    return lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   };
 
   const calculateSubtotal = (lineItems: NewOrderForm['line_items'], numDays: number) => {
@@ -522,7 +522,11 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           calculated_iva: createdOrder.calculated_iva?.toString() || formData.metadata.calculated_iva,
           calculated_total: createdOrder.calculated_total?.toString() || formData.metadata.calculated_total
         },
-        line_items: createdOrder.line_items || formData.line_items,
+        line_items: (createdOrder.line_items || formData.line_items).map(item => ({
+          ...item,
+          product_id: item.product_id.toString(),
+          price: item.price.toString()
+        })),
         coupon_lines: createdOrder.coupon_lines || (formData.metadata.applied_coupon ? [{
           code: formData.metadata.applied_coupon.code,
           discount: formData.metadata.coupon_discount_amount?.toString() || '0',
@@ -600,7 +604,11 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           calculated_iva: formData.metadata.calculated_iva,
           calculated_total: formData.metadata.calculated_total
         },
-        line_items: formData.line_items,
+        line_items: formData.line_items.map(item => ({
+          ...item,
+          product_id: item.product_id.toString(),
+          price: item.price.toString()
+        })),
         coupon_lines: formData.metadata.applied_coupon ? [{
           code: formData.metadata.applied_coupon.code,
           discount: formData.metadata.coupon_discount_amount?.toString() || '0',
@@ -929,10 +937,10 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
                 }
                 
                 const newLineItem = {
-                  product_id: product.id.toString(),
+                  product_id: product.id,
                   quantity: quantity,
                   sku: product.sku || '',
-                  price: (product.price || 0).toString(),
+                  price: product.price || 0,
                   name: product.name || '',
                   image: productImage
                 };

@@ -12,19 +12,32 @@ let supabaseAdmin: ReturnType<typeof createClient<Database>> | null = null;
 
 // Solo crear el cliente admin en el servidor
 if (typeof window === 'undefined') {
+  console.log('🔧 Configurando Supabase Admin Client...');
+  console.log('📍 URL:', supabaseUrl ? 'Configurada' : 'FALTANTE');
+  console.log('🔑 Service Key:', supabaseServiceKey ? 'Configurada' : 'FALTANTE');
+  
   if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('❌ Variables de entorno faltantes:');
+    console.error('PUBLIC_SUPABASE_URL:', supabaseUrl);
+    console.error('SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey ? '[CONFIGURADA]' : '[FALTANTE]');
     throw new Error('Missing Supabase environment variables for service role');
   }
   
-  supabaseAdmin = createClient<Database>(supabaseUrl, supabaseServiceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    },
-    db: {
-      schema: 'public'
-    }
-  });
+  try {
+    supabaseAdmin = createClient<Database>(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      },
+      db: {
+        schema: 'public'
+      }
+    });
+    console.log('✅ Supabase Admin Client creado exitosamente');
+  } catch (error) {
+    console.error('❌ Error creando Supabase Admin Client:', error);
+    throw error;
+  }
 }
 
 export { supabaseAdmin };

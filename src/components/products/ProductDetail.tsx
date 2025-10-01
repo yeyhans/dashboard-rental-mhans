@@ -8,11 +8,11 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
-import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
 import type { Database } from '../../types/database';
 import type { ProductCategory } from '../../types/product';
 import { CategorySelector } from './CategorySelector';
+import { ProductImageUpload } from './ProductImageUpload';
 
 type Product = Database['public']['Tables']['products']['Row'];
 
@@ -104,6 +104,24 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
     setUpdatedProduct(prev => ({ ...prev, [field]: checked }));
   };
 
+  const handleImagesUpdate = (images: string[]) => {
+    setUpdatedProduct(prev => ({ ...prev, images: JSON.stringify(images) }));
+  };
+
+  // Helper function to parse images JSON
+  const parseImages = (imagesJson: any): string[] => {
+    if (!imagesJson) return [];
+    if (typeof imagesJson === 'string') {
+      try {
+        const parsed = JSON.parse(imagesJson);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return Array.isArray(imagesJson) ? imagesJson : [];
+  };
+
   // Generate slug from name
   const generateSlug = () => {
     if (!updatedProduct.name) return;
@@ -152,20 +170,6 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
       setUpdatedProduct({ ...product });
     }
     setIsEditing(!isEditing);
-  };
-
-  // Parse images from JSON
-  const parseImages = (images: any): string[] => {
-    if (!images) return [];
-    if (typeof images === 'string') {
-      try {
-        const parsed = JSON.parse(images);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
-      }
-    }
-    return Array.isArray(images) ? images : [];
   };
 
   const productImages = parseImages(product.images);
@@ -375,6 +379,13 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
                   </div>
                 </CardContent>
               </Card>
+
+              <ProductImageUpload
+                productId={product.id}
+                currentImages={parseImages(updatedProduct.images || product.images)}
+                onImagesUpdate={handleImagesUpdate}
+                disabled={isSaving}
+              />
             </TabsContent>
 
             <TabsContent value="pricing" className="space-y-4 mt-4">

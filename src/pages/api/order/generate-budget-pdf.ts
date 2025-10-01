@@ -165,7 +165,7 @@ export const POST: APIRoute = async ({ request }) => {
             finalPdfUrl = uploadResult.fileUrl || uploadResult.url;
             console.log('✅ PDF uploaded to R2:', finalPdfUrl);
 
-            // Update order with budget PDF URL (using new_pdf_on_hold_url)
+            // Update order with budget PDF URL (append to history in new_pdf_on_hold_url)
             console.log('💾 Updating order with budget PDF URL...');
             const { createClient } = await import('@supabase/supabase-js');
             const supabase = createClient(
@@ -173,10 +173,26 @@ export const POST: APIRoute = async ({ request }) => {
               import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
             );
 
+            // Get current URL history to append new URL
+            const { data: currentOrder } = await supabase
+              .from('orders')
+              .select('new_pdf_on_hold_url')
+              .eq('id', orderId)
+              .single();
+
+            let updatedUrlHistory = finalPdfUrl;
+            if (currentOrder?.new_pdf_on_hold_url) {
+              // Append new URL to existing history, separated by comma
+              updatedUrlHistory = `${currentOrder.new_pdf_on_hold_url},${finalPdfUrl}`;
+              console.log('📝 Appending to existing URL history:', updatedUrlHistory);
+            } else {
+              console.log('📝 Creating new URL history:', updatedUrlHistory);
+            }
+
             const { error: updateError } = await supabase
               .from('orders')
               .update({ 
-                new_pdf_on_hold_url: finalPdfUrl,
+                new_pdf_on_hold_url: updatedUrlHistory,
                 date_modified: new Date().toISOString()
               })
               .eq('id', orderId);
@@ -184,7 +200,7 @@ export const POST: APIRoute = async ({ request }) => {
             if (updateError) {
               console.error('⚠️ Failed to update order with budget PDF URL:', updateError);
             } else {
-              console.log('✅ Order updated with budget PDF URL');
+              console.log('✅ Order updated with budget PDF URL history');
             }
           } else {
             console.warn('⚠️ R2 upload succeeded but no fileUrl in response:', uploadResult);

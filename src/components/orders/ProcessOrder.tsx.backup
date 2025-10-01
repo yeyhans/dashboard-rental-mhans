@@ -503,17 +503,11 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       const productDetails = getProductDetails(numericProductId || 0);
       const images = productDetails ? parseProductImages(productDetails.images) : [];
       
-      // Calculate proper total and subtotal
-      const unitPrice = parseFloat(item.price?.toString() || '0');
-      const quantity = parseInt(item.quantity?.toString() || '1');
-      const calculatedTotal = unitPrice * quantity;
-      
       console.log(`🔍 Enhanced item ${index + 1}: "${item.name}"`);
       console.log(`   - Original product_id: ${item.product_id} (${typeof item.product_id})`);
       console.log(`   - Numeric product_id: ${numericProductId}`);
       console.log(`   - Product details found: ${!!productDetails}`);
       console.log(`   - Stock status: ${productDetails?.stock_status || 'not found'}`);
-      console.log(`   - Price: ${unitPrice}, Quantity: ${quantity}, Calculated Total: ${calculatedTotal}`);
       
       // Log when product details are not found
       if (!productDetails && item.product_id) {
@@ -524,10 +518,6 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       return {
         ...item,
         product_id: numericProductId || 0, // Ensure product_id is always a number
-        price: unitPrice, // Ensure price is a number
-        quantity: quantity, // Ensure quantity is a number
-        total: calculatedTotal, // Calculate total properly
-        subtotal: calculatedTotal, // Calculate subtotal properly
         images,
         description: productDetails?.description || '',
         short_description: productDetails?.short_description || '',
@@ -538,13 +528,12 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
 
   // Initialize edited products from enhanced line items when they change
   useEffect(() => {
-    if (enhancedLineItems.length > 0 && editedProducts.length === 0) {
-      console.log('🔄 Initializing editedProducts from enhancedLineItems');
-      console.log('📦 Enhanced items:', enhancedLineItems.length);
-      console.log('🖼️ Images in enhanced items:', enhancedLineItems.map(item => ({ name: item.name, images: item.images?.length || 0 })));
+    if (enhancedLineItems.length > 0) {
+      // Always update editedProducts when enhancedLineItems change
+      // This ensures images and product details are always current
       setEditedProducts([...enhancedLineItems]);
     }
-  }, [enhancedLineItems, editedProducts.length]);
+  }, [enhancedLineItems]);
 
   // Force refresh editedProducts when entering edit mode
   useEffect(() => {

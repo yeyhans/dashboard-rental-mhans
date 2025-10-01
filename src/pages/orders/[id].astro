@@ -2,7 +2,9 @@
 import Base from "../../layout/Base.astro";
 import ProcessOrder from "../../components/orders/ProcessOrder";
 import { OrderService } from "../../services/orderService";
-import { getServerUserProfile } from "../../lib/supabase";
+import { getServerUserProfile, supabase } from "../../lib/supabase";
+import { AdminService } from "../../services/adminService";
+import { ProductService } from "../../services/productService";
 
 export const prerender = false;
 
@@ -11,6 +13,15 @@ const user = Astro.locals.user;
 
 if (!user) {
   console.log('🔒 Access denied: No authenticated user found in locals');
+  return Astro.redirect("/");
+}
+
+// Get the Supabase session for API authentication
+const { data: { session } } = await supabase.auth.getSession();
+console.log('🔑 Session data:', { hasSession: !!session, hasAccessToken: !!session?.access_token });
+
+if (!session) {
+  console.log('🔒 No Supabase session found, redirecting to login');
   return Astro.redirect("/");
 }
 
@@ -29,26 +40,65 @@ if (!order) {
   return Astro.redirect("/orders");
 }
 
-// Verificar autorización - el usuario solo puede ver sus propias órdenes
-// Necesitamos obtener el perfil del usuario para comparar con customer_id
-const userProfile = await getServerUserProfile(Astro);
-if (!userProfile?.profile) {
-  console.log('🔒 Access denied: No user profile found');
-  return Astro.redirect("/");
+// Verificar autorización - administradores pueden ver todas las órdenes, usuarios solo las suyas
+// Primero verificar si el usuario es administrador
+const isAdmin = await AdminService.isAdmin(user.id);
+
+if (isAdmin) {
+  console.log('✅ Admin access granted for user:', user.id, 'order:', order.id);
+} else {
+  // Si no es admin, verificar si es el propietario de la orden
+  const userProfile = await getServerUserProfile(Astro);
+  if (!userProfile?.profile) {
+    console.log('🔒 Access denied: No user profile found');
+    return Astro.redirect("/");
+  }
+
+  // Verificar si el usuario puede acceder a esta orden
+  const canAccess = 
+    order.customer_id === userProfile.profile.user_id || // Numeric user_id
+    order.billing_email === userProfile.profile.email || // Email match
+    order.billing_email === user.email; // Session email match
+
+  if (!canAccess) {
+    console.log(`🔒 Access denied: User ${user.id} cannot access order ${order.id} (customer_id: ${order.customer_id})`);
+    return Astro.redirect("/orders");
+  }
+  
+  console.log('✅ Customer access granted for user:', user.id, 'order:', order.id);
 }
 
-// Verificar si el usuario puede acceder a esta orden
-const canAccess = 
-  order.customer_id === userProfile.profile.user_id || // Numeric user_id
-  order.billing_email === userProfile.profile.email || // Email match
-  order.billing_email === user.email; // Session email match
-
-if (!canAccess) {
-  console.log(`🔒 Access denied: User ${user.id} cannot access order ${order.id} (customer_id: ${order.customer_id})`);
-  return Astro.redirect("/orders");
+// Load all products for the product selector using direct service call
+let allProducts: any[] = [];
+try {
+  console.log('🔄 Loading all products for selector...');
+  
+  // Use ProductService directly instead of HTTP call to avoid auth issues
+  const result = await ProductService.getAllProducts(1, 1000); // page=1, limit=1000
+  
+  if (result && result.products && Array.isArray(result.products)) {
+    allProducts = result.products;
+    console.log('✅ All products loaded successfully:', allProducts.length, 'products');
+    
+    // Log sample products for debugging
+    if (allProducts.length > 0) {
+      console.log('📦 Sample products:', allProducts.slice(0, 3).map(p => ({
+        id: p.id,
+        name: p.name,
+        status: p.status,
+        stock_status: p.stock_status,
+        price: p.price
+      })));
+    }
+  } else {
+    console.error('❌ ProductService returned invalid data:', result);
+  }
+} catch (error) {
+  console.error('❌ Error loading products from ProductService:', error);
 }
 
-console.log('✅ Order access granted for user:', user.id, 'order:', order.id);
+console.log('🔍 Final allProducts before passing to ProcessOrder:', allProducts.length, 'products');
+console.log('🔍 allProducts sample:', allProducts.slice(0, 2));
 
 // Usar datos directos de la base de datos con compatibilidad mínima
 const orderData = {
@@ -111,7 +161,8 @@ const title = `Orden #${id}`;
               } as any]
             }
           }}
-          sessionData={user}
+          sessionData={session}
+          allProducts={allProducts}
         />
       </>
     ) : (
