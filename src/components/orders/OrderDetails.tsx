@@ -108,7 +108,6 @@ interface Order {
   date_completed?: string | null;
   total: number;
   subtotal?: number;
-  discount_total?: number;
   tax_total?: number;
   shipping_total?: number;
   customer_id?: number;

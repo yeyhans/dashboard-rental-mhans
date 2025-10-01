@@ -1,0 +1,105 @@
+---
+import Base from '../../layout/Base.astro';
+import { supabase } from '../../lib/supabase';
+import { ShippingService } from '../../services/shippingService';
+import ShippingDashboard from '../../components/shipping/ShippingDashboard';
+import { Toaster } from '../../components/ui/sonner';
+
+// Check if user is authenticated
+const { data: { session } } = await supabase.auth.getSession();
+
+if (!session) {
+  return Astro.redirect('/');
+}
+
+// Verify admin access
+const { data: adminUser } = await supabase
+  .from('admin_users')
+  .select('*')
+  .eq('user_id', session.user.id)
+  .single();
+
+if (!adminUser) {
+  return Astro.redirect('/');
+}
+
+// Cargar datos iniciales de métodos de envío
+let initialShippingMethods = [];
+let initialStats = null;
+let error = null;
+
+try {
+  // Obtener los primeros 20 métodos de envío
+  const shippingResult = await ShippingService.getAllShippingMethods(1, 20);
+  
+  // Obtener estadísticas de envíos
+  const statsResult = await ShippingService.getShippingStats();
+  
+  initialShippingMethods = shippingResult.shippingMethods || [];
+  initialStats = statsResult;
+} catch (err) {
+  console.error('Error loading initial shipping data:', err);
+  error = 'Error al cargar los métodos de envío iniciales';
+  initialShippingMethods = [];
+  initialStats = {
+    totalMethods: 0,
+    activeMethods: 0,
+    totalShipments: 0,
+    pendingShipments: 0,
+    deliveredShipments: 0,
+    totalRevenue: '0.00',
+    deliveryRate: '0'
+  };
+}
+---
+
+<Base title="Gestión de Envíos - Sistema de Alquiler">
+  <div class="min-h-screen bg-background">
+    <div class="container mx-auto px-4 py-8">
+      {error && (
+        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+          <p><strong>Error:</strong> {error}</p>
+        </div>
+      )}
+      
+      <ShippingDashboard 
+        client:load
+        initialShippingMethods={initialShippingMethods}
+        initialStats={initialStats}
+      />
+      
+      <Toaster 
+        client:load
+        position="top-right"
+        richColors={true}
+        closeButton={true}
+      />
+    </div>
+  </div>
+
+  <!-- Estilos adicionales para el dashboard -->
+  <style>
+    /* Asegurar que el contenedor principal tenga el espacio correcto */
+    .container {
+      max-width: 1400px;
+    }
+    
+    /* Estilos para mejorar la experiencia móvil */
+    @media (max-width: 768px) {
+      .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+    }
+    
+    /* Estilos para los diálogos */
+    [data-radix-portal] {
+      z-index: 50;
+    }
+    
+    /* Asegurar que los toasts aparezcan correctamente */
+    [data-sonner-toaster] {
+      z-index: 100;
+    }
+  </style>
+</Base>

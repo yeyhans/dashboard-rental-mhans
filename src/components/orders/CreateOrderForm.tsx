@@ -12,10 +12,11 @@ import {
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Plus, Search, FileText, Mail } from 'lucide-react';
+import { Plus, Search, FileText, Mail, Truck, CheckCircle, MapPin } from 'lucide-react';
 import { generateBudgetWithOrderData } from '../../lib/budgetGenerationService';
 import type { Database } from '../../types/database';
 import type { Product } from '../../types/product';
+import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliveryTime } from '../../services/shippingService';
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
 
@@ -29,6 +30,7 @@ import {
   CommandItem,
   CommandList,
 } from '../ui/command';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { ProductSelector } from './ProductSelector';
 import { OrderCostSummary } from './OrderCostSummary';
 import { DialogTitle } from '../ui/dialog';
@@ -63,7 +65,6 @@ interface NewOrderForm {
     num_jornadas: string;
     company_rut: string;
     calculated_subtotal: string;
-    calculated_discount: string;
     calculated_iva: string;
     calculated_total: string;
     shipping_total: string;
@@ -99,7 +100,6 @@ const initialFormState: NewOrderForm = {
     num_jornadas: '',
     company_rut: '',
     calculated_subtotal: '0',
-    calculated_discount: '0',
     calculated_iva: '0',
     calculated_total: '0',
     shipping_total: '0',
@@ -131,6 +131,10 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
   const [budgetLoading, setBudgetLoading] = useState(false);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [budgetSuccess, setBudgetSuccess] = useState<string | null>(null);
+  const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState<ShippingMethod | null>(null);
+  const [shippingLoading, setShippingLoading] = useState(false);
+  const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'shipping'>('pickup');
 
 
   // Función para obtener headers de autenticación
@@ -186,7 +190,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
     };
   };
 
-  // Cargar usuarios y productos cuando se abre el formulario
+  // Cargar usuarios, productos y métodos de envío cuando se abre el formulario
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -257,6 +261,54 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           console.error('Error loading products:', productsData.error);
           setError('Error al cargar productos: ' + (productsData.error || 'Error desconocido'));
         }
+
+        // Cargar métodos de envío disponibles
+        setShippingLoading(true);
+        try {
+          const shippingResult = await ShippingService.getAllShippingMethods(1, 100, true); // Solo métodos habilitados
+          if (shippingResult.shippingMethods && shippingResult.shippingMethods.length > 0) {
+            setShippingMethods(shippingResult.shippingMethods);
+            // Seleccionar automáticamente el primer método disponible
+            const defaultMethod = shippingResult.shippingMethods[0];
+            if (defaultMethod) {
+              setSelectedShippingMethod(defaultMethod);
+              // Actualizar el shipping_total en el formulario
+              handleShippingChange(defaultMethod.cost.toString());
+            }
+          }
+        } catch (shippingError) {
+          console.error('Error loading shipping methods:', shippingError);
+          // No mostrar error crítico, usar métodos por defecto
+          const defaultMethods: ShippingMethod[] = [
+            {
+              id: 2,
+              name: 'Envío Estándar',
+              description: 'Envío estándar a todo Chile',
+              cost: 5000,
+              shipping_type: 'flat_rate',
+              enabled: true,
+              min_amount: null,
+              max_amount: null,
+              available_regions: null,
+              excluded_regions: null,
+              estimated_days_min: 2,
+              estimated_days_max: 4,
+              requires_address: true,
+              requires_phone: true,
+              metadata: {},
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }
+          ];
+          setShippingMethods(defaultMethods);
+          const firstMethod = defaultMethods[0];
+          if (firstMethod) {
+            setSelectedShippingMethod(firstMethod);
+            handleShippingChange(firstMethod.cost.toString());
+          }
+        } finally {
+          setShippingLoading(false);
+        }
       } catch (err) {
         console.error('Error al cargar datos:', err);
         setError(err instanceof Error ? err.message : 'Error al cargar datos');
@@ -293,42 +345,63 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
     }
   };
 
-  // Funciones de cálculo actualizadas
+  // Funciones de cálculo siguiendo la fórmula estricta requerida
   const calculateBaseSubtotal = (lineItems: NewOrderForm['line_items']) => {
+    // Subtotal base diario (precio × cantidad) - sin multiplicar por días
     return lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   };
 
-  const calculateSubtotal = (lineItems: NewOrderForm['line_items'], numDays: number) => {
-    const subtotalBeforeDays = calculateBaseSubtotal(lineItems);
-    return subtotalBeforeDays * numDays;
+  const calculateProductsSubtotal = (lineItems: NewOrderForm['line_items'], numDays: number) => {
+    // 1. Subtotal de productos (precio × cantidad × días)
+    const dailySubtotal = calculateBaseSubtotal(lineItems);
+    return dailySubtotal * numDays;
   };
 
-  const calculateIVA = (subtotal: number, applyIva: boolean) => {
-    return applyIva ? subtotal * 0.19 : 0; // 19% IVA solo si apply_iva es true
+  const calculateCalculatedSubtotal = (
+    productsSubtotal: number, 
+    shippingTotal: number, 
+    couponDiscount: number
+  ) => {
+    // 2. CALCULATED_SUBTOTAL = subtotal productos + envío - descuento cupón
+    return productsSubtotal + shippingTotal - couponDiscount;
   };
 
-  const calculateTotal = (subtotal: number, iva: number, discount: string, shipping: string, couponDiscount: number) => {
-    const discountAmount = parseFloat(discount) || 0;
-    const shippingAmount = parseFloat(shipping) || 0;
-    return subtotal + iva + shippingAmount - discountAmount - couponDiscount;
+  const calculateCalculatedIVA = (calculatedSubtotal: number, applyIva: boolean) => {
+    // 3. CALCULATED_IVA = calculated_subtotal × 0.19 (solo si apply_iva es true)
+    return applyIva ? calculatedSubtotal * 0.19 : 0;
   };
 
-  // Función para actualizar todos los cálculos
+  const calculateCalculatedTotal = (calculatedSubtotal: number, calculatedIva: number) => {
+    // 4. CALCULATED_TOTAL = calculated_subtotal + calculated_iva
+    return calculatedSubtotal + calculatedIva;
+  };
+
+  // Función para actualizar todos los cálculos siguiendo la fórmula correcta
   const updateAllCalculations = (
     lineItems: NewOrderForm['line_items'], 
     numDays: number,
-    discount: string,
     shipping: string = '0',
     couponDiscount: number = 0
   ) => {
-    const subtotal = calculateSubtotal(lineItems, numDays);
-    const iva = calculateIVA(subtotal, formData.metadata.apply_iva);
-    const total = calculateTotal(subtotal, iva, discount, shipping, couponDiscount);
+    // 1. Subtotal de productos
+    const productsSubtotal = calculateProductsSubtotal(lineItems, numDays);
+    
+    // 2. Parsear valores
+    const shippingAmount = parseFloat(shipping) || 0;
+    
+    // 3. CALCULATED_SUBTOTAL = productos + envío - descuento cupón
+    const calculatedSubtotal = calculateCalculatedSubtotal(productsSubtotal, shippingAmount, couponDiscount);
+    
+    // 4. CALCULATED_IVA = calculated_subtotal × 0.19
+    const calculatedIva = calculateCalculatedIVA(calculatedSubtotal, formData.metadata.apply_iva);
+    
+    // 5. CALCULATED_TOTAL = calculated_subtotal + calculated_iva
+    const calculatedTotal = calculateCalculatedTotal(calculatedSubtotal, calculatedIva);
 
     return {
-      calculated_subtotal: subtotal.toString(),
-      calculated_iva: iva.toString(),
-      calculated_total: total.toString(),
+      calculated_subtotal: calculatedSubtotal.toString(),
+      calculated_iva: calculatedIva.toString(),
+      calculated_total: calculatedTotal.toString(),
       shipping_total: shipping
     };
   };
@@ -367,7 +440,6 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
         const calculations = updateAllCalculations(
           prev.line_items,
           days,
-          newMetadata.calculated_discount,
           newMetadata.shipping_total,
           couponDiscountAmount
         );
@@ -390,27 +462,27 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
   };
 
 
-  // Actualizar totales cuando cambia el descuento
-  const handleDiscountChange = (value: string) => {
-    setFormData(prev => {
-      const numDays = parseInt(prev.metadata.num_jornadas) || 1;
-      const calculations = updateAllCalculations(
-        prev.line_items,
-        numDays,
-        value,
-        prev.metadata.shipping_total,
-        couponDiscountAmount
-      );
 
-      return {
-        ...prev,
-        metadata: {
-          ...prev.metadata,
-          calculated_discount: value,
-          ...calculations
-        }
-      };
-    });
+  // Manejar selección de método de envío
+  const handleShippingMethodSelect = (method: ShippingMethod) => {
+    setSelectedShippingMethod(method);
+    handleShippingChange(method.cost.toString());
+  };
+
+  // Manejar cambio de método de entrega
+  const handleDeliveryMethodChange = (method: 'pickup' | 'shipping') => {
+    setDeliveryMethod(method);
+    if (method === 'pickup') {
+      setSelectedShippingMethod(null);
+      handleShippingChange('0');
+    } else if (method === 'shipping' && shippingMethods.length > 0) {
+      // Auto-seleccionar el primer método disponible cuando se cambia a shipping
+      const firstMethod = shippingMethods[0];
+      if (firstMethod) {
+        setSelectedShippingMethod(firstMethod);
+        handleShippingChange(firstMethod.cost.toString());
+      }
+    }
   };
 
   // Actualizar totales cuando cambia el shipping
@@ -420,7 +492,6 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
       const calculations = updateAllCalculations(
         prev.line_items,
         numDays,
-        prev.metadata.calculated_discount,
         value,
         couponDiscountAmount
       );
@@ -448,7 +519,6 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
       const calculations = updateAllCalculations(
         prev.line_items,
         numDays,
-        prev.metadata.calculated_discount,
         prev.metadata.shipping_total,
         discountAmount
       );
@@ -475,7 +545,6 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
       const calculations = updateAllCalculations(
         prev.line_items,
         numDays,
-        prev.metadata.calculated_discount,
         prev.metadata.shipping_total,
         0
       );
@@ -518,7 +587,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           num_jornadas: createdOrder.num_jornadas?.toString() || formData.metadata.num_jornadas,
           company_rut: createdOrder.company_rut || formData.metadata.company_rut,
           calculated_subtotal: createdOrder.calculated_subtotal?.toString() || formData.metadata.calculated_subtotal,
-          calculated_discount: createdOrder.calculated_discount?.toString() || formData.metadata.calculated_discount,
+          calculated_discount: '0',
           calculated_iva: createdOrder.calculated_iva?.toString() || formData.metadata.calculated_iva,
           calculated_total: createdOrder.calculated_total?.toString() || formData.metadata.calculated_total
         },
@@ -600,7 +669,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           num_jornadas: formData.metadata.num_jornadas,
           company_rut: formData.metadata.company_rut,
           calculated_subtotal: formData.metadata.calculated_subtotal,
-          calculated_discount: formData.metadata.calculated_discount,
+          calculated_discount: '0',
           calculated_iva: formData.metadata.calculated_iva,
           calculated_total: formData.metadata.calculated_total
         },
@@ -674,16 +743,40 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
         num_jornadas: parseInt(formData.metadata.num_jornadas) || 1,
         company_rut: formData.metadata.company_rut,
         calculated_subtotal: parseFloat(formData.metadata.calculated_subtotal) || 0,
-        calculated_discount: parseFloat(formData.metadata.calculated_discount) || 0,
+        calculated_discount: 0,
         calculated_iva: parseFloat(formData.metadata.calculated_iva) || 0,
         calculated_total: parseFloat(formData.metadata.calculated_total) || 0,
         shipping_total: parseFloat(formData.metadata.shipping_total) || 0,
+        // Shipping lines profesional usando el método seleccionado
+        shipping_lines: deliveryMethod === 'shipping' && selectedShippingMethod ? [{
+          ...ShippingService.createShippingLine(
+            selectedShippingMethod,
+            {
+              first_name: formData.billing.first_name,
+              last_name: formData.billing.last_name,
+              address_1: formData.billing.address_1,
+              city: formData.billing.city,
+              phone: formData.billing.phone
+            }
+          ),
+          meta_data: {
+            ...ShippingService.createShippingLine(selectedShippingMethod).meta_data,
+            delivery_method: deliveryMethod
+          }
+        }] : [],
+        // Coupon lines profesional
         coupon_lines: formData.metadata.applied_coupon ? [{
           id: formData.metadata.applied_coupon.id,
           code: formData.metadata.applied_coupon.code,
           discount: formData.metadata.coupon_discount_amount || 0,
           discount_type: formData.metadata.applied_coupon.discount_type,
-          amount: formData.metadata.applied_coupon.amount
+          meta_data: {
+            coupon_id: formData.metadata.applied_coupon.id.toString(),
+            coupon_amount: formData.metadata.applied_coupon.amount.toString(),
+            original_amount: calculateProductsSubtotal(formData.line_items, parseInt(formData.metadata.num_jornadas) || 1).toString(),
+            applied_to: "cart_total",
+            usage_count: 1
+          }
         }] : [],
         line_items: formData.line_items,
         status: 'on-hold' // Cambiar a on-hold para generar presupuesto automáticamente
@@ -712,6 +805,10 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
         onOrderCreated(data.data);
         setIsOpen(false);
         setFormData(initialFormState);
+        setSelectedShippingMethod(null);
+        setShippingMethods([]);
+        setSelectedUserId('');
+        setDeliveryMethod('pickup');
       } else {
         setError(data.error || 'Error al crear el pedido');
       }
@@ -951,7 +1048,8 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
                   const calculations = updateAllCalculations(
                     updatedLineItems,
                     numDays,
-                    prev.metadata.calculated_discount
+                    prev.metadata.shipping_total,
+                    couponDiscountAmount
                   );
 
                   return {
@@ -971,7 +1069,8 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
                   const calculations = updateAllCalculations(
                     updatedLineItems,
                     numDays,
-                    prev.metadata.calculated_discount
+                    prev.metadata.shipping_total,
+                    couponDiscountAmount
                   );
 
                   return {
@@ -1042,16 +1141,123 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
             </div>
           </div>
 
+          {/* Método de Entrega */}
+          <div className="space-y-4">
+            <h4 className="font-medium text-sm">¿Cómo desea entregar el pedido?</h4>
+            <RadioGroup
+              value={deliveryMethod}
+              onValueChange={handleDeliveryMethodChange}
+              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+            >
+              <div className="flex items-center space-x-3 p-4 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
+                <RadioGroupItem value="pickup" id="pickup" />
+                <div className="flex-1">
+                  <Label htmlFor="pickup" className="flex items-center space-x-2 cursor-pointer">
+                    <MapPin className="h-4 w-4" />
+                    <span className="font-medium">Retiro en tienda</span>
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    El cliente retira el pedido en tienda (Gratis)
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-3 p-4 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
+                <RadioGroupItem value="shipping" id="shipping" />
+                <div className="flex-1">
+                  <Label htmlFor="shipping" className="flex items-center space-x-2 cursor-pointer">
+                    <Truck className="h-4 w-4" />
+                    <span className="font-medium">Envío a domicilio</span>
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Envío del pedido a la dirección del cliente
+                  </p>
+                </div>
+              </div>
+            </RadioGroup>
+          </div>
+
+          {/* Selector de Métodos de Envío (solo si se selecciona shipping) */}
+          {deliveryMethod === 'shipping' && (
+            <div className="space-y-4">
+              <h4 className="font-medium text-sm flex items-center gap-2">
+                <Truck className="h-4 w-4" />
+                Método de Envío
+              </h4>
+              {shippingLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                  Cargando métodos de envío...
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  {shippingMethods.map((method) => {
+                    const cartTotal = parseFloat(formData.metadata.calculated_subtotal) || 0;
+                    const validation = ShippingService.validateShippingMethod(method, cartTotal);
+                    const isSelected = selectedShippingMethod?.id === method.id;
+                    
+                    return (
+                      <div
+                        key={method.id}
+                        className={`border rounded-lg p-3 cursor-pointer transition-colors ${
+                          isSelected 
+                            ? 'border-primary bg-primary/5' 
+                            : validation.isValid 
+                              ? 'border-border hover:border-primary/50' 
+                              : 'border-border bg-muted/50 cursor-not-allowed opacity-60'
+                        }`}
+                        onClick={() => validation.isValid && handleShippingMethodSelect(method)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                              isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
+                            }`}>
+                              {isSelected && <CheckCircle className="h-3 w-3 text-primary-foreground" />}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{method.name}</span>
+                                <span className="text-sm font-semibold text-green-600">
+                                  {formatShippingCost(method.cost)}
+                                </span>
+                              </div>
+                              {method.description && (
+                                <p className="text-sm text-muted-foreground">{method.description}</p>
+                              )}
+                              <p className="text-xs text-muted-foreground">
+                                Entrega: {formatDeliveryTime(method.estimated_days_min, method.estimated_days_max)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        {!validation.isValid && validation.message && (
+                          <div className="mt-2 text-xs text-destructive">
+                            {validation.message}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {shippingMethods.length === 0 && !shippingLoading && (
+                    <div className="text-sm text-muted-foreground text-center py-4">
+                      No hay métodos de envío disponibles
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Resumen de Costos */}
           <OrderCostSummary
             baseSubtotal={calculateBaseSubtotal(formData.line_items).toString()}
             subtotal={formData.metadata.calculated_subtotal}
-            discount={formData.metadata.calculated_discount}
+            discount="0"
             iva={formData.metadata.calculated_iva}
             total={formData.metadata.calculated_total}
             shipping={formData.metadata.shipping_total}
             numDays={parseInt(formData.metadata.num_jornadas) || 1}
-            onDiscountChange={handleDiscountChange}
             onShippingChange={handleShippingChange}
             onCouponApplied={handleCouponApplied}
             onCouponRemoved={handleCouponRemoved}
@@ -1072,7 +1278,8 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
             mode="create"
             loading={loading}
             showCoupons={true}
-            showShipping={true}
+            showShipping={false}
+            showManualDiscount={false}
           />
 
         </div>

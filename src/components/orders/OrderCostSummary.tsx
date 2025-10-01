@@ -35,6 +35,7 @@ interface OrderCostSummaryProps {
   userId?: number | undefined;
   showCoupons?: boolean;
   showShipping?: boolean;
+  showManualDiscount?: boolean;
   accessToken?: string | undefined;
 }
 
@@ -60,6 +61,7 @@ export const OrderCostSummary = ({
   userId,
   showCoupons = true,
   showShipping = true,
+  showManualDiscount = true,
   accessToken
 }: OrderCostSummaryProps) => {
   const [applyIva, setApplyIva] = useState(parseFloat(iva) > 0);
@@ -70,10 +72,6 @@ export const OrderCostSummary = ({
   }, [iva]);
   
   const taxRate = 0.19;
-  
-  const calculateIva = (subtotalValue: number): number => {
-    return applyIva ? subtotalValue * taxRate : 0;
-  };
   
   const formatCurrencyWithSymbol = (value: string | number) => {
     const symbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '$';
@@ -95,7 +93,8 @@ export const OrderCostSummary = ({
       const newIva = checked ? Math.round(subtotalNum * taxRate * 100) / 100 : 0;
       
       // Calcular nuevo total (subtotal - descuento manual - descuento cupón + shipping + IVA)
-      const newTotal = Math.round((subtotalNum - discountNum - couponDiscountNum + shippingNum + newIva) * 100) / 100;
+      const manualDiscountNum = showManualDiscount ? discountNum : 0;
+      const newTotal = Math.round((subtotalNum - manualDiscountNum - couponDiscountNum + shippingNum + newIva) * 100) / 100;
       
       console.log('Recalculando con IVA:', {
         subtotal: subtotalNum,
@@ -126,7 +125,8 @@ export const OrderCostSummary = ({
       const couponDiscountNum = Math.round((couponDiscountAmount || 0) * 100) / 100;
       const ivaNum = Math.round((parseFloat(iva) || 0) * 100) / 100;
       
-      const newTotal = Math.round((subtotalNum - discountNum - couponDiscountNum + shippingNum + ivaNum) * 100) / 100;
+      const manualDiscountNum = showManualDiscount ? discountNum : 0;
+      const newTotal = Math.round((subtotalNum - manualDiscountNum - couponDiscountNum + shippingNum + ivaNum) * 100) / 100;
       
       onTotalChange(newTotal.toString(), iva);
     }
@@ -146,7 +146,8 @@ export const OrderCostSummary = ({
       const couponDiscountNum = Math.round(discountAmount * 100) / 100;
       const ivaNum = Math.round((parseFloat(iva) || 0) * 100) / 100;
       
-      const newTotal = Math.round((subtotalNum - discountNum - couponDiscountNum + shippingNum + ivaNum) * 100) / 100;
+      const manualDiscountNum = showManualDiscount ? discountNum : 0;
+      const newTotal = Math.round((subtotalNum - manualDiscountNum - couponDiscountNum + shippingNum + ivaNum) * 100) / 100;
       
       onTotalChange(newTotal.toString(), iva);
     }
@@ -165,7 +166,8 @@ export const OrderCostSummary = ({
       const shippingNum = Math.round((parseFloat(shipping) || 0) * 100) / 100;
       const ivaNum = Math.round((parseFloat(iva) || 0) * 100) / 100;
       
-      const newTotal = Math.round((subtotalNum - discountNum + shippingNum + ivaNum) * 100) / 100;
+      const manualDiscountNum = showManualDiscount ? discountNum : 0;
+      const newTotal = Math.round((subtotalNum - manualDiscountNum + shippingNum + ivaNum) * 100) / 100;
       
       onTotalChange(newTotal.toString(), iva);
     }
@@ -191,25 +193,28 @@ export const OrderCostSummary = ({
           <span className="font-medium">({numDays} jornada{numDays !== 1 ? 's' : ''}) {formatCurrencyWithSymbol(subtotal)}</span>
         </div>
         
-        <div className="flex justify-between items-center gap-2">
-          <span className="text-muted-foreground">Descuento Manual</span>
-          {isEditable && onDiscountChange ? (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">$</span>
-              <Input
-                type="number"
-                className="w-20 md:w-24 text-right h-8"
-                value={discount}
-                onChange={(e) => onDiscountChange(e.target.value)}
-                disabled={loading}
-                min="0"
-                step="1000"
-              />
-            </div>
-          ) : (
-            <span className="font-medium text-red-600">-{formatCurrencyWithSymbol(discount)}</span>
-          )}
-        </div>
+        {/* Manual Discount - only show if enabled */}
+        {showManualDiscount && (
+          <div className="flex justify-between items-center gap-2">
+            <span className="text-muted-foreground">Descuento Manual</span>
+            {isEditable && onDiscountChange ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">$</span>
+                <Input
+                  type="number"
+                  className="w-20 md:w-24 text-right h-8"
+                  value={discount}
+                  onChange={(e) => onDiscountChange(e.target.value)}
+                  disabled={loading}
+                  min="0"
+                  step="1000"
+                />
+              </div>
+            ) : (
+              <span className="font-medium text-red-600">-{formatCurrencyWithSymbol(discount)}</span>
+            )}
+          </div>
+        )}
         
         {/* Coupon Discount Display */}
         {couponDiscountAmount > 0 && (
@@ -275,7 +280,7 @@ export const OrderCostSummary = ({
         {mode === 'view' && (
           <div className="text-xs text-muted-foreground border-t pt-2 mt-2">
             <div className="grid grid-cols-2 gap-2">
-              <span>Subtotal sin IVA: {formatCurrencyWithSymbol(parseFloat(subtotal) - parseFloat(discount) - couponDiscountAmount)}</span>
+              <span>Subtotal sin IVA: {formatCurrencyWithSymbol(parseFloat(subtotal) - (showManualDiscount ? parseFloat(discount) : 0) - couponDiscountAmount)}</span>
               <span>IVA aplicado: {applyIva ? 'Sí' : 'No'}</span>
             </div>
           </div>
@@ -285,7 +290,7 @@ export const OrderCostSummary = ({
       {/* Coupon Selector */}
       {showCoupons && isEditable && (
         <CouponSelector
-          subtotal={parseFloat(subtotal) - parseFloat(discount)}
+          subtotal={parseFloat(subtotal) - (showManualDiscount ? parseFloat(discount) : 0)}
           onCouponApplied={handleCouponApplied}
           onCouponRemoved={handleCouponRemoved}
           appliedCoupon={appliedCoupon}

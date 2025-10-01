@@ -168,7 +168,6 @@ export class DashboardService {
           calculated_iva: order.calculated_iva || 0,
           calculated_total: order.calculated_total || order.total || 0,
           total: order.total || 0,
-          discount_total: order.discount_total || 0,
           shipping_total: order.shipping_total || 0
         };
 
@@ -385,7 +384,6 @@ export class DashboardService {
         calculated_iva: order.calculated_iva || 0,
         calculated_total: order.calculated_total || order.total || 0,
         total: order.total || 0,
-        discount_total: order.discount_total || 0,
         shipping_total: order.shipping_total || 0
       })) || [];
 

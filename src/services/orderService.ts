@@ -28,7 +28,6 @@ export class OrderService {
           calculated_discount,
           calculated_iva,
           calculated_total,
-          discount_total,
           shipping_total,
           cart_tax,
           total,
@@ -102,7 +101,6 @@ export class OrderService {
         calculated_iva: order.calculated_iva || 0,
         calculated_total: order.calculated_total || order.total || 0,
         total: order.total || 0,
-        discount_total: order.discount_total || 0,
         shipping_total: order.shipping_total || 0,
         cart_tax: order.cart_tax || 0,
         total_tax: order.total_tax || 0
@@ -141,7 +139,6 @@ export class OrderService {
           calculated_discount,
           calculated_iva,
           calculated_total,
-          discount_total,
           shipping_total,
           cart_tax,
           total,
@@ -215,7 +212,6 @@ export class OrderService {
         calculated_iva: data.calculated_iva || 0,
         calculated_total: data.calculated_total || data.total || 0,
         total: data.total || 0,
-        discount_total: data.discount_total || 0,
         shipping_total: data.shipping_total || 0,
         cart_tax: data.cart_tax || 0,
         total_tax: data.total_tax || 0
@@ -251,7 +247,6 @@ export class OrderService {
         calculated_iva: data.calculated_iva || 0,
         calculated_total: data.calculated_total || data.total || 0,
         total: data.total || 0,
-        discount_total: data.discount_total || 0,
         shipping_total: data.shipping_total || 0,
         cart_tax: data.cart_tax || 0,
         total_tax: data.total_tax || 0
@@ -288,7 +283,6 @@ export class OrderService {
         calculated_iva: data.calculated_iva || 0,
         calculated_total: data.calculated_total || data.total || 0,
         total: data.total || 0,
-        discount_total: data.discount_total || 0,
         shipping_total: data.shipping_total || 0,
         cart_tax: data.cart_tax || 0,
         total_tax: data.total_tax || 0
@@ -344,7 +338,6 @@ export class OrderService {
           calculated_discount,
           calculated_iva,
           calculated_total,
-          discount_total,
           shipping_total,
           cart_tax,
           total,
@@ -413,7 +406,6 @@ export class OrderService {
         calculated_iva: order.calculated_iva || 0,
         calculated_total: order.calculated_total || order.total || 0,
         total: order.total || 0,
-        discount_total: order.discount_total || 0,
         shipping_total: order.shipping_total || 0,
         cart_tax: order.cart_tax || 0,
         total_tax: order.total_tax || 0
@@ -455,7 +447,6 @@ export class OrderService {
           calculated_discount,
           calculated_iva,
           calculated_total,
-          discount_total,
           shipping_total,
           cart_tax,
           total,
@@ -524,7 +515,6 @@ export class OrderService {
         calculated_iva: order.calculated_iva || 0,
         calculated_total: order.calculated_total || order.total || 0,
         total: order.total || 0,
-        discount_total: order.discount_total || 0,
         shipping_total: order.shipping_total || 0,
         cart_tax: order.cart_tax || 0,
         total_tax: order.total_tax || 0
@@ -566,7 +556,6 @@ export class OrderService {
           calculated_discount,
           calculated_iva,
           calculated_total,
-          discount_total,
           shipping_total,
           cart_tax,
           total,
@@ -636,7 +625,6 @@ export class OrderService {
         calculated_iva: order.calculated_iva || 0,
         calculated_total: order.calculated_total || order.total || 0,
         total: order.total || 0,
-        discount_total: order.discount_total || 0,
         shipping_total: order.shipping_total || 0,
         cart_tax: order.cart_tax || 0,
         total_tax: order.total_tax || 0
@@ -694,7 +682,6 @@ export class OrderService {
         calculated_iva: data.calculated_iva || 0,
         calculated_total: data.calculated_total || data.total || 0,
         total: data.total || 0,
-        discount_total: data.discount_total || 0,
         shipping_total: data.shipping_total || 0,
         cart_tax: data.cart_tax || 0,
         total_tax: data.total_tax || 0
@@ -914,7 +901,6 @@ export class OrderService {
         calculated_iva: data.calculated_iva || 0,
         calculated_total: data.calculated_total || data.total || 0,
         total: data.total || 0,
-        discount_total: data.discount_total || 0,
         shipping_total: data.shipping_total || 0,
         cart_tax: data.cart_tax || 0,
         total_tax: data.total_tax || 0

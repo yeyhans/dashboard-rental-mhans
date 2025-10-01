@@ -25,7 +25,6 @@ export type Order = {
   calculated_discount: number;
   calculated_iva: number;
   calculated_total: number;
-  discount_total: number;
   shipping_total: number;
   cart_tax: number;
   total: number;

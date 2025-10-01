@@ -18,7 +18,6 @@ export interface OrderPdfData {
   calculated_discount?: string;
   calculated_iva?: string;
   calculated_total?: string;
-  discount_total?: string;
   shipping_total?: string;
   cart_tax?: string;
   total?: string;

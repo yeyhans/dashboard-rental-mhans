@@ -4,8 +4,18 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Label } from '../ui/label';
 import { Card, CardContent } from '../ui/card';
-import { Loader2, Tag, Check, X, AlertCircle } from 'lucide-react';
+import { Loader2, Tag, Check, X, AlertCircle, List } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Command,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '../ui/command';
+import { DialogTitle } from '../ui/dialog';
 import type { Database } from '../../types/database';
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
@@ -43,10 +53,83 @@ export const CouponSelector = ({
   const [couponCode, setCouponCode] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<CouponValidationResult | null>(null);
+  const [availableCoupons, setAvailableCoupons] = useState<Coupon[]>([]);
+  const [isLoadingCoupons, setIsLoadingCoupons] = useState(false);
+  const [showCouponList, setShowCouponList] = useState(false);
 
   // Helper function to format currency
   const formatCurrency = (value: number) => {
     return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  // Load available coupons
+  const loadAvailableCoupons = async () => {
+    setIsLoadingCoupons(true);
+    
+    try {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add authorization header if accessToken is available
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+      
+      // Try different status values - first try 'publish' (as used in CouponService)
+      let response = await fetch(`/api/coupons?limit=100&status=publish`, {
+        method: 'GET',
+        headers,
+        credentials: 'include'
+      });
+
+      let data = await response.json();
+      
+      // If no results with 'publish', try without status filter to get all coupons
+      if (!data.success || !data.data || !data.data.coupons || data.data.coupons.length === 0) {
+        console.log('No coupons found with status=publish, trying without status filter...');
+        
+        response = await fetch(`/api/coupons?limit=100`, {
+          method: 'GET',
+          headers,
+          credentials: 'include'
+        });
+        
+        data = await response.json();
+      }
+
+      console.log('Coupons API response:', data);
+
+      if (data.success && data.data && data.data.coupons) {
+        console.log(`Found ${data.data.coupons.length} coupons from API`);
+        
+        // Filter active coupons that haven't expired
+        const activeCoupons = data.data.coupons.filter((coupon: Coupon) => {
+          const now = new Date();
+          const expiryDate = coupon.date_expires ? new Date(coupon.date_expires) : null;
+          
+          // Accept both 'publish' and 'active' status, or any status if we're not filtering
+          const isActive = coupon.status === 'publish' || coupon.status === 'active' || !coupon.status;
+          const isNotExpired = !expiryDate || expiryDate > now;
+          const hasUsagesLeft = coupon.usage_limit === null || (coupon.usage_count || 0) < coupon.usage_limit;
+          
+          console.log(`Coupon ${coupon.code}: status=${coupon.status}, isActive=${isActive}, isNotExpired=${isNotExpired}, hasUsagesLeft=${hasUsagesLeft}`);
+          
+          return isActive && isNotExpired && hasUsagesLeft;
+        });
+        
+        console.log(`Filtered to ${activeCoupons.length} active coupons`);
+        setAvailableCoupons(activeCoupons);
+      } else {
+        console.error('Error loading coupons:', data.error || 'No data received');
+        setAvailableCoupons([]);
+      }
+    } catch (error) {
+      console.error('Error loading coupons:', error);
+      setAvailableCoupons([]);
+    } finally {
+      setIsLoadingCoupons(false);
+    }
   };
 
   // Calculate discount amount based on coupon type
@@ -163,6 +246,59 @@ export const CouponSelector = ({
     toast.info('Cupón removido');
   };
 
+  // Handle coupon selection from list
+  const handleCouponSelect = async (coupon: Coupon) => {
+    setCouponCode(coupon.code);
+    setShowCouponList(false);
+    
+    // Validate the selected coupon
+    await validateCoupon(coupon.code);
+  };
+
+  // Show coupon list
+  const handleShowCouponList = () => {
+    if (availableCoupons.length === 0) {
+      loadAvailableCoupons();
+    }
+    setShowCouponList(true);
+  };
+
+  // Debug function to check coupons status
+  const handleDebugCoupons = async () => {
+    try {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+      
+      const response = await fetch('/api/coupons/debug', {
+        method: 'GET',
+        headers,
+        credentials: 'include'
+      });
+
+      const data = await response.json();
+      console.log('🔍 Coupon Debug Results:', data);
+      
+      if (data.success) {
+        const debug = data.debug;
+        toast.info(`Diagnóstico de Cupones`, {
+          description: `Total: ${debug.totalCoupons}, Activos: ${debug.activeCount}, Expirados: ${debug.expiredCount}. Ver consola para detalles.`
+        });
+      } else {
+        toast.error('Error en diagnóstico', {
+          description: data.error
+        });
+      }
+    } catch (error) {
+      console.error('Error in debug:', error);
+      toast.error('Error al ejecutar diagnóstico');
+    }
+  };
+
   // Validate coupon when code changes (debounced)
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -248,6 +384,14 @@ export const CouponSelector = ({
             </div>
             <Button
               variant="outline"
+              onClick={handleShowCouponList}
+              disabled={disabled}
+              title="Seleccionar cupón de la lista"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => validateCoupon(couponCode)}
               disabled={disabled || isValidating || !couponCode.trim()}
             >
@@ -318,10 +462,107 @@ export const CouponSelector = ({
         </div>
       )}
 
+      {/* Coupon Selection Dialog */}
+      <CommandDialog open={showCouponList} onOpenChange={setShowCouponList}>
+        <DialogTitle className="px-4 pt-4">Seleccionar Cupón</DialogTitle>
+        <Command className="rounded-lg border shadow-md">
+          <CommandInput placeholder="Buscar cupón por código o descripción..." />
+          <CommandList>
+            <CommandEmpty>
+              {isLoadingCoupons ? (
+                <div className="flex items-center justify-center gap-2 py-4">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Cargando cupones...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+                  <AlertCircle className="h-8 w-8 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">No se encontraron cupones disponibles</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Puede que no haya cupones creados o todos estén expirados/agotados.
+                    </p>
+                    <div className="flex gap-2 mt-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={loadAvailableCoupons}
+                      >
+                        Recargar cupones
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleDebugCoupons}
+                      >
+                        Diagnóstico
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CommandEmpty>
+            <CommandGroup heading="Cupones Disponibles">
+              {availableCoupons.map((coupon) => {
+                const discountAmount = calculateDiscountAmount(coupon, subtotal);
+                return (
+                  <CommandItem
+                    key={coupon.id}
+                    value={`${coupon.code} ${coupon.description || ''}`}
+                    onSelect={() => handleCouponSelect(coupon)}
+                    className="flex flex-col items-start gap-2 p-3"
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2">
+                        <Tag className="h-4 w-4 text-muted-foreground" />
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                          {coupon.code}
+                        </Badge>
+                        <span className="font-medium text-green-600">
+                          {getDiscountTypeText(coupon.discount_type, coupon.amount)}
+                        </span>
+                      </div>
+                      <span className="text-sm font-semibold text-green-600">
+                        -${formatCurrency(discountAmount)}
+                      </span>
+                    </div>
+                    {coupon.description && (
+                      <p className="text-sm text-muted-foreground ml-6">
+                        {coupon.description}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-4 ml-6 text-xs text-muted-foreground">
+                      {coupon.minimum_amount && (
+                        <span>Mín: ${formatCurrency(coupon.minimum_amount)}</span>
+                      )}
+                      {coupon.maximum_amount && (
+                        <span>Máx: ${formatCurrency(coupon.maximum_amount)}</span>
+                      )}
+                      {coupon.usage_limit && (
+                        <span>Usos: {coupon.usage_count || 0}/{coupon.usage_limit}</span>
+                      )}
+                      {coupon.date_expires && (
+                        <span>Expira: {new Date(coupon.date_expires).toLocaleDateString()}</span>
+                      )}
+                    </div>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </CommandDialog>
+
       {/* Help Text */}
       {!appliedCoupon && (
         <p className="text-xs text-muted-foreground">
-          Ingresa un código de cupón válido para obtener descuentos en tu pedido
+          Ingresa un código de cupón o <button 
+            onClick={handleShowCouponList}
+            className="text-blue-600 hover:text-blue-700 underline"
+            disabled={disabled}
+          >
+            selecciona uno de la lista
+          </button> para obtener descuentos en tu pedido
         </p>
       )}
     </div>
