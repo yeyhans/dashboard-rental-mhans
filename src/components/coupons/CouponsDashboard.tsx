@@ -16,6 +16,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -101,7 +102,6 @@ const CouponsDashboard = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(Math.ceil(initialTotal / 20));
-  const [totalCoupons, setTotalCoupons] = useState(initialTotal);
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
@@ -130,7 +130,6 @@ const CouponsDashboard = ({
         const data: CouponsResponse = result.data;
         setCoupons(data.coupons);
         setTotalPages(data.totalPages);
-        setTotalCoupons(data.total);
         setCurrentPage(data.page);
       } else {
         toast.error('Error al cargar los cupones');
@@ -275,9 +274,12 @@ const CouponsDashboard = ({
               Crear Cupón
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Crear Nuevo Cupón</DialogTitle>
+              <DialogDescription>
+                Complete los campos para crear un nuevo cupón de descuento
+              </DialogDescription>
             </DialogHeader>
             <CreateCouponForm 
               onSuccess={() => {
@@ -533,9 +535,12 @@ const CouponsDashboard = ({
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Cupón</DialogTitle>
+            <DialogDescription>
+              Modifique los campos del cupón según sea necesario
+            </DialogDescription>
           </DialogHeader>
           {editingCoupon && (
             <EditCouponForm 

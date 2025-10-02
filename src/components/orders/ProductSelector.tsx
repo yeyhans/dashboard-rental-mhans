@@ -68,25 +68,10 @@ const PlusIcon = () => (
   </svg>
 );
 
-const SaveIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-    <polyline points="17,21 17,13 7,13 7,21" />
-    <polyline points="7,3 7,8 15,8" />
-  </svg>
-);
-
 const XIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
     <path d="m18 6-12 12" />
     <path d="m6 6 12 12" />
-  </svg>
-);
-
-const EditIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-    <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z" />
   </svg>
 );
 
@@ -139,7 +124,6 @@ interface ProductSelectorProps {
   numDays?: number;
   onAddProduct: (product: EnhancedProduct, quantity: number) => void;
   onRemoveProduct: (index: number) => void;
-  onUpdateProduct?: (itemId: number, updates: Partial<EnhancedLineItem>) => void;
   loading?: boolean;
   error?: string | null;
   mode: 'create' | 'edit' | 'view';
@@ -149,6 +133,7 @@ interface ProductSelectorProps {
   onError?: (error: string) => void;
   onSuccess?: (message: string) => void;
   enableStockFilter?: boolean;
+  enableStatusFilter?: boolean;
   validateStock?: boolean;
   validatePriceInput?: boolean;
 }
@@ -159,7 +144,6 @@ export const ProductSelector = ({
   numDays = 1,
   onAddProduct,
   onRemoveProduct,
-  onUpdateProduct,
   loading = false,
   error = null,
   mode = 'create',
@@ -169,6 +153,7 @@ export const ProductSelector = ({
   onError,
   onSuccess,
   enableStockFilter = true,
+  enableStatusFilter = false,
   validateStock = true,
   validatePriceInput = true
 }: ProductSelectorProps) => {
@@ -180,12 +165,11 @@ export const ProductSelector = ({
   console.log('  - Mode:', mode);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
-  const [editingItem, setEditingItem] = useState<number | null>(null);
-  const [editedItems, setEditedItems] = useState<{ [key: string]: Partial<EnhancedLineItem> }>({});
   const [open, setOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<EnhancedProduct | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'publish' | 'draft'>('all');
   const [localError, setLocalError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
 
@@ -302,9 +286,19 @@ export const ProductSelector = ({
       console.log(`  - After stock filter "${stockFilter}":`, filtered.length, '(was', beforeStock, ')');
     }
 
-    const beforeStatus = filtered.length;
-    filtered = filtered.filter(product => product.status === 'publish');
-    console.log('  - After status filter (publish only):', filtered.length, '(was', beforeStatus, ')');
+    // Filtro de status (opcional, por defecto muestra todos)
+    if (enableStatusFilter && statusFilter !== 'all') {
+      const beforeStatus = filtered.length;
+      filtered = filtered.filter(product => {
+        if (statusFilter === 'publish') {
+          return product.status === 'publish';
+        } else if (statusFilter === 'draft') {
+          return product.status === 'draft';
+        }
+        return true;
+      });
+      console.log(`  - After status filter "${statusFilter}":`, filtered.length, '(was', beforeStatus, ')');
+    }
     
     // Log some sample products for debugging
     if (filtered.length > 0) {
@@ -326,7 +320,7 @@ export const ProductSelector = ({
     }
 
     return filtered;
-  }, [products, searchQuery, stockFilter, enableStockFilter]);
+  }, [products, searchQuery, stockFilter, statusFilter, enableStockFilter, enableStatusFilter]);
 
   const totals = useMemo(() => {
     const subtotal = lineItems.reduce((sum, item) => sum + (item.total || 0), 0);
@@ -342,8 +336,6 @@ export const ProductSelector = ({
 
   useEffect(() => {
     if (mode === 'view') {
-      setEditingItem(null);
-      setEditedItems({});
       setValidationErrors({});
     }
   }, [mode]);
@@ -377,32 +369,6 @@ export const ProductSelector = ({
           </Alert>
         )}
 
-        {/* Debug info for products */}
-        {!loading && (
-          <Alert>
-            <AlertDescription>
-              <div className="text-sm">
-                <strong>Estado de productos:</strong>
-                <ul className="mt-1 space-y-1">
-                  <li>• Total productos recibidos: {products?.length || 0}</li>
-                  <li>• Productos después de filtros: {filteredProducts.length}</li>
-                  <li>• Filtro de stock actual: {stockFilter}</li>
-                  <li>• Búsqueda actual: {searchQuery || 'ninguna'}</li>
-                </ul>
-                {products?.length === 0 && (
-                  <p className="mt-2 text-amber-600">
-                    ⚠️ No se recibieron productos del servidor. Verifique la carga de datos.
-                  </p>
-                )}
-                {products?.length > 0 && filteredProducts.length === 0 && (
-                  <p className="mt-2 text-blue-600">
-                    ℹ️ Hay productos disponibles pero están siendo filtrados. Intente cambiar los filtros.
-                  </p>
-                )}
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
 
         {mode !== 'view' && (
           <div className="space-y-4">
@@ -462,34 +428,64 @@ export const ProductSelector = ({
                     </DialogHeader>
                     
                     <div className="flex flex-col gap-2">
-                      {enableStockFilter && (
-                        <div className="flex gap-2">
-                          <Button
-                            variant={stockFilter === 'all' ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setStockFilter('all')}
-                          >
-                            Todos
-                          </Button>
-                          <Button
-                            variant={stockFilter === 'in_stock' ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setStockFilter('in_stock')}
-                          >
-                            En Stock
-                          </Button>
-                          <Button
-                            variant={stockFilter === 'out_of_stock' ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setStockFilter('out_of_stock')}
-                          >
-                            Sin Stock
-                          </Button>
-                        </div>
-                      )}
+                      <div className="space-y-2">
+                        {enableStockFilter && (
+                          <div className="flex gap-2">
+                            <span className="text-sm font-medium text-muted-foreground">Stock:</span>
+                            <Button
+                              variant={stockFilter === 'all' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setStockFilter('all')}
+                            >
+                              Todos
+                            </Button>
+                            <Button
+                              variant={stockFilter === 'in_stock' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setStockFilter('in_stock')}
+                            >
+                              En Stock
+                            </Button>
+                            <Button
+                              variant={stockFilter === 'out_of_stock' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setStockFilter('out_of_stock')}
+                            >
+                              Sin Stock
+                            </Button>
+                          </div>
+                        )}
+                        
+                        {enableStatusFilter && (
+                          <div className="flex gap-2">
+                            <span className="text-sm font-medium text-muted-foreground">Estado:</span>
+                            <Button
+                              variant={statusFilter === 'all' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setStatusFilter('all')}
+                            >
+                              Todos
+                            </Button>
+                            <Button
+                              variant={statusFilter === 'publish' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setStatusFilter('publish')}
+                            >
+                              Publicados
+                            </Button>
+                            <Button
+                              variant={statusFilter === 'draft' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setStatusFilter('draft')}
+                            >
+                              Borradores
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                       
                       {/* Clear filters button when no products are visible */}
-                      {products?.length > 0 && filteredProducts.length === 0 && (searchQuery || stockFilter !== 'all') && (
+                      {products?.length > 0 && filteredProducts.length === 0 && (searchQuery || stockFilter !== 'all' || statusFilter !== 'all') && (
                         <div className="flex gap-2">
                           <Button
                             variant="outline"
@@ -497,10 +493,11 @@ export const ProductSelector = ({
                             onClick={() => {
                               setSearchQuery('');
                               setStockFilter('all');
+                              setStatusFilter('all');
                             }}
                             className="text-blue-600 border-blue-300 hover:bg-blue-50"
                           >
-                            Limpiar Filtros
+                            🔄 Limpiar Todos los Filtros
                           </Button>
                         </div>
                       )}
@@ -526,8 +523,10 @@ export const ProductSelector = ({
                                   <p className="font-medium">No se encontraron productos</p>
                                   <p className="text-sm mt-1">
                                     {searchQuery ? `Búsqueda: "${searchQuery}"` : ''}
-                                    {searchQuery && stockFilter !== 'all' ? ' • ' : ''}
-                                    {stockFilter !== 'all' ? `Filtro: ${stockFilter === 'in_stock' ? 'En Stock' : 'Sin Stock'}` : ''}
+                                    {searchQuery && (stockFilter !== 'all' || statusFilter !== 'all') ? ' • ' : ''}
+                                    {stockFilter !== 'all' ? `Stock: ${stockFilter === 'in_stock' ? 'En Stock' : 'Sin Stock'}` : ''}
+                                    {stockFilter !== 'all' && statusFilter !== 'all' ? ' • ' : ''}
+                                    {statusFilter !== 'all' ? `Estado: ${statusFilter === 'publish' ? 'Publicados' : 'Borradores'}` : ''}
                                   </p>
                                   <p className="text-xs mt-2 text-blue-600">
                                     Intente cambiar los filtros o limpiar la búsqueda

@@ -14,6 +14,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Plus, Search, FileText, Mail, Truck, CheckCircle, MapPin } from 'lucide-react';
 import { generateBudgetWithOrderData } from '../../lib/budgetGenerationService';
+import { sendBudgetGeneratedEmail } from '../../lib/emailService';
 import type { Database } from '../../types/database';
 import type { Product } from '../../types/product';
 import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliveryTime } from '../../services/shippingService';
@@ -591,7 +592,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           calculated_iva: createdOrder.calculated_iva?.toString() || formData.metadata.calculated_iva,
           calculated_total: createdOrder.calculated_total?.toString() || formData.metadata.calculated_total
         },
-        line_items: (createdOrder.line_items || formData.line_items).map(item => ({
+        line_items: (createdOrder.line_items || formData.line_items).map((item: any) => ({
           ...item,
           product_id: item.product_id.toString(),
           price: item.price.toString()
@@ -616,8 +617,25 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
         console.log('✅ Budget generated successfully for order:', createdOrder.id);
         console.log('📎 Budget URL:', result.budgetUrl);
         
-        // Mostrar notificación de éxito (opcional)
-        setBudgetSuccess(`Presupuesto generado y enviado por correo para la orden #${createdOrder.id}`);
+        // Enviar email de notificación al cliente (siguiendo el patrón del frontend)
+        if (result.budgetUrl) {
+          console.log('📧 Sending budget notification email to customer...');
+          try {
+            const emailResult = await sendBudgetGeneratedEmail(budgetData, result.budgetUrl);
+            if (emailResult.success) {
+              console.log('✅ Budget notification email sent successfully:', emailResult.emailId);
+              setBudgetSuccess(`Presupuesto generado y enviado por correo para la orden #${createdOrder.id}`);
+            } else {
+              console.warn('⚠️ Failed to send budget notification email:', emailResult.error);
+              setBudgetSuccess(`Presupuesto generado para la orden #${createdOrder.id}. El correo se enviará posteriormente.`);
+            }
+          } catch (emailError) {
+            console.warn('⚠️ Email sending error (non-critical):', emailError);
+            setBudgetSuccess(`Presupuesto generado para la orden #${createdOrder.id}. El correo se enviará posteriormente.`);
+          }
+        } else {
+          setBudgetSuccess(`Presupuesto generado para la orden #${createdOrder.id}`);
+        }
         
         // Limpiar mensaje después de unos segundos
         setTimeout(() => {
@@ -673,7 +691,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           calculated_iva: formData.metadata.calculated_iva,
           calculated_total: formData.metadata.calculated_total
         },
-        line_items: formData.line_items.map(item => ({
+        line_items: formData.line_items.map((item: any) => ({
           ...item,
           product_id: item.product_id.toString(),
           price: item.price.toString()
@@ -695,8 +713,27 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
       const result = await generateBudgetWithOrderData(budgetData, true, true);
 
       if (result.success) {
-        setBudgetSuccess(`Presupuesto generado exitosamente. ${result.budgetUrl ? 'PDF enviado por correo.' : ''}`);
         console.log('✅ Budget generated successfully:', result.budgetUrl);
+        
+        // Enviar email de notificación al cliente (siguiendo el patrón del frontend)
+        if (result.budgetUrl) {
+          console.log('📧 Sending budget notification email to customer...');
+          try {
+            const emailResult = await sendBudgetGeneratedEmail(budgetData, result.budgetUrl);
+            if (emailResult.success) {
+              console.log('✅ Budget notification email sent successfully:', emailResult.emailId);
+              setBudgetSuccess(`Presupuesto generado exitosamente y enviado por correo.`);
+            } else {
+              console.warn('⚠️ Failed to send budget notification email:', emailResult.error);
+              setBudgetSuccess(`Presupuesto generado exitosamente. El correo se enviará posteriormente.`);
+            }
+          } catch (emailError) {
+            console.warn('⚠️ Email sending error (non-critical):', emailError);
+            setBudgetSuccess(`Presupuesto generado exitosamente. El correo se enviará posteriormente.`);
+          }
+        } else {
+          setBudgetSuccess(`Presupuesto generado exitosamente.`);
+        }
       } else {
         setBudgetError(result.message || 'Error al generar el presupuesto');
         console.error('❌ Budget generation failed:', result.error);
@@ -798,6 +835,51 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
       if (data.success) {
         console.log('✅ Order created successfully:', data.data);
         
+        // Enviar notificación inmediata de creación de orden (siguiendo el patrón del frontend)
+        console.log('📧 Sending immediate order creation notification...');
+        try {
+          const orderNotificationData = {
+            order_id: data.data.id,
+            customer_id: data.data.customer_id?.toString() || formData.customer_id,
+            status: 'on-hold',
+            billing: {
+              first_name: data.data.billing_first_name || formData.billing.first_name,
+              last_name: data.data.billing_last_name || formData.billing.last_name,
+              company: data.data.billing_company || formData.billing.company,
+              email: data.data.billing_email || formData.billing.email,
+              phone: data.data.billing_phone || formData.billing.phone,
+              address_1: data.data.billing_address_1 || formData.billing.address_1,
+              city: data.data.billing_city || formData.billing.city
+            },
+            metadata: {
+              order_proyecto: data.data.order_proyecto || formData.metadata.order_proyecto,
+              order_fecha_inicio: data.data.order_fecha_inicio || formData.metadata.order_fecha_inicio,
+              order_fecha_termino: data.data.order_fecha_termino || formData.metadata.order_fecha_termino,
+              num_jornadas: data.data.num_jornadas?.toString() || formData.metadata.num_jornadas,
+              company_rut: data.data.company_rut || formData.metadata.company_rut,
+              calculated_subtotal: data.data.calculated_subtotal?.toString() || formData.metadata.calculated_subtotal,
+              calculated_discount: '0',
+              calculated_iva: data.data.calculated_iva?.toString() || formData.metadata.calculated_iva,
+              calculated_total: data.data.calculated_total?.toString() || formData.metadata.calculated_total
+            },
+            line_items: (data.data.line_items || formData.line_items).map((item: any) => ({
+              ...item,
+              product_id: item.product_id.toString(),
+              price: item.price.toString()
+            }))
+          };
+
+          // Enviar email de notificación de orden creada (sin PDF aún)
+          const emailResult = await sendBudgetGeneratedEmail(orderNotificationData, '');
+          if (emailResult.success) {
+            console.log('✅ Order creation notification sent successfully:', emailResult.emailId);
+          } else {
+            console.warn('⚠️ Failed to send order creation notification:', emailResult.error);
+          }
+        } catch (emailError) {
+          console.warn('⚠️ Order creation email error (non-critical):', emailError);
+        }
+        
         // Generar presupuesto automáticamente después de crear la orden
         console.log('🚀 Auto-generating budget for created order...');
         await generateBudgetForCreatedOrder(data.data);
@@ -846,7 +928,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
         <SheetHeader>
           <SheetTitle>Crear Nuevo Pedido</SheetTitle>
           <SheetDescription>
-            Complete los datos del nuevo pedido. Al crear el pedido se generará automáticamente el presupuesto PDF y se enviará por correo al cliente.
+            Complete los datos del nuevo pedido. Al crear el pedido se enviará una notificación por correo al cliente y se generará automáticamente el presupuesto PDF.
           </SheetDescription>
         </SheetHeader>
 
@@ -974,7 +1056,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
 
           {/* Selector de Productos */}
           <div className="space-y-4">
-            <h4 className="font-medium text-sm">Productos</h4>
+            <h4 className="font-medium text-sm">Productos ({products?.length || 0})</h4>
             <ProductSelector
               products={products.map(p => {
                 // Properly transform images to match EnhancedProduct interface

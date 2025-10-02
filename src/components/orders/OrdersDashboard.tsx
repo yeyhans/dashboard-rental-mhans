@@ -130,6 +130,8 @@ const OrdersDashboard = ({
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [total, setTotal] = useState(parseInt(initialTotal));
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
 
   // Detect mobile view
   useEffect(() => {
@@ -196,15 +198,106 @@ const OrdersDashboard = ({
     setCurrentPage(1);
   }, [searchTerm, statusFilter]);
 
+  // Auto-refresh polling when enabled
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (autoRefreshEnabled && !loading) {
+      console.log('🔄 Starting auto-refresh polling every 10 seconds...');
+      intervalId = setInterval(async () => {
+        console.log('🔄 Auto-refresh polling: checking for updates...');
+        await refreshData();
+      }, 10000); // Poll every 10 seconds
+    }
+
+    return () => {
+      if (intervalId) {
+        console.log('⏹️ Stopping auto-refresh polling');
+        clearInterval(intervalId);
+      }
+    };
+  }, [autoRefreshEnabled, loading]);
+
 
   // Get unique statuses from filtered orders
   const uniqueStatuses = Array.from(new Set(allOrders.map(order => order.status)));
 
-  // Function to refresh data (placeholder for future implementation)
-  const refreshData = () => {
-    // For now, this is a placeholder since we're using static data
-    // In a real implementation, this would reload data from the server
-    console.log('Refreshing data...');
+  // Function to refresh data from server
+  const refreshData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('🔄 Refreshing orders data from server...');
+      
+      // Prepare auth headers
+      let headers: HeadersInit = { 'Content-Type': 'application/json' };
+      
+      if (sessionData?.access_token) {
+        headers = {
+          'Authorization': `Bearer ${sessionData.access_token}`,
+          'Content-Type': 'application/json'
+        };
+      }
+
+      // Fetch fresh orders data
+      const response = await fetch('/api/orders?limit=1000', {
+        headers,
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error fetching orders: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        // Transform orders to match expected structure
+        const transformedOrders = data.data.orders.map((order: any) => ({
+          ...order,
+          metadata: {
+            order_proyecto: order.order_proyecto,
+            order_fecha_inicio: order.order_fecha_inicio,
+            order_fecha_termino: order.order_fecha_termino,
+            num_jornadas: order.num_jornadas,
+            calculated_subtotal: order.calculated_subtotal,
+            calculated_discount: order.calculated_discount,
+            calculated_iva: order.calculated_iva,
+            calculated_total: order.calculated_total,
+            company_rut: order.company_rut,
+            pdf_on_hold_url: order.new_pdf_on_hold_url,
+            pdf_processing_url: order.new_pdf_processing_url,
+            order_retire_name: order.order_retire_name,
+            order_retire_rut: order.order_retire_rut,
+            order_retire_phone: order.order_retire_phone,
+            order_comments: order.order_comments
+          },
+          billing: {
+            first_name: order.billing_first_name,
+            last_name: order.billing_last_name,
+            company: order.billing_company,
+            address_1: order.billing_address_1,
+            city: order.billing_city,
+            email: order.billing_email,
+            phone: order.billing_phone
+          }
+        }));
+
+        setAllOrders(transformedOrders);
+        setTotal(data.data.total || transformedOrders.length);
+        setLastRefreshTime(new Date());
+        
+        console.log('✅ Orders data refreshed successfully:', transformedOrders.length, 'orders loaded');
+      } else {
+        throw new Error(data.error || 'Error loading orders');
+      }
+    } catch (err) {
+      console.error('❌ Error refreshing orders:', err);
+      setError(err instanceof Error ? err.message : 'Error al actualizar los datos');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Function to update URL with current filters
@@ -244,8 +337,10 @@ const OrdersDashboard = ({
 
 
 
-  const handleOrderCreated = (newOrder: any) => {
-    // Transform the new order to match the expected structure
+  const handleOrderCreated = async (newOrder: any) => {
+    console.log('🎉 New order created:', newOrder.id);
+    
+    // Immediately add the new order to the list for instant feedback
     const transformedOrder: Order = {
       ...newOrder,
       // Create metadata object from direct properties for backward compatibility
@@ -259,8 +354,8 @@ const OrdersDashboard = ({
         calculated_iva: newOrder.calculated_iva?.toString() || '0',
         calculated_total: newOrder.calculated_total?.toString() || '0',
         company_rut: newOrder.company_rut || '',
-        pdf_on_hold_url: newOrder.pdf_on_hold_url || '',
-        pdf_processing_url: newOrder.pdf_processing_url || '',
+        pdf_on_hold_url: newOrder.new_pdf_on_hold_url || newOrder.pdf_on_hold_url || '',
+        pdf_processing_url: newOrder.new_pdf_processing_url || newOrder.pdf_processing_url || '',
         order_retire_name: newOrder.order_retire_name || '',
         order_retire_rut: newOrder.order_retire_rut || '',
         order_retire_phone: newOrder.order_retire_phone || '',
@@ -284,6 +379,22 @@ const OrdersDashboard = ({
 
     setAllOrders([transformedOrder, ...allOrders]);
     setTotal(total + 1);
+
+    // Enable auto-refresh to monitor PDF generation
+    setAutoRefreshEnabled(true);
+    
+    // Schedule automatic refresh after a short delay to get updated data including PDFs
+    console.log('⏰ Scheduling automatic refresh to get updated PDF URLs...');
+    setTimeout(async () => {
+      console.log('🔄 Auto-refreshing data to get latest PDF URLs...');
+      await refreshData();
+    }, 3000); // Wait 3 seconds for budget generation to complete
+    
+    // Disable auto-refresh after 2 minutes to avoid excessive polling
+    setTimeout(() => {
+      console.log('⏹️ Disabling auto-refresh after 2 minutes');
+      setAutoRefreshEnabled(false);
+    }, 120000); // 2 minutes
   };
 
   // Función para manejar el cambio de página
@@ -587,9 +698,10 @@ const OrdersDashboard = ({
                 onClick={refreshData}
                 disabled={loading}
                 variant="outline"
+                title={lastRefreshTime ? `Última actualización: ${lastRefreshTime.toLocaleTimeString()}` : 'Actualizar datos'}
               >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                {loading ? 'Actualizando...' : 'Actualizar'}
+                <RefreshCw className={`h-4 w-4 mr-2 ${autoRefreshEnabled ? 'animate-spin' : ''}`} />
+                {loading ? 'Actualizando...' : autoRefreshEnabled ? 'Auto-actualizando...' : 'Actualizar'}
               </Button>
 
               <CreateOrderForm onOrderCreated={handleOrderCreated} sessionData={sessionData} initialUsers={initialUsers} />

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trash2, Plus, Save, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 // Types
 interface LineItem {
@@ -82,9 +83,8 @@ interface EditOrderFormProps {
 
 // Status options
 const statusOptions = [
-  { value: 'pending', label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'processing', label: 'En proceso', color: 'bg-blue-100 text-blue-800' },
   { value: 'on-hold', label: 'En espera', color: 'bg-gray-100 text-gray-800' },
+  { value: 'processing', label: 'En proceso', color: 'bg-blue-100 text-blue-800' },
   { value: 'completed', label: 'Completado', color: 'bg-green-100 text-green-800' },
   { value: 'cancelled', label: 'Cancelado', color: 'bg-red-100 text-red-800' },
   { value: 'refunded', label: 'Reembolsado', color: 'bg-purple-100 text-purple-800' },
@@ -181,7 +181,170 @@ const EditOrderForm: React.FC<EditOrderFormProps> = ({ order, onSave, onCancel, 
 
   const handleSave = async () => {
     try {
+      // Check if status is being changed to 'completed' or 'failed'
+      const wasCompleted = order.status === 'completed';
+      const isNowCompleted = formData.status === 'completed';
+      const statusChangedToCompleted = !wasCompleted && isNowCompleted;
+
+      const wasFailed = order.status === 'failed';
+      const isNowFailed = formData.status === 'failed';
+      const statusChangedToFailed = !wasFailed && isNowFailed;
+
+      // Save the order first
       await onSave(formData);
+
+      // If status changed to completed, send notification email
+      if (statusChangedToCompleted) {
+        if (!formData.billing_email) {
+          toast.warning('⚠️ No se pudo enviar notificación', {
+            description: 'La orden no tiene un email de cliente configurado',
+            duration: 5000
+          });
+          return;
+        }
+        
+        console.log('📧 Order status changed to completed, sending notification email...');
+        
+        try {
+          const emailPayload = {
+            orderData: {
+              id: formData.id,
+              status: formData.status,
+              date_created: formData.date_created,
+              date_completed: new Date().toISOString(),
+              customer_id: formData.customer_id?.toString() || '',
+              total: formData.total?.toString() || formData.calculated_total?.toString() || '0',
+              
+              // Billing information
+              billing_first_name: formData.billing_first_name,
+              billing_last_name: formData.billing_last_name,
+              billing_company: formData.billing_company,
+              billing_email: formData.billing_email,
+              billing_phone: formData.billing_phone,
+              
+              // Project information
+              order_proyecto: formData.order_proyecto,
+              order_fecha_inicio: formData.order_fecha_inicio,
+              order_fecha_termino: formData.order_fecha_termino,
+              num_jornadas: formData.num_jornadas,
+              
+              // Line items (simplified for email)
+              line_items: formData.line_items?.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                sku: item.sku
+              }))
+            },
+            emailType: 'order_completed' as const
+          };
+
+          const response = await fetch('/api/emails/send-order-completed-notification', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(emailPayload)
+          });
+
+          const result = await response.json();
+          
+          if (result.success) {
+            console.log('✅ Order completed notification sent successfully:', result.emailId);
+            toast.success('📧 Correo de orden completada enviado', {
+              description: `Notificación enviada a ${formData.billing_email}`,
+              duration: 5000
+            });
+          } else {
+            console.error('❌ Failed to send order completed notification:', result.error);
+            toast.error('Error al enviar notificación', {
+              description: 'No se pudo enviar el correo de orden completada',
+              duration: 5000
+            });
+          }
+        } catch (emailError) {
+          console.error('💥 Error sending order completed notification:', emailError);
+          // Don't throw here - we don't want to fail the order save if email fails
+        }
+      }
+
+      // If status changed to failed, send failure notification email
+      if (statusChangedToFailed) {
+        if (!formData.billing_email) {
+          toast.warning('⚠️ No se pudo enviar notificación de fallo', {
+            description: 'La orden no tiene un email de cliente configurado',
+            duration: 5000
+          });
+          return;
+        }
+        
+        console.log('📧 Order status changed to failed, sending failure notification email...');
+        
+        try {
+          const emailPayload = {
+            orderData: {
+              id: formData.id,
+              status: formData.status,
+              date_created: formData.date_created,
+              date_modified: new Date().toISOString(),
+              customer_id: formData.customer_id?.toString() || '',
+              total: formData.total?.toString() || formData.calculated_total?.toString() || '0',
+              
+              // Billing information
+              billing_first_name: formData.billing_first_name,
+              billing_last_name: formData.billing_last_name,
+              billing_company: formData.billing_company,
+              billing_email: formData.billing_email,
+              billing_phone: formData.billing_phone,
+              
+              // Project information
+              order_proyecto: formData.order_proyecto,
+              order_fecha_inicio: formData.order_fecha_inicio,
+              order_fecha_termino: formData.order_fecha_termino,
+              num_jornadas: formData.num_jornadas,
+              
+              // Line items (simplified for email)
+              line_items: formData.line_items?.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                sku: item.sku
+              }))
+            },
+            emailType: 'order_failed' as const,
+            failureReason: 'La orden no pudo ser procesada correctamente. Nuestro equipo está trabajando para resolver el problema.'
+          };
+
+          const response = await fetch('/api/emails/send-order-failed-notification', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(emailPayload)
+          });
+
+          const result = await response.json();
+          
+          if (result.success) {
+            console.log('✅ Order failed notification sent successfully:', result.emailId);
+            toast.error('📧 Notificación de fallo enviada', {
+              description: `Cliente notificado del problema en ${formData.billing_email}`,
+              duration: 5000
+            });
+          } else {
+            console.error('❌ Failed to send order failed notification:', result.error);
+            toast.error('Error al enviar notificación de fallo', {
+              description: 'No se pudo notificar al cliente del problema',
+              duration: 5000
+            });
+          }
+        } catch (emailError) {
+          console.error('💥 Error sending order failed notification:', emailError);
+          toast.error('Error crítico en notificación', {
+            description: 'Fallo al enviar notificación de orden fallida',
+            duration: 5000
+          });
+          // Don't throw here - we don't want to fail the order save if email fails
+        }
+      }
     } catch (error) {
       console.error('Error saving order:', error);
     }

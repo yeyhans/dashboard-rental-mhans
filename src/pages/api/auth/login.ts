@@ -58,20 +58,46 @@ export const POST: APIRoute = withCors(async (context) => {
       });
     }
 
-    // Set Supabase session cookies on the response
+    // Set extended Supabase session cookies for administrators
     if (authData.session) {
-      const { access_token, refresh_token, expires_in } = authData.session;
+      const { access_token, refresh_token } = authData.session;
+      
+      // Configuración extendida para administradores (30 días)
+      const extendedMaxAge = 60 * 60 * 24 * 30; // 30 días
+      
       context.cookies.set('sb-access-token', access_token, {
         path: '/',
-        maxAge: expires_in,
+        maxAge: extendedMaxAge,
         httpOnly: true,
         secure: import.meta.env.PROD,
         sameSite: 'lax',
       });
+      
       context.cookies.set('sb-refresh-token', refresh_token, {
         path: '/',
-        maxAge: 60 * 60 * 24 * 30, // 30 days
+        maxAge: extendedMaxAge,
         httpOnly: true,
+        secure: import.meta.env.PROD,
+        sameSite: 'lax',
+      });
+      
+      // Marcar como sesión de administrador extendida
+      context.cookies.set('sb-admin-session', 'true', {
+        path: '/',
+        maxAge: extendedMaxAge,
+        httpOnly: false, // Permitir acceso desde JavaScript para verificaciones
+        secure: import.meta.env.PROD,
+        sameSite: 'lax',
+      });
+      
+      // Configurar fecha de expiración extendida
+      const extendedExpiry = new Date();
+      extendedExpiry.setDate(extendedExpiry.getDate() + 30);
+      
+      context.cookies.set('sb-session-expiry', extendedExpiry.toISOString(), {
+        path: '/',
+        maxAge: extendedMaxAge,
+        httpOnly: false, // Permitir acceso desde JavaScript
         secure: import.meta.env.PROD,
         sameSite: 'lax',
       });
@@ -88,9 +114,14 @@ export const POST: APIRoute = withCors(async (context) => {
         session: {
           access_token: authData.session?.access_token,
           expires_at: authData.session?.expires_at
+        },
+        preferences: {
+          remember_me: true,
+          session_duration: 30 * 24 * 60 * 60, // 30 días en segundos
+          expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
         }
       },
-      message: 'Inicio de sesión exitoso'
+      message: 'Inicio de sesión exitoso - Sesión extendida configurada por 30 días'
     }), {
       status: 200,
       headers: {

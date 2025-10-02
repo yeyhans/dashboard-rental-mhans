@@ -70,7 +70,8 @@ interface EmailResult {
  */
 export const sendBudgetGeneratedEmail = async (
   orderData: BudgetEmailData,
-  pdfUrl: string
+  pdfUrl: string,
+  customMessage?: string
 ): Promise<EmailResult> => {
   try {
     console.log('📧 Starting budget email notification process...');
@@ -142,24 +143,29 @@ export const sendBudgetGeneratedEmail = async (
       hasPdfUrl: !!emailData.data.pdfUrl
     });
 
-    // Call the frontend email service API
-    // Since we're in the backend, we need to make an HTTP request to the frontend email service
-    const frontendEmailApiUrl = import.meta.env.FRONTEND_EMAIL_API_URL || 'http://localhost:4321/api/email/send-budget';
+    // Call the backend email service API (local)
+    // Use the backend's own email API endpoint for better performance and reliability
+    const backendEmailApiUrl = '/api/emails/send-budget-notification';
     
-    console.log('🔗 Calling frontend email API:', frontendEmailApiUrl);
+    console.log('🔗 Calling backend email API:', backendEmailApiUrl);
     
-    const response = await fetch(frontendEmailApiUrl, {
+    const response = await fetch(backendEmailApiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Backend-Request': 'true', // Identify this as a backend request
+        'X-Internal-Request': 'true', // Identify this as an internal request
       },
-      body: JSON.stringify(emailData)
+      body: JSON.stringify({
+        budgetData: orderData,
+        budgetUrl: pdfUrl,
+        emailType: pdfUrl ? 'budget_generated' : 'order_created',
+        customMessage: customMessage
+      })
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Frontend email API error:', {
+      console.error('❌ Backend email API error:', {
         status: response.status,
         statusText: response.statusText,
         error: errorText
@@ -171,17 +177,17 @@ export const sendBudgetGeneratedEmail = async (
     }
 
     const result = await response.json();
-    console.log('📥 Frontend email API response:', result);
+    console.log('📥 Backend email API response:', result);
 
     if (result.success) {
-      console.log('✅ Budget email sent successfully via frontend API:', result.emailId);
+      console.log('✅ Budget email sent successfully via backend API:', result.emailId);
       return {
         success: true,
         message: 'Email de presupuesto enviado exitosamente',
         emailId: result.emailId
       };
     } else {
-      console.error('❌ Frontend email API returned error:', result.error);
+      console.error('❌ Backend email API returned error:', result.error);
       
       // Fallback: Try direct email sending
       console.log('🔄 Attempting fallback email sending...');

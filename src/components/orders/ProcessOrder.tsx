@@ -5,15 +5,16 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, Upload, FileText, FileCheck } from 'lucide-react';
+import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, Upload, FileText, FileCheck, Mail, Send, Paperclip } from 'lucide-react';
 import EditOrderForm from './EditOrderForm';
 import { CouponSelector } from './CouponSelector';
 import { ProductSelector } from './ProductSelector';
 import { apiClient } from '@/services/apiClient';
 import type { Database } from '@/types/database';
 import { toast } from 'sonner';
-import { warrantyPhotosService, type WarrantyPhotosUploadResult } from '@/services/warrantyPhotosService';
+import { WarrantyImageUpload } from './WarrantyImageUpload';
 import { generateOrderProcessingPdfFromId, generateBudgetPdfFromId } from '@/lib/orderPdfGenerationService';
+import { sendManualEmail, validateManualEmailData, type ManualEmailData } from '@/services/manualEmailService';
 
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
@@ -81,14 +82,23 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
   const [editedManualDiscount, setEditedManualDiscount] = useState(orderData?.calculated_discount?.toString() || '0');
   
   // Warranty photos states
-  const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [warrantyPhotos, setWarrantyPhotos] = useState<string[]>([]);
   
   // Order PDF generation states
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [generatingBudget, setGeneratingBudget] = useState(false);
+  
+  // Manual email states
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailData, setEmailData] = useState({
+    subject: '',
+    message: '',
+    emailType: 'availability_confirmation' as 'availability_confirmation' | 'order_update' | 'custom',
+    includeBudget: false,
+    includeContract: false,
+    selectedBudgetUrls: [] as string[] // For multiple budget selection
+  });
   
   // Initialize coupon and product state from order data
   useEffect(() => {
@@ -621,63 +631,23 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
     toast.info(`Producto removido: ${productName}`);
   };
 
-  // Warranty photos handlers
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files) return;
-
-    const fileArray = Array.from(files);
-    const validation = warrantyPhotosService.validateFiles(fileArray);
-
-    if (!validation.valid) {
-      validation.errors.forEach(error => toast.error(error));
-      return;
+  // Initialize warranty photos from order data
+  useEffect(() => {
+    if (orderData?.fotos_garantia) {
+      const photos = Array.isArray(orderData.fotos_garantia) 
+        ? orderData.fotos_garantia 
+        : Object.values(orderData.fotos_garantia);
+      setWarrantyPhotos(photos.filter(Boolean));
     }
+  }, [orderData?.fotos_garantia]);
 
-    setSelectedFiles(fileArray);
-    setShowUploadModal(true);
-  };
-
-  const handleUploadPhotos = async () => {
-    if (!selectedFiles.length || !orderData?.id) return;
-
-    setUploadingPhotos(true);
-    try {
-      const result: WarrantyPhotosUploadResult = await warrantyPhotosService.uploadWarrantyPhotos(
-        orderData.id,
-        selectedFiles
-      );
-
-      if (result.success) {
-        toast.success(`${result.totalPhotos} fotos subidas exitosamente`);
-        setShowUploadModal(false);
-        setSelectedFiles([]);
-        
-        // Reload the page to show updated photos
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
-      } else {
-        throw new Error(result.error || 'Error al subir las fotos');
-      }
-    } catch (error) {
-      console.error('Error uploading photos:', error);
-      toast.error(error instanceof Error ? error.message : 'Error al subir las fotos');
-    } finally {
-      setUploadingPhotos(false);
-    }
-  };
-
-  const handleCancelUpload = () => {
-    setShowUploadModal(false);
-    setSelectedFiles([]);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const removeSelectedFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  // Handle warranty photos update
+  const handleWarrantyPhotosUpdate = (newPhotos: string[]) => {
+    setWarrantyPhotos(newPhotos);
+    // Optionally reload the page to sync with server state
+    // setTimeout(() => {
+    //   window.location.reload();
+    // }, 1000);
   };
 
   // Order PDF generation function
@@ -786,6 +756,142 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
     } finally {
       setGeneratingBudget(false);
     }
+  };
+
+  // Helper function to get available budget URLs
+  const getAvailableBudgetUrls = (): string[] => {
+    if (!orderData?.new_pdf_on_hold_url) return [];
+    return orderData.new_pdf_on_hold_url
+      .split(',')
+      .map(url => url.trim())
+      .filter(url => url.length > 0);
+  };
+
+  // Manual email handlers
+  const handleSendManualEmail = async () => {
+    if (!orderData?.id) {
+      toast.error('ID de orden no disponible');
+      return;
+    }
+
+    const customerEmail = getCustomerEmail();
+    const customerName = getCustomerName();
+    
+    if (customerEmail === 'No disponible') {
+      toast.error('Email del cliente no disponible');
+      return;
+    }
+
+    // Prepare email data
+    const manualEmailData: ManualEmailData = {
+      to: customerEmail,
+      customerName: customerName,
+      orderId: orderData.id,
+      projectName: orderData.order_proyecto || 'Proyecto de Arriendo',
+      subject: emailData.subject,
+      message: emailData.message,
+      emailType: emailData.emailType,
+      attachments: emailData.selectedBudgetUrls.length > 0 || emailData.includeContract ? {
+        ...(emailData.selectedBudgetUrls.length > 0 && { budgetUrls: emailData.selectedBudgetUrls }),
+        ...(emailData.includeContract && orderData.new_pdf_processing_url && { contractUrl: orderData.new_pdf_processing_url })
+      } : undefined
+    };
+
+    // Validate email data
+    const validation = validateManualEmailData(manualEmailData);
+    if (!validation.isValid) {
+      validation.errors.forEach(error => toast.error(error));
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      console.log('📧 Sending manual email:', manualEmailData);
+      
+      const result = await sendManualEmail(manualEmailData);
+
+      if (result.success) {
+        toast.success('Correo enviado exitosamente');
+        setShowEmailModal(false);
+        // Reset form
+        setEmailData({
+          subject: '',
+          message: '',
+          emailType: 'availability_confirmation',
+          includeBudget: false,
+          includeContract: false,
+          selectedBudgetUrls: []
+        });
+      } else {
+        throw new Error(result.message || 'Error al enviar el correo');
+      }
+    } catch (error) {
+      console.error('💥 Error sending manual email:', error);
+      toast.error(error instanceof Error ? error.message : 'Error al enviar el correo');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  const handleCancelEmail = () => {
+    setShowEmailModal(false);
+    setEmailData({
+      subject: '',
+      message: '',
+      emailType: 'availability_confirmation',
+      includeBudget: false,
+      includeContract: false,
+      selectedBudgetUrls: []
+    });
+  };
+
+  const generateEmailSubject = () => {
+    const orderId = orderData?.id;
+    const projectName = orderData?.order_proyecto || 'Proyecto';
+    
+    switch (emailData.emailType) {
+      case 'availability_confirmation':
+        return `✅ Confirmación de Disponibilidad - ${projectName} (Orden #${orderId})`;
+      case 'order_update':
+        return `📋 Actualización de Pedido - ${projectName} (Orden #${orderId})`;
+      default:
+        return `📧 Comunicación - ${projectName} (Orden #${orderId})`;
+    }
+  };
+
+  const generateEmailMessage = () => {
+    const customerName = getCustomerName();
+    const projectName = orderData?.order_proyecto || 'su proyecto';
+    const orderId = orderData?.id;
+    
+    switch (emailData.emailType) {
+      case 'availability_confirmation':
+        return `Estimado/a ${customerName},\n\nNos complace confirmar la disponibilidad de los equipos para ${projectName} (Orden #${orderId}).\n\nTodos los productos solicitados están disponibles para las fechas indicadas. Procederemos con la preparación de los equipos según lo acordado.\n\nSi tiene alguna consulta adicional, no dude en contactarnos.\n\nSaludos cordiales,\nEquipo Rental Mhans`;
+      case 'order_update':
+        return `Estimado/a ${customerName},\n\nLe escribimos para informarle sobre una actualización en su pedido ${projectName} (Orden #${orderId}).\n\n[Describa aquí los cambios o actualizaciones realizadas]\n\nSi tiene alguna consulta sobre estos cambios, no dude en contactarnos.\n\nSaludos cordiales,\nEquipo Rental Mhans`;
+      default:
+        return `Estimado/a ${customerName},\n\nLe escribimos en relación a su pedido ${projectName} (Orden #${orderId}).\n\n[Escriba aquí su mensaje personalizado]\n\nSaludos cordiales,\nEquipo Rental Mhans`;
+    }
+  };
+
+  // Auto-generate subject and message when email type changes
+  const handleEmailTypeChange = (newType: typeof emailData.emailType) => {
+    // Temporarily update emailData for generation functions
+    const originalType = emailData.emailType;
+    emailData.emailType = newType;
+    
+    const newSubject = generateEmailSubject();
+    const newMessage = generateEmailMessage();
+    
+    // Restore original type
+    emailData.emailType = originalType;
+    
+    setEmailData(prev => ({
+      ...prev,
+      emailType: newType,
+      subject: prev.subject === '' ? newSubject : prev.subject,
+      message: prev.message === '' ? newMessage : prev.message
+    }));
   };
 
   if (!orderData) {
@@ -1102,8 +1208,334 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
           </CardContent>
         </Card>
 
-            {/* Enhanced Products Section */}
-            <Card>
+      {/* Manual Email Communication Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Mail className="w-5 h-5" />
+              Comunicación Manual
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowEmailModal(true)}
+              className="flex items-center gap-2 bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100"
+            >
+              <Send className="w-4 h-4" />
+              Enviar Correo
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-medium text-blue-900 mb-2">📧 Envío de Correos al Cliente</h4>
+              <p className="text-sm text-blue-700 mb-3">
+                Envíe correos personalizados al cliente para confirmar disponibilidad, 
+                actualizar el estado del pedido o comunicar información importante.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white p-3 rounded border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="font-medium text-sm">Cliente:</span>
+                  </div>
+                  <p className="text-sm text-gray-700">{getCustomerName()}</p>
+                  <p className="text-xs text-gray-500">{getCustomerEmail()}</p>
+                </div>
+                
+                <div className="bg-white p-3 rounded border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span className="font-medium text-sm">Documentos Disponibles:</span>
+                  </div>
+                  <div className="space-y-1">
+                    {orderData.new_pdf_on_hold_url && (
+                      <div className="flex items-center gap-1 text-xs text-green-600">
+                        <FileText className="w-3 h-3" />
+                        Presupuesto PDF
+                      </div>
+                    )}
+                    {orderData.new_pdf_processing_url && (
+                      <div className="flex items-center gap-1 text-xs text-blue-600">
+                        <FileCheck className="w-3 h-3" />
+                        Contrato PDF
+                      </div>
+                    )}
+                    {!orderData.new_pdf_on_hold_url && !orderData.new_pdf_processing_url && (
+                      <span className="text-xs text-gray-500">Sin documentos generados</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-3 flex items-center gap-2 text-xs text-blue-600">
+                <Paperclip className="w-3 h-3" />
+                <span>Los documentos disponibles pueden adjuntarse automáticamente al correo</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Email Modal */}
+      {showEmailModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Mail className="w-5 h-5" />
+                Enviar Correo Manual
+              </h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCancelEmail}
+                disabled={sendingEmail}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Recipient Info */}
+              <div className="bg-gray-50 p-3 rounded-lg border">
+                <div className="text-sm">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-medium text-gray-700">Para:</span>
+                    <span className="text-gray-600">{getCustomerEmail()}</span>
+                  </div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-medium text-gray-700">Cliente:</span>
+                    <span className="text-gray-600">{getCustomerName()}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium text-gray-700">Orden:</span>
+                    <span className="text-gray-600">#{orderData.id} - {orderData.order_proyecto || 'Proyecto de Arriendo'}</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Email Type Selection */}
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Tipo de Correo</Label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <Button
+                    variant={emailData.emailType === 'availability_confirmation' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleEmailTypeChange('availability_confirmation')}
+                    disabled={sendingEmail}
+                    className="justify-start h-auto p-3"
+                  >
+                    <div className="text-left">
+                      <div className="font-medium">✅ Confirmación</div>
+                      <div className="text-xs opacity-70">Disponibilidad confirmada</div>
+                    </div>
+                  </Button>
+                  <Button
+                    variant={emailData.emailType === 'order_update' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleEmailTypeChange('order_update')}
+                    disabled={sendingEmail}
+                    className="justify-start h-auto p-3"
+                  >
+                    <div className="text-left">
+                      <div className="font-medium">📋 Actualización</div>
+                      <div className="text-xs opacity-70">Cambios en el pedido</div>
+                    </div>
+                  </Button>
+                  <Button
+                    variant={emailData.emailType === 'custom' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleEmailTypeChange('custom')}
+                    disabled={sendingEmail}
+                    className="justify-start h-auto p-3"
+                  >
+                    <div className="text-left">
+                      <div className="font-medium">📧 Personalizado</div>
+                      <div className="text-xs opacity-70">Mensaje libre</div>
+                    </div>
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Subject */}
+              <div>
+                <Label htmlFor="email-subject" className="text-sm font-medium mb-2 block">
+                  Asunto del Correo
+                </Label>
+                <Input
+                  id="email-subject"
+                  value={emailData.subject}
+                  onChange={(e) => setEmailData(prev => ({ ...prev, subject: e.target.value }))}
+                  placeholder={generateEmailSubject()}
+                  disabled={sendingEmail}
+                  className="w-full"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEmailData(prev => ({ ...prev, subject: generateEmailSubject() }))}
+                  disabled={sendingEmail}
+                  className="mt-1 h-6 px-2 text-xs text-blue-600 hover:text-blue-700"
+                >
+                  Usar asunto sugerido
+                </Button>
+              </div>
+              
+              {/* Message */}
+              <div>
+                <Label htmlFor="email-message" className="text-sm font-medium mb-2 block">
+                  Mensaje
+                </Label>
+                <textarea
+                  id="email-message"
+                  value={emailData.message}
+                  onChange={(e) => setEmailData(prev => ({ ...prev, message: e.target.value }))}
+                  placeholder={generateEmailMessage()}
+                  disabled={sendingEmail}
+                  rows={8}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEmailData(prev => ({ ...prev, message: generateEmailMessage() }))}
+                  disabled={sendingEmail}
+                  className="mt-1 h-6 px-2 text-xs text-blue-600 hover:text-blue-700"
+                >
+                  Usar mensaje sugerido
+                </Button>
+              </div>
+              
+              {/* Attachments */}
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Documentos a Adjuntar</Label>
+                <div className="space-y-3">
+                  {/* Budget PDFs Selection */}
+                  {orderData.new_pdf_on_hold_url && (() => {
+                    const availableBudgets = getAvailableBudgetUrls();
+                    return availableBudgets.length > 0 && (
+                      <div className="border rounded-lg p-3 bg-green-50">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="w-4 h-4 text-green-600" />
+                          <span className="text-sm font-medium text-green-800">
+                            Presupuestos Disponibles ({availableBudgets.length})
+                          </span>
+                        </div>
+                        <div className="space-y-2 max-h-32 overflow-y-auto">
+                          {availableBudgets.map((budgetUrl, index) => {
+                            const isSelected = emailData.selectedBudgetUrls.includes(budgetUrl);
+                            return (
+                              <label 
+                                key={index} 
+                                className="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-white transition-colors"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    const newSelected = e.target.checked
+                                      ? [...emailData.selectedBudgetUrls, budgetUrl]
+                                      : emailData.selectedBudgetUrls.filter(url => url !== budgetUrl);
+                                    setEmailData(prev => ({ ...prev, selectedBudgetUrls: newSelected }));
+                                  }}
+                                  disabled={sendingEmail}
+                                  className="rounded"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    Presupuesto {index + 1}
+                                  </div>
+                                  <div className="text-xs text-gray-500 truncate">
+                                    {budgetUrl.split('/').pop()?.split('?')[0] || 'presupuesto.pdf'}
+                                  </div>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    window.open(budgetUrl, '_blank');
+                                  }}
+                                  className="h-6 w-6 p-0 text-green-600 hover:text-green-700"
+                                >
+                                  <FileText className="w-3 h-3" />
+                                </Button>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {emailData.selectedBudgetUrls.length > 0 && (
+                          <div className="mt-2 text-xs text-green-700 bg-green-100 px-2 py-1 rounded">
+                            ✓ {emailData.selectedBudgetUrls.length} presupuesto(s) seleccionado(s)
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Contract PDF Selection */}
+                  {orderData.new_pdf_processing_url && (
+                    <label className="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        checked={emailData.includeContract}
+                        onChange={(e) => setEmailData(prev => ({ ...prev, includeContract: e.target.checked }))}
+                        disabled={sendingEmail}
+                        className="rounded"
+                      />
+                      <FileCheck className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm">Incluir Contrato PDF</span>
+                    </label>
+                  )}
+
+                  {/* No documents available */}
+                  {!orderData.new_pdf_on_hold_url && !orderData.new_pdf_processing_url && (
+                    <div className="text-sm text-gray-500 p-2 border border-dashed rounded">
+                      No hay documentos disponibles para adjuntar
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Action buttons */}
+              <div className="flex items-center justify-end gap-2 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={handleCancelEmail}
+                  disabled={sendingEmail}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleSendManualEmail}
+                  disabled={sendingEmail || !emailData.subject.trim() || !emailData.message.trim()}
+                  className="flex items-center gap-2"
+                >
+                  {sendingEmail ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Enviar Correo
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Products Section */}
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
@@ -1223,7 +1655,6 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                   </div>
                 </div>
               ))}
-              
             </div>
           ) : (
             <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
@@ -1236,6 +1667,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
           )}
         </CardContent>
       </Card>
+      
       {/* Enhanced Financial Summary with Editable Coupons and Shipping */}
       {(orderData.calculated_subtotal || orderData.calculated_discount || orderData.calculated_iva || orderData.shipping_total || orderData.coupon_lines) && (
         <Card>
@@ -1622,20 +2054,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                 </span>
               </div>
               
-              {/* Payment Status Integration */}
-              <div className="flex justify-between items-center pt-2 border-t">
-                <span className="text-muted-foreground">Estado de Pago:</span>
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${
-                    isPaymentComplete ? 'bg-green-500' : 'bg-yellow-500'
-                  }`} />
-                  <span className={`font-medium ${
-                    isPaymentComplete ? 'text-green-700' : 'text-yellow-700'
-                  }`}>
-                    {isPaymentComplete ? '✅ Pagado Completo' : '⏳ Pago Pendiente'}
-                  </span>
-                </div>
-              </div>
+
               
               {/* Currency Information */}
               <div className="text-xs text-muted-foreground text-center pt-2 border-t">
@@ -1655,178 +2074,13 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
 
 
       {/* Warranty Photos Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ImageIcon className="w-5 h-5" />
-              Fotos de Garantía
-              {orderData.fotos_garantia && (Array.isArray(orderData.fotos_garantia) ? orderData.fotos_garantia.length > 0 : Object.keys(orderData.fotos_garantia).length > 0) && (
-                <Badge variant="secondary" className="ml-2">
-                  {Array.isArray(orderData.fotos_garantia) ? orderData.fotos_garantia.length : Object.keys(orderData.fotos_garantia).length} fotos
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/jpeg,image/jpg,image/png,image/webp"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingPhotos}
-                className="flex items-center gap-2"
-              >
-                <Upload className="w-4 h-4" />
-                Subir Fotos
-              </Button>
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {orderData.fotos_garantia && (Array.isArray(orderData.fotos_garantia) ? orderData.fotos_garantia.length > 0 : Object.keys(orderData.fotos_garantia).length > 0) ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {(Array.isArray(orderData.fotos_garantia) ? orderData.fotos_garantia : Object.values(orderData.fotos_garantia)).map((foto: string, index: number) => (
-                <div key={index} className="relative aspect-square group">
-                  <img
-                    src={foto}
-                    alt={`Foto de garantía ${index + 1}`}
-                    className="object-cover w-full h-full rounded-lg border transition-transform group-hover:scale-105 cursor-pointer"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                    onClick={() => window.open(foto, '_blank')}
-                  />
-                  <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                    {index + 1}
-                  </div>
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="w-8 h-8 p-0 /90 hover:"
-                      onClick={() => window.open(foto, '_blank')}
-                    >
-                      <ImageIcon className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
-              <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <ImageIcon className="w-6 h-6 text-gray-400" />
-              </div>
-              <p className="font-medium">No hay fotos de garantía disponibles</p>
-              <p className="text-sm mt-1">Las fotos se mostrarán aquí una vez que sean subidas</p>
-              <Button
-                variant="outline"
-                className="mt-4 flex items-center gap-2"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingPhotos}
-              >
-                <Upload className="w-4 h-4" />
-                Subir Primera Foto
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Upload Modal */}
-      {showUploadModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Subir Fotos de Garantía</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCancelUpload}
-                disabled={uploadingPhotos}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="text-sm text-muted-foreground">
-                <p>Se subirán {selectedFiles.length} fotos para la orden #{orderData.id}</p>
-                <p>Formatos permitidos: JPEG, PNG, WebP • Tamaño máximo: 5MB por foto</p>
-              </div>
-              
-              {/* Preview selected files */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-60 overflow-y-auto">
-                {selectedFiles.map((file, index) => (
-                  <div key={index} className="relative group">
-                    <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden border">
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt={`Preview ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                      {index + 1}
-                    </div>
-                    <div className="absolute top-2 right-2">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="w-6 h-6 p-0"
-                        onClick={() => removeSelectedFile(index)}
-                        disabled={uploadingPhotos}
-                      >
-                        <X className="w-3 h-3" />
-                      </Button>
-                    </div>
-                    <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                      {warrantyPhotosService.formatFileSize(file.size)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              {/* Action buttons */}
-              <div className="flex items-center justify-end gap-2 pt-4 border-t">
-                <Button
-                  variant="outline"
-                  onClick={handleCancelUpload}
-                  disabled={uploadingPhotos}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleUploadPhotos}
-                  disabled={uploadingPhotos || selectedFiles.length === 0}
-                  className="flex items-center gap-2"
-                >
-                  {uploadingPhotos ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Subiendo...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-4 h-4" />
-                      Subir {selectedFiles.length} Fotos
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <WarrantyImageUpload
+        orderId={orderData?.id || null}
+        currentImages={warrantyPhotos}
+        onImagesUpdate={handleWarrantyPhotosUpdate}
+      />
     </div>
   );
 }
 
-export default ProcessOrder
+export default ProcessOrder;

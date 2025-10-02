@@ -56,11 +56,11 @@ const couponSchema = z.object({
   date_expires: z.string().optional(),
   usage_limit: z.number().min(1).optional(),
   usage_limit_per_user: z.number().min(1).optional(),
-  status: z.enum(['publish', 'draft', 'private']).default('publish'),
+  status: z.enum(['publish', 'draft', 'private']),
   minimum_amount: z.number().min(0).optional(),
   maximum_amount: z.number().min(0).optional(),
-  individual_use: z.boolean().default(false),
-  exclude_sale_items: z.boolean().default(false),
+  individual_use: z.boolean(),
+  exclude_sale_items: z.boolean(),
 });
 
 type CouponFormData = z.infer<typeof couponSchema>;
@@ -81,6 +81,20 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
     formState: { errors }
   } = useForm<CouponFormData>({
     resolver: zodResolver(couponSchema),
+    defaultValues: {
+      code: '',
+      amount: 0,
+      discount_type: 'percent',
+      description: '',
+      status: 'publish',
+      usage_limit: undefined,
+      usage_limit_per_user: undefined,
+      minimum_amount: undefined,
+      maximum_amount: undefined,
+      individual_use: false,
+      exclude_sale_items: false,
+      date_expires: ''
+    }
   });
 
   const discountType = watch('discount_type');
@@ -112,6 +126,7 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
   const onSubmit = async (data: CouponFormData) => {
     try {
       setIsSubmitting(true);
+      console.log('🔄 Submitting coupon update:', data);
 
       // Prepare update data
       const updateData: CouponUpdate = {
@@ -129,7 +144,11 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
         exclude_sale_items: data.exclude_sale_items,
       };
 
+      console.log('📤 Update data being sent:', updateData);
+
       const headers = getAuthHeaders();
+      console.log('🔑 Auth headers:', headers);
+
       const response = await fetch(`/api/coupons/${coupon.id}`, {
         method: 'PUT',
         headers,
@@ -137,16 +156,19 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
         body: JSON.stringify(updateData),
       });
 
+      console.log('📡 Response status:', response.status);
       const result = await response.json();
+      console.log('📥 Response data:', result);
 
       if (result.success) {
         toast.success('Cupón actualizado correctamente');
         onSuccess();
       } else {
+        console.error('❌ Update failed:', result.error);
         toast.error(result.error || 'Error al actualizar el cupón');
       }
     } catch (error) {
-      console.error('Error updating coupon:', error);
+      console.error('💥 Error updating coupon:', error);
       toast.error('Error al actualizar el cupón');
     } finally {
       setIsSubmitting(false);
@@ -208,13 +230,13 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
             <div className="space-y-2">
               <Label htmlFor="status">Estado</Label>
               <Select
-                value={watch('status')}
+                value={watch('status') || 'publish'}
                 onValueChange={(value: 'publish' | 'draft' | 'private') => 
                   setValue('status', value)
                 }
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Seleccionar estado" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="publish">Activo</SelectItem>
@@ -245,13 +267,13 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
             <div className="space-y-2">
               <Label htmlFor="discount_type">Tipo de Descuento *</Label>
               <Select
-                value={watch('discount_type')}
+                value={watch('discount_type') || 'percent'}
                 onValueChange={(value: 'percent' | 'fixed_cart' | 'fixed_product') => 
                   setValue('discount_type', value)
                 }
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Seleccionar tipo de descuento" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="percent">Porcentaje</SelectItem>
@@ -370,7 +392,7 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="individual_use"
-                checked={watch('individual_use')}
+                checked={watch('individual_use') || false}
                 onCheckedChange={(checked) => setValue('individual_use', !!checked)}
               />
               <Label htmlFor="individual_use" className="text-sm">
@@ -384,7 +406,7 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="exclude_sale_items"
-                checked={watch('exclude_sale_items')}
+                checked={watch('exclude_sale_items') || false}
                 onCheckedChange={(checked) => setValue('exclude_sale_items', !!checked)}
               />
               <Label htmlFor="exclude_sale_items" className="text-sm">
