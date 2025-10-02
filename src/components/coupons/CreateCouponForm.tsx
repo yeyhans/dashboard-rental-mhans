@@ -48,7 +48,7 @@ type CouponInsert = Database['public']['Tables']['coupons']['Insert'];
 const couponSchema = z.object({
   code: z.string().min(1, 'El código es requerido').max(50, 'El código es muy largo'),
   amount: z.number().min(0, 'El monto debe ser mayor a 0'),
-  discount_type: z.enum(['percent', 'fixed_cart', 'fixed_product'], {
+  discount_type: z.enum(['percent', 'fixed_cart'], {
     required_error: 'Selecciona un tipo de descuento'
   }),
   description: z.string().optional(),
@@ -219,7 +219,7 @@ const CreateCouponForm = ({ onSuccess }: CreateCouponFormProps) => {
               <Label htmlFor="discount_type">Tipo de Descuento *</Label>
               <Select
                 value={watch('discount_type')}
-                onValueChange={(value: 'percent' | 'fixed_cart' | 'fixed_product') => 
+                onValueChange={(value: 'percent' | 'fixed_cart') => 
                   setValue('discount_type', value)
                 }
               >
@@ -229,7 +229,6 @@ const CreateCouponForm = ({ onSuccess }: CreateCouponFormProps) => {
                 <SelectContent>
                   <SelectItem value="percent">Porcentaje</SelectItem>
                   <SelectItem value="fixed_cart">Monto fijo del carrito</SelectItem>
-                  <SelectItem value="fixed_product">Monto fijo del producto</SelectItem>
                 </SelectContent>
               </Select>
             </div>

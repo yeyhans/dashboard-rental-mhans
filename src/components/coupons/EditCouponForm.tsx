@@ -49,7 +49,7 @@ type CouponUpdate = Database['public']['Tables']['coupons']['Update'];
 const couponSchema = z.object({
   code: z.string().min(1, 'El código es requerido').max(50, 'El código es muy largo'),
   amount: z.number().min(0, 'El monto debe ser mayor a 0'),
-  discount_type: z.enum(['percent', 'fixed_cart', 'fixed_product'], {
+  discount_type: z.enum(['percent', 'fixed_cart'], {
     required_error: 'Selecciona un tipo de descuento'
   }),
   description: z.string().optional(),
@@ -104,7 +104,7 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
     if (coupon) {
       setValue('code', coupon.code);
       setValue('amount', coupon.amount);
-      setValue('discount_type', coupon.discount_type as 'percent' | 'fixed_cart' | 'fixed_product');
+      setValue('discount_type', coupon.discount_type as 'percent' | 'fixed_cart');
       setValue('description', coupon.description || '');
       setValue('status', coupon.status as 'publish' | 'draft' | 'private');
       setValue('usage_limit', coupon.usage_limit || undefined);
@@ -268,7 +268,7 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
               <Label htmlFor="discount_type">Tipo de Descuento *</Label>
               <Select
                 value={watch('discount_type') || 'percent'}
-                onValueChange={(value: 'percent' | 'fixed_cart' | 'fixed_product') => 
+                onValueChange={(value: 'percent' | 'fixed_cart') => 
                   setValue('discount_type', value)
                 }
               >
@@ -278,7 +278,6 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
                 <SelectContent>
                   <SelectItem value="percent">Porcentaje</SelectItem>
                   <SelectItem value="fixed_cart">Monto fijo del carrito</SelectItem>
-                  <SelectItem value="fixed_product">Monto fijo del producto</SelectItem>
                 </SelectContent>
               </Select>
             </div>

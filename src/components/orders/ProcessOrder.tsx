@@ -5,10 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, Upload, FileText, FileCheck, Mail, Send, Paperclip } from 'lucide-react';
+import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, Upload, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle } from 'lucide-react';
 import EditOrderForm from './EditOrderForm';
 import { CouponSelector } from './CouponSelector';
 import { ProductSelector } from './ProductSelector';
+import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliveryTime } from '../../services/shippingService';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { apiClient } from '@/services/apiClient';
 import type { Database } from '@/types/database';
 import { toast } from 'sonner';
@@ -76,10 +78,18 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
   const [couponDiscountAmount, setCouponDiscountAmount] = useState(0);
   const [savingFinancials, setSavingFinancials] = useState(false);
   
+  // Shipping method states (siguiendo patrón de CreateOrderForm)
+  const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState<ShippingMethod | null>(null);
+  const [shippingLoading, setShippingLoading] = useState(false);
+  const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'shipping'>(
+    orderData?.shipping_total && parseFloat(orderData.shipping_total.toString()) > 0 ? 'shipping' : 'pickup'
+  );
+  
   // Product editing states
   const [editedProducts, setEditedProducts] = useState<EnhancedLineItem[]>([]);
   const [showProductSelector, setShowProductSelector] = useState(false);
-  const [editedManualDiscount, setEditedManualDiscount] = useState(orderData?.calculated_discount?.toString() || '0');
+  // editedManualDiscount removed - no longer using manual discounts
   
   // Warranty photos states
   const [warrantyPhotos, setWarrantyPhotos] = useState<string[]>([]);
@@ -359,31 +369,104 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
     toast.info('Cupón removido');
   };
 
-  const calculateEditedSubtotal = () => {
-    const subtotal = editedProducts.reduce((sum, item) => {
-      const itemTotal = parseFloat(item.total?.toString() || '0');
-      console.log(`💰 Item "${item.name}": quantity=${item.quantity}, price=${item.price}, total=${itemTotal}`);
-      return sum + itemTotal;
+  // Funciones de cálculo siguiendo la misma lógica que CreateOrderForm.tsx
+  const calculateProductsSubtotal = (lineItems: any[], numDays: number) => {
+    // 1. Subtotal de productos (precio × cantidad × días)
+    const dailySubtotal = lineItems.reduce((sum, item) => {
+      const price = parseFloat(item.price?.toString() || '0');
+      const quantity = parseInt(item.quantity?.toString() || '0');
+      return sum + (price * quantity);
     }, 0);
-    console.log('💰 Total calculated subtotal:', subtotal);
-    return subtotal;
+    return dailySubtotal * numDays;
+  };
+
+  const calculateCalculatedSubtotal = (
+    productsSubtotal: number, 
+    shippingTotal: number, 
+    couponDiscount: number
+  ) => {
+    // 2. CALCULATED_SUBTOTAL = subtotal productos + envío - descuento cupón
+    return productsSubtotal + shippingTotal - couponDiscount;
+  };
+
+  const calculateCalculatedIVA = (calculatedSubtotal: number, applyIva: boolean = true) => {
+    // 3. CALCULATED_IVA = calculated_subtotal × 0.19 (solo si apply_iva es true)
+    return applyIva ? calculatedSubtotal * 0.19 : 0;
+  };
+
+  const calculateCalculatedTotal = (calculatedSubtotal: number, calculatedIva: number) => {
+    // 4. CALCULATED_TOTAL = calculated_subtotal + calculated_iva
+    return calculatedSubtotal + calculatedIva;
+  };
+
+  // Función para actualizar todos los cálculos siguiendo la fórmula correcta
+  const updateAllCalculations = (
+    lineItems: any[], 
+    numDays: number,
+    shipping: number = 0,
+    couponDiscount: number = 0
+  ) => {
+    // 1. Subtotal de productos
+    const productsSubtotal = calculateProductsSubtotal(lineItems, numDays);
+    
+    // 2. CALCULATED_SUBTOTAL = productos + envío - descuento cupón
+    const calculatedSubtotal = calculateCalculatedSubtotal(productsSubtotal, shipping, couponDiscount);
+    
+    // 3. CALCULATED_IVA = calculated_subtotal × 0.19
+    const calculatedIva = calculateCalculatedIVA(calculatedSubtotal, true);
+    
+    // 4. CALCULATED_TOTAL = calculated_subtotal + calculated_iva
+    const calculatedTotal = calculateCalculatedTotal(calculatedSubtotal, calculatedIva);
+
+    console.log('💰 Calculation breakdown:', {
+      productsSubtotal,
+      shipping,
+      couponDiscount,
+      calculatedSubtotal,
+      calculatedIva,
+      calculatedTotal
+    });
+
+    return {
+      products_subtotal: productsSubtotal,
+      calculated_subtotal: calculatedSubtotal,
+      calculated_iva: calculatedIva,
+      calculated_total: calculatedTotal
+    };
+  };
+
+  const calculateEditedSubtotal = () => {
+    // Para compatibilidad con código existente - solo subtotal de productos
+    const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
+    return calculateProductsSubtotal(editedProducts, numDays);
   };
 
   const calculateUpdatedTotal = () => {
-    const subtotal = isEditingFinancials ? calculateEditedSubtotal() : parseFloat(orderData.calculated_subtotal?.toString() || '0');
-    const manualDiscount = parseFloat(editedManualDiscount || '0');
+    // Usar las nuevas funciones de cálculo
+    const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
     const shipping = parseFloat(editedShipping || '0');
-    const iva = subtotal * 0.19; // Calculate IVA as 19% of subtotal
-    
-    return subtotal - manualDiscount - couponDiscountAmount + shipping + iva;
+    const calculations = updateAllCalculations(
+      editedProducts,
+      numDays,
+      shipping,
+      couponDiscountAmount
+    );
+    return calculations.calculated_total;
   };
 
   const handleSaveFinancials = async () => {
     try {
       setSavingFinancials(true);
       
-      const subtotal = calculateEditedSubtotal();
-      const iva = subtotal * 0.19;
+      // Usar las nuevas funciones de cálculo siguiendo CreateOrderForm.tsx
+      const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
+      const shipping = parseFloat(editedShipping || '0');
+      const calculations = updateAllCalculations(
+        editedProducts,
+        numDays,
+        shipping,
+        couponDiscountAmount
+      );
       
       // Prepare updated order data
       const updatedOrderData = {
@@ -398,18 +481,43 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
           subtotal: item.subtotal,
           sku: item.sku
         })),
-        calculated_subtotal: subtotal,
-        calculated_discount: parseFloat(editedManualDiscount || '0'),
-        calculated_iva: iva,
-        shipping_total: parseFloat(editedShipping || '0'),
+        // Usar los cálculos actualizados siguiendo la fórmula de CreateOrderForm
+        calculated_subtotal: calculations.calculated_subtotal,
+        calculated_discount: 0, // Ya no se usa descuento manual
+        calculated_iva: calculations.calculated_iva,
+        shipping_total: shipping,
         coupon_lines: appliedCoupon ? [{
           id: appliedCoupon.id,
           code: appliedCoupon.code,
           discount: couponDiscountAmount,
           discount_type: appliedCoupon.discount_type,
-          amount: appliedCoupon.amount
+          amount: appliedCoupon.amount,
+          meta_data: {
+            coupon_id: appliedCoupon.id.toString(),
+            coupon_amount: appliedCoupon.amount.toString(),
+            original_amount: calculations.products_subtotal.toString(),
+            applied_to: "cart_total",
+            usage_count: 1
+          }
         }] : [],
-        calculated_total: calculateUpdatedTotal()
+        // Shipping lines profesional usando el método seleccionado
+        shipping_lines: deliveryMethod === 'shipping' && selectedShippingMethod ? [{
+          ...ShippingService.createShippingLine(
+            selectedShippingMethod,
+            {
+              first_name: orderData.billing_first_name || '',
+              last_name: orderData.billing_last_name || '',
+              address_1: orderData.billing_address_1 || '',
+              city: orderData.billing_city || '',
+              phone: orderData.billing_phone || ''
+            }
+          ),
+          meta_data: {
+            ...ShippingService.createShippingLine(selectedShippingMethod).meta_data,
+            delivery_method: deliveryMethod
+          }
+        }] : [],
+        calculated_total: calculations.calculated_total
       };
 
       const response = await fetch(`/api/orders/${orderData.id}`, {
@@ -447,7 +555,6 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
   const handleCancelFinancialEdit = () => {
     // Reset to original values
     setEditedShipping(orderData?.shipping_total?.toString() || '0');
-    setEditedManualDiscount(orderData?.calculated_discount?.toString() || '0');
     // Force refresh from enhanced line items to ensure we have current data
     console.log('🔄 Resetting editedProducts from enhancedLineItems');
     console.log('📦 Available enhanced items:', enhancedLineItems.length);
@@ -499,10 +606,98 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       setCouponDiscountAmount(0);
     }
     
+    // Reset shipping states
+    setDeliveryMethod(
+      orderData?.shipping_total && parseFloat(orderData.shipping_total.toString()) > 0 ? 'shipping' : 'pickup'
+    );
+    setSelectedShippingMethod(null);
+    setShippingMethods([]);
+    
     setIsEditingFinancials(false);
     setShowProductSelector(false);
     toast.info('Cambios cancelados');
   };
+
+  // Funciones de manejo de shipping (siguiendo patrón de CreateOrderForm)
+  const loadShippingMethods = async () => {
+    setShippingLoading(true);
+    try {
+      const shippingResult = await ShippingService.getAllShippingMethods(1, 100, true); // Solo métodos habilitados
+      if (shippingResult.shippingMethods && shippingResult.shippingMethods.length > 0) {
+        setShippingMethods(shippingResult.shippingMethods);
+        
+        // Si estamos en modo shipping y no hay método seleccionado, seleccionar el primero
+        if (deliveryMethod === 'shipping' && !selectedShippingMethod) {
+          const defaultMethod = shippingResult.shippingMethods[0];
+          if (defaultMethod) {
+            setSelectedShippingMethod(defaultMethod);
+            setEditedShipping(defaultMethod.cost.toString());
+          }
+        }
+      }
+    } catch (shippingError) {
+      console.error('Error loading shipping methods:', shippingError);
+      // Fallback a métodos por defecto
+      const defaultMethods: ShippingMethod[] = [
+        {
+          id: 2,
+          name: 'Envío Estándar',
+          description: 'Envío estándar a todo Chile',
+          cost: 5000,
+          shipping_type: 'flat_rate',
+          enabled: true,
+          min_amount: null,
+          max_amount: null,
+          available_regions: null,
+          excluded_regions: null,
+          estimated_days_min: 2,
+          estimated_days_max: 4,
+          requires_address: true,
+          requires_phone: true,
+          metadata: {},
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ];
+      setShippingMethods(defaultMethods);
+      if (deliveryMethod === 'shipping' && !selectedShippingMethod) {
+        const firstMethod = defaultMethods[0];
+        if (firstMethod) {
+          setSelectedShippingMethod(firstMethod);
+          setEditedShipping(firstMethod.cost.toString());
+        }
+      }
+    } finally {
+      setShippingLoading(false);
+    }
+  };
+
+  const handleShippingMethodSelect = (method: ShippingMethod) => {
+    setSelectedShippingMethod(method);
+    setEditedShipping(method.cost.toString());
+  };
+
+  const handleDeliveryMethodChange = (method: 'pickup' | 'shipping') => {
+    setDeliveryMethod(method);
+    if (method === 'pickup') {
+      setSelectedShippingMethod(null);
+      setEditedShipping('0');
+    } else if (method === 'shipping' && shippingMethods.length > 0) {
+      // Auto-seleccionar el primer método disponible cuando se cambia a shipping
+      const firstMethod = shippingMethods[0];
+      if (firstMethod) {
+        setSelectedShippingMethod(firstMethod);
+        setEditedShipping(firstMethod.cost.toString());
+      }
+    }
+  };
+
+  // Cargar métodos de envío cuando se entra en modo de edición
+  useEffect(() => {
+    if (isEditingFinancials && shippingMethods.length === 0) {
+      loadShippingMethods();
+    }
+  }, [isEditingFinancials]);
 
   // Enhanced line items with product details
   const enhancedLineItems = useMemo(() => {
@@ -1892,48 +2087,16 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                 </div>
               )}
               
-              {/* Manual Discount Section */}
-              {isEditingFinancials ? (
-                <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Tag className="w-4 h-4 text-red-600" />
-                    <Label htmlFor="manual-discount" className="text-red-700 font-medium">Descuento Manual</Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-red-600">$</span>
-                    <Input
-                      id="manual-discount"
-                      type="number"
-                      value={editedManualDiscount}
-                      onChange={(e) => setEditedManualDiscount(e.target.value)}
-                      disabled={savingFinancials}
-                      className="flex-1"
-                      min="0"
-                      step="1000"
-                      placeholder="0"
-                    />
-                  </div>
-                  <p className="text-xs text-red-600 mt-2">
-                    Descuento adicional aplicado manualmente
-                  </p>
+              {/* Subtotal de Productos (solo mostrar en modo lectura) */}
+              {!isEditingFinancials && orderData.calculated_subtotal && (
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Subtotal de Productos:</span>
+                  <span className="font-medium">${(() => {
+                    const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
+                    const productsSubtotal = calculateProductsSubtotal(enhancedLineItems, numDays);
+                    return productsSubtotal.toLocaleString('es-CL');
+                  })()}</span>
                 </div>
-              ) : (
-                // Display base subtotal and manual discount (read-only)
-                <>
-                  {orderData.calculated_subtotal && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Subtotal Base:</span>
-                      <span className="font-medium">${orderData.calculated_subtotal.toLocaleString('es-CL')}</span>
-                    </div>
-                  )}
-                  
-                  {orderData.calculated_discount && parseFloat(orderData.calculated_discount.toString()) > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Descuento Manual:</span>
-                      <span className="font-medium text-red-600">-${parseFloat(orderData.calculated_discount.toString()).toLocaleString('es-CL')}</span>
-                    </div>
-                  )}
-                </>
               )}
               
               
@@ -1945,7 +2108,11 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                     <Label className="text-green-700 font-medium">Cupón de Descuento</Label>
                   </div>
                   <CouponSelector
-                    subtotal={parseFloat(orderData.calculated_subtotal?.toString() || '0') - parseFloat(orderData.calculated_discount?.toString() || '0')}
+                    subtotal={(() => {
+                      // Usar el subtotal de productos (sin envío ni cupones) para validar cupones
+                      const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
+                      return calculateProductsSubtotal(editedProducts, numDays);
+                    })()}
                     onCouponApplied={handleCouponApplied}
                     onCouponRemoved={handleCouponRemoved}
                     appliedCoupon={appliedCoupon}
@@ -1991,30 +2158,117 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                 })()
               )}
               
-              {/* Editable Shipping Section */}
+              {/* Delivery Method & Shipping Section */}
               {isEditingFinancials ? (
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Truck className="w-4 h-4 text-blue-600" />
-                    <Label htmlFor="shipping-cost" className="text-blue-700 font-medium">Costo de Envío</Label>
+                <div className="space-y-4">
+                  {/* Método de Entrega */}
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <h4 className="font-medium text-sm mb-3">¿Cómo desea entregar el pedido?</h4>
+                    <RadioGroup
+                      value={deliveryMethod}
+                      onValueChange={handleDeliveryMethodChange}
+                      className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                    >
+                      <div className="flex items-center space-x-3 p-3 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
+                        <RadioGroupItem value="pickup" id="pickup-edit" />
+                        <div className="flex-1">
+                          <Label htmlFor="pickup-edit" className="flex items-center space-x-2 cursor-pointer">
+                            <MapPin className="h-4 w-4" />
+                            <span className="font-medium">Retiro en tienda</span>
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            El cliente retira el pedido en tienda (Gratis)
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-3 p-3 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
+                        <RadioGroupItem value="shipping" id="shipping-edit" />
+                        <div className="flex-1">
+                          <Label htmlFor="shipping-edit" className="flex items-center space-x-2 cursor-pointer">
+                            <Truck className="h-4 w-4" />
+                            <span className="font-medium">Envío a domicilio</span>
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Envío del pedido a la dirección del cliente
+                          </p>
+                        </div>
+                      </div>
+                    </RadioGroup>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-blue-600">$</span>
-                    <Input
-                      id="shipping-cost"
-                      type="number"
-                      value={editedShipping}
-                      onChange={(e) => setEditedShipping(e.target.value)}
-                      disabled={savingFinancials}
-                      className="flex-1"
-                      min="0"
-                      step="1000"
-                      placeholder="0"
-                    />
-                  </div>
-                  <p className="text-xs text-blue-600 mt-2">
-                    Ingresa el costo de envío para este pedido
-                  </p>
+
+                  {/* Selector de Métodos de Envío (solo si se selecciona shipping) */}
+                  {deliveryMethod === 'shipping' && (
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                      <h4 className="font-medium text-sm flex items-center gap-2 mb-3">
+                        <Truck className="h-4 w-4 text-blue-600" />
+                        Método de Envío
+                      </h4>
+                      {shippingLoading ? (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                          Cargando métodos de envío...
+                        </div>
+                      ) : (
+                        <div className="grid gap-3">
+                          {shippingMethods.map((method) => {
+                            const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
+                            const productsSubtotal = calculateProductsSubtotal(editedProducts, numDays);
+                            const validation = ShippingService.validateShippingMethod(method, productsSubtotal);
+                            const isSelected = selectedShippingMethod?.id === method.id;
+                            
+                            return (
+                              <div
+                                key={method.id}
+                                className={`border rounded-lg p-3 cursor-pointer transition-colors ${
+                                  isSelected 
+                                    ? 'border-primary bg-primary/5' 
+                                    : validation.isValid 
+                                      ? 'border-border hover:border-primary/50' 
+                                      : 'border-border bg-muted/50 cursor-not-allowed opacity-60'
+                                }`}
+                                onClick={() => validation.isValid && handleShippingMethodSelect(method)}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                      isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
+                                    }`}>
+                                      {isSelected && <CheckCircle className="h-3 w-3 text-primary-foreground" />}
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium">{method.name}</span>
+                                        <span className="text-sm font-semibold text-green-600">
+                                          {formatShippingCost(method.cost)}
+                                        </span>
+                                      </div>
+                                      {method.description && (
+                                        <p className="text-sm text-muted-foreground">{method.description}</p>
+                                      )}
+                                      <p className="text-xs text-muted-foreground">
+                                        Entrega: {formatDeliveryTime(method.estimated_days_min, method.estimated_days_max)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                                {!validation.isValid && validation.message && (
+                                  <div className="mt-2 text-xs text-destructive">
+                                    {validation.message}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {shippingMethods.length === 0 && !shippingLoading && (
+                            <div className="text-sm text-muted-foreground text-center py-4">
+                              No hay métodos de envío disponibles
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 // Display shipping cost (read-only)
@@ -2030,15 +2284,74 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                 )
               )}
               
+              {/* Subtotal Calculado (productos + envío - cupón) */}
+              {(() => {
+                const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
+                const shipping = parseFloat(editedShipping || '0');
+                
+                if (isEditingFinancials) {
+                  const calculations = updateAllCalculations(
+                    editedProducts,
+                    numDays,
+                    shipping,
+                    couponDiscountAmount
+                  );
+                  return (
+                    <div className="flex justify-between items-center bg-blue-50 p-2 rounded">
+                      <span className="text-blue-700 font-medium">Subtotal Calculado:</span>
+                      <span className="font-medium text-blue-700">
+                        ${calculations.calculated_subtotal.toLocaleString('es-CL')}
+                      </span>
+                    </div>
+                  );
+                } else {
+                  // En modo lectura, mostrar el subtotal calculado original
+                  return orderData.calculated_subtotal ? (
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Subtotal Calculado:</span>
+                      <span className="font-medium">
+                        ${parseFloat(orderData.calculated_subtotal.toString()).toLocaleString('es-CL')}
+                      </span>
+                    </div>
+                  ) : null;
+                }
+              })()}
+              
               {/* IVA */}
-              {(isEditingFinancials ? (calculateEditedSubtotal() * 0.19) : (orderData.calculated_iva && parseFloat(orderData.calculated_iva.toString()))) > 0 && (
+              {(() => {
+                const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
+                const shipping = parseFloat(editedShipping || '0');
+                
+                if (isEditingFinancials) {
+                  const calculations = updateAllCalculations(
+                    editedProducts,
+                    numDays,
+                    shipping,
+                    couponDiscountAmount
+                  );
+                  return calculations.calculated_iva > 0;
+                } else {
+                  return orderData.calculated_iva && parseFloat(orderData.calculated_iva.toString()) > 0;
+                }
+              })() && (
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">IVA (19%):</span>
                   <span className="font-medium">
-                    ${isEditingFinancials 
-                      ? (calculateEditedSubtotal() * 0.19).toLocaleString('es-CL')
-                      : parseFloat(orderData.calculated_iva?.toString() || '0').toLocaleString('es-CL')
-                    }
+                    ${(() => {
+                      if (isEditingFinancials) {
+                        const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
+                        const shipping = parseFloat(editedShipping || '0');
+                        const calculations = updateAllCalculations(
+                          editedProducts,
+                          numDays,
+                          shipping,
+                          couponDiscountAmount
+                        );
+                        return calculations.calculated_iva.toLocaleString('es-CL');
+                      } else {
+                        return parseFloat(orderData.calculated_iva?.toString() || '0').toLocaleString('es-CL');
+                      }
+                    })()}
                   </span>
                 </div>
               )}

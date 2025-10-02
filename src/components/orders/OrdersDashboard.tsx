@@ -701,7 +701,7 @@ const OrdersDashboard = ({
                 title={lastRefreshTime ? `Última actualización: ${lastRefreshTime.toLocaleTimeString()}` : 'Actualizar datos'}
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${autoRefreshEnabled ? 'animate-spin' : ''}`} />
-                {loading ? 'Actualizando...' : autoRefreshEnabled ? 'Auto-actualizando...' : 'Actualizar'}
+                {loading ? 'Actualizando...' : 'Actualizar'}
               </Button>
 
               <CreateOrderForm onOrderCreated={handleOrderCreated} sessionData={sessionData} initialUsers={initialUsers} />
