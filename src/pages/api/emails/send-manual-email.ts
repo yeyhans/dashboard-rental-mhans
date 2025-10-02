@@ -141,7 +141,7 @@ async function sendViaWorkerFallback(
   metadata?: any
 ): Promise<Response> {
   try {
-    const workerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || 'https://rental-contracts-worker.yeysonhans.workers.dev';
+    const workerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || 'https://workers.mariohans.cl';
     
     const emailPayload = {
       to,

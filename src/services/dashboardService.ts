@@ -258,7 +258,7 @@ export class DashboardService {
               endDate: order.order_fecha_termino!,
               status: order.status,
               daysRemaining
-            });
+            }); 
           });
         }
       });

@@ -34,9 +34,9 @@ Images are stored in the `products.images` column as a JSONB array:
 
 ```json
 [
-  "https://pub-83720ce748254db48d49e3d86d0f44b5.r2.dev/products/123_1704067200000_1.jpg",
-  "https://pub-83720ce748254db48d49e3d86d0f44b5.r2.dev/products/123_1704067200000_2.png",
-  "https://pub-83720ce748254db48d49e3d86d0f44b5.r2.dev/products/123_1704067200000_3.webp"
+  "https://workers.mariohans.cl/products/123_1704067200000_1.jpg",
+  "https://workers.mariohans.cl/products/123_1704067200000_2.png",
+  "https://workers.mariohans.cl/products/123_1704067200000_3.webp"
 ]
 ```
 
@@ -96,8 +96,8 @@ After uploading images, click "Guardar cambios" to save the product with new ima
   "success": true,
   "message": "Successfully uploaded 3 product images",
   "urls": [
-    "https://pub-83720ce748254db48d49e3d86d0f44b5.r2.dev/products/123_1704067200000_1.jpg",
-    "https://pub-83720ce748254db48d49e3d86d0f44b5.r2.dev/products/123_1704067200000_2.png"
+    "https://workers.mariohans.cl/products/123_1704067200000_1.jpg",
+    "https://workers.mariohans.cl/products/123_1704067200000_2.png"
   ],
   "productId": "123",
   "totalImages": 2

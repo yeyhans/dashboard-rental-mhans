@@ -78,18 +78,8 @@ try {
   
   if (result && result.products && Array.isArray(result.products)) {
     allProducts = result.products;
-    console.log('✅ All products loaded successfully:', allProducts.length, 'products');
-    
-    // Log sample products for debugging
-    if (allProducts.length > 0) {
-      console.log('📦 Sample products:', allProducts.slice(0, 3).map(p => ({
-        id: p.id,
-        name: p.name,
-        status: p.status,
-        stock_status: p.stock_status,
-        price: p.price
-      })));
-    }
+
+
   } else {
     console.error('❌ ProductService returned invalid data:', result);
   }

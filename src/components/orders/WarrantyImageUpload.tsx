@@ -113,7 +113,13 @@ export function WarrantyImageUpload({
 
   // Remove current image
   const removeCurrentImage = useCallback(async (imageUrl: string) => {
-    if (!orderId) return;
+    console.log('🗑️ removeCurrentImage called with:', { orderId, imageUrl });
+    
+    if (!orderId) {
+      console.error('❌ No orderId provided for image deletion');
+      toast.error('Error: No se pudo identificar la orden');
+      return;
+    }
     
     try {
       const success = await WarrantyImageService.deleteWarrantyPhoto(orderId, imageUrl);

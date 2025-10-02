@@ -60,9 +60,6 @@ interface WPOrderResponse {
 
 
 function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderResponse, sessionData?: any, allProducts?: DatabaseProduct[] }) {
-  console.log('ProcessOrder received:', order);
-  console.log('🔍 ProcessOrder allProducts prop:', allProducts);
-  console.log('🔍 ProcessOrder allProducts length:', allProducts?.length || 0);
 
   const orderData = order?.orders?.orders?.[0];
   
@@ -418,14 +415,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
     // 4. CALCULATED_TOTAL = calculated_subtotal + calculated_iva
     const calculatedTotal = calculateCalculatedTotal(calculatedSubtotal, calculatedIva);
 
-    console.log('💰 Calculation breakdown:', {
-      productsSubtotal,
-      shipping,
-      couponDiscount,
-      calculatedSubtotal,
-      calculatedIva,
-      calculatedTotal
-    });
+
 
     return {
       products_subtotal: productsSubtotal,
@@ -713,13 +703,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       const quantity = parseInt(item.quantity?.toString() || '1');
       const calculatedTotal = unitPrice * quantity;
       
-      console.log(`🔍 Enhanced item ${index + 1}: "${item.name}"`);
-      console.log(`   - Original product_id: ${item.product_id} (${typeof item.product_id})`);
-      console.log(`   - Numeric product_id: ${numericProductId}`);
-      console.log(`   - Product details found: ${!!productDetails}`);
-      console.log(`   - Stock status: ${productDetails?.stock_status || 'not found'}`);
-      console.log(`   - Price: ${unitPrice}, Quantity: ${quantity}, Calculated Total: ${calculatedTotal}`);
-      
+
       // Log when product details are not found
       if (!productDetails && item.product_id) {
         console.warn(`⚠️ Product details not found for ID: ${item.product_id} (${item.name})`);
@@ -763,8 +747,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
 
   // Use products from props (loaded server-side with proper authentication)
   const availableProducts = allProducts || [];
-  console.log('🔍 ProcessOrder availableProducts:', availableProducts);
-  console.log('🔍 ProcessOrder availableProducts length:', availableProducts.length);
+
 
   // Product editing handlers
   const handleAddProduct = (product: DatabaseProduct, quantity: number) => {

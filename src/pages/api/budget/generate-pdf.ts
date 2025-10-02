@@ -721,7 +721,7 @@ async function uploadBudgetPDFToR2(pdfBuffer: ArrayBuffer, orderData: BudgetData
   url?: string;
 }> {
   try {
-    const workerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || 'https://rental-contracts-worker.yeysonhans.workers.dev';
+    const workerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || 'https://workers.mariohans.cl';
     
     console.log('🔧 Debug: Worker URL:', workerUrl);
     console.log('🔧 Debug: Budget PDF buffer size:', pdfBuffer.byteLength, 'bytes');

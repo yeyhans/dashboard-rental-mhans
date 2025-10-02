@@ -263,22 +263,35 @@ export class WarrantyImageService {
    */
   static async deleteWarrantyPhoto(orderId: string | number, photoUrl: string): Promise<boolean> {
     try {
+      console.log('🗑️ Deleting warranty photo:', { orderId, photoUrl });
+      
+      const payload = {
+        orderId: orderId.toString(),
+        photoUrl
+      };
+      
+      console.log('📤 Sending delete request with payload:', payload);
+      
       const response = await fetch(`${this.workerUrl}/delete-warranty-photo`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          orderId: orderId.toString(),
-          photoUrl
-        })
+        body: JSON.stringify(payload)
       });
       
       if (!response.ok) {
-        throw new Error(`Failed to delete warranty photo: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('❌ Delete request failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText
+        });
+        throw new Error(`Failed to delete warranty photo: ${response.statusText} - ${errorText}`);
       }
       
       const result = await response.json();
+      console.log('✅ Delete response:', result);
       return result.success || false;
     } catch (error) {
       console.error('Error deleting warranty photo:', error);
