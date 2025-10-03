@@ -1,4 +1,6 @@
 ---
+import { getServerUser, getServerUserProfile } from '../../lib/supabase';
+
 let { orderId } = Astro.params;
 
 if (!orderId) {
@@ -21,31 +23,96 @@ if (isInternalRequest) {
     return new Response('Internal request validation failed', { status: 400 });
   }
   console.log('✅ Internal request validated for orderId:', orderId);
+} else {
+  // For direct requests, verify authentication using server-side method
+  const user = await getServerUser(Astro);
+  
+  if (!user) {
+    console.log('No authenticated user found');
+    return Astro.redirect('/login');
+  }
+
+  // Get current user profile for authorization
+  console.log('🔍 Getting current user profile for authorization...');
+  console.log('🔍 Current user from getServerUser:', { id: user.id, email: user.email });
+  console.log('🔍 Requested orderId:', orderId);
+  
+  const currentUserProfile = await getServerUserProfile(Astro);
+  console.log('🔍 Current user profile result:', {
+    hasProfile: !!currentUserProfile,
+    hasProfileData: !!currentUserProfile?.profile,
+    profileUserId: currentUserProfile?.profile?.user_id,
+    profileAuthUid: currentUserProfile?.profile?.auth_uid
+  });
+  
+  if (!currentUserProfile || !currentUserProfile.profile) {
+    console.error('❌ No user profile found for current user');
+    return new Response('User profile not found', { status: 404 });
+  }
 }
 
-// Get order data using service role key
+// Get order data
 let orderData;
 try {
-  console.log('🔧 Fetching order data with service role key for orderId:', orderId);
-  const { createClient } = await import('@supabase/supabase-js');
-  const serviceSupabase = createClient(
-    import.meta.env.PUBLIC_SUPABASE_URL!,
-    import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
-  );
-  
-  const { data: order, error } = await serviceSupabase
-    .from('orders')
-    .select('*')
-    .eq('id', parseInt(orderId))
-    .single();
-  
-  if (error || !order) {
-    console.error('Error fetching order data:', error);
-    return new Response('Order not found', { status: 404 });
+  if (isInternalRequest) {
+    // For internal requests, use service role key to get order data directly
+    console.log('🔧 Internal request: fetching order data with service role key');
+    const { createClient } = await import('@supabase/supabase-js');
+    const serviceSupabase = createClient(
+      import.meta.env.PUBLIC_SUPABASE_URL!,
+      import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
+    );
+    
+    const { data: order, error } = await serviceSupabase
+      .from('orders')
+      .select('*')
+      .eq('id', parseInt(orderId))
+      .single();
+    
+    if (error || !order) {
+      console.error('Error fetching order data for internal request:', error);
+      return new Response('Order not found', { status: 404 });
+    }
+    
+    orderData = order;
+    console.log('✅ Internal request: order data fetched successfully');
+  } else {
+    // For regular requests, use the server method with authorization check
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      import.meta.env.PUBLIC_SUPABASE_URL!,
+      import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
+    );
+    
+    const { data: order, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', parseInt(orderId))
+      .single();
+      
+    if (error || !order) {
+      console.error('Error fetching order data:', error);
+      return new Response('Order not found', { status: 404 });
+    }
+    
+    // Verify user can only access their own orders
+    const currentUserProfile = await getServerUserProfile(Astro);
+    if (!currentUserProfile?.profile) {
+      return new Response('User profile not found', { status: 404 });
+    }
+    
+    // Check if the order belongs to the current user
+    const userMatches = order.customer_id === currentUserProfile.profile.user_id?.toString() ||
+                       order.customer_id === currentUserProfile.profile.auth_uid ||
+                       order.customer_id === currentUserProfile.auth?.id;
+    
+    if (!userMatches) {
+      console.warn(`❌ Unauthorized access attempt to order ${orderId} by user ${currentUserProfile.profile.user_id}`);
+      return Astro.redirect('/404');
+    }
+    
+    orderData = order;
   }
-  
-  orderData = order;
-  console.log('✅ Order data fetched successfully');
 } catch (error) {
   console.error('Error fetching order data:', error);
   return new Response('Error fetching order data', { status: 500 });
@@ -55,7 +122,6 @@ try {
 Astro.response.headers.set('X-Frame-Options', 'DENY');
 Astro.response.headers.set('X-Content-Type-Options', 'nosniff');
 Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-
 
 // Generate current date
 const currentDate = new Date().toLocaleDateString('es-CL', {

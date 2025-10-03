@@ -264,7 +264,7 @@ export const POST: APIRoute = async ({ request }) => {
 <meta charset="UTF-8"/>
 <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>*|MC:SUBJECT|*</title>
+<title>Gracias por tu solicitud. Estamos revisando la disponibilidad de los equipos que seleccionaste y te contactaremos muy pronto confirmando su disponibilidad.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
 <!--[if !mso]><!--><link rel="stylesheet" type="text/css" id="newGoogleFontsStatic" href="https://fonts.googleapis.com/css?family=Source+Code+Pro:400,400i,700,700i,900,900i"/><!--<![endif]--><style>img{-ms-interpolation-mode:bicubic;}

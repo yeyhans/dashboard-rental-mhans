@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🚨 ORDEN FALLIDA - NOTIFICACIÓN URGENTE ADMIN</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+    .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+    .section { background: white; padding: 20px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #dc2626; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0; }
+    .info-item { background: #f8f9fa; padding: 10px; border-radius: 5px; }
+    .info-label { font-weight: bold; color: #dc2626; }
+    .urgent-alert { background: #fef2f2; border: 2px solid #dc2626; padding: 20px; border-radius: 8px; margin: 15px 0; }
+    .action-box { background: #fff3cd; border: 2px solid #ffc107; padding: 20px; border-radius: 8px; margin: 15px 0; }
+    .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 14px; }
+    .customer-email-content { border: 2px solid #dc2626; border-radius: 8px; padding: 10px; background: #fef2f2; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚨 ORDEN FALLIDA - NOTIFICACIÓN URGENTE</h1>
+      <p>Copia del email enviado al cliente + acción administrativa urgente</p>
+      <p><strong>⏰ REQUIERE ATENCIÓN INMEDIATA</strong></p>
+    </div>
+    
+    <div class="content">
+      <div class="urgent-alert">
+        <h3>🚨 ALERTA CRÍTICA</h3>
+        <p><strong>Una orden ha fallado y el cliente ha sido notificado automáticamente.</strong></p>
+        <p><strong>Destinatario:</strong> {{customerEmail}} ({{customerName}})</p>
+        <p><strong>Fecha/Hora:</strong> {{currentDateTime}}</p>
+        <p><strong>Estado:</strong> ❌ ORDEN FALLIDA - REQUIERE SEGUIMIENTO URGENTE</p>
+        <p><strong>Tipo:</strong> Notificación de orden fallida</p>
+      </div>
+
+      {{#if customerEmailContent}}
+      <!-- Contenido del email enviado al cliente -->
+      <div class="section">
+        <h3>📋 Contenido del Email Enviado al Cliente</h3>
+        <div class="customer-email-content">
+          {{customerEmailContent}}
+        </div>
+      </div>
+      {{/if}}
+
+      {{#if failureReason}}
+      <div class="section">
+        <h3>🔍 Motivo del Fallo</h3>
+        <p><strong>{{failureReason}}</strong></p>
+      </div>
+      {{/if}}
+
+      <div class="section">
+        <h3>👤 Información del Cliente (CONTACTAR URGENTE)</h3>
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">Nombre Completo:</div>
+            <div>{{customerName}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Email:</div>
+            <div>{{customerEmail}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Teléfono:</div>
+            <div>{{customerPhone}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Empresa:</div>
+            <div>{{customerCompany}}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>📋 Detalles de la Orden Fallida</h3>
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">Número de Orden:</div>
+            <div>#{{orderId}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Proyecto:</div>
+            <div>{{projectName}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Estado:</div>
+            <div>❌ FALLIDA</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Total en Riesgo:</div>
+            <div>{{totalAmount}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Fecha Inicio Planificada:</div>
+            <div>{{startDate}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Fecha Término Planificada:</div>
+            <div>{{endDate}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Duración:</div>
+            <div>{{numJornadas}} {{jornadasText}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Fecha del Fallo:</div>
+            <div>{{failedDate}}</div>
+          </div>
+        </div>
+      </div>
+
+      {{#if lineItems}}
+      <div class="section">
+        <h3>🛠️ Equipos/Servicios Afectados ({{lineItemsCount}} items)</h3>
+        {{#each lineItems}}
+        <div class="info-item">
+          <div class="info-label">{{name}}</div>
+          <div>Cantidad: {{quantity}} {{#if sku}}| SKU: {{sku}}{{/if}}</div>
+        </div>
+        {{/each}}
+      </div>
+      {{/if}}
+
+      <div class="action-box">
+        <h3>⚡ ACCIONES INMEDIATAS REQUERIDAS</h3>
+        <p><strong>🕐 TIEMPO CRÍTICO - Actuar en las próximas 2 horas:</strong></p>
+        <ol>
+          <li><strong>📞 CONTACTAR AL CLIENTE INMEDIATAMENTE</strong>
+            <ul>
+              <li>Llamar a: {{customerPhone}}</li>
+              <li>Email: {{customerEmail}}</li>
+              <li>Explicar la situación y disculparse</li>
+            </ul>
+          </li>
+          <li><strong>🔍 INVESTIGAR CAUSA DEL FALLO</strong>
+            <ul>
+              <li>Revisar disponibilidad de equipos</li>
+              <li>Verificar problemas logísticos</li>
+              <li>Identificar conflictos de fechas</li>
+            </ul>
+          </li>
+          <li><strong>💡 PROPONER SOLUCIONES</strong>
+            <ul>
+              <li>Equipos alternativos disponibles</li>
+              <li>Fechas alternativas</li>
+              <li>Descuentos compensatorios</li>
+              <li>Servicios adicionales gratuitos</li>
+            </ul>
+          </li>
+          <li><strong>📋 DOCUMENTAR RESOLUCIÓN</strong>
+            <ul>
+              <li>Actualizar estado de la orden</li>
+              <li>Registrar acciones tomadas</li>
+              <li>Confirmar satisfacción del cliente</li>
+            </ul>
+          </li>
+        </ol>
+      </div>
+
+      <div class="section">
+        <h3>📊 Impacto del Negocio</h3>
+        <ul>
+          <li><strong>Valor en riesgo:</strong> {{totalAmount}}</li>
+          <li><strong>Reputación:</strong> Cliente puede dejar reseña negativa</li>
+          <li><strong>Relación:</strong> Riesgo de perder cliente a largo plazo</li>
+          <li><strong>Operaciones:</strong> Posible efecto dominó en otras órdenes</li>
+        </ul>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p>🚨 NOTIFICACIÓN URGENTE AUTOMÁTICA - REQUIERE ACCIÓN INMEDIATA</p>
+      <p>🕐 Generado el {{currentDateTime}}</p>
+      <p>© {{currentYear}} Rental Mhans - Sistema de Alertas Críticas</p>
+    </div>
+  </div>
+</body>
+</html>

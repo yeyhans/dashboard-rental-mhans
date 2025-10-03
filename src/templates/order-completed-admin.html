@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orden Completada - Notificación Admin</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+    .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+    .section { background: white; padding: 20px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #28a745; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0; }
+    .info-item { background: #f8f9fa; padding: 10px; border-radius: 5px; }
+    .info-label { font-weight: bold; color: #28a745; }
+    .alert { background: #d4edda; border: 1px solid #28a745; padding: 15px; border-radius: 8px; margin: 15px 0; }
+    .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 14px; }
+    .customer-email-content { border: 2px solid #28a745; border-radius: 8px; padding: 10px; background: #f8f9fa; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>✅ ORDEN COMPLETADA - NOTIFICACIÓN ADMIN</h1>
+      <p>Copia del email enviado al cliente + información administrativa</p>
+    </div>
+    
+    <div class="content">
+      <div class="alert">
+        <h3>📧 Email Enviado al Cliente</h3>
+        <p><strong>Destinatario:</strong> {{customerEmail}} ({{customerName}})</p>
+        <p><strong>Fecha/Hora:</strong> {{currentDateTime}}</p>
+        <p><strong>Estado:</strong> ✅ Enviado exitosamente</p>
+        <p><strong>Tipo:</strong> Notificación de orden completada</p>
+      </div>
+
+      <!-- Contenido del email enviado al cliente -->
+      <div class="section">
+        <h3>📋 Contenido del Email Enviado al Cliente</h3>
+        <div class="customer-email-content">
+          {{customerEmailContent}}
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>👤 Información del Cliente</h3>
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">Nombre Completo:</div>
+            <div>{{customerName}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Email:</div>
+            <div>{{customerEmail}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Teléfono:</div>
+            <div>{{customerPhone}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Empresa:</div>
+            <div>{{customerCompany}}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>📋 Detalles de la Orden Completada</h3>
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">Número de Orden:</div>
+            <div>#{{orderId}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Proyecto:</div>
+            <div>{{projectName}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Estado:</div>
+            <div>✅ COMPLETADO</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Total:</div>
+            <div>{{totalAmount}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Fecha Inicio:</div>
+            <div>{{startDate}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Fecha Término:</div>
+            <div>{{endDate}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Duración:</div>
+            <div>{{numJornadas}} {{jornadasText}}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Completado:</div>
+            <div>{{completedDate}}</div>
+          </div>
+        </div>
+      </div>
+
+      {{#if lineItems}}
+      <div class="section">
+        <h3>🛠️ Equipos/Servicios ({{lineItemsCount}} items)</h3>
+        {{#each lineItems}}
+        <div class="info-item">
+          <div class="info-label">{{name}}</div>
+          <div>Cantidad: {{quantity}} {{#if sku}}| SKU: {{sku}}{{/if}}</div>
+        </div>
+        {{/each}}
+      </div>
+      {{/if}}
+
+      <div class="section">
+        <h3>⚡ Acciones de Seguimiento</h3>
+        <ul>
+          <li><strong>Confirmar satisfacción del cliente</strong> - Llamar para verificar que todo estuvo correcto</li>
+          <li><strong>Solicitar feedback</strong> - Pedir opinión sobre el servicio brindado</li>
+          <li><strong>Actualizar registros</strong> - Marcar equipos como disponibles en inventario</li>
+          <li><strong>Facturación final</strong> - Verificar que todos los pagos estén completos</li>
+          <li><strong>Oportunidades futuras</strong> - Mantener contacto para futuros proyectos</li>
+        </ul>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p>📧 Notificación automática generada por el sistema</p>
+      <p>🕐 Generado el {{currentDateTime}}</p>
+      <p>© {{currentYear}} Rental Mhans - Sistema de Gestión de Órdenes</p>
+    </div>
+  </div>
+</body>
+</html>

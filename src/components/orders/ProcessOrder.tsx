@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, Upload, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle } from 'lucide-react';
+import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye } from 'lucide-react';
 import EditOrderForm from './EditOrderForm';
 import { CouponSelector } from './CouponSelector';
 import { ProductSelector } from './ProductSelector';
@@ -101,24 +101,35 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
   const [emailData, setEmailData] = useState({
     subject: '',
     message: '',
-    emailType: 'availability_confirmation' as 'availability_confirmation' | 'order_update' | 'custom',
+    emailType: 'availability_confirmation' as 'availability_confirmation' | 'order_update' | 'warranty_photos' | 'custom',
     includeBudget: false,
     includeContract: false,
     selectedBudgetUrls: [] as string[] // For multiple budget selection
   });
   
-  // Initialize coupon and product state from order data
+  // Initialize coupon, shipping and product state from order data
   useEffect(() => {
+    console.log('🔄 Initializing order data values:', {
+      orderId: orderData?.id,
+      coupon_lines: orderData?.coupon_lines,
+      shipping_total: orderData?.shipping_total,
+      calculated_discount: orderData?.calculated_discount,
+      shipping_lines: orderData?.shipping_lines
+    });
+    
     if (orderData?.coupon_lines) {
       try {
         const couponLines = typeof orderData.coupon_lines === 'string' 
           ? JSON.parse(orderData.coupon_lines) 
           : orderData.coupon_lines;
         
+        console.log('🎫 Parsed coupon_lines:', couponLines);
+        
         if (Array.isArray(couponLines) && couponLines.length > 0) {
           const firstCoupon = couponLines[0];
           // Reconstruct coupon object from stored data
           if (firstCoupon.id && firstCoupon.code) {
+            console.log('✅ Applying coupon from order data:', firstCoupon.code, 'discount:', firstCoupon.discount);
             setAppliedCoupon({
               id: firstCoupon.id,
               code: firstCoupon.code,
@@ -143,17 +154,25 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
           }
         }
       } catch (error) {
-        console.error('Error parsing coupon_lines:', error);
+        console.error('❌ Error parsing coupon_lines:', error);
       }
     }
     
+    // Initialize shipping total
     if (orderData?.shipping_total) {
+      console.log('🚚 Setting shipping total from order data:', orderData.shipping_total);
       setEditedShipping(orderData.shipping_total.toString());
     }
     
+    // Initialize calculated_discount if it exists (for display purposes)
+    // Note: Manual discount editing was removed, but we still need to show existing values
     if (orderData?.calculated_discount) {
-      setEditedManualDiscount(orderData.calculated_discount.toString());
+      console.log('💰 Found existing calculated_discount:', orderData.calculated_discount);
+      // The calculated_discount is now handled automatically through coupon calculations
+      // but we log it for reference
     }
+    
+    console.log('ℹ️ Order data initialization completed');
   }, [orderData]);
 
   if (!order || !order.orders) {
@@ -420,6 +439,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
     return {
       products_subtotal: productsSubtotal,
       calculated_subtotal: calculatedSubtotal,
+      calculated_discount: couponDiscount, // El descuento aplicado (principalmente cupones)
       calculated_iva: calculatedIva,
       calculated_total: calculatedTotal
     };
@@ -473,7 +493,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
         })),
         // Usar los cálculos actualizados siguiendo la fórmula de CreateOrderForm
         calculated_subtotal: calculations.calculated_subtotal,
-        calculated_discount: 0, // Ya no se usa descuento manual
+        calculated_discount: calculations.calculated_discount, // Descuento aplicado (cupones)
         calculated_iva: calculations.calculated_iva,
         shipping_total: shipping,
         coupon_lines: appliedCoupon ? [{
@@ -682,18 +702,18 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
     }
   };
 
-  // Cargar métodos de envío cuando se entra en modo de edición
+  // Cargar métodos de envío cuando se entra en modo de edición (basic loading)
   useEffect(() => {
     if (isEditingFinancials && shippingMethods.length === 0) {
       loadShippingMethods();
     }
-  }, [isEditingFinancials]);
+  }, [isEditingFinancials, shippingMethods.length]);
 
   // Enhanced line items with product details
   const enhancedLineItems = useMemo(() => {
     if (!orderData.line_items) return [];
     
-    return orderData.line_items.map((item, index) => {
+    return orderData.line_items.map((item) => {
       const numericProductId = typeof item.product_id === 'string' ? parseInt(item.product_id, 10) : item.product_id;
       const productDetails = getProductDetails(numericProductId || 0);
       const images = productDetails ? parseProductImages(productDetails.images) : [];
@@ -744,6 +764,55 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       setEditedProducts([...enhancedLineItems]);
     }
   }, [isEditingFinancials, enhancedLineItems]);
+
+  // Initialize shipping method from existing shipping_lines when entering edit mode
+  useEffect(() => {
+    if (isEditingFinancials && orderData?.shipping_lines && !selectedShippingMethod) {
+      try {
+        const shippingLines = typeof orderData.shipping_lines === 'string' 
+          ? JSON.parse(orderData.shipping_lines) 
+          : orderData.shipping_lines;
+        
+        if (Array.isArray(shippingLines) && shippingLines.length > 0) {
+          const firstShippingLine = shippingLines[0];
+          console.log('🚚 Initializing shipping method from existing shipping_lines:', firstShippingLine);
+          
+          // Crear un método de envío temporal basado en los datos existentes
+          const existingMethod: ShippingMethod = {
+            id: firstShippingLine.method_id || 0,
+            name: firstShippingLine.method_title || 'Método Existente',
+            description: firstShippingLine.method_title || '',
+            cost: parseFloat(firstShippingLine.total || '0'),
+            shipping_type: 'flat_rate', // Use valid shipping type
+            enabled: true,
+            min_amount: null,
+            max_amount: null,
+            available_regions: null,
+            excluded_regions: null,
+            estimated_days_min: 2,
+            estimated_days_max: 5,
+            requires_address: true,
+            requires_phone: true,
+            metadata: firstShippingLine.meta_data || {},
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          setSelectedShippingMethod(existingMethod);
+          setEditedShipping(existingMethod.cost.toString());
+          
+          // Determinar el método de entrega basado en el costo
+          if (existingMethod.cost > 0) {
+            setDeliveryMethod('shipping');
+          } else {
+            setDeliveryMethod('pickup');
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing shipping_lines:', error);
+      }
+    }
+  }, [isEditingFinancials, orderData?.shipping_lines, selectedShippingMethod]);
 
   // Use products from props (loaded server-side with proper authentication)
   const availableProducts = allProducts || [];
@@ -960,6 +1029,11 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       return;
     }
 
+    // Get warranty photos if email type is warranty_photos
+    const warrantyPhotos = emailData.emailType === 'warranty_photos' && orderData.fotos_garantia 
+      ? (Array.isArray(orderData.fotos_garantia) ? orderData.fotos_garantia.filter((url): url is string => typeof url === 'string') : [])
+      : [];
+
     // Prepare email data
     const manualEmailData: ManualEmailData = {
       to: customerEmail,
@@ -969,9 +1043,10 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       subject: emailData.subject,
       message: emailData.message,
       emailType: emailData.emailType,
-      attachments: emailData.selectedBudgetUrls.length > 0 || emailData.includeContract ? {
+      attachments: emailData.selectedBudgetUrls.length > 0 || emailData.includeContract || warrantyPhotos.length > 0 ? {
         ...(emailData.selectedBudgetUrls.length > 0 && { budgetUrls: emailData.selectedBudgetUrls }),
-        ...(emailData.includeContract && orderData.new_pdf_processing_url && { contractUrl: orderData.new_pdf_processing_url })
+        ...(emailData.includeContract && orderData.new_pdf_processing_url && { contractUrl: orderData.new_pdf_processing_url }),
+        ...(warrantyPhotos.length > 0 && { warrantyPhotos })
       } : undefined
     };
 
@@ -1032,6 +1107,8 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
         return `✅ Confirmación de Disponibilidad - ${projectName} (Orden #${orderId})`;
       case 'order_update':
         return `📋 Actualización de Pedido - ${projectName} (Orden #${orderId})`;
+      case 'warranty_photos':
+        return `📸 Fotos de Garantía - ${projectName} (Orden #${orderId})`;
       default:
         return `📧 Comunicación - ${projectName} (Orden #${orderId})`;
     }
@@ -1044,11 +1121,13 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
     
     switch (emailData.emailType) {
       case 'availability_confirmation':
-        return `Estimado/a ${customerName},\n\nNos complace confirmar la disponibilidad de los equipos para ${projectName} (Orden #${orderId}).\n\nTodos los productos solicitados están disponibles para las fechas indicadas. Procederemos con la preparación de los equipos según lo acordado.\n\nSi tiene alguna consulta adicional, no dude en contactarnos.\n\nSaludos cordiales,\nEquipo Rental Mhans`;
+        return `Nos complace confirmar la disponibilidad de los equipos para ${projectName} (Orden #${orderId}).\n\nTodos los productos solicitados están disponibles para las fechas indicadas. Procederemos con la preparación de los equipos según lo acordado.`;
       case 'order_update':
-        return `Estimado/a ${customerName},\n\nLe escribimos para informarle sobre una actualización en su pedido ${projectName} (Orden #${orderId}).\n\n[Describa aquí los cambios o actualizaciones realizadas]\n\nSi tiene alguna consulta sobre estos cambios, no dude en contactarnos.\n\nSaludos cordiales,\nEquipo Rental Mhans`;
+        return `Hemos revisado tu pedido ${projectName} (Orden #${orderId}) y realizado algunas modificaciones, que detallamos a continuación:.\n\n[Describa aquí los cambios o actualizaciones realizadas]\n\n`;
+      case 'warranty_photos':
+        return `Adjuntamos las fotos del pedido ${projectName} (Orden #${orderId}) en donde los equipos fueron retirados hoy como registro de su estado y entrega.\n\nRecuerda respetar las condiciones del arriendo y coordinar la devolución, con horario máximo hasta la <strong>1 PM del día siguiente</strong> al término de tu jornada de arriendo.`;
       default:
-        return `Estimado/a ${customerName},\n\nLe escribimos en relación a su pedido ${projectName} (Orden #${orderId}).\n\n[Escriba aquí su mensaje personalizado]\n\nSaludos cordiales,\nEquipo Rental Mhans`;
+        return `Le escribimos en relación a su pedido ${projectName} (Orden #${orderId}).\n\n[Escriba aquí su mensaje personalizado]\n\n`;
     }
   };
 
@@ -1499,7 +1578,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
               {/* Email Type Selection */}
               <div>
                 <Label className="text-sm font-medium mb-2 block">Tipo de Correo</Label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
                   <Button
                     variant={emailData.emailType === 'availability_confirmation' ? 'default' : 'outline'}
                     size="sm"
@@ -1522,6 +1601,18 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                     <div className="text-left">
                       <div className="font-medium">📋 Actualización</div>
                       <div className="text-xs opacity-70">Cambios en el pedido</div>
+                    </div>
+                  </Button>
+                  <Button
+                    variant={emailData.emailType === 'warranty_photos' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleEmailTypeChange('warranty_photos')}
+                    disabled={sendingEmail}
+                    className="justify-start h-auto p-3"
+                  >
+                    <div className="text-left">
+                      <div className="font-medium">📸 Fotos Garantía</div>
+                      <div className="text-xs opacity-70">Imágenes del rental</div>
                     </div>
                   </Button>
                   <Button
@@ -1586,6 +1677,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                 >
                   Usar mensaje sugerido
                 </Button>
+                <span className="text-xs text-gray-500">Ya está incluida la bienvenida y despedida personalizada en el correo.</span>
               </div>
               
               {/* Attachments */}
@@ -1671,8 +1763,50 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                     </label>
                   )}
 
+                  {/* Warranty Photos Section - Only show for warranty_photos email type */}
+                  {emailData.emailType === 'warranty_photos' && orderData.fotos_garantia && (() => {
+                    const warrantyPhotos = Array.isArray(orderData.fotos_garantia) 
+                      ? orderData.fotos_garantia.filter((url): url is string => typeof url === 'string') 
+                      : [];
+                    return warrantyPhotos.length > 0 ? (
+                      <div className="border rounded-lg p-3 bg-purple-50">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Camera className="w-4 h-4 text-purple-600" />
+                          <span className="text-sm font-medium text-purple-800">
+                            Fotos de Garantía ({warrantyPhotos.length})
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                          {warrantyPhotos.map((photoUrl, index) => {
+                            const urlString = typeof photoUrl === 'string' ? photoUrl : '';
+                            return (
+                              <div key={index} className="relative group">
+                                <img
+                                  src={urlString}
+                                  alt={`Foto de garantía ${index + 1}`}
+                                  className="w-full h-20 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                                  onClick={() => window.open(urlString, '_blank')}
+                                />
+                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all rounded flex items-center justify-center">
+                                  <Eye className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-2 text-xs text-purple-700 bg-purple-100 px-2 py-1 rounded">
+                          ✓ {warrantyPhotos.length} foto(s) de garantía se incluirán automáticamente
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-amber-600 p-2 border border-amber-200 bg-amber-50 rounded">
+                        ⚠️ No hay fotos de garantía disponibles para esta orden
+                      </div>
+                    );
+                  })()}
+
                   {/* No documents available */}
-                  {!orderData.new_pdf_on_hold_url && !orderData.new_pdf_processing_url && (
+                  {!orderData.new_pdf_on_hold_url && !orderData.new_pdf_processing_url && emailData.emailType !== 'warranty_photos' && (
                     <div className="text-sm text-gray-500 p-2 border border-dashed rounded">
                       No hay documentos disponibles para adjuntar
                     </div>
@@ -2140,6 +2274,39 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                   return null;
                 })()
               )}
+              
+              {/* Calculated Discount Display */}
+              {(() => {
+                const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
+                const shipping = parseFloat(editedShipping || '0');
+                
+                if (isEditingFinancials) {
+                  const calculations = updateAllCalculations(
+                    editedProducts,
+                    numDays,
+                    shipping,
+                    couponDiscountAmount
+                  );
+                  return calculations.calculated_discount > 0 ? (
+                    <div className="flex justify-between items-center bg-orange-50 p-3 rounded-lg border border-orange-200">
+                      <span className="text-orange-700 font-medium">💰 Descuento Total Aplicado:</span>
+                      <span className="font-medium text-orange-700">
+                        -${calculations.calculated_discount.toLocaleString('es-CL')}
+                      </span>
+                    </div>
+                  ) : null;
+                } else {
+                  // En modo lectura, mostrar el descuento calculado original si existe
+                  return orderData.calculated_discount && parseFloat(orderData.calculated_discount.toString()) > 0 ? (
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Descuento Total Aplicado:</span>
+                      <span className="font-medium text-orange-600">
+                        -${parseFloat(orderData.calculated_discount.toString()).toLocaleString('es-CL')}
+                      </span>
+                    </div>
+                  ) : null;
+                }
+              })()}
               
               {/* Delivery Method & Shipping Section */}
               {isEditingFinancials ? (

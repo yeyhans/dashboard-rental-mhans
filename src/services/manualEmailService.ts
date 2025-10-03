@@ -13,13 +13,14 @@ export interface ManualEmailData {
   // Email content
   subject: string;
   message: string;
-  emailType: 'availability_confirmation' | 'order_update' | 'custom';
+  emailType: 'availability_confirmation' | 'order_update' | 'warranty_photos' | 'custom';
   
   // Document attachments
   attachments?: {
     budgetUrl?: string;
     budgetUrls?: string[]; // Support for multiple budget URLs
     contractUrl?: string;
+    warrantyPhotos?: string[]; // Support for warranty photos
     customDocuments?: Array<{
       name: string;
       url: string;
@@ -45,7 +46,7 @@ export const sendManualEmail = async (emailData: ManualEmailData): Promise<Manua
       to: emailData.to,
       orderId: emailData.orderId,
       emailType: emailData.emailType,
-      hasAttachments: !!(emailData.attachments?.budgetUrl || emailData.attachments?.budgetUrls?.length || emailData.attachments?.contractUrl || emailData.attachments?.customDocuments?.length)
+      hasAttachments: !!(emailData.attachments?.budgetUrl || emailData.attachments?.budgetUrls?.length || emailData.attachments?.contractUrl || emailData.attachments?.warrantyPhotos?.length || emailData.attachments?.customDocuments?.length)
     });
 
     // Validate required fields
@@ -143,313 +144,161 @@ export const sendManualEmail = async (emailData: ManualEmailData): Promise<Manua
 };
 
 /**
- * Generate HTML template for manual emails
+ * Generate HTML template for manual emails using MailChimp-style inline HTML
  */
 function generateManualEmailTemplate(emailData: ManualEmailData): string {
   const { customerName, orderId, projectName, message, emailType, attachments } = emailData;
   
-  // Email type specific styling and content
-  const getEmailTypeConfig = () => {
+  // Get email type configuration
+  const getEmailTypeTitle = () => {
     switch (emailType) {
       case 'availability_confirmation':
-        return {
-          title: '✅ Confirmación de Disponibilidad',
-          headerColor: '#10b981', // green
-          icon: '✅',
-          subtitle: 'Confirmación de disponibilidad de productos'
-        };
+        return 'Confirmación de Disponibilidad';
       case 'order_update':
-        return {
-          title: '📋 Actualización de Pedido',
-          headerColor: '#3b82f6', // blue
-          icon: '📋',
-          subtitle: 'Actualización del estado de su pedido'
-        };
+        return 'Actualización de Pedido';
       default:
-        return {
-          title: '📧 Comunicación Importante',
-          headerColor: '#6366f1', // indigo
-          icon: '📧',
-          subtitle: 'Información sobre su pedido'
-        };
+        return 'Comunicación Importante';
     }
   };
 
-  const config = getEmailTypeConfig();
-
-  // Count attachments
+  const emailTitle = getEmailTypeTitle();
+  
+  // Count attachments for display
   const budgetCount = (attachments?.budgetUrl ? 1 : 0) + (attachments?.budgetUrls?.length || 0);
+  const warrantyPhotosCount = attachments?.warrantyPhotos?.length || 0;
   const attachmentCount = budgetCount + 
                          (attachments?.contractUrl ? 1 : 0) + 
+                         warrantyPhotosCount +
                          (attachments?.customDocuments?.length || 0);
 
-  return `
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Rental Mhans - Comunicación</title>
-      <style>
-        body { 
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-          line-height: 1.6; 
-          color: #333; 
-          margin: 0; 
-          padding: 0; 
-          background-color: #f5f5f5;
-        }
-        .container { 
-          max-width: 600px; 
-          margin: 20px auto; 
-          background: white;
-          border-radius: 12px;
-          overflow: hidden;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .header { 
-          background: linear-gradient(135deg, ${config.headerColor} 0%, ${config.headerColor}dd 100%); 
-          color: white; 
-          padding: 30px; 
-          text-align: center; 
-        }
-        .header h1 {
-          margin: 0;
-          font-size: 24px;
-          font-weight: 600;
-        }
-        .header p {
-          margin: 8px 0 0 0;
-          opacity: 0.9;
-          font-size: 16px;
-        }
-        .content { 
-          padding: 30px; 
-        }
-        .order-info {
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-          padding: 20px;
-          margin: 20px 0;
-        }
-        .order-info h3 {
-          margin: 0 0 15px 0;
-          color: #1e293b;
-          font-size: 18px;
-        }
-        .info-row {
-          display: flex;
-          justify-content: space-between;
-          margin: 8px 0;
-          padding: 8px 0;
-          border-bottom: 1px solid #e2e8f0;
-        }
-        .info-row:last-child {
-          border-bottom: none;
-        }
-        .info-label {
-          font-weight: 600;
-          color: #64748b;
-        }
-        .info-value {
-          color: #1e293b;
-        }
-        .message-content {
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-left: 4px solid ${config.headerColor};
-          border-radius: 8px;
-          padding: 20px;
-          margin: 20px 0;
-          white-space: pre-wrap;
-          line-height: 1.7;
-        }
-        .attachments {
-          background: #f1f5f9;
-          border-radius: 8px;
-          padding: 20px;
-          margin: 20px 0;
-        }
-        .attachments h4 {
-          margin: 0 0 15px 0;
-          color: #1e293b;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .attachment-item {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 12px;
-          background: white;
-          border: 1px solid #e2e8f0;
-          border-radius: 6px;
-          margin: 8px 0;
-        }
-        .attachment-info {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-        .attachment-icon {
-          width: 32px;
-          height: 32px;
-          background: ${config.headerColor};
-          color: white;
-          border-radius: 6px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 14px;
-          font-weight: bold;
-        }
-        .attachment-button {
-          background: ${config.headerColor};
-          color: white;
-          padding: 8px 16px;
-          text-decoration: none;
-          border-radius: 6px;
-          font-size: 14px;
-          font-weight: 500;
-          transition: opacity 0.2s;
-        }
-        .attachment-button:hover {
-          opacity: 0.9;
-        }
-        .footer { 
-          background: #f8fafc;
-          text-align: center; 
-          padding: 25px; 
-          border-top: 1px solid #e2e8f0; 
-          color: #64748b; 
-          font-size: 14px; 
-        }
-        .footer p {
-          margin: 5px 0;
-        }
-        .company-info {
-          margin-top: 15px;
-          padding-top: 15px;
-          border-top: 1px solid #e2e8f0;
-        }
-      </style>
-    </head>
+  const emailHtml = `
+<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office"><head>
+    <!--[if gte mso 15]>
+    <xml>
+    <o:OfficeDocumentSettings>
+    <o:AllowPNG/>
+    <o:PixelsPerInch>96</o:PixelsPerInch>
+    </o:OfficeDocumentSettings>
+    </xml>
+    <![endif]-->
+    <meta charset="UTF-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>${emailTitle} - ${projectName || 'Orden'} #${orderId}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+    <!--[if !mso]><!--><link rel="stylesheet" type="text/css" id="newGoogleFontsStatic" href="https://fonts.googleapis.com/css?family=Source+Code+Pro:400,400i,700,700i,900,900i"/><!--<![endif]--><style>img{-ms-interpolation-mode:bicubic;}
+    table, td{mso-table-lspace:0pt;mso-table-rspace:0pt;}
+    .mceStandardButton, .mceStandardButton td, .mceStandardButton td a{mso-hide:all!important;}
+    p, a, li, td, blockquote{mso-line-height-rule:exactly;}
+    p, a, li, td, body, table, blockquote{-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%;}
+    .mcnPreviewText{display:none!important;}
+    .bodyCell{margin:0 auto;padding:0;width:100%;}
+    .ExternalClass, .ExternalClass p, .ExternalClass td, .ExternalClass div, .ExternalClass span, .ExternalClass font{line-height:100%;}
+    .ReadMsgBody, .ExternalClass{width:100%;}
+    a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
+    body{height:100%;margin:0;padding:0;width:100%;background:#ffffff;}
+    p{margin:0;padding:0;}
+    table{border-collapse:collapse;}
+    td, p, a{word-break:break-word;}
+    h1, h2, h3, h4, h5, h6{display:block;margin:0;padding:0;}
+    img, a img{border:0;height:auto;outline:none;text-decoration:none;}
+    body, #bodyTable{background-color:rgb(235, 235, 235);}
+    .mceText, .mcnTextContent, .mceLabel{font-family:"Source Code Pro", "Helvetica Neue", Helvetica, Arial, sans-serif;}
+    .mceText, .mcnTextContent, .mceLabel{color:rgb(255, 255, 255);}
+    .mceText p, .mcnTextContent p{color:rgb(255, 255, 255);font-family:"Source Code Pro", "Helvetica Neue", Helvetica, Arial, sans-serif;font-size:16px;font-weight:normal;line-height:1.5;text-align:center;letter-spacing:0;direction:ltr;margin:0;}
+    .mceText a, .mcnTextContent a{color:rgb(0, 0, 0);font-style:normal;font-weight:normal;text-decoration:underline;direction:ltr;}
+    p.mcePastedContent, h1.mcePastedContent, h2.mcePastedContent, h3.mcePastedContent, h4.mcePastedContent{text-align:left;}
+    @media only screen and (max-width: 480px) {
+    body, table, td, p, a, li, blockquote{-webkit-text-size-adjust:none!important;}
+    body{width:100%!important;min-width:100%!important;}
+    .mceText p{margin:0;font-size:16px!important;line-height:1.5!important;}
+    .bodyCell{padding-left:16px!important;padding-right:16px!important;}
+    }</style></head>
     <body>
-      <div class="container">
-        <div class="header">
-          <h1>${config.icon} ${config.title}</h1>
-          <p>${config.subtitle}</p>
-        </div>
-        
-        <div class="content">
-          <p>Estimado/a <strong>${customerName}</strong>,</p>
-          
-          <div class="order-info">
-            <h3>📋 Información del Pedido</h3>
-            <div class="info-row">
-              <span class="info-label">Número de Orden:</span>
-              <span class="info-value">#${orderId}</span>
-            </div>
-            ${projectName ? `
-            <div class="info-row">
-              <span class="info-label">Proyecto:</span>
-              <span class="info-value">${projectName}</span>
-            </div>
-            ` : ''}
-            <div class="info-row">
-              <span class="info-label">Fecha:</span>
-              <span class="info-value">${new Date().toLocaleDateString('es-CL', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}</span>
-            </div>
-          </div>
-          
-          <div class="message-content">
-${message}
-          </div>
-          
-          ${attachmentCount > 0 ? `
-          <div class="attachments">
-            <h4>📎 Documentos Adjuntos (${attachmentCount})</h4>
-            
-            ${attachments?.budgetUrl ? `
-            <div class="attachment-item">
-              <div class="attachment-info">
-                <div class="attachment-icon">💰</div>
-                <div>
-                  <div style="font-weight: 600;">Presupuesto</div>
-                  <div style="font-size: 12px; color: #64748b;">Documento PDF con detalles de costos</div>
-                </div>
-              </div>
-              <a href="${attachments.budgetUrl}" class="attachment-button" target="_blank">Ver Presupuesto</a>
-            </div>
-            ` : ''}
-            
-            ${attachments?.budgetUrls?.map((budgetUrl, index) => `
-            <div class="attachment-item">
-              <div class="attachment-info">
-                <div class="attachment-icon">💰</div>
-                <div>
-                  <div style="font-weight: 600;">Presupuesto ${index + 1}</div>
-                  <div style="font-size: 12px; color: #64748b;">Documento PDF con detalles de costos</div>
-                </div>
-              </div>
-              <a href="${budgetUrl.trim()}" class="attachment-button" target="_blank">Ver Presupuesto ${index + 1}</a>
-            </div>
-            `).join('') || ''}
-            
-            ${attachments?.contractUrl ? `
-            <div class="attachment-item">
-              <div class="attachment-info">
-                <div class="attachment-icon">📄</div>
-                <div>
-                  <div style="font-weight: 600;">Contrato</div>
-                  <div style="font-size: 12px; color: #64748b;">Contrato de procesamiento</div>
-                </div>
-              </div>
-              <a href="${attachments.contractUrl}" class="attachment-button" target="_blank">Ver Contrato</a>
-            </div>
-            ` : ''}
-            
-            ${attachments?.customDocuments?.map(doc => `
-            <div class="attachment-item">
-              <div class="attachment-info">
-                <div class="attachment-icon">${doc.type === 'warranty' ? '📸' : '📄'}</div>
-                <div>
-                  <div style="font-weight: 600;">${doc.name}</div>
-                  <div style="font-size: 12px; color: #64748b;">Documento adicional</div>
-                </div>
-              </div>
-              <a href="${doc.url}" class="attachment-button" target="_blank">Ver Documento</a>
-            </div>
-            `).join('') || ''}
-          </div>
-          ` : ''}
-          
-          <p>Si tiene alguna consulta o necesita información adicional, no dude en contactarnos.</p>
-          
-          <p>Saludos cordiales,<br>
-          <strong>Equipo Rental Mhans</strong></p>
-        </div>
-        
-        <div class="footer">
-          <p>Este correo fue enviado desde nuestro sistema de gestión de pedidos.</p>
-          <div class="company-info">
-            <p><strong>📧</strong> rental.mariohans@gmail.com</p>
-            <p><strong>📱</strong> WhatsApp disponible para consultas</p>
-            <p>© ${new Date().getFullYear()} Rental Mhans - Equipos de Construcción</p>
-          </div>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
+    <center>
+    <table border="0" cellpadding="0" cellspacing="0" height="100%" width="100%" id="bodyTable" style="background-color: rgb(235, 235, 235);">
+    <tbody><tr>
+    <td class="bodyCell" align="center" valign="top">
+    <table id="root" border="0" cellpadding="0" cellspacing="0" width="100%"><tbody data-block-id="4" class="mceWrapper"><tr><td style="background-color:#ebebeb" valign="top" align="center" class="mceSectionHeader"><!--[if (gte mso 9)|(IE)]><table align="center" border="0" cellspacing="0" cellpadding="0" width="660" style="width:660px;"><tr><td><![endif]--><table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:660px" role="presentation"><tbody><tr><td style="background-color:#ffffff" valign="top" class="mceWrapperInner"><table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation" data-block-id="3"><tbody><tr class="mceRow"><td style="background-position:center;background-repeat:no-repeat;background-size:cover" valign="top"><table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation"><tbody><tr><td style="padding-top:0;padding-bottom:0" valign="top" class="mceColumn" id="mceColumnId--7" data-block-id="-7" colspan="12" width="100%"><table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation"><tbody><tr><td style="background-color:#000000;padding-top:40px;padding-bottom:40px;padding-right:40px;padding-left:40px;border:0;border-radius:0" valign="top" class="mceImageBlockContainer" align="left" id="b20"><div><!--[if !mso]><!--></div><a href="https://rental.mariohans.cl" style="display:block" target="_blank" data-block-id="20"><table align="left" border="0" cellpadding="0" cellspacing="0" width="50%" style="border-collapse:separate;margin:0;vertical-align:top;max-width:50%;width:50%;height:auto" role="presentation" data-testid="image-20"><tbody><tr><td style="border:0;border-radius:0;margin:0" valign="top"><img alt="" src="https://mcusercontent.com/9ba4e87550786c74a0e5dc97e/images/87791a39-5396-8f56-d47d-22a92f2a3afe.png" width="290" height="auto" style="display:block;max-width:100%;height:auto;border-radius:0" class="imageDropZone mceLogo"/></td></tr></tbody></table></a><div><!--<![endif]--></div><div>
+    <!--[if mso]>
+    <a href="https://rental.mariohans.cl"><span class="mceImageBorder" style="border:0;border-width:2px;vertical-align:top;margin:0"><img role="presentation" class="imageDropZone mceLogo" src="https://mcusercontent.com/9ba4e87550786c74a0e5dc97e/images/87791a39-5396-8f56-d47d-22a92f2a3afe.png" alt="" width="290" height="auto" style="display:block;max-width:290px;width:290px;height:auto"/></span></a>
+    <![endif]-->
+    </div></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table><!--[if (gte mso 9)|(IE)]></td></tr></table><![endif]--></td></tr></tbody><tbody data-block-id="11" class="mceWrapper"><tr><td style="background-color:transparent" valign="top" align="center" class="mceSectionBody"><!--[if (gte mso 9)|(IE)]><table align="center" border="0" cellspacing="0" cellpadding="0" width="660" style="width:660px;"><tr><td><![endif]--><table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:660px" role="presentation"><tbody><tr><td style="background-color:#ffffff" valign="top" class="mceWrapperInner"><table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation" data-block-id="10"><tbody><tr class="mceRow"><td style="background-position:center;background-repeat:no-repeat;background-size:cover" valign="top"><table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation"><tbody><tr><td style="padding-top:0;padding-bottom:0" valign="top" class="mceColumn" id="mceColumnId--8" data-block-id="-8" colspan="12" width="100%"><table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation"><tbody><tr><td style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0" valign="top" class="mceGutterContainer" id="gutterContainerId-25"><table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:separate" role="presentation"><tbody><tr><td style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;border:0;border-radius:0" valign="top" id="b25"><table width="100%" style="border:0;background-color:transparent;border-radius:0;border-collapse:separate"><tbody><tr><td style="padding-left:20px;padding-right:20px;padding-top:20px;padding-bottom:20px" class="mceTextBlockContainer"><div data-block-id="25" class="mceText" id="d25" style="width:100%"><p style="text-align: left;" class="last-child"><span style="color:rgb(0, 0, 0);"><span style="font-size: 15px">${emailTitle}.</span></span></p></div></td></tr></tbody></table></td></tr></tbody></table></td></tr><tr><td style="background-color:transparent;padding-top:17px;padding-bottom:17px;padding-right:17px;padding-left:17px;border:0;border-radius:0" valign="top" class="mceDividerBlockContainer" id="b23"><table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:transparent;width:100%" role="presentation" class="mceDividerContainer" data-block-id="23"><tbody><tr><td style="min-width:100%;border-top-width:1px;border-top-style:solid;border-top-color:#000000;line-height:0;font-size:0" valign="top" class="mceDividerBlock"> </td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table><!--[if (gte mso 9)|(IE)]></td></tr></table><![endif]--></td></tr></tbody><tbody data-block-id="17" class="mceWrapper"><tr><td style="background-color:transparent" valign="top" align="center" class="mceSectionFooter"><!--[if (gte mso 9)|(IE)]><table align="center" border="0" cellspacing="0" cellpadding="0" width="660" style="width:660px;"><tr><td><![endif]--><table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:660px" role="presentation"><tbody><tr><td style="background-color:#ffffff" valign="top" class="mceWrapperInner"><table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation" data-block-id="16"><tbody><tr class="mceRow"><td style="background-position:center;background-repeat:no-repeat;background-size:cover" valign="top"><table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation"><tbody><tr><td style="padding-top:0;padding-bottom:0" valign="top" class="mceColumn" id="mceColumnId--9" data-block-id="-9" colspan="12" width="100%"><table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation"><tbody><tr><td style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0" valign="top" class="mceGutterContainer" id="gutterContainerId-22"><table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:separate" role="presentation"><tbody><tr><td style="padding-top:0;padding-bottom:0;padding-right:0;padding-left:0;border:0;border-radius:0" valign="top" id="b22"><table width="100%" style="border:0;background-color:transparent;border-radius:0;border-collapse:separate"><tbody><tr><td style="padding-left:24px;padding-right:24px;padding-top:12px;padding-bottom:12px" class="mceTextBlockContainer"><div data-block-id="22" class="mceText" id="d22" style="width:100%">
+    
+    <p class="mcePastedContent" style="margin: 0.0px 0.0px 0.0px 0.0px; font: 13.0px 'Helvetica Neue';"><span style="color:#000000;"><span style="font-size: 13px"><span style="font-family: 'Source Code Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif"><span style="font-weight:normal;">Hola ${customerName},\n\n</span></span></span></span></p>
+    <p class="mcePastedContent"><br/></p>
+    <p class="mcePastedContent" style="margin: 0.0px 0.0px 0.0px 0.0px; font: 13.0px 'Helvetica Neue';"><span style="color:#000000;"><span style="font-size: 13px"><span style="font-family: 'Source Code Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif"><span style="font-weight:normal;">${message}</span></span></span></span></p>
+    <p class="mcePastedContent"><br/></p>
+    
+    ${attachmentCount > 0 ? `
+    <p class="mcePastedContent" style="margin: 0.0px 0.0px 0.0px 0.0px; font: 13.0px 'Helvetica Neue';"><span style="color:#000000;"><span style="font-size: 13px"><span style="font-family: 'Source Code Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif"><span style="font-weight:normal;">📎 <strong>Documentos adjuntos:</strong></span></span></span></span></p>
+    <p class="mcePastedContent"><br/></p>
+    
+    ${attachments?.budgetUrl ? `
+    <p class="mcePastedContent" style="margin: 0.0px 0.0px 0.0px 0.0px; font: 13.0px 'Helvetica Neue';"><span style="color:#000000;"><span style="font-size: 13px"><span style="font-family: 'Source Code Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif"><span style="font-weight:normal;">💰 <a href="${attachments.budgetUrl}" target="_blank">Ver Presupuesto</a></span></span></span></span></p>
+    ` : ''}
+    
+    ${attachments?.budgetUrls?.map((budgetUrl, index) => `
+    <p class="mcePastedContent" style="margin: 0.0px 0.0px 0.0px 0.0px; font: 13.0px 'Helvetica Neue';"><span style="color:#000000;"><span style="font-size: 13px"><span style="font-family: 'Source Code Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif"><span style="font-weight:normal;">💰 <a href="${budgetUrl.trim()}" target="_blank">Ver Presupuesto ${index + 1}</a></span></span></span></span></p>
+    `).join('') || ''}
+    
+    ${attachments?.contractUrl ? `
+    <p class="mcePastedContent" style="margin: 0.0px 0.0px 0.0px 0.0px; font: 13.0px 'Helvetica Neue';"><span style="color:#000000;"><span style="font-size: 13px"><span style="font-family: 'Source Code Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif"><span style="font-weight:normal;">📄 <a href="${attachments.contractUrl}" target="_blank">Ver Contrato</a></span></span></span></span></p>
+    ` : ''}
+    
+    ${attachments?.warrantyPhotos?.length ? `
+    <p class="mcePastedContent" style="margin: 0.0px 0.0px 0.0px 0.0px; font: 13.0px 'Helvetica Neue';"><span style="color:#000000;"><span style="font-size: 13px"><span style="font-family: 'Source Code Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif"><span style="font-weight:normal;">📸 <strong>Fotos de Garantía (${attachments.warrantyPhotos.length}):</strong></span></span></span></span></p>
+    <p class="mcePastedContent"><br/></p>
+    
+    ${attachments.warrantyPhotos.map((photoUrl, index) => `
+    <p class="mcePastedContent" style="margin: 0.0px 0.0px 0.0px 0.0px; font: 13.0px 'Helvetica Neue';"><span style="color:#000000;"><span style="font-size: 13px"><span style="font-family: 'Source Code Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif"><span style="font-weight:normal;">🖼️ <a href="${photoUrl.trim()}" target="_blank">Ver Foto ${index + 1}</a></span></span></span></span></p>
+    `).join('') || ''}
+    
+    <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 10px 0;">
+    <tbody><tr><td style="padding: 10px;">
+    <table border="0" cellpadding="5" cellspacing="5" width="100%">
+    <tbody><tr>
+    ${attachments.warrantyPhotos.slice(0, 3).map((photoUrl, index) => `
+    <td align="center" style="width: 33.33%;">
+    <a href="${photoUrl.trim()}" target="_blank" style="text-decoration: none;">
+    <img src="${photoUrl.trim()}" alt="Foto de Garantía ${index + 1}" style="max-width: 150px; max-height: 150px; border: 2px solid #e2e8f0; border-radius: 8px; object-fit: cover;" />
+    </a>
+    </td>
+    `).join('')}
+    </tr></tbody></table>
+    ${attachments.warrantyPhotos.length > 3 ? `
+    <table border="0" cellpadding="5" cellspacing="5" width="100%">
+    <tbody><tr>
+    ${attachments.warrantyPhotos.slice(3, 6).map((photoUrl, index) => `
+    <td align="center" style="width: 33.33%;">
+    <a href="${photoUrl.trim()}" target="_blank" style="text-decoration: none;">
+    <img src="${photoUrl.trim()}" alt="Foto de Garantía ${index + 4}" style="max-width: 150px; max-height: 150px; border: 2px solid #e2e8f0; border-radius: 8px; object-fit: cover;" />
+    </a>
+    </td>
+    `).join('')}
+    </tr></tbody></table>
+    ` : ''}
+    </td></tr></tbody></table>
+    ` : ''}
+    
+    <p class="mcePastedContent"><br/></p>
+    ` : ''}
+    
+    <p class="mcePastedContent" style="margin: 0.0px 0.0px 0.0px 0.0px; font: 13.0px 'Helvetica Neue';"><span style="color:#000000;"><span style="font-size: 13px"><span style="font-family: 'Source Code Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif"><span style="font-weight:normal;">Si tienes dudas o necesitas asesoría, contáctanos por WhatsApp.</span></span></span></span></p>
+    <p class="mcePastedContent" style="margin: 0.0px 0.0px 0.0px 0.0px; font: 13.0px 'Helvetica Neue';"><br/></p>
+    <p class="mcePastedContent" style="margin: 0.0px 0.0px 0.0px 0.0px; font: 13.0px 'Helvetica Neue';"><span style="color:#000000;"><span style="font-size: 13px"><span style="font-family: 'Source Code Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif"><span style="font-weight:normal;">Saludos,<br/></span></span></span></span><strong><span style="color:#000000;"><span style="font-size: 13px"><span style="font-family: 'Source Code Pro', 'Helvetica Neue', Helvetica, Arial, sans-serif"><span style="font-weight:normal;">Mario Hans FotoRental.</span></span></span></span></strong></p>
+    <p class="mcePastedContent last-child" style="margin: 0.0px 0.0px 0.0px 0.0px; font: 13.0px 'Helvetica Neue';"><br/></p>
+    
+    </div></td></tr></tbody></table></td></tr></tbody></table></td></tr><tr><td style="padding-top:12px;padding-bottom:12px;padding-right:0;padding-left:0;border:0;border-radius:0" valign="top" class="mceLayoutContainer" id="b27"><table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation" data-block-id="27"><tbody><tr class="mceRow"><td style="background-position:center;background-repeat:no-repeat;background-size:cover" valign="top"><table border="0" cellpadding="0" cellspacing="24" width="100%" role="presentation"><tbody><tr><td valign="top" class="mceColumn" id="mceColumnId--6" data-block-id="-6" colspan="12" width="100%"><table border="0" cellpadding="0" cellspacing="0" width="100%" role="presentation"><tbody><tr><td style="border:0;border-radius:0" valign="top" class="mceSocialFollowBlockContainer" id="b-5"><table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" class="mceSocialFollowBlock" data-block-id="-5"><tbody><tr><td valign="middle" align="center"><!--[if mso]><table align="left" border="0" cellspacing= "0" cellpadding="0"><tr><![endif]--><!--[if mso]><td align="center" valign="top"><![endif]--><table align="left" border="0" cellpadding="0" cellspacing="0" style="display:inline;float:left" role="presentation"><tbody><tr><td style="padding-top:3px;padding-bottom:3px;padding-left:12px;padding-right:12px" valign="top" class="mceSocialFollowIcon" align="center" width="24"><a href="https://instagram.com/mariohans" target="_blank" rel="noreferrer"><img class="mceSocialFollowImage" width="24" height="24" alt="Icono de Instagram" src="https://cdn-images.mailchimp.com/icons/social-block-v2/dark-instagram-48.png"/></a></td></tr></tbody></table><!--[if mso]></td><![endif]--><!--[if mso]><td align="center" valign="top"><![endif]--><table align="left" border="0" cellpadding="0" cellspacing="0" style="display:inline;float:left" role="presentation"><tbody><tr><td style="padding-top:3px;padding-bottom:3px;padding-left:12px;padding-right:12px" valign="top" class="mceSocialFollowIcon" align="center" width="24"><a href="https://web.whatsapp.com/send/?phone=5690818976" target="_blank" rel="noreferrer"><img class="mceSocialFollowImage" width="24" height="24" alt="Website icon" src="https://cdn-images.mailchimp.com/icons/social-block-v2/dark-link-48.png"/></a></td></tr></tbody></table><!--[if mso]></td><![endif]--><!--[if mso]></tr></table><![endif]--></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr><tr><td style="background-color:transparent;padding-top:25px;padding-bottom:25px;padding-right:25px;padding-left:25px;border:0;border-radius:0" valign="top" class="mceDividerBlockContainer" id="b29"><table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:transparent;width:100%" role="presentation" class="mceDividerContainer" data-block-id="29"><tbody><tr><td style="min-width:100%;border-top-width:1px;border-top-style:solid;border-top-color:#000000;line-height:0;font-size:0" valign="top" class="mceDividerBlock"> </td></tr></tbody></table></td></tr>
+    </tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table><!--[if (gte mso 9)|(IE)]></td></tr></table><![endif]--></td></tr></tbody></table>
+    </td>
+    </tr>
+    </tbody></table>
+    </center>
+    <script type="text/javascript"  src="/6_u7pQA2/Omr9aMG/XUvxDLm/NW/iuL9cpk4JhpJrt/EhZlAQ/cDAdQR/RLRDc"></script></body></html>`;
+
+  return emailHtml;
 }
 
 /**
