@@ -69,7 +69,7 @@ const pdfUrl = `${baseUrl}/order-pdf/${orderId}.pdf`;
 
 ### Variables de Entorno Requeridas:
 ```env
-PUBLIC_SUPABASE_URL=https://supabase-mhans.farmiemos.cl
+PUBLIC_SUPABASE_URL=https://supabase.mariohans.cl
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 PUBLIC_CLOUDFLARE_WORKER_URL=your_worker_url
 ```

@@ -16,6 +16,7 @@ import type { Database } from '@/types/database';
 import { toast } from 'sonner';
 import { WarrantyImageUpload } from './WarrantyImageUpload';
 import { generateOrderProcessingPdfFromId, generateBudgetPdfFromId } from '@/lib/orderPdfGenerationService';
+import { createEventFromOrder, openGoogleCalendar } from '@/lib/simpleCalendar';
 import { sendManualEmail, validateManualEmailData, type ManualEmailData } from '@/services/manualEmailService';
 
 
@@ -918,10 +919,28 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
         toast.success('Contrato de procesamiento generado exitosamente');
         console.log('✅ PDF generated successfully:', result.pdfUrl);
         
+        // Crear recordatorio en Google Calendar (solución simple)
+        try {
+          console.log('📅 Creating calendar reminder for order:', orderData.id);
+          const eventData = createEventFromOrder(orderData);
+          
+          // Abrir Google Calendar automáticamente para agregar el evento
+          openGoogleCalendar(eventData);
+          
+          toast.success('Recordatorio de calendario creado', {
+            description: `Se abrió Google Calendar para agregar el evento de la orden #${orderData.id}`
+          });
+          
+          console.log('✅ Calendar reminder opened successfully');
+        } catch (calendarError) {
+          console.error('💥 Error creating calendar reminder:', calendarError);
+          toast.warning('No se pudo abrir el recordatorio de calendario');
+        }
+        
         // Reload the page to show the new PDF URL
         setTimeout(() => {
           window.location.reload();
-        }, 1000);
+        }, 2000); // Aumentado para mostrar mensajes de calendario
       } else {
         throw new Error(result.message || 'Error al generar el contrato');
       }
