@@ -13,7 +13,8 @@ import {
   Tag, 
   CreditCard, 
   LogOut, 
-  Grid3X3 
+  Grid3X3, 
+Truck
 } from "lucide-react";
 interface Props {
   title: string;
@@ -192,6 +193,13 @@ const { data: { session } } = await supabase.auth.getSession();
                     <Tag className="h-4 w-4 sidebar-icon mr-2" />
                     <span class="sidebar-text">Cupones</span>
                   </a>
+                  <a
+                    href="/orders/shipping"
+                    class="flex items-center px-4 py-2 rounded-lg text-sm"
+                  >
+                    <Truck className="h-4 w-4 sidebar-icon mr-2" />
+                    <span class="sidebar-text">Envios</span>
+                  </a>
                 </div>
               </div>
               <a 
@@ -264,8 +272,6 @@ const { data: { session } } = await supabase.auth.getSession();
               >
                 <Home className="h-6 w-6" />
               </a>
-              <!-- Orders with tooltip for submenu -->
-              <div class="relative group">
                 <a 
                   href="/orders" 
                   class="p-2 rounded-lg block"
@@ -273,19 +279,14 @@ const { data: { session } } = await supabase.auth.getSession();
                 >
                   <ShoppingBag className="h-6 w-6" />
                 </a>
-                <!-- Tooltip for collapsed sidebar -->
-                <div class="absolute left-full ml-2 top-0 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                  <div class="font-medium">Pedidos</div>
-                  <div class="text-xs opacity-75 flex items-center">
-                    <ClipboardList className="h-3 w-3 mr-1" />
-                    Todos los Pedidos
-                  </div>
-                  <div class="text-xs opacity-75 flex items-center">
-                    <Tag className="h-3 w-3 mr-1" />
-                    Cupones
-                  </div>
-                </div>
-              </div>
+                <a
+                  href="/orders/shipping"
+                  class="p-2 rounded-lg block"
+                  title="Envios"
+                >
+                  <Truck className="h-6 w-6" />
+                </a>
+
 
               <a
               href="/orders/coupons"
@@ -300,8 +301,7 @@ const { data: { session } } = await supabase.auth.getSession();
               >
                 <Users className="h-6 w-6" />
               </a>
-              <!-- Products with tooltip for submenu -->
-              <div class="relative group">
+
                 <a 
                   href="/products" 
                   class="p-2 rounded-lg block"
@@ -309,19 +309,7 @@ const { data: { session } } = await supabase.auth.getSession();
                 >
                   <Package className="h-6 w-6" />
                 </a>
-                <!-- Tooltip for collapsed sidebar -->
-                <div class="absolute left-full ml-2 top-0 bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                  <div class="font-medium">Productos</div>
-                  <div class="text-xs opacity-75 flex items-center">
-                    <Package className="h-3 w-3 mr-1" />
-                    Todos los Productos
-                  </div>
-                  <div class="text-xs opacity-75 flex items-center">
-                    <Grid3X3 className="h-3 w-3 mr-1" />
-                    Categorías
-                  </div>
-                </div>
-              </div>
+
               <a 
                 href="/payments-table" 
                 class="p-2 rounded-lg"

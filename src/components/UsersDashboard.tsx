@@ -22,6 +22,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from './ui/dialog';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from './ui/accordion';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -42,7 +48,8 @@ import {
   Clock,
   AlertCircle,
   UserCheck,
-  Edit
+  Edit,
+  Filter
 } from 'lucide-react';
 
 interface UsersDashboardProps {
@@ -65,13 +72,58 @@ const enhanceUser = (user: UserProfile) => ({
 
 // Calculate user profile completion percentage
 const calculateCompletionPercentage = (user: UserProfile): number => {
-  const fields = [
-    user.nombre, user.apellido, user.email, user.rut, user.telefono,
-    user.direccion, user.ciudad, user.fecha_nacimiento, user.instagram,
-    user.usuario, user.empresa_nombre, user.pais, user.tipo_cliente
+  // Required fields for all users
+  const requiredFields = [
+    user.email,
+    user.nombre,
+    user.apellido,
+    user.usuario,
+    user.rut,
+    user.direccion,
+    user.ciudad,
+    user.pais,
+    user.tipo_cliente,
+    user.telefono,
+    user.fecha_nacimiento,
+    user.terminos_aceptados,
+    user.url_rut_anverso,
+    user.url_rut_reverso,
+    user.url_firma
   ];
-  const filledFields = fields.filter(field => field && field.toString().trim() !== '').length;
-  return Math.round((filledFields / fields.length) * 100);
+
+  // Optional field (instagram) - always considered as filled for calculation purposes
+  const optionalFields = [
+    true // instagram is optional, so we count it as always complete
+  ];
+
+  // Additional required fields for empresa type
+  const empresaFields = user.tipo_cliente === 'empresa' ? [
+    user.empresa_nombre,
+    user.empresa_rut,
+    user.empresa_ciudad,
+    user.empresa_direccion,
+    user.new_url_e_rut_empresa
+  ] : [];
+
+  // Combine all required fields
+  const allRequiredFields = [...requiredFields, ...optionalFields, ...empresaFields];
+  
+  // Count filled fields (excluding instagram since it's optional)
+  const filledRequiredFields = requiredFields.filter(field => {
+    if (typeof field === 'boolean') return field === true;
+    return field && field.toString().trim() !== '';
+  }).length;
+
+  const filledEmpresaFields = empresaFields.filter(field => 
+    field && field.toString().trim() !== ''
+  ).length;
+
+  const filledOptionalFields = 1; // Instagram is always considered complete since it's optional
+
+  const totalFilledFields = filledRequiredFields + filledEmpresaFields + filledOptionalFields;
+  const totalRequiredFields = allRequiredFields.length;
+
+  return Math.round((totalFilledFields / totalRequiredFields) * 100);
 };
 
 const statusColors: Record<string, string> = {
@@ -96,6 +148,8 @@ const UsersDashboard = ({
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   // const [stats] = useState<UserStats | null>(null);
   const [isMobileView, setIsMobileView] = useState(false);
+  const [completionFilter, setCompletionFilter] = useState<{min: number, max: number}>({min: 0, max: 100});
+  const [clientTypeFilter, setClientTypeFilter] = useState<string>('all');
 
   // Detect mobile view
   useEffect(() => {
@@ -111,22 +165,36 @@ const UsersDashboard = ({
     };
   }, []);
 
-  // Filter users based on search term
+  // Filter users based on search term, completion percentage, and client type
   const filteredUsers = allUsers.filter(user => {
-    if (!searchTerm) return true;
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      user.nombre?.toLowerCase().includes(searchLower) ||
-      user.apellido?.toLowerCase().includes(searchLower) ||
-      user.email?.toLowerCase().includes(searchLower) ||
-      user.rut?.toLowerCase().includes(searchLower) ||
-      user.empresa_nombre?.toLowerCase().includes(searchLower) ||
-      user.usuario?.toLowerCase().includes(searchLower) ||
-      user.instagram?.toLowerCase().includes(searchLower) ||
-      user.ciudad?.toLowerCase().includes(searchLower) ||
-      user.pais?.toLowerCase().includes(searchLower) ||
-      user.tipo_cliente?.toLowerCase().includes(searchLower)
-    );
+    // Search term filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = (
+        user.nombre?.toLowerCase().includes(searchLower) ||
+        user.apellido?.toLowerCase().includes(searchLower) ||
+        user.email?.toLowerCase().includes(searchLower) ||
+        user.rut?.toLowerCase().includes(searchLower) ||
+        user.empresa_nombre?.toLowerCase().includes(searchLower) ||
+        user.usuario?.toLowerCase().includes(searchLower) ||
+        user.instagram?.toLowerCase().includes(searchLower) ||
+        user.ciudad?.toLowerCase().includes(searchLower) ||
+        user.pais?.toLowerCase().includes(searchLower) ||
+        user.tipo_cliente?.toLowerCase().includes(searchLower)
+      );
+      if (!matchesSearch) return false;
+    }
+
+    // Client type filter
+    if (clientTypeFilter !== 'all') {
+      if (clientTypeFilter === 'individual' && user.tipo_cliente === 'empresa') return false;
+      if (clientTypeFilter === 'empresa' && user.tipo_cliente !== 'empresa') return false;
+      if (clientTypeFilter === 'undefined' && user.tipo_cliente) return false;
+    }
+
+    // Completion percentage filter
+    const userCompletion = calculateCompletionPercentage(user);
+    return userCompletion >= completionFilter.min && userCompletion <= completionFilter.max;
   });
 
   // Calculate pagination
@@ -147,10 +215,10 @@ const UsersDashboard = ({
     setCurrentPage(1); // Reset to first page
   };
 
-  // Reset page when search changes
+  // Reset page when search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, completionFilter, clientTypeFilter]);
 
   // Handle user update
   const handleUserUpdated = (updatedUser: UserProfile) => {
@@ -196,9 +264,60 @@ const UsersDashboard = ({
     </div>
   );
 
+  // Helper function to get missing fields for completion
+  const getMissingFields = (user: UserProfile): string[] => {
+    const missing: string[] = [];
+    
+    // Required fields for all users
+    const requiredFieldsMap = {
+      'Email': user.email,
+      'Nombre': user.nombre,
+      'Apellido': user.apellido,
+      'Usuario': user.usuario,
+      'RUT': user.rut,
+      'Dirección': user.direccion,
+      'Ciudad': user.ciudad,
+      'País': user.pais,
+      'Tipo de Cliente': user.tipo_cliente,
+      'Teléfono': user.telefono,
+      'Fecha de Nacimiento': user.fecha_nacimiento,
+      'Términos Aceptados': user.terminos_aceptados,
+      'RUT Anverso': user.url_rut_anverso,
+      'RUT Reverso': user.url_rut_reverso,
+      'Firma': user.url_firma
+    };
+
+    // Check required fields
+    Object.entries(requiredFieldsMap).forEach(([fieldName, value]) => {
+      if (typeof value === 'boolean') {
+        if (!value) missing.push(fieldName);
+      } else {
+        if (!value || value.toString().trim() === '') missing.push(fieldName);
+      }
+    });
+
+    // Additional fields for empresa type
+    if (user.tipo_cliente === 'empresa') {
+      const empresaFieldsMap = {
+        'Nombre de Empresa': user.empresa_nombre,
+        'RUT de Empresa': user.empresa_rut,
+        'Ciudad de Empresa': user.empresa_ciudad,
+        'Dirección de Empresa': user.empresa_direccion,
+        'E-RUT de Empresa': user.new_url_e_rut_empresa
+      };
+
+      Object.entries(empresaFieldsMap).forEach(([fieldName, value]) => {
+        if (!value || value.toString().trim() === '') missing.push(fieldName);
+      });
+    }
+
+    return missing;
+  };
+
   // User details dialog component
   const UserDetailsDialog = ({ user }: { user: UserProfile }) => {
     const enhanced = enhanceUser(user);
+    const missingFields = getMissingFields(user);
     
     return (
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw] md:w-auto p-4 md:p-6">
@@ -221,6 +340,11 @@ const UsersDashboard = ({
                   <div>
                     <p className="text-sm font-medium">Perfil Completo</p>
                     <p className="text-2xl font-bold">{enhanced.completionPercentage}%</p>
+                    {missingFields.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {missingFields.length} campos faltantes
+                      </p>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -255,6 +379,54 @@ const UsersDashboard = ({
               </CardContent>
             </Card>
           </div>
+
+          {/* Missing Fields for Completion */}
+          {missingFields.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium mb-2 text-foreground flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-orange-600" />
+                Campos Faltantes para Completar Perfil ({missingFields.length})
+              </h4>
+              <div className="bg-orange-50 border border-orange-200 p-4 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {missingFields.map((field, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-orange-400 rounded-full flex-shrink-0"></div>
+                      <span className="text-sm text-orange-800">{field}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 text-xs text-orange-700">
+                  <strong>Nota:</strong> {user.tipo_cliente === 'empresa' ? 
+                    'Como usuario empresa, debe completar campos adicionales de empresa.' : 
+                    'Instagram es el único campo opcional.'
+                  }
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Completion Status */}
+          {missingFields.length === 0 && (
+            <div>
+              <h4 className="text-sm font-medium mb-2 text-foreground flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                Estado de Completitud
+              </h4>
+              <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <span className="text-sm font-medium text-green-800">
+                    ¡Perfil 100% Completo!
+                  </span>
+                </div>
+                <p className="text-xs text-green-700 mt-2">
+                  Este usuario ha completado todos los campos requeridos
+                  {user.tipo_cliente === 'empresa' ? ' incluyendo información de empresa' : ''}.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Personal Information */}
           <div>
@@ -721,9 +893,17 @@ const UsersDashboard = ({
           </CardTitle>
           <CardDescription>
             Gestiona y visualiza todos los usuarios registrados {initialTotal > 0 ? `(${initialTotal} en total)` : ''}
-            {searchTerm && (
+            {(searchTerm || completionFilter.min > 0 || completionFilter.max < 100 || clientTypeFilter !== 'all') && (
               <span className="block text-sm mt-1">
-                Mostrando {totalFilteredUsers} resultados para "{searchTerm}"
+                Mostrando {totalFilteredUsers} resultados
+                {searchTerm && ` para "${searchTerm}"`}
+                {clientTypeFilter !== 'all' && 
+                  ` tipo ${clientTypeFilter === 'individual' ? 'Individual' : 
+                           clientTypeFilter === 'empresa' ? 'Empresa' : 'Sin Definir'}`
+                }
+                {(completionFilter.min > 0 || completionFilter.max < 100) && 
+                  ` con perfil ${completionFilter.min}%-${completionFilter.max}%`
+                }
               </span>
             )}
           </CardDescription>
@@ -751,6 +931,165 @@ const UsersDashboard = ({
                 {loading ? 'Actualizando...' : 'Actualizar'}
               </Button>
             </div>
+
+            {/* Filters Section */}
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="filters" className="border rounded-lg">
+                <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">
+                      Filtros Avanzados
+                    </span>
+                    {(clientTypeFilter !== 'all' || completionFilter.min > 0 || completionFilter.max < 100) && (
+                      <Badge variant="secondary" className="ml-2 text-xs">
+                        {[
+                          clientTypeFilter !== 'all' ? '1' : '',
+                          (completionFilter.min > 0 || completionFilter.max < 100) ? '1' : ''
+                        ].filter(Boolean).length} activo{[
+                          clientTypeFilter !== 'all' ? '1' : '',
+                          (completionFilter.min > 0 || completionFilter.max < 100) ? '1' : ''
+                        ].filter(Boolean).length !== 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4">
+                  <div className="space-y-4">
+                    {/* Client Type Filter */}
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-2 block">
+                        Tipo de Cliente
+                      </Label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <Button
+                          variant={clientTypeFilter === 'all' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setClientTypeFilter('all')}
+                          className="text-xs"
+                        >
+                          Todos
+                        </Button>
+                        <Button
+                          variant={clientTypeFilter === 'individual' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setClientTypeFilter('individual')}
+                          className="text-xs"
+                        >
+                          Individual
+                        </Button>
+                        <Button
+                          variant={clientTypeFilter === 'empresa' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setClientTypeFilter('empresa')}
+                          className="text-xs"
+                        >
+                          Empresa
+                        </Button>
+                        <Button
+                          variant={clientTypeFilter === 'undefined' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setClientTypeFilter('undefined')}
+                          className="text-xs"
+                        >
+                          Sin Definir
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Completion Percentage Filter */}
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-2 block">
+                        % de Perfil Completo
+                      </Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Mínimo (%)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={completionFilter.min}
+                            onChange={(e) => setCompletionFilter(prev => ({
+                              ...prev,
+                              min: Math.max(0, Math.min(100, parseInt(e.target.value) || 0))
+                            }))}
+                            className="text-foreground"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Máximo (%)</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={completionFilter.max}
+                            onChange={(e) => setCompletionFilter(prev => ({
+                              ...prev,
+                              max: Math.max(0, Math.min(100, parseInt(e.target.value) || 100))
+                            }))}
+                            className="text-foreground"
+                          />
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCompletionFilter({min: 0, max: 100})}
+                            className="text-xs"
+                          >
+                            Limpiar
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCompletionFilter({min: 80, max: 100})}
+                            className="text-xs"
+                          >
+                            Completos
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCompletionFilter({min: 0, max: 50})}
+                            className="text-xs"
+                          >
+                            Incompletos
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {(completionFilter.min > 0 || completionFilter.max < 100) && (
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          Mostrando usuarios con perfil entre {completionFilter.min}% y {completionFilter.max}% completo
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Filter Summary */}
+                    {(clientTypeFilter !== 'all' || completionFilter.min > 0 || completionFilter.max < 100) && (
+                      <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-md">
+                        <strong>Filtros activos:</strong>
+                        {clientTypeFilter !== 'all' && (
+                          <span className="ml-1">
+                            Tipo: {clientTypeFilter === 'individual' ? 'Individual' : 
+                                   clientTypeFilter === 'empresa' ? 'Empresa' : 'Sin Definir'}
+                          </span>
+                        )}
+                        {(completionFilter.min > 0 || completionFilter.max < 100) && (
+                          <span className="ml-1">
+                            {clientTypeFilter !== 'all' ? ', ' : ''}
+                            Perfil: {completionFilter.min}%-{completionFilter.max}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </div>
 
           {/* Users table or cards */}
@@ -778,7 +1117,9 @@ const UsersDashboard = ({
               
               <div className="text-sm text-muted-foreground">
                 Mostrando {startIndex + 1}-{Math.min(endIndex, totalFilteredUsers)} de {totalFilteredUsers} usuarios
-                {searchTerm && ` (filtrados de ${initialTotal} total)`}
+                {(searchTerm || completionFilter.min > 0 || completionFilter.max < 100 || clientTypeFilter !== 'all') && 
+                  ` (filtrados de ${initialTotal} total)`
+                }
               </div>
             </div>
 
