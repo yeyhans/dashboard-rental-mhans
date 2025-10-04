@@ -14,7 +14,8 @@ import {
   CreditCard, 
   LogOut, 
   Grid3X3, 
-Truck
+Truck,
+BarChart3
 } from "lucide-react";
 interface Props {
   title: string;
@@ -245,6 +246,13 @@ const { data: { session } } = await supabase.auth.getSession();
                 <CreditCard className="h-5 w-5 sidebar-icon" />
                 <span class="sidebar-text ml-3">Pagos</span>
               </a>
+              <a 
+                href="/analytics" 
+                class="flex items-center px-4 py-2 rounded-lg"
+              >
+                <BarChart3 className="h-5 w-5 sidebar-icon" />
+                <span class="sidebar-text ml-3">Analytics</span>
+              </a>
               
               <!-- Logout Button -->
               <button 
@@ -315,6 +323,12 @@ const { data: { session } } = await supabase.auth.getSession();
                 class="p-2 rounded-lg"
               >
                 <CreditCard className="h-6 w-6" />
+              </a>
+              <a 
+                href="/analytics" 
+                class="p-2 rounded-lg"
+              >
+                <BarChart3 className="h-6 w-6" />
               </a>
               <!-- Logout Button for collapsed sidebar -->
               <button 

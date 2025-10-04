@@ -1,0 +1,93 @@
+---
+import Base from '../layout/Base.astro';
+import AdvancedAnalyticsDashboard from '../components/AdvancedAnalyticsDashboard';
+import { AdvancedAnalyticsService } from '../services/advancedAnalyticsService';
+import { supabase } from '../lib/supabase';
+
+export const prerender = false;
+
+// Verificar autenticación de admin
+if (!supabase) {
+  console.error('Supabase client is not initialized. Check environment variables.');
+  return Astro.redirect("/");
+}
+
+const { data: { session } } = await supabase.auth.getSession();
+
+if (!session) {
+  return Astro.redirect("/");
+}
+
+// Verificar que el usuario es admin
+const { data: adminUser, error: adminError } = await supabase
+  .from('admin_users')
+  .select('*')
+  .eq('user_id', session.user.id)
+  .eq('role', 'admin')
+  .single();
+
+if (adminError || !adminUser) {
+  console.error('Admin verification failed:', adminError?.message);
+  Astro.cookies.delete('sb-access-token', { path: '/' });
+  Astro.cookies.delete('sb-refresh-token', { path: '/' });
+  return Astro.redirect("/");
+}
+
+// Obtener parámetros de fecha desde la URL
+const urlParams = new URLSearchParams(Astro.url.search);
+const startDate = urlParams.get('startDate');
+const endDate = urlParams.get('endDate');
+
+// Obtener estadísticas avanzadas
+let analyticsData = null;
+let error = null;
+
+try {
+  console.log('🔍 Loading advanced analytics data...');
+  if (startDate && endDate) {
+    console.log(`📅 Using custom date range: ${startDate} to ${endDate}`);
+    analyticsData = await AdvancedAnalyticsService.getAdvancedAnalytics(startDate, endDate);
+  } else {
+    console.log('📅 Using default date range (last 30 days)');
+    analyticsData = await AdvancedAnalyticsService.getAdvancedAnalytics();
+  }
+  console.log('✅ Advanced analytics loaded successfully');
+} catch (err) {
+  console.error('❌ Error loading advanced analytics:', err);
+  error = err instanceof Error ? err.message : 'Error desconocido al cargar analytics';
+}
+
+const title = "Analytics Avanzados - Rental Mhans";
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    {error && (
+      <div class="mb-6 p-4 border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/50 rounded-lg">
+        <div class="flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p class="text-red-700 dark:text-red-400 font-medium">Error al cargar analytics</p>
+        </div>
+        <p class="text-red-600 dark:text-red-300 text-sm mt-1">{error}</p>
+      </div>
+    )}
+
+    {analyticsData && (
+      <AdvancedAnalyticsDashboard 
+        client:load
+        analyticsData={analyticsData}
+      />
+    )}
+
+    {!analyticsData && !error && (
+      <div class="flex items-center justify-center py-12">
+        <div class="text-center">
+          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p class="text-muted-foreground">Cargando analytics...</p>
+        </div>
+      </div>
+    )}
+  </div>
+</Base>
