@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye } from 'lucide-react';
+import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye, Settings } from 'lucide-react';
 import EditOrderForm from './EditOrderForm';
 import { CouponSelector } from './CouponSelector';
 import { ProductSelector } from './ProductSelector';
@@ -18,6 +18,8 @@ import { WarrantyImageUpload } from './WarrantyImageUpload';
 import { generateOrderProcessingPdfFromId, generateBudgetPdfFromId } from '@/lib/orderPdfGenerationService';
 import { createEventFromOrder, openGoogleCalendar } from '@/lib/simpleCalendar';
 import { sendManualEmail, validateManualEmailData, type ManualEmailData } from '@/services/manualEmailService';
+import { AdminCommunications } from './AdminCommunications';
+import { useOrderNotifications } from '../../hooks/useOrderNotifications';
 
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
@@ -83,6 +85,17 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
   const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'shipping'>(
     orderData?.shipping_total && parseFloat(orderData.shipping_total.toString()) > 0 ? 'shipping' : 'pickup'
   );
+  const [shippingAddress, setShippingAddress] = useState('');
+  
+  // Custom shipping states
+  const [showCustomShippingForm, setShowCustomShippingForm] = useState(false);
+  const [customShippingData, setCustomShippingData] = useState({
+    name: '',
+    description: '',
+    cost: '',
+    estimated_days_min: '1',
+    estimated_days_max: '3'
+  });
   
   // Product editing states
   const [editedProducts, setEditedProducts] = useState<EnhancedLineItem[]>([]);
@@ -102,20 +115,52 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
   const [emailData, setEmailData] = useState({
     subject: '',
     message: '',
-    emailType: 'availability_confirmation' as 'availability_confirmation' | 'order_update' | 'warranty_photos' | 'custom',
+    emailType: 'custom' as 'warranty_photos' | 'availability_confirmation' | 'order_update' | 'custom',
+    selectedBudgetUrls: [] as string[],
     includeBudget: false,
-    includeContract: false,
-    selectedBudgetUrls: [] as string[] // For multiple budget selection
+    includeContract: false
   });
-  
-  // Initialize coupon, shipping and product state from order data
+
+  // Order notifications hook
+  const {
+    notifyEmailSent,
+    notifyEmailFailed,
+    notifyStatusChange,
+    notifyPdfGenerated
+  } = useOrderNotifications({
+    orderId: orderData?.id || 0,
+    customerId: orderData?.customer_id?.toString() || '',
+    customerName: `${orderData?.billing_first_name || ''} ${orderData?.billing_last_name || ''}`.trim(),
+    customerEmail: orderData?.billing_email || '',
+    adminId: sessionData?.user?.id || 'admin',
+    adminName: sessionData?.user?.name || 'Administrador',
+    adminEmail: sessionData?.user?.email || 'admin@rental.com'
+  });
+
   useEffect(() => {
-    console.log('🔄 Initializing order data values:', {
-      orderId: orderData?.id,
+    console.log('🔍 ProcessOrder: Received orderData:', {
+      id: orderData?.id,
+      status: orderData?.status,
+      customer_id: orderData?.customer_id,
+      order_proyecto: orderData?.order_proyecto,
       coupon_lines: orderData?.coupon_lines,
       shipping_total: orderData?.shipping_total,
       calculated_discount: orderData?.calculated_discount,
       shipping_lines: orderData?.shipping_lines
+    });
+    
+    console.log('🚚 [ProcessOrder] Detailed shipping_lines analysis:', {
+      shipping_lines_exists: !!orderData?.shipping_lines,
+      shipping_lines_type: typeof orderData?.shipping_lines,
+      shipping_lines_raw: orderData?.shipping_lines,
+      shipping_lines_length: Array.isArray(orderData?.shipping_lines) ? orderData.shipping_lines.length : 'not array',
+      shipping_address: (() => {
+        if (Array.isArray(orderData?.shipping_lines) && orderData.shipping_lines.length > 0) {
+          const firstLine = orderData.shipping_lines[0];
+          return typeof firstLine === 'object' && firstLine && 'meta_data' in firstLine ? firstLine.meta_data?.shipping_address : undefined;
+        }
+        return undefined;
+      })()
     });
     
     if (orderData?.coupon_lines) {
@@ -511,22 +556,44 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
             usage_count: 1
           }
         }] : [],
-        // Shipping lines profesional usando el método seleccionado
+        // Shipping lines según método de entrega seleccionado
         shipping_lines: deliveryMethod === 'shipping' && selectedShippingMethod ? [{
-          ...ShippingService.createShippingLine(
-            selectedShippingMethod,
-            {
-              first_name: orderData.billing_first_name || '',
-              last_name: orderData.billing_last_name || '',
-              address_1: orderData.billing_address_1 || '',
-              city: orderData.billing_city || '',
-              phone: orderData.billing_phone || ''
-            }
-          ),
-          meta_data: {
-            ...ShippingService.createShippingLine(selectedShippingMethod).meta_data,
-            delivery_method: deliveryMethod
-          }
+          ...(selectedShippingMethod.metadata?.custom 
+            ? {
+                // Método customizado - crear shipping line manualmente
+                id: selectedShippingMethod.id,
+                method_id: selectedShippingMethod.id,
+                method_title: selectedShippingMethod.name,
+                method_type: selectedShippingMethod.shipping_type,
+                total: selectedShippingMethod.cost,
+                taxes: [],
+                meta_data: {
+                  estimated_delivery: formatDeliveryTime(selectedShippingMethod.estimated_days_min, selectedShippingMethod.estimated_days_max),
+                  delivery_method: deliveryMethod,
+                  shipping_address: shippingAddress.trim(),
+                  custom_shipping: true,
+                  tracking_number: null
+                }
+              }
+            : {
+                // Método estándar - usar ShippingService
+                ...ShippingService.createShippingLine(
+                  selectedShippingMethod,
+                  {
+                    first_name: orderData.billing_first_name || '',
+                    last_name: orderData.billing_last_name || '',
+                    address_1: orderData.billing_address_1 || '',
+                    city: orderData.billing_city || '',
+                    phone: orderData.billing_phone || ''
+                  }
+                ),
+                meta_data: {
+                  ...ShippingService.createShippingLine(selectedShippingMethod).meta_data,
+                  delivery_method: deliveryMethod,
+                  shipping_address: shippingAddress.trim()
+                }
+              }
+          )
         }] : [],
         calculated_total: calculations.calculated_total
       };
@@ -703,6 +770,64 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
     }
   };
 
+  // Custom shipping handlers
+  const handleCustomShippingSubmit = () => {
+    if (!customShippingData.name || !customShippingData.cost) {
+      alert('Por favor completa el nombre y costo del envío customizado');
+      return;
+    }
+
+    // Crear un método de envío temporal customizado
+    const customMethod: ShippingMethod = {
+      id: `custom_${Date.now()}`,
+      name: customShippingData.name,
+      description: customShippingData.description || 'Envío personalizado',
+      cost: customShippingData.cost,
+      shipping_type: 'flat_rate',
+      enabled: true,
+      min_amount: null,
+      max_amount: null,
+      available_regions: null,
+      excluded_regions: null,
+      estimated_days_min: customShippingData.estimated_days_min,
+      estimated_days_max: customShippingData.estimated_days_max,
+      requires_address: true,
+      requires_phone: true,
+      metadata: { custom: true },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: null
+    };
+
+    // Agregar el método customizado a la lista
+    setShippingMethods(prev => [...prev, customMethod]);
+    
+    // Seleccionar automáticamente el método customizado
+    setSelectedShippingMethod(customMethod);
+    setEditedShipping(customMethod.cost);
+    
+    // Limpiar el formulario y cerrarlo
+    setCustomShippingData({
+      name: '',
+      description: '',
+      cost: '',
+      estimated_days_min: '1',
+      estimated_days_max: '3'
+    });
+    setShowCustomShippingForm(false);
+  };
+
+  const handleCustomShippingCancel = () => {
+    setCustomShippingData({
+      name: '',
+      description: '',
+      cost: '',
+      estimated_days_min: '1',
+      estimated_days_max: '3'
+    });
+    setShowCustomShippingForm(false);
+  };
+
   // Cargar métodos de envío cuando se entra en modo de edición (basic loading)
   useEffect(() => {
     if (isEditingFinancials && shippingMethods.length === 0) {
@@ -725,11 +850,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       const calculatedTotal = unitPrice * quantity;
       
 
-      // Log when product details are not found
-      if (!productDetails && item.product_id) {
-        console.warn(`⚠️ Product details not found for ID: ${item.product_id} (${item.name})`);
-        console.log('📋 Available product IDs:', productsData.map(p => p.id));
-      }
+
       
       return {
         ...item,
@@ -802,11 +923,39 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
           setSelectedShippingMethod(existingMethod);
           setEditedShipping(existingMethod.cost.toString());
           
-          // Determinar el método de entrega basado en el costo
-          if (existingMethod.cost > 0) {
+          // Determinar el método de entrega basado en metadata primero, luego en el costo
+          const metaData = firstShippingLine.meta_data || {};
+          const deliveryMethodFromMeta = metaData.delivery_method || metaData['delivery_method'];
+          
+          console.log('🔍 Determining delivery method:', {
+            metaData,
+            deliveryMethodFromMeta,
+            cost: existingMethod.cost,
+            method_title: firstShippingLine.method_title,
+            shipping_address: metaData.shipping_address
+          });
+          
+          // Cargar dirección de envío si existe
+          if (metaData.shipping_address) {
+            console.log('📍 Loading shipping address:', metaData.shipping_address);
+            setShippingAddress(metaData.shipping_address);
+          }
+          
+          if (deliveryMethodFromMeta === 'shipping') {
+            console.log('✅ Setting delivery method to SHIPPING based on metadata');
             setDeliveryMethod('shipping');
-          } else {
+          } else if (deliveryMethodFromMeta === 'pickup') {
+            console.log('✅ Setting delivery method to PICKUP based on metadata');
             setDeliveryMethod('pickup');
+          } else {
+            // Fallback: determinar por costo (lógica anterior)
+            if (existingMethod.cost > 0) {
+              console.log('✅ Setting delivery method to SHIPPING based on cost > 0');
+              setDeliveryMethod('shipping');
+            } else {
+              console.log('✅ Setting delivery method to PICKUP based on cost = 0');
+              setDeliveryMethod('pickup');
+            }
           }
         }
       } catch (error) {
@@ -919,6 +1068,13 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
         toast.success('Contrato de procesamiento generado exitosamente');
         console.log('✅ PDF generated successfully:', result.pdfUrl);
         
+        // Notificar al cliente sobre la generación del contrato
+        await notifyPdfGenerated(
+          'processing',
+          result.pdfUrl || '',
+          true
+        );
+        
         // Crear recordatorio en Google Calendar (solución simple)
         try {
           console.log('📅 Creating calendar reminder for order:', orderData.id);
@@ -946,7 +1102,16 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       }
     } catch (error) {
       console.error('💥 Error generating order PDF:', error);
-      toast.error(error instanceof Error ? error.message : 'Error al generar el contrato');
+      const errorMessage = error instanceof Error ? error.message : 'Error al generar el contrato';
+      toast.error(errorMessage);
+      
+      // Notificar al cliente sobre el error en la generación
+      await notifyPdfGenerated(
+        'processing',
+        '',
+        false,
+        errorMessage
+      );
     } finally {
       setGeneratingPdf(false);
     }
@@ -973,6 +1138,13 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
         toast.success('Presupuesto generado exitosamente');
         console.log('✅ Budget PDF generated successfully:', result.pdfUrl);
         
+        // Notificar al cliente sobre la generación del presupuesto
+        await notifyPdfGenerated(
+          'budget',
+          result.pdfUrl || '',
+          true
+        );
+        
         // Reload the page to show the new PDF URL
         setTimeout(() => {
           window.location.reload();
@@ -982,7 +1154,16 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       }
     } catch (error) {
       console.error('💥 Error generating budget PDF:', error);
-      toast.error(error instanceof Error ? error.message : 'Error al generar el presupuesto');
+      const errorMessage = error instanceof Error ? error.message : 'Error al generar el presupuesto';
+      toast.error(errorMessage);
+      
+      // Notificar al cliente sobre el error en la generación
+      await notifyPdfGenerated(
+        'budget',
+        '',
+        false,
+        errorMessage
+      );
     } finally {
       setGeneratingBudget(false);
     }
@@ -1009,6 +1190,13 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
         toast.success('Presupuesto actualizado exitosamente');
         console.log('✅ Budget PDF updated successfully:', result.pdfUrl);
         
+        // Notificar al cliente sobre la actualización del presupuesto
+        await notifyPdfGenerated(
+          'budget',
+          result.pdfUrl || '',
+          true
+        );
+        
         // Reload the page to show the updated PDF URL history
         setTimeout(() => {
           window.location.reload();
@@ -1018,7 +1206,16 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       }
     } catch (error) {
       console.error('💥 Error updating budget PDF:', error);
-      toast.error(error instanceof Error ? error.message : 'Error al actualizar el presupuesto');
+      const errorMessage = error instanceof Error ? error.message : 'Error al actualizar el presupuesto';
+      toast.error(errorMessage);
+      
+      // Notificar al cliente sobre el error en la actualización
+      await notifyPdfGenerated(
+        'budget',
+        '',
+        false,
+        errorMessage
+      );
     } finally {
       setGeneratingBudget(false);
     }
@@ -1031,6 +1228,54 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       .split(',')
       .map(url => url.trim())
       .filter(url => url.length > 0);
+  };
+
+  // Function to handle order status changes
+  const handleStatusChange = async (newStatus: string, reason?: string) => {
+    if (!orderData?.id) {
+      toast.error('ID de orden no disponible');
+      return;
+    }
+
+    const oldStatus = orderData.status || 'unknown';
+    
+    try {
+      // Aquí iría la lógica para actualizar el estado en la base de datos
+      // Por ahora solo notificamos el cambio
+      
+      await notifyStatusChange(
+        oldStatus,
+        newStatus,
+        reason,
+        `Cambio realizado desde el panel administrativo por ${sessionData?.user?.name || 'Administrador'}`
+      );
+      
+      toast.success(`Estado cambiado de ${oldStatus} a ${newStatus}`);
+      
+      // Recargar la página para mostrar el nuevo estado
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error changing order status:', error);
+      toast.error('Error al cambiar el estado de la orden');
+    }
+  };
+
+  // Function to mark order as completed
+  const handleMarkAsCompleted = async () => {
+    if (confirm('¿Estás seguro de que quieres marcar esta orden como completada?')) {
+      await handleStatusChange('completed', 'Orden completada manualmente por el administrador');
+    }
+  };
+
+  // Function to mark order as failed
+  const handleMarkAsFailed = async () => {
+    const reason = prompt('Ingresa el motivo por el cual la orden falló:');
+    if (reason) {
+      await handleStatusChange('failed', reason);
+    }
   };
 
   // Manual email handlers
@@ -1084,6 +1329,20 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
 
       if (result.success) {
         toast.success('Correo enviado exitosamente');
+        
+        // Notificar al cliente a través del sistema de comunicaciones
+        await notifyEmailSent(
+          emailData.emailType,
+          emailData.subject,
+          customerEmail,
+          emailData.message,
+          [
+            ...emailData.selectedBudgetUrls,
+            ...(emailData.includeContract && orderData.new_pdf_processing_url ? [orderData.new_pdf_processing_url] : []),
+            ...warrantyPhotos
+          ].filter(Boolean)
+        );
+        
         setShowEmailModal(false);
         // Reset form
         setEmailData({
@@ -1099,7 +1358,17 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       }
     } catch (error) {
       console.error('💥 Error sending manual email:', error);
-      toast.error(error instanceof Error ? error.message : 'Error al enviar el correo');
+      const errorMessage = error instanceof Error ? error.message : 'Error al enviar el correo';
+      toast.error(errorMessage);
+      
+      // Notificar al cliente sobre el error en el envío
+      await notifyEmailFailed(
+        emailData.emailType,
+        emailData.subject,
+        customerEmail,
+        errorMessage,
+        emailData.message
+      );
     } finally {
       setSendingEmail(false);
     }
@@ -1315,6 +1584,65 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
             )}
           </CardContent>
         </Card>
+
+        {/* Shipping Information */}
+        {(() => {
+          const shippingLines = typeof orderData?.shipping_lines === 'string' 
+            ? JSON.parse(orderData.shipping_lines) 
+            : orderData?.shipping_lines;
+          
+          const hasShippingInfo = Array.isArray(shippingLines) && shippingLines.length > 0;
+          const firstShippingLine = hasShippingInfo ? shippingLines[0] : null;
+          const deliveryMethodFromData = firstShippingLine?.meta_data?.delivery_method;
+          const shippingAddressFromData = firstShippingLine?.meta_data?.shipping_address;
+          
+          if (!hasShippingInfo) return null;
+          
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {deliveryMethodFromData === 'shipping' ? (
+                    <><Truck className="h-4 w-4" /> Información de Envío</>
+                  ) : (
+                    <><MapPin className="h-4 w-4" /> Información de Retiro</>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="font-medium">Método de entrega:</span>
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    deliveryMethodFromData === 'shipping' 
+                      ? 'bg-blue-100 text-blue-800' 
+                      : 'bg-green-100 text-green-800'
+                  }`}>
+                    {deliveryMethodFromData === 'shipping' ? 'Envío a domicilio' : 'Retiro en tienda'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Método:</span>
+                  <span>{firstShippingLine.method_title || 'N/A'}</span>
+                </div>
+                {shippingAddressFromData && (
+                  <div className="flex justify-between">
+                    <span className="font-medium">Dirección de envío:</span>
+                    <span className="text-right max-w-xs">{shippingAddressFromData}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="font-medium">Costo:</span>
+                  <span className={deliveryMethodFromData === 'pickup' ? 'text-green-600 font-medium' : ''}>
+                    {deliveryMethodFromData === 'pickup' 
+                      ? 'Gratis' 
+                      : `$${parseFloat(firstShippingLine.total || '0').toLocaleString('es-CL')}`
+                    }
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
       </div>
 
       {/* Project Information */}
@@ -1483,6 +1811,66 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
             </div>
           </CardContent>
         </Card>
+
+      {/* Order Status Management Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="w-5 h-5" />
+            Gestión de Estado de Orden
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <h4 className="font-medium text-yellow-800 mb-2">Estado Actual</h4>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-sm">
+                  {orderData.status?.toUpperCase() || 'DESCONOCIDO'}
+                </Badge>
+                <span className="text-sm text-muted-foreground">
+                  Última modificación: {orderData.date_modified ? new Date(orderData.date_modified).toLocaleString('es-CL') : 'No disponible'}
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex flex-wrap gap-3">
+              {/* Botón para marcar como completado */}
+              {orderData.status !== 'completed' && (
+                <Button 
+                  variant="default" 
+                  size="sm"
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700 shadow-lg"
+                  onClick={handleMarkAsCompleted}
+                  title="Marcar orden como completada"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Marcar como Completada
+                </Button>
+              )}
+              
+              {/* Botón para marcar como fallida */}
+              {orderData.status !== 'failed' && orderData.status !== 'completed' && (
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  className="bg-gradient-to-r from-red-600 to-rose-600 text-white hover:from-red-700 hover:to-rose-700 shadow-lg"
+                  onClick={handleMarkAsFailed}
+                  title="Marcar orden como fallida"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Marcar como Fallida
+                </Button>
+              )}
+            </div>
+            
+            <div className="text-xs text-muted-foreground bg-gray-50 p-3 rounded">
+              <strong>Nota:</strong> Los cambios de estado notificarán automáticamente al cliente a través del sistema de comunicaciones.
+              Asegúrate de que el cambio sea correcto antes de confirmar.
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Manual Email Communication Section */}
       <Card>
@@ -2368,11 +2756,31 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
 
                   {/* Selector de Métodos de Envío (solo si se selecciona shipping) */}
                   {deliveryMethod === 'shipping' && (
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
                       <h4 className="font-medium text-sm flex items-center gap-2 mb-3">
                         <Truck className="h-4 w-4 text-blue-600" />
-                        Método de Envío
+                        Información de Envío
                       </h4>
+                      
+                      {/* Campo de dirección de envío */}
+                      <div className="space-y-2">
+                        <Label htmlFor="shippingAddressEdit" className="text-sm font-medium text-gray-700">
+                          Dirección de envío
+                        </Label>
+                        <Input
+                          id="shippingAddressEdit"
+                          type="text"
+                          placeholder="Dirección completa de envío"
+                          value={shippingAddress}
+                          onChange={(e) => setShippingAddress(e.target.value)}
+                          className="w-full bg-white"
+                        />
+                        {shippingAddress && (
+                          <p className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
+                            📍 <strong>Dirección guardada:</strong> {shippingAddress}
+                          </p>
+                        )}
+                      </div>
                       {shippingLoading ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
@@ -2408,6 +2816,12 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                                     <div>
                                       <div className="flex items-center gap-2">
                                         <span className="font-medium">{method.name}</span>
+                                        {method.metadata?.custom && (
+                                          <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                                            <Settings className="h-3 w-3 mr-1" />
+                                            Personalizado
+                                          </Badge>
+                                        )}
                                         <span className="text-sm font-semibold text-green-600">
                                           {formatShippingCost(method.cost)}
                                         </span>
@@ -2432,6 +2846,126 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                           {shippingMethods.length === 0 && !shippingLoading && (
                             <div className="text-sm text-muted-foreground text-center py-4">
                               No hay métodos de envío disponibles
+                            </div>
+                          )}
+                          
+                          {/* Botón para agregar envío customizado */}
+                          <div className="mt-4 pt-3 border-t border-gray-200">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowCustomShippingForm(true)}
+                              className="w-full flex items-center gap-2 text-blue-600 border-blue-300 hover:bg-blue-50"
+                            >
+                              <Plus className="h-4 w-4" />
+                              Crear Envío Personalizado
+                            </Button>
+                          </div>
+                          
+                          {/* Formulario de envío customizado */}
+                          {showCustomShippingForm && (
+                            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                              <h5 className="font-medium text-sm mb-3 flex items-center gap-2">
+                                <Settings className="h-4 w-4" />
+                                Crear Envío Personalizado
+                              </h5>
+                              
+                              <div className="space-y-3">
+                                <div>
+                                  <Label htmlFor="customShippingName" className="text-xs font-medium">
+                                    Nombre del envío *
+                                  </Label>
+                                  <Input
+                                    id="customShippingName"
+                                    type="text"
+                                    placeholder="Ej: Envío Express Personalizado"
+                                    value={customShippingData.name}
+                                    onChange={(e) => setCustomShippingData(prev => ({ ...prev, name: e.target.value }))}
+                                    className="mt-1"
+                                  />
+                                </div>
+                                
+                                <div>
+                                  <Label htmlFor="customShippingDescription" className="text-xs font-medium">
+                                    Descripción
+                                  </Label>
+                                  <Input
+                                    id="customShippingDescription"
+                                    type="text"
+                                    placeholder="Descripción del método de envío"
+                                    value={customShippingData.description}
+                                    onChange={(e) => setCustomShippingData(prev => ({ ...prev, description: e.target.value }))}
+                                    className="mt-1"
+                                  />
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <Label htmlFor="customShippingCost" className="text-xs font-medium">
+                                      Costo *
+                                    </Label>
+                                    <Input
+                                      id="customShippingCost"
+                                      type="number"
+                                      placeholder="0"
+                                      value={customShippingData.cost}
+                                      onChange={(e) => setCustomShippingData(prev => ({ ...prev, cost: e.target.value }))}
+                                      className="mt-1"
+                                    />
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <Label htmlFor="customShippingMinDays" className="text-xs font-medium">
+                                        Días mín.
+                                      </Label>
+                                      <Input
+                                        id="customShippingMinDays"
+                                        type="number"
+                                        min="1"
+                                        value={customShippingData.estimated_days_min}
+                                        onChange={(e) => setCustomShippingData(prev => ({ ...prev, estimated_days_min: e.target.value }))}
+                                        className="mt-1"
+                                      />
+                                    </div>
+                                    
+                                    <div>
+                                      <Label htmlFor="customShippingMaxDays" className="text-xs font-medium">
+                                        Días máx.
+                                      </Label>
+                                      <Input
+                                        id="customShippingMaxDays"
+                                        type="number"
+                                        min="1"
+                                        value={customShippingData.estimated_days_max}
+                                        onChange={(e) => setCustomShippingData(prev => ({ ...prev, estimated_days_max: e.target.value }))}
+                                        className="mt-1"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex gap-2 pt-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={handleCustomShippingSubmit}
+                                    className="flex-1"
+                                  >
+                                    Crear Envío
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleCustomShippingCancel}
+                                    className="flex-1"
+                                  >
+                                    Cancelar
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -2560,6 +3094,21 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
         orderId={orderData?.id || null}
         currentImages={warrantyPhotos}
         onImagesUpdate={handleWarrantyPhotosUpdate}
+      />
+
+      {/* Admin Communications Section */}
+      <AdminCommunications
+        orderId={orderData?.id || 0}
+        customerInfo={{
+          id: orderData?.customer_id?.toString() || '',
+          name: `${orderData?.billing_first_name || ''} ${orderData?.billing_last_name || ''}`.trim(),
+          email: orderData?.billing_email || ''
+        }}
+        adminInfo={{
+          id: sessionData?.user?.id || 'admin',
+          name: sessionData?.user?.name || 'Administrador',
+          email: sessionData?.user?.email || 'admin@rental.com'
+        }}
       />
     </div>
   );

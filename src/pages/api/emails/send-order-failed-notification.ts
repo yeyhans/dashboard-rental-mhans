@@ -123,7 +123,7 @@ export const POST: APIRoute = async ({ request }) => {
       
       // Send email to customer
       const { data, error } = await resend.emails.send({
-        from: `Rental Mhans <problemas@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
+        from: `Rental Mario Hans <noreply@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
         to: [customerEmail],
         subject: customerSubject,
         html: htmlContent,
@@ -151,7 +151,7 @@ export const POST: APIRoute = async ({ request }) => {
         const adminHtml = htmlContent;
         
         const adminResult = await resend.emails.send({
-          from: `Rental Mhans Admin <urgente@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
+          from: `Rental Mario Hans Admin <admin@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
           to: [ADMIN_EMAIL],
           subject: adminSubject,
           html: adminHtml,

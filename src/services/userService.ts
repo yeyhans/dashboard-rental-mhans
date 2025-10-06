@@ -129,7 +129,7 @@ export class UserService {
       
       console.log('🔄 UserService.updateUser - Starting update:', { userId, updates });
       
-      // First, let's verify the user exists and get current data
+      // First, verify the user exists
       const existingUser = await this.getUserById(userId);
       if (!existingUser) {
         console.error('❌ User not found in updateUser:', userId);
@@ -141,58 +141,36 @@ export class UserService {
         email: existingUser.email,
         current_url_rut_anverso: existingUser.url_rut_anverso 
       });
-      
-      // Add updated_at timestamp
+
+      // Try direct update first (this should work with proper RLS policies)
+      console.log('🔍 Attempting direct update...');
       const updateData = {
         ...updates,
         updated_at: new Date().toISOString()
       };
-      
-      console.log('📝 Executing update with data:', updateData);
-      
-      // First, let's test if we can perform a simple select to verify permissions
-      console.log('🔍 Testing read permissions...');
-      const { data: testRead, error: testReadError } = await admin
+
+      const { data, error } = await admin
         .from('user_profiles')
-        .select('user_id, email, url_rut_anverso')
-        .eq('user_id', userId);
-      
-      console.log('📊 Read test result:', { testRead, testReadError });
-      
-      // Try a minimal update first to test permissions
-      console.log('🔍 Testing minimal update...');
-      const { data: testUpdate, error: testUpdateError, count: testCount } = await admin
-        .from('user_profiles')
-        .update({ updated_at: new Date().toISOString() })
+        .update(updateData)
         .eq('user_id', userId)
         .select();
-      
-      console.log('📊 Minimal update test:', { testUpdate, testUpdateError, testCount, affectedRows: testUpdate?.length });
-      
-      if (testUpdateError) {
-        console.error('❌ Minimal update failed, permissions issue:', testUpdateError);
-        throw new Error(`Error de permisos en actualización: ${testUpdateError.message}`);
-      }
-      
-      if (!testUpdate || testUpdate.length === 0) {
-        console.error('❌ Minimal update affected 0 rows - RLS or permissions issue');
+
+      console.log('📊 Direct update result:', { data, error, affectedRows: data?.length });
+
+      // If direct update fails or affects 0 rows, use the admin function
+      if (error || !data || data.length === 0) {
+        console.log('🔍 Direct update failed, using admin function...');
         
-        // Use the SQL function that bypasses RLS
-        console.log('🔍 Using SQL function to bypass RLS...');
+        // Use the comprehensive admin function with all updates as JSONB
+        const updatesJson = JSON.stringify(updates);
         
-        // Prepare parameters for the SQL function
-        const functionParams = {
-          p_user_id: userId,
-          p_url_rut_anverso: updates.url_rut_anverso || null,
-          p_url_rut_reverso: updates.url_rut_reverso || null,
-          p_url_firma: updates.url_firma || null,
-          p_new_url_e_rut_empresa: updates.new_url_e_rut_empresa || null
-        };
-        
-        console.log('📝 Calling update_user_profile_admin with params:', functionParams);
+        console.log('📝 Calling update_user_profile_admin_full with updates:', updatesJson);
         
         const { data: sqlFunctionResult, error: sqlFunctionError } = await admin
-          .rpc('update_user_profile_admin' as any, functionParams);
+          .rpc('update_user_profile_admin_full' as any, {
+            p_user_id: userId,
+            p_updates: updatesJson
+          });
         
         console.log('📊 SQL function result:', { sqlFunctionResult, sqlFunctionError });
         
@@ -208,47 +186,22 @@ export class UserService {
         const updatedUser = Array.isArray(sqlFunctionResult) ? sqlFunctionResult[0] : sqlFunctionResult;
         console.log('✅ User updated via SQL function:', { 
           user_id: (updatedUser as any).user_id, 
-          updated_fields: Object.keys(updates),
-          new_url_rut_anverso: (updatedUser as any).url_rut_anverso 
+          updated_fields: Object.keys(updates)
         });
         return updatedUser as UserProfile;
       }
-      
-      // If minimal update worked, proceed with full update
-      console.log('✅ Minimal update successful, proceeding with full update...');
-      const { data, error, count } = await admin
-        .from('user_profiles')
-        .update(updateData)
-        .eq('user_id', userId)
-        .select();
 
-      console.log('📊 Full update result:', { data, error, count, affectedRows: data?.length });
-
-      if (error) {
-        console.error('❌ Supabase update error:', error);
-        throw error;
-      }
-      
-      if (!data || data.length === 0) {
-        console.error('❌ No rows affected by update');
-        throw new Error('No se pudo actualizar el usuario - ninguna fila afectada');
-      }
-      
-      if (data.length > 1) {
-        console.warn('⚠️ Multiple rows affected by update:', data.length);
-      }
-      
-      const updatedUser = data[0]; // Take the first (should be only) result
+      // Direct update succeeded
+      const updatedUser = data[0];
       
       if (!updatedUser) {
         console.error('❌ No user data in update result');
         throw new Error('No se pudo obtener los datos actualizados del usuario');
       }
 
-      console.log('✅ User updated successfully:', { 
+      console.log('✅ User updated successfully via direct update:', { 
         user_id: updatedUser.user_id, 
-        updated_fields: Object.keys(updates),
-        new_url_rut_anverso: updatedUser.url_rut_anverso 
+        updated_fields: Object.keys(updates)
       });
 
       return updatedUser;

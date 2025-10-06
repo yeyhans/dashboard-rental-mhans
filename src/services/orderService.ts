@@ -7,6 +7,120 @@ type OrderUpdate = Database['public']['Tables']['orders']['Update'];
 
 export class OrderService {
   /**
+   * Obtener solo órdenes completadas para tabla de pagos
+   */
+  static async getCompletedOrders(page: number = 1, limit: number = 10) {
+    try {
+      if (!supabaseAdmin) {
+        throw new Error('Supabase admin client is not initialized');
+      }
+
+      const offset = (page - 1) * limit;
+      
+      const query = supabaseAdmin
+        .from('orders')
+        .select(`
+          id,
+          status,
+          currency,
+          date_created,
+          date_modified,
+          date_completed,
+          date_paid,
+          customer_id,
+          calculated_subtotal,
+          calculated_discount,
+          calculated_iva,
+          calculated_total,
+          shipping_total,
+          cart_tax,
+          total,
+          total_tax,
+          billing_first_name,
+          billing_last_name,
+          billing_company,
+          billing_address_1,
+          billing_city,
+          billing_email,
+          billing_phone,
+          order_proyecto,
+          order_fecha_inicio,
+          order_fecha_termino,
+          num_jornadas,
+          company_rut,
+          order_retire_name,
+          order_retire_phone,
+          order_retire_rut,
+          order_comments,
+          line_items,
+          payment_method,
+          payment_method_title,
+          transaction_id,
+          order_key,
+          customer_ip_address,
+          customer_user_agent,
+          created_via,
+          customer_note,
+          correo_enviado,
+          pago_completo,
+          is_editable,
+          needs_payment,
+          needs_processing,
+          fotos_garantia,
+          orden_compra,
+          numero_factura,
+          new_pdf_on_hold_url,
+          new_pdf_processing_url,
+          tax_lines,
+          shipping_lines,
+          fee_lines,
+          coupon_lines,
+          refunds,
+          user_profiles (
+            user_id,
+            nombre,
+            apellido,
+            email,
+            rut
+          )
+        `, { count: 'exact' })
+        .eq('status', 'completed')
+        .order('date_completed', { ascending: false });
+
+      const { data, error, count } = await query
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        throw error;
+      }
+
+      // Ensure all completed orders have required calculated fields
+      const ordersWithCalculatedFields = data?.map(order => ({
+        ...order,
+        calculated_subtotal: order.calculated_subtotal || 0,
+        calculated_discount: order.calculated_discount || 0,
+        calculated_iva: order.calculated_iva || 0,
+        calculated_total: order.calculated_total || order.total || 0,
+        total: order.total || 0,
+        shipping_total: order.shipping_total || 0,
+        cart_tax: order.cart_tax || 0,
+        total_tax: order.total_tax || 0
+      })) || [];
+
+      return {
+        orders: ordersWithCalculatedFields,
+        total: count || 0,
+        page,
+        limit,
+        totalPages: Math.ceil((count || 0) / limit)
+      };
+    } catch (error) {
+      console.error('Error fetching completed orders:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Obtener todas las órdenes con paginación
    */
   static async getAllOrders(page: number = 1, limit: number = 10, status?: string) {

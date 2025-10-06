@@ -136,7 +136,7 @@ export const POST: APIRoute = async ({ request }) => {
         try {
           // Create FormData for Cloudflare Worker with proper PDF content
           const formData = new FormData();
-          const fileName = `budget_${orderId}_${Date.now()}.pdf`;
+          const fileName = `Presupuesto_${orderId}_${Date.now()}.pdf`;
           
           // Create blob with explicit PDF content type and proper buffer
           const pdfBlob = new Blob([pdfBuffer], { 

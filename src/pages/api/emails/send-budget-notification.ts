@@ -200,7 +200,7 @@ const generateBudgetEmailTemplate = (data: BudgetEmailData, budgetUrl: string, c
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Rental Mhans - Presupuesto</title>
+      <title>Rental Mario Hans - Presupuesto</title>
       <style>
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -218,7 +218,7 @@ const generateBudgetEmailTemplate = (data: BudgetEmailData, budgetUrl: string, c
       <div class="container">
         <div class="header">
           <h1>${title}</h1>
-          <p>Rental Mhans - Equipos de Construcción</p>
+          <p>Rental Mario Hans - Equipos de Construcción</p>
         </div>
         
         <div class="content">
@@ -274,7 +274,7 @@ const generateBudgetEmailTemplate = (data: BudgetEmailData, budgetUrl: string, c
         <div class="footer">
           <p>Este es un correo automático. Si tienes consultas, contáctanos.</p>
           <p>📧 rental.mariohans@gmail.com | 📱 WhatsApp disponible</p>
-          <p>© ${new Date().getFullYear()} Rental Mhans - Todos los derechos reservados</p>
+          <p>© ${new Date().getFullYear()} Rental Mario Hans - Todos los derechos reservados</p>
         </div>
       </div>
     </body>
@@ -333,7 +333,7 @@ export const POST: APIRoute = async ({ request }) => {
       const resend = new Resend(import.meta.env.RESEND_API_KEY);
       
       const { data, error } = await resend.emails.send({
-        from: `Rental Mhans <presupuestos@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
+        from: `Rental Mario Hans <noreply@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
         to: [customerEmail],
         subject,
         html: htmlContent,
@@ -359,7 +359,7 @@ export const POST: APIRoute = async ({ request }) => {
         const adminHtml = generateAdminBackupEmail(budgetData, budgetUrl || '', customerName, customerEmail);
         
         await resend.emails.send({
-          from: `Rental Mhans Admin <admin@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
+          from: `Rental Mario Hans Admin <admin@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
           to: [ADMIN_EMAIL],
           subject: adminSubject,
           html: adminHtml,
@@ -725,7 +725,7 @@ function generateAdminBackupEmail(
         <div class="footer">
           <p>📧 Este es un respaldo automático generado por el sistema</p>
           <p>🕐 Generado el ${new Date().toLocaleString('es-CL')}</p>
-          <p>© ${new Date().getFullYear()} Rental Mhans - Sistema de Gestión de Órdenes</p>
+          <p>© ${new Date().getFullYear()} Rental Mario Hans - Sistema de Gestión de Órdenes</p>
         </div>
       </div>
     </body>

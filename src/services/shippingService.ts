@@ -1,64 +1,69 @@
-// Servicio de envíos con datos mock hasta implementar las tablas en la base de datos
+import { supabaseAdmin } from '../lib/supabase';
+
+// Servicio de envíos usando la tabla shipping_methods de Supabase
 
 // Tipos para el sistema de envíos
 export interface ShippingMethod {
-  id: number;
+  id: string;
   name: string;
   description: string | null;
-  cost: number;
+  cost: string; // Decimal stored as string in database
   shipping_type: 'free' | 'flat_rate' | 'local_pickup' | 'calculated' | 'express';
   enabled: boolean;
-  min_amount: number | null;
-  max_amount: number | null;
+  min_amount: string | null; // Decimal stored as string
+  max_amount: string | null; // Decimal stored as string
   available_regions?: string[] | null;
   excluded_regions?: string[] | null;
-  estimated_days_min: number;
-  estimated_days_max: number;
+  estimated_days_min: string; // Stored as string in database
+  estimated_days_max: string; // Stored as string in database
   requires_address: boolean;
   requires_phone: boolean;
   metadata: Record<string, any>;
   created_at: string;
   updated_at: string;
+  created_by: string | null;
 }
 
 export interface ShippingMethodInsert {
-  id?: number;
+  id?: string;
   name: string;
   description?: string | null;
-  cost: number;
+  cost: string; // Decimal as string
   shipping_type: 'free' | 'flat_rate' | 'local_pickup' | 'calculated' | 'express';
   enabled?: boolean;
-  min_amount?: number | null;
-  max_amount?: number | null;
+  min_amount?: string | null; // Decimal as string
+  max_amount?: string | null; // Decimal as string
   available_regions?: string[] | null;
   excluded_regions?: string[] | null;
-  estimated_days_min: number;
-  estimated_days_max: number;
+  estimated_days_min: string; // String in database
+  estimated_days_max: string; // String in database
   requires_address?: boolean;
   requires_phone?: boolean;
   metadata?: Record<string, any>;
   created_at?: string;
   updated_at?: string;
+  created_by?: string | null;
 }
 
 export interface ShippingMethodUpdate {
-  id?: number;
+  id?: string;
   name?: string;
   description?: string | null;
-  cost?: number;
+  cost?: string; // Decimal as string
   shipping_type?: 'free' | 'flat_rate' | 'local_pickup' | 'calculated' | 'express';
   enabled?: boolean;
-  min_amount?: number | null;
-  max_amount?: number | null;
+  min_amount?: string | null; // Decimal as string
+  max_amount?: string | null; // Decimal as string
   available_regions?: string[] | null;
   excluded_regions?: string[] | null;
-  estimated_days_min?: number;
-  estimated_days_max?: number;
+  estimated_days_min?: string; // String in database
+  estimated_days_max?: string; // String in database
   requires_address?: boolean;
   requires_phone?: boolean;
   metadata?: Record<string, any>;
   created_at?: string;
   updated_at?: string;
+  created_by?: string | null;
 }
 
 export interface ShippingUsage {
@@ -82,8 +87,8 @@ export interface ShippingMethodWithUsage extends ShippingMethod {
 }
 
 export interface ShippingLine {
-  id: number;
-  method_id: number;
+  id: string | number;
+  method_id: string | number;
   method_title: string;
   method_type: string;
   total: string;
@@ -101,85 +106,7 @@ export interface ShippingLine {
   };
 }
 
-// Datos mock para desarrollo
-const mockShippingMethods: ShippingMethod[] = [
-  {
-    id: 1,
-    name: 'Envío Gratis',
-    description: 'Envío gratuito para compras sobre $50.000',
-    cost: 0,
-    shipping_type: 'free',
-    enabled: true,
-    min_amount: 50000,
-    max_amount: null,
-    available_regions: ['RM', 'V', 'VIII'],
-    excluded_regions: null,
-    estimated_days_min: 3,
-    estimated_days_max: 5,
-    requires_address: true,
-    requires_phone: true,
-    metadata: {},
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: 2,
-    name: 'Envío Estándar',
-    description: 'Envío estándar a todo Chile',
-    cost: 5000,
-    shipping_type: 'flat_rate',
-    enabled: true,
-    min_amount: null,
-    max_amount: null,
-    available_regions: null,
-    excluded_regions: null,
-    estimated_days_min: 2,
-    estimated_days_max: 4,
-    requires_address: true,
-    requires_phone: true,
-    metadata: {},
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: 3,
-    name: 'Envío Express',
-    description: 'Entrega en 24 horas',
-    cost: 12000,
-    shipping_type: 'express',
-    enabled: true,
-    min_amount: null,
-    max_amount: null,
-    available_regions: ['RM'],
-    excluded_regions: null,
-    estimated_days_min: 1,
-    estimated_days_max: 1,
-    requires_address: true,
-    requires_phone: true,
-    metadata: {},
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: 4,
-    name: 'Retiro en Tienda',
-    description: 'Retira tu pedido en nuestra tienda',
-    cost: 0,
-    shipping_type: 'local_pickup',
-    enabled: true,
-    min_amount: null,
-    max_amount: null,
-    available_regions: ['RM'],
-    excluded_regions: null,
-    estimated_days_min: 0,
-    estimated_days_max: 1,
-    requires_address: false,
-    requires_phone: true,
-    metadata: {},
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
-];
+
 
 export class ShippingService {
   /**
@@ -187,22 +114,38 @@ export class ShippingService {
    */
   static async getAllShippingMethods(page: number = 1, limit: number = 10, enabled?: boolean) {
     try {
+      if (!supabaseAdmin) {
+        console.error('❌ Supabase admin client not available');
+        throw new Error('Database connection not available');
+      }
+
+      let query = supabaseAdmin
+        .from('shipping_methods')
+        .select('*', { count: 'exact' })
+        .order('id', { ascending: true });
+
       // Filtrar por enabled si se especifica
-      let filteredMethods = mockShippingMethods;
       if (enabled !== undefined) {
-        filteredMethods = mockShippingMethods.filter(method => method.enabled === enabled);
+        query = query.eq('enabled', enabled);
       }
 
       // Aplicar paginación
       const offset = (page - 1) * limit;
-      const paginatedMethods = filteredMethods.slice(offset, offset + limit);
+      query = query.range(offset, offset + limit - 1);
+
+      const { data: shippingMethods, error, count } = await query;
+
+      if (error) {
+        console.error('❌ Error fetching shipping methods:', error);
+        throw error;
+      }
 
       return {
-        shippingMethods: paginatedMethods,
-        total: filteredMethods.length,
+        shippingMethods: shippingMethods || [],
+        total: count || 0,
         page,
         limit,
-        totalPages: Math.ceil(filteredMethods.length / limit)
+        totalPages: Math.ceil((count || 0) / limit)
       };
     } catch (error) {
       console.error('Error fetching shipping methods:', error);
@@ -213,10 +156,29 @@ export class ShippingService {
   /**
    * Obtener método de envío por ID
    */
-  static async getShippingMethodById(methodId: number): Promise<ShippingMethod | null> {
+  static async getShippingMethodById(methodId: string | number): Promise<ShippingMethod | null> {
     try {
-      const method = mockShippingMethods.find(m => m.id === methodId);
-      return method || null;
+      if (!supabaseAdmin) {
+        console.error('❌ Supabase admin client not available');
+        throw new Error('Database connection not available');
+      }
+
+      const { data: method, error } = await supabaseAdmin
+        .from('shipping_methods')
+        .select('*')
+        .eq('id', methodId)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No rows returned
+          return null;
+        }
+        console.error('❌ Error fetching shipping method by ID:', error);
+        throw error;
+      }
+
+      return method;
     } catch (error) {
       console.error('Error fetching shipping method by ID:', error);
       throw error;
@@ -228,28 +190,37 @@ export class ShippingService {
    */
   static async createShippingMethod(methodData: ShippingMethodInsert): Promise<ShippingMethod> {
     try {
-      const newId = Math.max(...mockShippingMethods.map(m => m.id)) + 1;
-      const newMethod: ShippingMethod = {
-        id: newId,
-        name: methodData.name,
-        description: methodData.description || null,
-        cost: methodData.cost,
-        shipping_type: methodData.shipping_type,
-        enabled: methodData.enabled ?? true,
-        min_amount: methodData.min_amount || null,
-        max_amount: methodData.max_amount || null,
-        available_regions: methodData.available_regions || null,
-        excluded_regions: methodData.excluded_regions || null,
-        estimated_days_min: methodData.estimated_days_min,
-        estimated_days_max: methodData.estimated_days_max,
-        requires_address: methodData.requires_address ?? true,
-        requires_phone: methodData.requires_phone ?? true,
-        metadata: methodData.metadata || {},
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      if (!supabaseAdmin) {
+        console.error('❌ Supabase admin client not available');
+        throw new Error('Database connection not available');
+      }
 
-      mockShippingMethods.push(newMethod);
+      const { data: newMethod, error } = await supabaseAdmin
+        .from('shipping_methods')
+        .insert({
+          name: methodData.name,
+          description: methodData.description || null,
+          cost: methodData.cost,
+          shipping_type: methodData.shipping_type,
+          enabled: methodData.enabled ?? true,
+          min_amount: methodData.min_amount || null,
+          max_amount: methodData.max_amount || null,
+          available_regions: methodData.available_regions || null,
+          excluded_regions: methodData.excluded_regions || null,
+          estimated_days_min: methodData.estimated_days_min,
+          estimated_days_max: methodData.estimated_days_max,
+          requires_address: methodData.requires_address ?? true,
+          requires_phone: methodData.requires_phone ?? true,
+          metadata: methodData.metadata || {}
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error creating shipping method:', error);
+        throw error;
+      }
+
       return newMethod;
     } catch (error) {
       console.error('Error creating shipping method:', error);
@@ -260,20 +231,31 @@ export class ShippingService {
   /**
    * Actualizar método de envío
    */
-  static async updateShippingMethod(methodId: number, updates: ShippingMethodUpdate): Promise<ShippingMethod> {
+  static async updateShippingMethod(methodId: string | number, updates: ShippingMethodUpdate): Promise<ShippingMethod> {
     try {
-      const methodIndex = mockShippingMethods.findIndex(m => m.id === methodId);
-      if (methodIndex === -1) {
-        throw new Error('Método de envío no encontrado');
+      if (!supabaseAdmin) {
+        console.error('❌ Supabase admin client not available');
+        throw new Error('Database connection not available');
       }
 
-      const updatedMethod = {
-        ...mockShippingMethods[methodIndex],
-        ...updates,
-        updated_at: new Date().toISOString()
-      };
+      const { data: updatedMethod, error } = await supabaseAdmin
+        .from('shipping_methods')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', methodId)
+        .select()
+        .single();
 
-      mockShippingMethods[methodIndex] = updatedMethod;
+      if (error) {
+        if (error.code === 'PGRST116') {
+          throw new Error('Método de envío no encontrado');
+        }
+        console.error('❌ Error updating shipping method:', error);
+        throw error;
+      }
+
       return updatedMethod;
     } catch (error) {
       console.error('Error updating shipping method:', error);
@@ -284,14 +266,23 @@ export class ShippingService {
   /**
    * Eliminar método de envío
    */
-  static async deleteShippingMethod(methodId: number): Promise<boolean> {
+  static async deleteShippingMethod(methodId: string | number): Promise<boolean> {
     try {
-      const methodIndex = mockShippingMethods.findIndex(m => m.id === methodId);
-      if (methodIndex === -1) {
-        throw new Error('Método de envío no encontrado');
+      if (!supabaseAdmin) {
+        console.error('❌ Supabase admin client not available');
+        throw new Error('Database connection not available');
       }
 
-      mockShippingMethods.splice(methodIndex, 1);
+      const { error } = await supabaseAdmin
+        .from('shipping_methods')
+        .delete()
+        .eq('id', methodId);
+
+      if (error) {
+        console.error('❌ Error deleting shipping method:', error);
+        throw error;
+      }
+
       return true;
     } catch (error) {
       console.error('Error deleting shipping method:', error);
@@ -304,20 +295,31 @@ export class ShippingService {
    */
   static async searchShippingMethods(searchTerm: string, page: number = 1, limit: number = 10) {
     try {
-      const filteredMethods = mockShippingMethods.filter(method =>
-        method.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (method.description && method.description.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
+      if (!supabaseAdmin) {
+        console.error('❌ Supabase admin client not available');
+        throw new Error('Database connection not available');
+      }
 
       const offset = (page - 1) * limit;
-      const paginatedMethods = filteredMethods.slice(offset, offset + limit);
+      
+      const { data: shippingMethods, error, count } = await supabaseAdmin
+        .from('shipping_methods')
+        .select('*', { count: 'exact' })
+        .or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
+        .order('id', { ascending: true })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        console.error('❌ Error searching shipping methods:', error);
+        throw error;
+      }
 
       return {
-        shippingMethods: paginatedMethods,
-        total: filteredMethods.length,
+        shippingMethods: shippingMethods || [],
+        total: count || 0,
         page,
         limit,
-        totalPages: Math.ceil(filteredMethods.length / limit),
+        totalPages: Math.ceil((count || 0) / limit),
         searchTerm
       };
     } catch (error) {
@@ -331,10 +333,25 @@ export class ShippingService {
    */
   static async getShippingStats() {
     try {
-      const totalMethods = mockShippingMethods.length;
-      const activeMethods = mockShippingMethods.filter(m => m.enabled).length;
+      if (!supabaseAdmin) {
+        console.error('❌ Supabase admin client not available');
+        throw new Error('Database connection not available');
+      }
+
+      // Obtener estadísticas de métodos de envío
+      const { data: allMethods, error: methodsError } = await supabaseAdmin
+        .from('shipping_methods')
+        .select('enabled');
+
+      if (methodsError) {
+        console.error('❌ Error fetching shipping methods for stats:', methodsError);
+        throw methodsError;
+      }
+
+      const totalMethods = allMethods?.length || 0;
+      const activeMethods = allMethods?.filter(m => m.enabled).length || 0;
       
-      // Datos mock para estadísticas
+      // TODO: Implementar estadísticas reales de envíos cuando esté disponible la tabla shipping_usage
       const mockStats = {
         totalMethods,
         activeMethods,
@@ -372,18 +389,18 @@ export class ShippingService {
     }
 
     // Verificar monto mínimo
-    if (method.min_amount && cartTotal < method.min_amount) {
+    if (method.min_amount && cartTotal < parseFloat(method.min_amount)) {
       return {
         isValid: false,
-        message: `Monto mínimo requerido: $${method.min_amount.toLocaleString()}`
+        message: `Monto mínimo requerido: $${parseFloat(method.min_amount).toLocaleString()}`
       };
     }
 
     // Verificar monto máximo
-    if (method.max_amount && cartTotal > method.max_amount) {
+    if (method.max_amount && cartTotal > parseFloat(method.max_amount)) {
       return {
         isValid: false,
-        message: `Monto máximo permitido: $${method.max_amount.toLocaleString()}`
+        message: `Monto máximo permitido: $${parseFloat(method.max_amount).toLocaleString()}`
       };
     }
 
@@ -428,10 +445,10 @@ export class ShippingService {
       method_id: method.id,
       method_title: method.name,
       method_type: method.shipping_type,
-      total: method.cost.toString(),
+      total: method.cost,
       taxes: [],
       meta_data: {
-        estimated_delivery: `${method.estimated_days_min}-${method.estimated_days_max} días`,
+        estimated_delivery: formatDeliveryTime(method.estimated_days_min, method.estimated_days_max),
         tracking_number: null,
         ...(shippingAddress && { shipping_address: shippingAddress })
       }
@@ -440,16 +457,20 @@ export class ShippingService {
 }
 
 // Utilidades para formateo
-export const formatShippingCost = (cost: number): string => {
-  if (cost === 0) return 'Gratis';
-  return `$${cost.toLocaleString('es-CL')}`;
+export const formatShippingCost = (cost: string | number): string => {
+  const numericCost = typeof cost === 'string' ? parseFloat(cost) : cost;
+  if (numericCost === 0) return 'Gratis';
+  return `$${numericCost.toLocaleString('es-CL')}`;
 };
 
-export const formatDeliveryTime = (minDays: number, maxDays: number): string => {
-  if (minDays === maxDays) {
-    return `${minDays} ${minDays === 1 ? 'día' : 'días'}`;
+export const formatDeliveryTime = (minDays: string | number, maxDays: string | number): string => {
+  const numericMinDays = typeof minDays === 'string' ? parseInt(minDays) : minDays;
+  const numericMaxDays = typeof maxDays === 'string' ? parseInt(maxDays) : maxDays;
+  
+  if (numericMinDays === numericMaxDays) {
+    return `${numericMinDays} ${numericMinDays === 1 ? 'día' : 'días'}`;
   }
-  return `${minDays}-${maxDays} días`;
+  return `${numericMinDays}-${numericMaxDays} días`;
 };
 
 export const getShippingTypeLabel = (type: string): string => {

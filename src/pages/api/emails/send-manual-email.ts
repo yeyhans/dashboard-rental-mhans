@@ -75,7 +75,7 @@ export const POST: APIRoute = async ({ request }) => {
       
       // Prepare email data
       const emailData = {
-        from: `Rental Mhans <comunicaciones@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
+        from: `Rental Mario Hans <noreply@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
         to: [to],
         subject,
         html,

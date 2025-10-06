@@ -651,7 +651,7 @@ function generateBudgetHTML(orderData: BudgetData): string {
     </div>
     
     <div class="footer">
-      <p>Rental Mhans - Presupuesto de Arriendo | Este documento fue generado electrónicamente el ${currentDate}</p>
+      <p>Rental Mario Hans - Presupuesto de Arriendo | Este documento fue generado electrónicamente el ${currentDate}</p>
       <p>Estado: ${orderStatus.toUpperCase()} | Método de Pago: ${paymentMethod}</p>
     </div>
 </div>

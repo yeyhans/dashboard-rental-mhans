@@ -241,7 +241,7 @@ async function sendBudgetEmailFallback(
       Si tiene alguna consulta, no dude en contactarnos.
       
       Saludos cordiales,
-      Equipo Rental Mhans
+      Equipo Rental Mario Hans
     `;
 
     // Log the fallback email (in production, this would use a simple email service)

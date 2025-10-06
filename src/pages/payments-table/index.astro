@@ -15,9 +15,9 @@ if (!session) {
   return Astro.redirect("/");
 }
 
-// Load ALL orders for client-side pagination and filtering
-// This ensures we have all data available for proper pagination
-const { orders, total } = await OrderService.getAllOrders(1, 1000); // Load up to 1000 orders
+// Load only COMPLETED orders for payments table
+// This ensures we only show orders that have been completed
+const { orders, total } = await OrderService.getCompletedOrders(1, 1000); // Load up to 1000 completed orders
 
 const ordersData = {
   orders: orders || [],
