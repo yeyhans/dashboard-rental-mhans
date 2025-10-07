@@ -63,6 +63,7 @@ export const GET: APIRoute = async () => {
       environment: import.meta.env.MODE || 'production',
       endpoints: {
         budget_pdf: '/api/external/generate-budget-pdf',
+        contract_pdf: '/api/validate/generate-pdf',
         health: '/api/health'
       }
     };

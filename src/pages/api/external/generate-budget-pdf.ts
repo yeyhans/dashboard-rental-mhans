@@ -11,7 +11,7 @@ export const POST: APIRoute = async ({ request }) => {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*', // In production, specify the exact frontend domain
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, x-frontend-source',
       'Access-Control-Max-Age': '86400',
     };
 
@@ -279,7 +279,7 @@ export const POST: APIRoute = async ({ request }) => {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, x-frontend-source',
     };
     
     return new Response(JSON.stringify({
@@ -300,7 +300,7 @@ export const OPTIONS: APIRoute = async () => {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, x-frontend-source',
       'Access-Control-Max-Age': '86400',
     }
   });
