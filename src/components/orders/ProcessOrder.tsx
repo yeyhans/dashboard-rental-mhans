@@ -1812,65 +1812,6 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
           </CardContent>
         </Card>
 
-      {/* Order Status Management Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="w-5 h-5" />
-            Gestión de Estado de Orden
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <h4 className="font-medium text-yellow-800 mb-2">Estado Actual</h4>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-sm">
-                  {orderData.status?.toUpperCase() || 'DESCONOCIDO'}
-                </Badge>
-                <span className="text-sm text-muted-foreground">
-                  Última modificación: {orderData.date_modified ? new Date(orderData.date_modified).toLocaleString('es-CL') : 'No disponible'}
-                </span>
-              </div>
-            </div>
-            
-            <div className="flex flex-wrap gap-3">
-              {/* Botón para marcar como completado */}
-              {orderData.status !== 'completed' && (
-                <Button 
-                  variant="default" 
-                  size="sm"
-                  className="bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700 shadow-lg"
-                  onClick={handleMarkAsCompleted}
-                  title="Marcar orden como completada"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Marcar como Completada
-                </Button>
-              )}
-              
-              {/* Botón para marcar como fallida */}
-              {orderData.status !== 'failed' && orderData.status !== 'completed' && (
-                <Button 
-                  variant="destructive" 
-                  size="sm"
-                  className="bg-gradient-to-r from-red-600 to-rose-600 text-white hover:from-red-700 hover:to-rose-700 shadow-lg"
-                  onClick={handleMarkAsFailed}
-                  title="Marcar orden como fallida"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Marcar como Fallida
-                </Button>
-              )}
-            </div>
-            
-            <div className="text-xs text-muted-foreground bg-gray-50 p-3 rounded">
-              <strong>Nota:</strong> Los cambios de estado notificarán automáticamente al cliente a través del sistema de comunicaciones.
-              Asegúrate de que el cambio sea correcto antes de confirmar.
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Manual Email Communication Section */}
       <Card>
