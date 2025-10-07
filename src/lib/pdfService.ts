@@ -33,7 +33,16 @@ export async function generatePdfFromHtml(options: PdfGenerationOptions): Promis
       // Vercel configuration - use @sparticuz/chromium
       console.log('🌐 Using Vercel/serverless configuration with @sparticuz/chromium');
       browser = await puppeteer.launch({
-        args: chromium.args,
+        args: [
+          ...chromium.args,
+          '--disable-blink-features=AutomationControlled', // Prevents email anonymization
+          '--disable-features=VizDisplayCompositor',
+          '--disable-web-security',
+          '--disable-features=TranslateUI',
+          '--disable-ipc-flooding-protection',
+          '--allow-running-insecure-content', // Allow loading external images
+          '--disable-site-isolation-trials'
+        ],
         executablePath: await chromium.executablePath(),
         headless: true,
       });
@@ -43,7 +52,17 @@ export async function generatePdfFromHtml(options: PdfGenerationOptions): Promis
       const puppeteerFull = await import('puppeteer');
       browser = await puppeteerFull.default.launch({
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+          '--no-sandbox', 
+          '--disable-setuid-sandbox',
+          '--disable-blink-features=AutomationControlled', // Prevents email anonymization
+          '--disable-features=VizDisplayCompositor',
+          '--disable-web-security',
+          '--disable-features=TranslateUI',
+          '--disable-ipc-flooding-protection',
+          '--allow-running-insecure-content', // Allow loading external images
+          '--disable-site-isolation-trials'
+        ]
       });
     }
 
@@ -54,9 +73,13 @@ export async function generatePdfFromHtml(options: PdfGenerationOptions): Promis
     
     // Set content and wait for network to be idle
     await page.setContent(htmlContent, { 
-      waitUntil: 'networkidle2',
-      timeout: 30000 
+      waitUntil: 'networkidle2', // Standard wait for network requests
+      timeout: 30000 // Standard timeout
     });
+    
+    // Brief wait to ensure images are rendered
+    console.log('⏳ Brief wait for image rendering...');
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     console.log('📄 Generating PDF...');
     

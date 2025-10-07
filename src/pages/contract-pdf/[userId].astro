@@ -1,0 +1,861 @@
+---
+import { createClient } from '@supabase/supabase-js';
+
+// Get user ID from the URL parameter
+const { userId } = Astro.params;
+
+if (!userId) {
+  throw new Error('User ID is required');
+}
+
+console.log('🔍 Generating contract PDF for user:', userId);
+
+// Initialize Supabase client with service role key
+const supabase = createClient(
+  import.meta.env.PUBLIC_SUPABASE_URL!,
+  import.meta.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+// Fetch user profile data from database
+console.log('📊 Fetching user profile data...');
+const { data: userProfile, error: profileError } = await supabase
+  .from('user_profiles')
+  .select('*')
+  .eq('user_id', parseInt(userId))
+  .single();
+
+if (profileError || !userProfile) {
+  console.error('❌ Error fetching user profile:', profileError);
+  throw new Error('User profile not found');
+}
+
+console.log('✅ User profile data fetched:', {
+  user_id: userProfile.user_id,
+  email: userProfile.email,
+  nombre: userProfile.nombre,
+  apellido: userProfile.apellido,
+  rut: userProfile.rut
+});
+
+// Use the same userData structure as frontend
+const userData = userProfile;
+
+// Format dates
+const currentDate = new Date().toLocaleDateString('es-CL', { 
+  year: 'numeric', 
+  month: 'long', 
+  day: 'numeric' 
+});
+
+// Generate contract number (same logic as frontend)
+const contractNumber = `${userData.user_id}-${Date.now().toString().slice(-6)}`;
+
+// Check terms acceptance
+const termsAccepted = userData.terminos_aceptados;
+
+console.log('📄 Contract data prepared for PDF generation');
+---
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contrato de Arriendo - {userData.nombre} {userData.apellido}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 15mm;
+    }
+    
+    body {
+      font-family: 'Calibri', 'Arial', sans-serif;
+      line-height: 1.4;
+      color: #000;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+    }
+    
+    .container {
+      max-width: 210mm;
+      margin: 0 auto;
+      background: #fff;
+      padding: 20px;
+    }
+    
+    /* Header profesional similar al presupuesto */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 40px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #000;
+    }
+    
+    .header .logo {
+      flex-shrink: 0;
+    }
+    
+    .header .logo img {
+      width: 200px;
+      height: auto;
+    }
+    
+    .header .title-section {
+      flex-grow: 1;
+      text-align: center;
+      margin: 0 30px;
+    }
+    
+    .header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      margin: 0;
+      color: #000;
+      letter-spacing: 1px;
+      font-family: 'Calibri', sans-serif;
+    }
+    
+    .header .contract-details {
+      flex-shrink: 0;
+      text-align: right;
+      font-size: 14px;
+      color: #000;
+      line-height: 1.3;
+    }
+    
+    .header .contract-details .contract-number {
+      font-weight: 700;
+      color: #000;
+      margin-bottom: 5px;
+      font-size: 16px;
+    }
+    
+    .header .contract-details .contract-date {
+      color: #000;
+      font-size: 14px;
+    }
+    
+    /* Información del cliente en formato similar al presupuesto */
+    .client-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 30px;
+      font-size: 14px;
+      background-color: #f8f9fa;
+      padding: 20px;
+      border-radius: 5px;
+    }
+    
+    .client-info .info-item {
+      margin-bottom: 8px;
+    }
+    
+    .client-info .info-label {
+      font-weight: 700;
+      color: #000;
+      display: inline;
+    }
+    
+    .client-info .info-value {
+      color: #000;
+      display: inline;
+    }
+    
+    /* Secciones del contrato */
+    .section {
+      margin-bottom: 25px;
+      page-break-inside: avoid;
+    }
+    
+    .section h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #000;
+      margin-bottom: 15px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #e8e7e7;
+      font-family: 'Calibri', sans-serif;
+    }
+    
+    .section h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #000;
+      margin: 20px 0 10px 0;
+      font-family: 'Calibri', sans-serif;
+    }
+    
+    .section h5 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #000;
+      margin: 15px 0 8px 0;
+      font-family: 'Calibri', sans-serif;
+    }
+    
+    .section p {
+      text-align: justify;
+      margin-bottom: 12px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    
+    .section ol, .section ul {
+      margin-bottom: 15px;
+      padding-left: 25px;
+    }
+    
+    .section li {
+      margin-bottom: 8px;
+      font-size: 13px;
+      line-height: 1.4;
+      text-align: justify;
+    }
+    
+    /* Información bancaria similar al presupuesto */
+    .bank-info {
+      background-color: #f8f9fa;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    
+    .bank-info strong {
+      font-weight: 700;
+    }
+    
+    /* Documentos adjuntos */
+    .documents-section {
+      background-color: #f8f9fa;
+      padding: 20px;
+      border-radius: 5px;
+      margin: 30px 0;
+    }
+    
+    .document-item {
+      margin-bottom: 20px;
+      padding: 15px;
+      background-color: #fff;
+      border-radius: 5px;
+      border: 1px solid #e8e7e7;
+    }
+    
+    .document-name {
+      font-weight: 700;
+      color: #000;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    
+    .document-url {
+      font-size: 11px;
+      color: #666;
+      word-break: break-all;
+      margin-bottom: 10px;
+    }
+    
+    .document-image {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid #e8e7e7;
+      border-radius: 3px;
+    }
+    
+    /* Sección de firmas mejorada */
+    .signature-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 40px;
+      margin: 40px 0;
+      padding: 30px;
+      background-color: #f8f9fa;
+      border-radius: 5px;
+      border: 1px solid #e8e7e7;
+    }
+
+    .signature-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 200px;
+    }
+
+    .signature-image {
+      width: 250px;
+      height: 120px;
+      object-fit: contain;
+      margin-bottom: 15px;
+      background-color: white;
+      border: 1px solid #e8e7e7;
+      border-radius: 3px;
+    }
+
+    .signature-line {
+      width: 200px;
+      height: 1px;
+      background-color: #000;
+      margin: 15px 0 10px 0;
+    }
+
+    .signature-info {
+      text-align: center;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .signature-info strong {
+      font-weight: 700;
+      font-size: 14px;
+    }
+    
+    /* Estado de aceptación */
+    .acceptance-status {
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+      font-weight: 700;
+      text-align: center;
+      font-size: 14px;
+    }
+    
+    .accepted {
+      background-color: #d4edda;
+      color: #155724;
+      border: 2px solid #c3e6cb;
+    }
+    
+    .pending {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 2px solid #f5c6cb;
+    }
+    
+    /* Footer profesional */
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e8e7e7;
+      text-align: center;
+      font-size: 11px;
+      color: #666;
+    }
+    
+    /* Saltos de página */
+    .page-break {
+      page-break-before: always;
+    }
+    
+    /* Estilos para impresión */
+    @media print {
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      
+      .container {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+      }
+      
+      .footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+      }
+    }
+    
+    /* Responsive para diferentes tamaños */
+    @media screen and (max-width: 768px) {
+      .header {
+        flex-direction: column;
+        text-align: center;
+      }
+      
+      .header .title-section {
+        margin: 20px 0;
+      }
+      
+      .client-info {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      
+      .signature-section {
+        flex-direction: column;
+        gap: 30px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header profesional -->
+    <div class="header">
+      <div class="logo">
+        <img src="https://media.mariohans.cl/logos/Recurso%2016%403x.png" alt="Logo Mario Hans" loading="eager">
+      </div>
+      <div class="title-section">
+        <h1>CONTRATO DE ARRIENDO</h1>
+      </div>
+      <div class="contract-details">
+        <div class="contract-number">N° {contractNumber}</div>
+        <div class="contract-date">{currentDate}</div>
+      </div>
+    </div>
+
+    <!-- Información del cliente en formato profesional -->
+    <div class="client-info">
+      <div>
+        <div class="info-item">
+          <span class="info-label">Nombre:</span> <span class="info-value">{userData.nombre} {userData.apellido}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">RUT:</span> <span class="info-value">{userData.rut}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Email:</span> <span class="info-value">{userData.email}</span>
+        </div>
+      </div>
+      <div>
+        <div class="info-item">
+          <span class="info-label">Teléfono:</span> <span class="info-value">{userData.telefono}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Dirección:</span> <span class="info-value">{userData.direccion}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Ciudad:</span> <span class="info-value">{userData.ciudad}</span>
+        </div>
+      </div>
+      <div>
+        {userData.tipo_cliente === 'empresa' && (
+          <div>
+            <div class="info-item">
+              <span class="info-label">Empresa:</span> <span class="info-value">{userData.empresa_nombre}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">RUT Empresa:</span> <span class="info-value">{userData.empresa_rut}</span>
+            </div>
+          </div>
+        )}
+        <div class="info-item">
+          <span class="info-label">Tipo Cliente:</span> <span class="info-value">{userData.tipo_cliente === 'empresa' ? 'Empresa' : 'Persona Natural'}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sección principal del contrato -->
+  <div class="section">
+    <h2>CONTRATO DE ARRIENDO DE BIENES MUEBLES</h2>
+    <div>
+      <p>
+        En Santiago de Chile, a <strong>{currentDate}</strong>, comparecen por una parte Hans Salinas SpA, Rol Único Tributario N° 77.892.569-9,
+        representada legalmente por <strong>Mario Alberto Hans Salinas</strong>, cédula de identidad nacional N° 16.135.586-0, ambos con
+        domicilio para estos efectos en Jose Victorino Lastarria 394, departamento N° 83, comuna de Santiago, ciudad de
+        Santiago, en adelante “LA PARTE ARRENDADORA” o “LA ARRENDADORA”; y por la otra, {userData.tipo_cliente === 'empresa' ? `, Rol Único Tributario N° ${userData.empresa_rut}, representada legalmente por` : ''} <strong>{userData.nombre} {userData.apellido}</strong>, cédula de identidad nacional N° <strong>{userData.rut}</strong>,
+        {userData.tipo_cliente === 'empresa' ? 'ambos' : ''} con domicilio en <strong> {userData.direccion}</strong>, en adelante
+        “LA PARTE ARRENDATARIA” o “EL ARRENDATARIO”
+      </p>
+      <p>
+        La parte ARRENDADORA y la parte ARRENDATARIA, que en adelante podrán ser denominadas individualmente como
+“la parte” y conjuntamente como “las partes”, reconociéndose capacidad legal suficiente para contratar y obligarse
+recíprocamente, y siendo responsable de la veracidad de sus declaraciones.
+      </p>
+    </div>
+  </div>
+  <div class="section">
+    <h2>EXPONEN</h2>
+    <ol>
+      <li>Que la PARTE ARRENDADORA es propietaria del bien mueble o conjunto de bienes muebles, en adelante, ''el
+        bien mueble'', que se individualiza en el (los) Anexo(s) del presente Contrato.</li>
+      <li>Que el(los) bien(es) mueble(s) se encuentra(n) en perfecto estado de conservación</li>
+      <li>Que ambas partes conocen y aceptan las características y el estado de uso y conservación del bien mueble, de
+        acuerdo con lo declarado. La PARTE ARRENDADORA manifiesta que ha sido informada por la otra parte al
+        momento de este acto de firmar este Contrato, y consiente en entregar el bien mueble cumpliendo las
+        condiciones y el propósito de formalizar el presente documento.</li>
+      <li>Que la PARTE ARRENDATARIA está interesada en el arrendamiento de dicho bien mueble por los usos y
+        disfrutes, y la PARTE ARRENDADORA consiente dicha cesión.</li>
+      <li>Y que, habiendo llegado las partes a un entendimiento pleno y perfecto sobre la materia de sus voluntades,
+        formalizan su acuerdo respecto al arrendamiento de este(os) bien(s) mueble(s), en adelante, el ''Contrato'', con el
+        objeto de constituir y regular su acuerdo, el cual se rige por las siguientes:</li>
+    </ol>    
+  </div>
+  <div class="section">
+    <h2>CLÁUSULAS</h2>
+    <h3>PRIMERA: OBJETO DEL CONTRATO</h3>
+    <p>LA ARRENDADORA entrega en arriendo al ARRENDATARIO, quien acepta, el (los) bien(es) mueble(s) descrito(s) en
+      el(los) Anexo(s) de este contrato, con cuanto lo sea inherente y accesorio, el (los) cual forma(n) parte integrante del
+      mismo.</p>
+    <p>
+      La PARTE ARRENDATARIA declara que ha revisado suficientemente dicho(s) bien(es) mueble(s), confirmando que se
+encuentra(n) en perfecto estado para el uso que consistirá su destino.
+    </p>
+    <h3>SEGUNDA: USO O DESTINO</h3>
+    <p>La PARTE ARRENDATARIA se obliga a darle uso al bien(es) mueble(s), única y exclusivamente, en actividades
+      relacionadas con la fotografía y producción audiovisual.</p>
+    <p>Dicho uso no podrá ser modificado por la PARTE ARRENDATARIA sin el consentimiento previo, expreso y por escrito de
+      la PARTE ARRENDADORA.</p>
+    <p>Igualmente, la PARTE ARRENDATARIA se obliga a no realizar ningún uso o disposición del bien mueble que sea de
+      contrariedad con lo anterior, la moral o el orden público, o bien de cualquier otro modo pueda causar lesiones o daños a
+      terceros, personas, cosas o al propio bien mueble a su disposición.</p>
+    <p>El incumplimiento de cualquiera de estos requisitos será motivo de resolución del Contrato.</p>
+
+    <h3>TERCERA: DURACIÓN DEL ARRIENDO</h3>
+    <p>El presente Contrato se entenderá firmado en aquella fecha correspondiente a la creación de la cuenta de USUARIO en
+      el Sitio web https://rental.mariohans.cl/, sin embargo, comenzará a regir desde la fecha de la aceptación de presupuesto
+      realizada a través de dicho sitio web, fecha que constará en el (los) Anexo(s) del presente Contrato y se extenderá por el
+      período de que se describe en dicho Anexo(s) contado desde la fecha de entrega de los equipos. EL ARRENDATARIO
+      deberá devolver los equipos en la fecha y hora estipuladas en el(los) Anexos, salvo que las partes acuerden por escrito
+      una extensión del plazo.</p>
+    <p>El ARRENDATARIO deberá crearse una cuenta y un usuario a través del sitio web https://rental.mariohans.cl/, donde se
+      encontrará identificado mediante su nombre, dirección de correo electrónico y datos necesarios para el presente
+      Contrato, los cuales se solicitarán en el proceso de registro, quedando dicho registro como constancia fehaciente de la
+      aceptación de los términos del presente Contrato. En los Anexos del presente Contrato constarán los presupuestos
+      aprobados de acuerdo con la solicitud del usuario, ARRENDATARIO.</p>
+    <h3>CUARTA: ENTREGA</h3>
+    <p>La PARTE ARRENDADORA hará entrega del bien(es) mueble(s) objeto de este Contrato, poniéndolo en poder de la
+      PARTE ARRENDATARIA, que lo recibe, en el horario y fecha estipulada en el Anexo(s) del presente Contrato en el
+      domicilio señalado por el ARRENDADOR. A partir de esta entrega, la PARTE ARRENDATARIA se hace cargo de las
+      responsabilidades derivadas de su tenencia y uso, así como de su limpieza y transporte.</p>
+    <h3>QUINTA: PRECIO Y FORMA DE PAGO</h3>
+    <p>El precio del arriendo de los bienes individualizados en (los) Anexo(s) del presente Contrato será el establecido en el
+      Anexo correspondiente, el cual deberá ser pagado por EL ARRENDATARIO, en las condiciones que el correspondiente
+      Anexo determine.</p>
+    <p>El ARRENDATARIO deberá pagar una reserva por el arriendo de los bienes, lo cual corresponde al 25% del valor total
+      del arriendo establecido en el Anexo correspondiente, según la cotización proporcionada previamente, y aceptada por
+      las partes. El monto restante deberá ser pagado al momento de la entrega de los bienes mediante el método de pago
+      acordado y que consta en el Anexo.</p>
+    <p>El monto correspondiente a la reserva deberá ser pagado mediante transferencia bancaria a:</p>
+    <div class="bank-info">
+      <strong>HANS SALINAS SpA</strong><br>
+      <strong>RUT:</strong> 77.892.569-9<br>
+      <strong>Banco de Chile</strong><br>
+      <strong>Cuenta Corriente</strong><br>
+      <strong>Número de cuenta:</strong> 8140915407<br>
+      <strong>Email:</strong> pagos@mariohans.cl
+    </div>
+    <p>o a través del sistema de pago que se encuentre disponible en el sitio web https://rental.mariohans.cl/</p>
+    <p>La reserva deberá ser abonada antes del retiro de los bienes del domicilio acordado. El pago de la reserva asegura la
+      disponibilidad de los equipos para la fecha solicitada y se procederá a retirarlos del stock. Sin el pago de la reserva, LA
+      ARRENDADORA no garantiza la disponibilidad de los equipos, pudiendo estos ser puestos a disposición de terceros, sin
+      previo aviso.</p>
+    <p>El saldo restante, correspondiente al 75% del valor total del arriendo, deberá ser pagado en su totalidad antes o en el
+      momento de la devolución por parte de la ARRENDATARIA de los bienes arrendados.</p>
+    <p>El incumplimiento por la PARTE ARRENDATARIA de las obligaciones de pago de la renta en el plazo fijado será motivo
+      de resolución del presente Contrato, debiendo en tal caso restituir inmediatamente el(los) bien(s) mueble(s) a la PARTE
+      ARRENDADORA y perdiendo el monto pagado por concepto de reserva.</p>  
+      <h3>SEXTA: ENTREGA Y DEVOLUCIÓN DE LOS EQUIPOS</h3>
+      <ol>
+        <li>LA ARRENDADORA entregará los equipos al ARRENDATARIO en el estado descrito en el(los) Anexo(s), previa revisión conjunta.</li>
+        <li>EL ARRENDATARIO se compromete a devolver los equipos en las mismas condiciones en que fueron
+          entregados, salvo el desgaste normal por uso.</li>
+        <li>La entrega y devolución de los equipos se realizará en el domicilio señalado por el ARRENDADOR, en horario
+          previamente acordado con éste.</li>
+        <li>Los bienes y sus accesorios deben ser entregados en las mismas condiciones en que fueron entregados,
+          considerando su correcto funcionamiento y estado de conservación, limpios y secos.</li>
+      </ol>
+    <h3>SEXTA: ENTREGA Y DEVOLUCIÓN DE LOS EQUIPOS</h3>
+    <p>Los gastos inherentes a la utilización del bien mueble serán de cargo de la PARTE ARRENDATARIA</p>
+    <p>En el caso de las reparaciones al bien mueble que deban efectuarse durante la vigencia de este Contrato, serán de
+      cargo de la PARTE ARRANDATARIA. Dichas reparaciones deberán realizarse en servicios técnicos autorizados por las
+      marcas de cada bien arrendado, previa coordinación y autorización del ARRENDADOR.</p>
+    <p>Sin embargo, si existe una destrucción total de la cosa, una pérdida total de utilidad o existe una destrucción de más del
+      50% de los equipos y/o accesorios, que conste en informe de servicio técnico autorizado, si las reparaciones
+      imposibilitan que la PARTE ARRENDADORA pueda hacer uso del bien(es) mueble(s) para el uso que fue(ron)
+      arrendado(s) o cuando la reparación y los costos de la misma superen el valor del bien, LA PARTE ARRENDATARIA
+      deberá pagar al ARRENDADOR del valor total de equipo, el cual podrá realizarse a través de entrega de un bien idéntico
+      en calidad de nuevo o a través de transferencia bancaria. Para determinar el valor del bien que deberá reintegrarse, el
+      ARRENDADOR le entregará un presupuesto en que incluirá un desglose de cómo se ha realizado la estimación del
+      bien.</p>
+    <p>El ARRENDATARIO deberá efectuar las reparaciones o el reemplazo del equipo dentro de un plazo máximo de 10 días
+      hábiles. Dichas acciones no eximirán ni suspenderán el cumplimiento de las obligaciones contractuales vigentes.</p>
+    <p>En caso de ocurrir daños físicos o de operabilidad en los bienes, el ARRENDADOR tiene derecho a realizar un chequeo
+      previo de los bienes y emitirá un informe técnico para determinar la reparación y/o reemplazo de las partes dañadas o la
+      reposición total de los bienes.</p>
+    <p>En todo caso, la PARTE ARRENDATARIA no podrá, sin el consentimiento de la PARTE ARRENDADORA, hacer en el
+      bien(es) mueble(s) otros trabajos o cambios que puedan turbar o disminuir el goce del bien</p>
+    <p>En todo caso, si las reparaciones necesarias no pueden postergarse sin comprometer la seguridad del bien mueble y
+      afectan gravemente su uso o goce, serán de responsabilidad de la PARTE ARRENDADORA, si es que son de su
+      imputabilidad. En dicho caso, la PARTE ARRENDATARIA tendrá derecho a que se le restituyan los días de arriendo en
+      los que no haya podido hacer uso del bien mueble debido a dichas reparaciones, ajustando el plazo y las obligaciones
+      contractuales en consecuencia.</p>
+    <p>Las reparaciones que se deban efectuar por una utilización del bien mueble indebida o contraria a lo dispuesto en este
+      Contrato, son de cargo de la PARTE ARRENDATARIA. Por el contrario será de cargo de la PARTE ARRENDADORA las
+      reparaciones cuyas causas eran conocidas o no pudieron ser controladas por la PARTE ARRENDADORA antes de
+      entregar el(los) bien(es) mueble(s) en arriendo, y no comunicadas a la PARTE ARRENDATARIA.</p>  
+      <p>En relación con los elementos fungibles, tales como ampolletas, tubos de flash, fusibles y LED, si estos dejan de
+        funcionar debido al término de su vida útil mientras estén en poder del ARRENDATARIO, la responsabilidad de este
+        último se limitará al 50% del valor de reemplazo de dichos elementos. Por otro lado, en caso de rotura o daño atribuible
+        al ARRENDATARIO, este será responsable del 100% del valor de reemplazo.</p>
+
+      <h3>OCTAVA: OBLIGACIONES DE LAS PARTES</h3>
+      <h5>Obligaciones del ARRENDADOR: La PARTE ARRENDADORA se obliga a:</h5>
+      <ol>
+        <li>Entregar los equipos y sus accesorios objeto del Contrato en condiciones óptimas de uso</li>
+        <li>Mantener al bien mueble en estado de servir para el fin que ha sido arrendado.</li>
+        <li>Librar a la PARTE ARRENDATARIA de toda turbación o embarazo en el goce del bien mueble.</li>
+        <li>Cubrir los gastos de las reparaciones al bien mueble que deban efectuarse durante la vigencia de este Contrato,
+          cuyas causas eran conocidas o no pudieron ser controladas por la PARTE ARRENDADORA antes de entregar el(los) bien(es) mueble(s) en arriendo, y no comunicadas a la PARTE ARRENDATARIA.</li>
+
+      </ol>
+      <h5>Obligaciones de EL ARRENDATARIO: La PARTE ARRENDATARIO se obliga a:</h5>
+      <ol>
+        <li>Verificar las condiciones físicas y de funcionamiento de todos los bienes que se entregan en arriendo, así como la
+          cantidad y el modelo, ya sea el ARRENDATARIO una Empresa, Cliente directo y/o persona(s) designada(s)
+          autorizada(s) para el retiro de los equipos. Una vez retirados los bienes y aceptada su conformidad, se entenderá
+          que LA PARTE ARRENDATARIA no podrá alegar posteriormente respecto a la calidad ni estado de los bienes.</li>
+        <li>Utilizar los equipos y accesorios exclusivamente para los fines declarados y conforme a las instrucciones
+          proporcionadas, no pudiendo, en consecuencia, hacerlos servir a otros fines que los convenidos.</li>
+        <li>Pagar oportunamente y de manera íntegra las rentas de arriendo.</li>
+        <li>No subarrendar, transferir ni ceder los equipos a terceros, así como tampoco realizar cambios o mejoras al bien
+          mueble sin consentimiento previo y escrito de la PARTE ARRENDADORA</li>
+        <li>No contraer compromisos económicos o legales que puedan ver afectados los intereses del ARRENDADOR.</li>
+        <li>Tomar las precauciones correspondientes para el transporte, armado y uso de cada uno de los bienes y sus
+          accesorios. EL ARRENDATARIO debe siempre observar el cuidado en el correcto ensamblaje de partes, piezas y
+          en el manejo apropiado de todos los bienes para conservar su funcionamiento e integridad física, so pena de
+          indemnizar al ARRENDADOR de los daños que éste pueda causar en los bienes.</li>
+        <li>Asumir la responsabilidad acerca de daños físicos y/o de operabilidad, sean hechos por causas directas o
+          indirectas, causadas con o sin intencionalidad por personas pertenecientes a la empresa arrendadora o por
+          terceros, en los bienes, accesorios, partes y piezas que estén en su poder.</li>
+        <li>A asumir toda responsabilidad por las pérdidas, daños o perjuicios que puedan sufrir los bienes arrendados como
+          consecuencia de caso fortuito o fuerza mayor, entendiéndose por tales los definidos en el artículo 45 del Código
+          Civil. Esta responsabilidad incluirá, a modo enunciativo, pero no limitativo, eventos tales como incendios,
+          inundaciones, terremotos o cualquier otro suceso de naturaleza imprevisible e inevitable, salvo que dichos
+          eventos sean ocasionados por dolo o negligencia del ARRENDATARIO. En caso de que ocurra un evento de
+          caso fortuito o fuerza mayor, el ARRENDATARIO se compromete a reparar, reponer o indemnizar los bienes
+          afectados dentro de un plazo no superior a 30 días hábiles, de conformidad con el avalúo realizado por el
+          ARRENDADOR, que será aceptada por ambas partes.</li>
+        <li>Restituir inmediatamente al bien mueble una vez terminado el presente Contrato, poniéndolo a disposición de la
+          PARTE ARRENDADORA en los términos previamente estipulados.</li>
+        <li>Notificar de inmediato a LA PARTE ARRENDADORA en caso de pérdida, daño o cualquier inconveniente que
+          afecte a los equipos.</li>
+        <li>Reparar los daños, gastos, pérdidas u otras lesiones que el uso del bien mueble haya ocasionado por descuido o
+          culpa suya.</li>
+        <li>Devolver los bienes y sus accesorios en las mismas condiciones en que fueron entregados, considerando su
+          estado de funcionamiento, de conservación y limpieza.</li>
+      </ol>
+      <p>Para efectos legales, las partes acuerdan elevar las obligaciones de la PARTE ARRENDATARIA a la calidad de
+        esenciales, dejando explícita la facultad de la PARTE ARRENDADORA de invocar una infracción grave del Contrato y
+        derecho de la PARTE ARRENDADORA a ponerle término al mismo.</p>
+      <h3>NOVENA: GARANTÍAS Y MULTAS POR RETRASO EN LA ENTREGA DE LOS BIENES Y POR
+        SU MAL ESTADO</h3>
+      <p>No se exigirá una garantía monetaria debido a que el Contrato formaliza el compromiso entre las partes. No obstante, EL
+        ARRENDATARIO responderá por los daños o pérdidas que puedan sufrir los equipos durante el periodo de arriendo.</p>
+      <p>EL ARRENDATARIO debe devolver los bienes en el domicilio señalado por el ARRENDADOR en el horario señalado en
+        el Anexo. En caso de incumplimiento de dicho plazo, se aplicará una multa equivalente al valor de un día de arriendo por
+        cada día de retraso en la devolución de los bienes, sin perjuicio de las demás acciones legales que pudiera ejercer LA
+        ARRENDADORA.</p>
+      <p>El ARRENDATARIO podrá notificar al ARRENDADOR, a través de correo electrónico, u otro medio idóneo, con al menos
+          48 horas de antelación a la fecha programada para el retiro de los bienes, indicada en el Anexo correspondiente, su
+          decisión de desistir del arrendamiento. Dicha notificación deberá realizarse de manera expresa y textual, señalando que
+          renuncia al arriendo de los bienes. En este caso, el monto pagado en concepto de reserva no será reembolsado.</p>
+      <p>EL ARRENDATARIO se obliga a devolver los equipos y sus accesorios en las mismas condiciones en que fueron
+        entregados, considerando su correcto funcionamiento y estado de conservación, salvo el desgaste normal por uso.</p>
+      <p>Asimismo, los equipos deberán ser devueltos limpios y secos. En caso de que los bienes presenten suciedad,
+        acumulación de polvo o humedad, LA ARRENDADORA procederá a una inspección técnica para evaluar posibles daños.
+        Si se determina que el ingreso de polvo, agua u otros elementos ha afectado la operatividad de los equipos, EL
+        ARRENDATARIO será responsable de los costos de limpieza especializada, reparación o, en caso de daño irreparable,
+        de su reposición conforme al valor que determine el ARRENDATARIO conforme a informe técnico.</p>
+      <h3>DÉCIMA: RESPONSABILIDAD</h3>
+      <p>A partir del momento en que el ARRENDATARIO retire los bienes del lugar designado por el ARRENDADOR para su
+        entrega, el ARRENDATARIO asumirá plena responsabilidad por la custodia, transporte, uso y conservación de los
+        mismos y de sus accesorios.</p>
+      <p>El ARRENDATARIO será responsable de cualquier daño, pérdida, deterioro o destrucción que sufran los equipos,
+        incluyendo aquellos ocurridos durante el transporte, salvo que dichos daños sean consecuencia directa de defectos
+        preexistentes en los equipos que puedan ser acreditados de manera fehaciente.</p>
+      <p>El ARRENDATARIO deberá tomar todas las precauciones necesarias para garantizar la adecuada protección y
+        seguridad de los equipos desde el momento de su retiro hasta su devolución al ARRENDADOR.</p>
+      <p>La PARTE ARRENDATARIA se hace directa y exclusivamente responsable, eximiendo de toda responsabilidad a la
+        PARTE ARRENDADORA, de todos los daños que pueda causar a sí misma, a terceras personas o a las cosas haciendo
+        uso del bien mueble arrendado, personalmente o por aquellas personas que ella autorice a utilizar.</p>
+      <p>La PARTE ARRENDADORA no responde por daños causados al equipo por negligencia o mal uso de la PARTE
+        ARRENDATARIA o por daños producidos por situaciones imprevistas de responsabilidad de terceros. En cualquiera de
+        estos casos la ARRENDADORA cobrará al ARRENDATARIO los gastos en que deba incurrir para su reparación.</p>
+      <h3>DÉCIMO PRIMERA: MODIFICACIONES AL CONTRATO</h3>
+      <p>LA ARRENDADORA se reserva el derecho de modificar los términos y condiciones del presente Contrato cuando ello
+        sea necesario para la adecuada prestación del servicio, el cumplimiento de normativas legales o la actualización de sus
+        políticas operativas.</p>
+      <p>Toda modificación será debidamente notificada a EL ARRENDATARIO a través de la plataforma
+        https://rental.mariohans.cl/ y/o mediante correo electrónico registrado en su cuenta de usuario. Dichas modificaciones
+        entrarán en vigor a partir de la fecha indicada en la notificación, y EL ARRENDADOR deberá aceptarlas expresamente
+        para continuar utilizando el servicio.</p>  
+      <p>En caso de que EL ARRENDATARIO no acepte las modificaciones, podrá solicitar la terminación del Contrato sin
+        penalización, siempre que no existan obligaciones pendientes derivadas del uso de los bienes arrendados.</p>
+      <h3>DÉCIMO SEGUNDA: RESOLUCIÓN DEL CONTRATO</h3>  
+      <p>Sin perjuicio de lo anterior, el incumplimiento de las obligaciones legales o contractuales dará derecho a la otra parte a
+        resolver el Contrato sin previo aviso, aunque deberá notificar a la otra parte las causas de extinción.</p>
+      <p>EL ARRENDATARIO reconoce y acepta que el presente Contrato se formaliza de manera digital a través de su cuenta
+        de usuario en el sitio web https://rental.mariohans.cl/. En consecuencia, en caso de incumplimiento de cualquiera de las
+        obligaciones establecidas en este Contrato, particularmente aquellas relacionadas con el pago de los arriendos o
+        cualquier otra falta grave a los términos acordados, LA ARRENDADORA podrá, a su sola discreción, resolver el Contrato
+        de manera inmediata y proceder a la eliminación de la cuenta de usuario del ARRENDATARIO en la plataforma, sin que
+        ello genere derecho a reembolso o compensación alguna. Dicha eliminación no eximirá al ARRENDATARIO de sus
+        obligaciones pendientes, incluyendo el pago de sumas adeudadas o la devolución de los bienes arrendados.</p>
+      <p>En caso de que cualquiera de las partes incumpla alguna de las obligaciones establecidas en este Contrato, o las
+        cumpla de manera defectuosa, la otra parte tendrá derecho a solicitar la resolución del mismo. Sin embargo, antes de
+        proceder a la terminación, se deberá conceder un plazo razonable para que la parte incumplidora subsane dicho incumplimiento.
+         Si el incumplimiento resulta grave o excede los límites establecidos en las disposiciones formales del
+        Contrato, la parte afectada podrá optar directamente por la resolución del Contrato, notificando dicha decisión por correo
+        electrónico u otro medio idóneo.</p>
+      <p>Se siga por exigir así el cumplimiento o la exclusión del Contrato, a la parte optante, además, tendrá derecho a ser
+        indemnizada por los perjuicios que sean razonablemente justificados.</p>
+      <p>En caso de que la parte afectada decida no resolver el Contrato, no se considerará como una renuncia a su derecho, y
+        podrá ejercer tal facultad en cualquier momento del Contrato, incluso si las formas ajenas sus derechos para hacer
+        cumplir sus obligaciones derivadas del presente Contrato.</p>
+      <h3>DÉCIMO TERCERA: TERMINACIÓN ANTICIPADA DEL CONTRATO</h3>
+      <p>El presente Contrato podrá darse por terminado de forma anticipada en los siguientes casos</p>
+      <ol>
+        <li>Por mutuo acuerdo de las partes.</li>
+        <li>Por incumplimiento de cualquiera de las obligaciones establecidas en este Contrato.</li>
+        <li>Por la devolución anticipada de los equipos, previa notificación por escrito a LA ARRENDADORA.</li>
+      </ol>
+      <h3>DÉCIMO CUARTA: NOTIFICACIONES</h3>
+      <p>Para realizar cualquier notificación entre las partes que tenga como origen el presente Contrato, éstas acuerdan que su
+        domicilio para estos efectos serán las direcciones indicadas al principio de este Contrato. A falta de una designación
+        expresa, se tendrá por válida aquella dirección que figure como domicilio principal de cada parte y en su defecto el
+        domicilio señalado para efectos de este Contrato en el registro correspondiente.</p>
+      <p>Asimismo, ambas partes declaran que están de acuerdo en que las notificaciones puedan ser realizadas mediante
+        medios electrónicos, siempre que exista constancia de recepción.</p>
+      <p>Cuando se opte por un medio electrónico, la parte que remite la comunicación deberá guardar el acuse de recibo por
+        correo electrónico o una impresión de la notificación enviada y de su respuesta, según lo que se establezca.</p>
+      <p>Para garantizar la autenticidad de las personas emisoras, la parte destinataria de una notificación tiene el derecho de
+        mantener una comunicación fluida entre las partes, facilitando las siguientes direcciones de correo electrónico:</p>
+      <p><strong>Para la PARTE ARRENDADORA:</strong> rental.mariohans@gmail.com<br><strong>Para la PARTE ARRENDATARIA:</strong> {userData.email}</p>
+      <h3>DÉCIMO QUINTA: PROPIEDAD INDUSTRIAL E INTELECTUAL</h3>
+      <p>Las partes reconocen y acuerdan que toda propiedad intelectual e industrial, incluyendo, pero sin limitarse a nombres
+        comerciales, logotipos y marcas registradas, es de exclusiva propiedad de cada una de ellas. En virtud del presente
+        contrato, ninguna de las partes podrá utilizar la propiedad intelectual o industrial de la otra en anuncios, materiales
+        promocionales o cualquier otro medio sin la autorización previa y expresa por escrito de su titular.</p>
+      <p>Asimismo, EL ARRENDATARIO reconoce y acepta que ni él ni ningún tercero adquieren derechos de propiedad sobre
+        los bienes objeto de este contrato, ni sobre cualquier servicio asociado a estos. Esto incluye, sin limitación, cualquier
+        desarrollo, mejora, modificación o material provisto o generado en relación con los bienes arrendados, los cuales
+        seguirán siendo de exclusiva propiedad de LA ARRENDADORA.</p>
+      <h3>DÉCIMO QUINTA: PROPIEDAD INDUSTRIAL E INTELECTUAL</h3>
+      <p>Para todos los efectos legales derivados del presente Contrato, las partes fijan domicilio en la ciudad de Santiago, y se
+        someten a la jurisdicción de sus tribunales de justicia, conforme a la legislación vigente en la República de Chile</p>
+      <h3>DÉCIMO SÉPTIMA: DECLARACIONES FINALES</h3>
+      <p>Las partes declaran que han leído y comprendido la totalidad del presente Contrato, firmando en señal de conformidad.
+        Este documento se firma en dos ejemplares de igual tenor, fecha y efecto, quedando uno en poder de cada parte.</p>
+      <p>Se faculta al portador de uno de los ejemplares originales del presente Contrato para requerir las anotaciones,
+        inscripciones y subscripciones que procedan o sean pertinentes.</p>
+      
+
+    </div>
+    
+    <!-- Sección de firmas profesional -->
+    <div class="section">
+      <h2>FIRMAS</h2>
+      <div class="signature-section">
+        <div class="signature-container">
+            <div class="document-name">ARRENDADOR</div>
+            <img src="https://media.mariohans.cl/mhansfirma.png" 
+                 class="signature-image" 
+                 alt="Firma Mario Hans" />
+            <div class="signature-line"></div>
+            <div class="signature-info">
+                <strong>Mario Alberto Hans Salinas</strong><br>
+                RUT: 16.135.586-0<br>
+                <strong>EN REPRESENTACIÓN DE</strong><br>
+                <strong>Hans Salinas SpA</strong><br>
+                RUT: 77.892.569-9
+            </div>
+        </div>
+
+        <div class="signature-container">
+            <div class="document-name">ARRENDATARIO</div>
+            {userData.url_firma ? (
+              <img src={userData.url_firma} 
+                   class="signature-image" 
+                   alt="Firma Usuario" />
+            ) : (
+              <div class="signature-image" style="border: 1px dashed #ccc; display: flex; align-items: center; justify-content: center; color: #666;">
+                Firma Pendiente
+              </div>
+            )}
+            <div class="signature-line"></div>
+            <div class="signature-info">
+                <strong>{userData.nombre} {userData.apellido}</strong><br>
+                RUT: {userData.rut}<br>
+                {userData.tipo_cliente === 'empresa' && (
+                  <span>
+                    <strong>EN REPRESENTACIÓN DE</strong><br>
+                    <strong>{userData.empresa_nombre}</strong><br>
+                    RUT: {userData.empresa_rut}
+                  </span>
+                )}
+            </div>
+        </div>
+      </div>
+    </div>
+    <!-- Sección de documentos con diseño profesional -->
+    <div class="page-break"></div>
+    <div class="section">
+      <h2>DOCUMENTOS ADJUNTOS</h2>
+      
+      <div class="documents-section">
+        <p><strong>Documentos incluidos en este contrato:</strong></p>
+        
+        {userData.url_rut_anverso && (
+          <div class="document-item">
+            <div class="document-name">1. Carnet de Identidad (Anverso)</div>
+            <div class="document-url">URL: {userData.url_rut_anverso}</div>
+            <img src={userData.url_rut_anverso} class="document-image" alt="RUT Anverso" />
+          </div>
+        )}
+        
+        {userData.url_rut_reverso && (
+          <div class="document-item">
+            <div class="document-name">2. Carnet de Identidad (Reverso)</div>
+            <div class="document-url">URL: <a href={userData.url_rut_reverso}>{userData.url_rut_reverso}</a></div>
+            <img src={userData.url_rut_reverso} class="document-image" alt="RUT Reverso" />
+          </div>
+        )}
+        
+        {userData.url_firma && (
+          <div class="document-item">
+            <div class="document-name">3. Firma Digital</div>
+            <div class="document-url">URL: <a href={userData.url_firma}>{userData.url_firma}</a></div>
+            <img src={userData.url_firma} class="document-image" alt="Firma Digital" />
+          </div>
+        )}
+        
+        {(userData.url_empresa_erut || userData.new_url_e_rut_empresa) && (
+          <div class="document-item">
+            <div class="document-name">4. E-RUT Empresa</div>
+            <div class="document-url">URL: <a href={userData.new_url_e_rut_empresa || userData.url_empresa_erut}>{userData.new_url_e_rut_empresa || userData.url_empresa_erut}</a></div>
+            <img src={userData.new_url_e_rut_empresa || userData.url_empresa_erut} class="document-image" alt="E-RUT Empresa" />
+          </div>
+        )}
+        
+        {!userData.url_rut_anverso && !userData.url_rut_reverso && !userData.url_firma && !userData.url_empresa_erut && !userData.new_url_e_rut_empresa && (
+          <div class="document-item">
+            <p>No hay documentos adjuntos al contrato.</p>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- Estado de aceptación de términos -->
+    <div class="section">
+      <h2>ESTADO DEL CONTRATO</h2>
+      <div class={termsAccepted ? 'acceptance-status accepted' : 'acceptance-status pending'}>
+        {termsAccepted ? '✅ TÉRMINOS ACEPTADOS' : '⏳ PENDIENTE DE ACEPTACIÓN'}
+      </div>
+    </div>
+
+
+  </div> 
+
+
+</body>
+</html>
