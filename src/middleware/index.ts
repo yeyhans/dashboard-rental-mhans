@@ -1,86 +1,70 @@
 import { defineMiddleware } from "astro:middleware";
-import { supabase } from "../lib/supabase";
+import { getServerAdmin, clearAuthCookies, isExtendedSessionValid } from "../lib/supabase";
 import micromatch from "micromatch";
 
 const { isMatch } = micromatch;
 
-const protectedRoutes = ["/dashboard(|/)", "/orders/**", "/users/**", "/payments-table(|/)", "/products/**"];
-const authRoutes = ["/api/auth/signin", "/api/auth/signout"];
+// Rutas que requieren autenticación de administrador
+const protectedRoutes = [
+  "/dashboard(|/)", 
+  "/orders/**", 
+  "/users/**", 
+  "/payments-table(|/)", 
+  "/products/**",
+  "/analytics/**"
+];
+
+// Rutas de autenticación que no requieren verificación
+const authRoutes = [
+  "/api/auth/login", 
+  "/api/auth/logout", 
+  "/api/auth/session"
+];
+
 const homeRoute = "/";
 const dashboardRoute = "/dashboard";
 
 export const onRequest = defineMiddleware(async (context, next) => {
-  const { url, cookies, redirect, locals } = context;
+  const { url, redirect, locals } = context;
 
-  // Allow auth routes to pass through
+  // Permitir rutas de autenticación sin verificación
   if (isMatch(url.pathname, authRoutes)) {
     return next();
   }
 
-  const accessToken = cookies.get("sb-access-token");
-  const refreshToken = cookies.get("sb-refresh-token");
-
-  // Redirect to dashboard if user is logged in and tries to access the home page
-  if (url.pathname === homeRoute && accessToken && refreshToken) {
-    return redirect(dashboardRoute);
-  }
-
-  // If it's not a protected route, just continue
+  // Si no es una ruta protegida, continuar sin verificación
   if (!isMatch(url.pathname, protectedRoutes)) {
     return next();
   }
+
+  console.log('🔒 Verificando admin para ruta protegida:', url.pathname);
+
+  // Verificar si tiene sesión extendida válida primero
+  if (isExtendedSessionValid(context)) {
+    console.log('⚡ Sesión extendida válida, omitiendo verificación completa');
+    return next();
+  }
+
+  // Verificar admin completo
+  const adminSession = await getServerAdmin(context);
   
-  // From here, we are dealing with a protected route
-  console.log('🔒 Checking auth for protected route:', url.pathname);
-  
-  if (!accessToken || !refreshToken) {
-    console.log('🔒 Access denied: No tokens found');
+  if (!adminSession) {
+    console.log('🔒 Acceso denegado: No es administrador o sesión inválida');
+    clearAuthCookies(context);
     return redirect(homeRoute);
   }
 
-  if (!supabase) {
-    console.error('Supabase client not available in middleware');
-    return redirect(homeRoute);
+  // Configurar datos del usuario en locals para uso en páginas
+  locals.user = adminSession.user;
+  locals.email = adminSession.admin.email;
+  // Nota: adminRole e isExtendedSession se pueden acceder via adminSession si se necesita
+
+  console.log('✅ Admin verificado:', adminSession.admin.email, '- Sesión hasta:', adminSession.expiresAt);
+
+  // Si está en home y autenticado, redirigir a dashboard
+  if (url.pathname === homeRoute) {
+    return redirect(dashboardRoute);
   }
-
-  const { data, error } = await supabase.auth.setSession({
-    refresh_token: refreshToken.value,
-    access_token: accessToken.value,
-  });
-
-  if (error) {
-    console.log('🔒 Access denied: Invalid session', error.message);
-    // Clear cookies on error and redirect
-    cookies.delete("sb-access-token", { path: "/" });
-    cookies.delete("sb-refresh-token", { path: "/" });
-    return redirect(homeRoute);
-  }
-
-  console.log('✅ Auth successful for user:', data.user?.email);
-
-  // Set local user data
-  locals.email = data.user?.email ?? "";
-  locals.user = data.user;
-
-  // Refresh cookies with new tokens
-  const accessTokenExpiresIn = data.session?.expires_in ?? 3600;
-  const refreshTokenMaxAge = 7 * 24 * 60 * 60; // 7 days
-
-  cookies.set("sb-access-token", data.session!.access_token, {
-    sameSite: "strict",
-    path: "/",
-    secure: true,
-    maxAge: Math.floor(accessTokenExpiresIn),
-    httpOnly: true
-  });
-
-  cookies.set("sb-refresh-token", data.session!.refresh_token, {
-    sameSite: "strict",
-    path: "/",
-    secure: true,
-    maxAge: refreshTokenMaxAge,
-    httpOnly: true
-  });
 
   return next();
 }); 

@@ -1,23 +1,22 @@
 ---
 import Base from "../../layout/Base.astro";
 import ProductsDashboard from "../../components/ProductsDashboard";
-import { supabase } from "../../lib/supabase";
+import { getServerAdmin, clearAuthCookies } from "../../lib/supabase";
 import { ProductService } from "../../services/productService";
 import { CategoryService } from "../../services/categoryService";
 
 export const prerender = false;
 
-if (!supabase) {
-  throw new Error("Supabase client is not initialized.");
-}
-const { data: { session } } = await supabase.auth.getSession();
+// Verificar autenticación usando el nuevo sistema
+const adminSession = await getServerAdmin(Astro);
 
-if (!session) {
+if (!adminSession) {
+  console.log('🚫 Acceso denegado a products - Usuario no es administrador');
+  clearAuthCookies(Astro);
   return Astro.redirect("/");
 }
 
-// Get the access token from the session
-const accessToken = session.access_token;
+console.log('✅ Admin autenticado en products:', adminSession.admin.email);
 
 // Load ALL products and categories for client-side pagination and filtering
 // This ensures we have all data available for proper pagination
@@ -33,7 +32,7 @@ const categoriesData = {
   categories: categories || []
 };
 
-const title = "Gestión de Productos";
+const title = `Gestión de Productos | ${adminSession.admin.email}`;
 ---
 
 <Base title={title}>
@@ -43,7 +42,11 @@ const title = "Gestión de Productos";
       initialProducts={productsData.products as any}
       initialTotal={productsData.total}
       initialCategories={categoriesData.categories as any}
-      accessToken={accessToken}
+      adminData={{
+        email: adminSession.admin.email,
+        role: adminSession.admin.role,
+        userId: adminSession.user.id
+      }}
     />
   </div>
 </Base>

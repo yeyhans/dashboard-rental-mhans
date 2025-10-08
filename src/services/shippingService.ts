@@ -4,7 +4,7 @@ import { supabaseAdmin } from '../lib/supabase';
 
 // Tipos para el sistema de envíos
 export interface ShippingMethod {
-  id: string;
+  id: number;
   name: string;
   description: string | null;
   cost: string; // Decimal stored as string in database
@@ -12,20 +12,20 @@ export interface ShippingMethod {
   enabled: boolean;
   min_amount: string | null; // Decimal stored as string
   max_amount: string | null; // Decimal stored as string
-  available_regions?: string[] | null;
-  excluded_regions?: string[] | null;
+  available_regions?: any | null;
+  excluded_regions?: any | null;
   estimated_days_min: string; // Stored as string in database
   estimated_days_max: string; // Stored as string in database
   requires_address: boolean;
   requires_phone: boolean;
-  metadata: Record<string, any>;
+  metadata: any;
   created_at: string;
   updated_at: string;
   created_by: string | null;
 }
 
 export interface ShippingMethodInsert {
-  id?: string;
+  id?: number;
   name: string;
   description?: string | null;
   cost: string; // Decimal as string
@@ -33,20 +33,20 @@ export interface ShippingMethodInsert {
   enabled?: boolean;
   min_amount?: string | null; // Decimal as string
   max_amount?: string | null; // Decimal as string
-  available_regions?: string[] | null;
-  excluded_regions?: string[] | null;
+  available_regions?: any | null;
+  excluded_regions?: any | null;
   estimated_days_min: string; // String in database
   estimated_days_max: string; // String in database
   requires_address?: boolean;
   requires_phone?: boolean;
-  metadata?: Record<string, any>;
+  metadata?: any;
   created_at?: string;
   updated_at?: string;
   created_by?: string | null;
 }
 
 export interface ShippingMethodUpdate {
-  id?: string;
+  id?: number;
   name?: string;
   description?: string | null;
   cost?: string; // Decimal as string
@@ -54,13 +54,13 @@ export interface ShippingMethodUpdate {
   enabled?: boolean;
   min_amount?: string | null; // Decimal as string
   max_amount?: string | null; // Decimal as string
-  available_regions?: string[] | null;
-  excluded_regions?: string[] | null;
+  available_regions?: any | null;
+  excluded_regions?: any | null;
   estimated_days_min?: string; // String in database
   estimated_days_max?: string; // String in database
   requires_address?: boolean;
   requires_phone?: boolean;
-  metadata?: Record<string, any>;
+  metadata?: any;
   created_at?: string;
   updated_at?: string;
   created_by?: string | null;
@@ -78,7 +78,7 @@ export interface ShippingUsage {
   created_at: string;
   shipped_at: string | null;
   delivered_at: string | null;
-  metadata: Record<string, any>;
+  metadata: any;
 }
 
 export interface ShippingMethodWithUsage extends ShippingMethod {
@@ -194,6 +194,10 @@ export class ShippingService {
         console.error('❌ Supabase admin client not available');
         throw new Error('Database connection not available');
       }
+
+      // Debug: Verificar que estamos usando service role
+      console.log('🔍 Creating shipping method with service role key');
+      console.log('📝 Method data:', JSON.stringify(methodData, null, 2));
 
       const { data: newMethod, error } = await supabaseAdmin
         .from('shipping_methods')

@@ -1,31 +1,36 @@
 ---
 import Base from "../layout/Base.astro";
 import UsersDashboardWithToaster from "../components/UsersDashboardWithToaster";
-import { supabase } from "../lib/supabase";
+import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
 import { UserService } from "../services/userService";
 
 export const prerender = false;
 
-if (!supabase) {
-  throw new Error("Supabase client is not initialized.");
-}
-const { data: { session } } = await supabase.auth.getSession();
+// Verificar autenticación usando el nuevo sistema
+const adminSession = await getServerAdmin(Astro);
 
-if (!session) {
+if (!adminSession) {
+  console.log('🚫 Acceso denegado a users - Usuario no es administrador');
+  clearAuthCookies(Astro);
   return Astro.redirect("/");
 }
 
-// Load ALL users for client-side pagination and filtering
-// This ensures we have all data available for proper pagination
-const { users, total } = await UserService.searchUsers('', 1, 1000); // Load up to 1000 users
+console.log('✅ Admin autenticado en users:', adminSession.admin.email);
+
+// Cargar usuarios para paginación y filtrado del lado del cliente
+const { users, total } = await UserService.searchUsers('', 1, 1000); // Cargar hasta 1000 usuarios
 
 const usersData = {
   users: users || [],
   total: total || 0,
-  sessionToken: session.access_token // Pass the access token to client
+  adminInfo: {
+    email: adminSession.admin.email,
+    role: adminSession.admin.role,
+    sessionExpiry: adminSession.expiresAt.toISOString()
+  }
 };
 
-const title = "Gestión de Usuarios";
+const title = `Gestión de Usuarios | ${adminSession.admin.email}`;
 ---
 
 <Base title={title}>
@@ -34,7 +39,7 @@ const title = "Gestión de Usuarios";
       client:load
       initialUsers={usersData.users}
       initialTotal={usersData.total}
-      sessionToken={usersData.sessionToken}
+      adminInfo={usersData.adminInfo}
     />
   </div>
 </Base>

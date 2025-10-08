@@ -1,51 +1,38 @@
 --- 
 import Base from "../layout/Base.astro";
-import { supabase } from "../lib/supabase";
+import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
 import { DashboardService } from "../services/dashboardService";
 import DashboardContainer from "../components/DashboardContainer";
 
 export const prerender = false;
 
-// Get session from Supabase
-if (!supabase) {
-  console.error('Supabase client is not initialized. Check environment variables.');
+// Verificación de autenticación y admin usando el nuevo sistema
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  console.log('🚫 Acceso denegado al dashboard - Usuario no es administrador');
+  clearAuthCookies(Astro);
   return Astro.redirect("/");
 }
 
-const { data: { session } } = await supabase.auth.getSession();
+console.log('✅ Admin autenticado en dashboard:', adminSession.admin.email);
 
-if (!session) {
-  return Astro.redirect("/");
-}
-
-// Verify the user is an admin from the 'admin_users' table
-const { data: adminUser, error: adminError } = await supabase
-  .from('admin_users')
-  .select('*')
-  .eq('user_id', session.user.id)
-  .eq('role', 'admin')
-  .single();
-
-if (adminError || !adminUser) {
-  console.error('Admin verification failed:', adminError?.message);
-  // Clear cookies and redirect to login if not an admin
-  Astro.cookies.delete('sb-access-token', { path: '/' });
-  Astro.cookies.delete('sb-refresh-token', { path: '/' });
-  return Astro.redirect("/");
-}
-
-// Fetch comprehensive dashboard data using the service
+// Cargar datos del dashboard con manejo de errores mejorado
 let dashboardStats;
 try {
+  console.log('📊 Cargando estadísticas del dashboard...');
   dashboardStats = await DashboardService.getDashboardStats();
-  console.log('Dashboard Stats loaded successfully:', {
+  
+  console.log('✅ Dashboard Stats cargadas:', {
+    adminUser: adminSession.admin.email,
     monthlyOrders: dashboardStats.monthlyOrderStats.totalOrders,
     rentedEquipment: dashboardStats.rentedEquipment.length,
-    totalSales: dashboardStats.financialSummary.totalSales
+    totalSales: dashboardStats.financialSummary.totalSales,
+    sessionType: adminSession.isExtended ? 'Extendida (30 días)' : 'Regular'
   });
 } catch (error) {
-  console.error('Error fetching dashboard stats:', error);
-  // Initialize with empty data structure
+  console.error('❌ Error cargando dashboard stats:', error);
+  // Estructura de datos vacía para evitar errores de renderizado
   dashboardStats = {
     monthlyOrderStats: {
       totalOrders: 0,
@@ -72,7 +59,21 @@ try {
   };
 }
 
-const title = "Dashboard - Rental Mario Hans";
+// Datos adicionales para el dashboard (se pasarán al componente)
+const dashboardContext = {
+  adminUser: {
+    email: adminSession.admin.email,
+    role: adminSession.admin.role,
+    id: adminSession.admin.id
+  },
+  session: {
+    isExtended: adminSession.isExtended,
+    expiresAt: adminSession.expiresAt.toLocaleDateString('es-ES'),
+    userId: adminSession.user.id
+  }
+};
+
+const title = `Dashboard - Rental Mario Hans | ${adminSession.admin.email}`;
 ---
 
 <Base title={title}>
@@ -100,6 +101,7 @@ const title = "Dashboard - Rental Mario Hans";
     <DashboardContainer 
       client:load
       initialData={dashboardStats}
+      adminContext={dashboardContext}
     />
 
   </div>

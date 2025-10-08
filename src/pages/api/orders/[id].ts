@@ -57,8 +57,12 @@ export const GET: APIRoute = withCors(withAuth(async (context) => {
 
 export const PUT: APIRoute = withCors(withAuth(async (context) => {
   try {
+    console.log('🔄 PUT /api/orders/[id] - Iniciando actualización');
     const orderId = parseInt(context.params.id as string);
     const updates = await context.request.json();
+    
+    console.log('📦 Order ID:', orderId);
+    console.log('📤 Updates received:', JSON.stringify(updates, null, 2));
 
     if (isNaN(orderId)) {
       return new Response(JSON.stringify({
@@ -86,10 +90,13 @@ export const PUT: APIRoute = withCors(withAuth(async (context) => {
       });
     }
 
+    console.log('🔄 Llamando OrderService.updateOrder...');
     const updatedOrder = await OrderService.updateOrder(orderId, {
       ...updates,
       date_modified: new Date().toISOString()
     });
+    
+    console.log('✅ Orden actualizada exitosamente:', updatedOrder?.id);
 
     return new Response(JSON.stringify({
       success: true,

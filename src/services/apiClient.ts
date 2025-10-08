@@ -1,64 +1,70 @@
-import { supabase } from '../lib/supabase';
+import { getCurrentAccessToken, isExtendedSessionValid } from '../lib/authService';
 
 /**
- * Cliente API que maneja automáticamente la autenticación
+ * Cliente API profesional con manejo automático de autenticación
+ * Optimizado para sesiones extendidas de administrador
  */
 class ApiClient {
   private baseUrl: string;
+  private tokenCache: { token: string | null; expiry: number } | null = null;
+  private readonly CACHE_TTL = 2 * 60 * 1000; // 2 minutos
 
   constructor() {
     this.baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    console.log('🔧 ApiClient inicializado para:', this.baseUrl);
   }
 
   /**
-   * Obtiene el token de autorización actual
+   * Obtiene el token de autorización con cache optimizado
    */
   private async getAuthToken(): Promise<string | null> {
-    if (!supabase) {
-      // Solo mostrar warning en el cliente, no en el servidor
-      if (typeof window !== 'undefined') {
-        console.warn('Supabase client not available');
-      }
-      return null;
-    }
-    
     try {
-      // Solo mostrar logs detallados en el cliente
-      if (typeof window !== 'undefined') {
-        console.log('Getting auth session...');
-      }
-      
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error) {
+      // Verificar cache primero
+      if (this.tokenCache && Date.now() < this.tokenCache.expiry) {
         if (typeof window !== 'undefined') {
-          console.error('Error getting session:', error);
+          console.log('🔄 Usando token desde cache');
         }
-        return null;
+        return this.tokenCache.token;
       }
-      
-      if (!session) {
-        // En el contexto del servidor, esto es completamente normal
-        if (typeof window !== 'undefined') {
-          console.log('No active session found');
-        }
-        return null;
+
+      // Si estamos en el cliente y tiene sesión extendida válida, optimizar
+      if (typeof window !== 'undefined' && isExtendedSessionValid()) {
+        const token = await getCurrentAccessToken();
+        
+        // Actualizar cache
+        this.tokenCache = {
+          token,
+          expiry: Date.now() + this.CACHE_TTL
+        };
+        
+        console.log('✅ Token obtenido desde sesión extendida');
+        return token;
       }
+
+      // Fallback a método estándar
+      const token = await getCurrentAccessToken();
       
-      if (typeof window !== 'undefined') {
-        console.log('Session found:', { 
-          user: session.user?.email, 
-          hasToken: !!session.access_token 
-        });
-      }
+      // Actualizar cache
+      this.tokenCache = {
+        token,
+        expiry: Date.now() + this.CACHE_TTL
+      };
       
-      return session.access_token || null;
+      return token;
     } catch (error) {
       if (typeof window !== 'undefined') {
-        console.error('Error getting auth token:', error);
+        console.error('❌ Error obteniendo token:', error);
       }
       return null;
     }
+  }
+
+  /**
+   * Limpia el cache de tokens (útil después de logout)
+   */
+  public clearTokenCache(): void {
+    this.tokenCache = null;
+    console.log('🧹 Cache de tokens limpiado');
   }
 
   /**
@@ -134,7 +140,7 @@ class ApiClient {
   }
 
   /**
-   * Maneja respuestas JSON con manejo de errores
+   * Maneja respuestas JSON con manejo de errores mejorado
    */
   async handleJsonResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
@@ -144,16 +150,38 @@ class ApiClient {
       if (response.status === 401) {
         const authError = errorData.error || 'Token de autorización requerido';
         
-        // En el contexto del servidor, los errores 401 pueden ser normales
-        // si el endpoint no requiere autenticación pero el cliente intenta enviar token
-        if (typeof window === 'undefined') {
-          console.log('🔧 401 error in server context - endpoint may not require auth');
+        // Limpiar cache de tokens en caso de error 401
+        this.clearTokenCache();
+        
+        if (typeof window !== 'undefined') {
+          console.error('🔒 Error de autenticación:', authError);
+          
+          // Si tiene sesión extendida pero aún así falla, podría ser que expiró
+          if (isExtendedSessionValid()) {
+            console.warn('⚠️ Sesión extendida parece válida pero servidor rechaza. Posible expiración.');
+          } else {
+            console.warn('⚠️ No hay sesión extendida válida. Redirigiendo a login...');
+            // Opcional: redirigir automáticamente
+            // window.location.href = '/';
+          }
         } else {
-          console.error('Authentication error:', authError);
-          console.warn('Usuario no autenticado. Considere redirigir al login.');
+          console.log('🔧 Error 401 en contexto servidor - endpoint puede no requerir auth');
         }
         
         throw new Error(`Autenticación requerida: ${authError}`);
+      }
+      
+      // Manejar otros errores comunes
+      if (response.status === 403) {
+        throw new Error(`Permisos insuficientes: ${errorData.error || 'Acceso denegado'}`);
+      }
+      
+      if (response.status === 404) {
+        throw new Error(`Recurso no encontrado: ${errorData.error || 'Not found'}`);
+      }
+      
+      if (response.status >= 500) {
+        throw new Error(`Error del servidor: ${errorData.error || 'Internal server error'}`);
       }
       
       throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
@@ -161,14 +189,60 @@ class ApiClient {
 
     return response.json();
   }
+
+  /**
+   * Información del estado actual del cliente
+   */
+  public getClientInfo() {
+    return {
+      baseUrl: this.baseUrl,
+      hasTokenCache: !!this.tokenCache,
+      tokenCacheValid: this.tokenCache ? Date.now() < this.tokenCache.expiry : false,
+      isExtendedSessionValid: typeof window !== 'undefined' ? isExtendedSessionValid() : false,
+      environment: typeof window !== 'undefined' ? 'client' : 'server'
+    };
+  }
 }
 
 // Instancia singleton del cliente API
 export const apiClient = new ApiClient();
 
 /**
- * Hook para usar el cliente API en componentes React
+ * Hook para usar el cliente API en componentes React con funcionalidades adicionales
  */
 export const useApiClient = () => {
-  return apiClient;
+  return {
+    ...apiClient,
+    // Funciones adicionales específicas para el hook
+    getClientStatus: () => apiClient.getClientInfo(),
+    refreshAuth: () => apiClient.clearTokenCache(),
+    
+    // Helpers para manejo de errores comunes
+    isAuthError: (error: Error) => error.message.includes('Autenticación requerida'),
+    isPermissionError: (error: Error) => error.message.includes('Permisos insuficientes'),
+    
+    // Wrapper para requests con mejor manejo de errores
+    safeRequest: async <T>(requestFn: () => Promise<T>): Promise<{ data: T | null; error: string | null }> => {
+      try {
+        const data = await requestFn();
+        return { data, error: null };
+      } catch (error) {
+        console.error('🔴 API Request failed:', error);
+        return { data: null, error: error instanceof Error ? error.message : 'Error desconocido' };
+      }
+    }
+  };
+};
+
+/**
+ * Función de utilidad para verificar el estado de autenticación
+ */
+export const checkAuthStatus = async () => {
+  try {
+    const response = await apiClient.get('/api/auth/me');
+    return await apiClient.handleJsonResponse(response);
+  } catch (error) {
+    console.log('Usuario no autenticado o error de conexión');
+    return null;
+  }
 };

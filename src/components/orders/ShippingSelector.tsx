@@ -9,19 +9,8 @@ import { Label } from '../ui/label';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
-import { Loader2, Truck, MapPin, Clock, Plus } from 'lucide-react';
-
-// Tipos simplificados para el backend
-interface ShippingMethod {
-  id: number;
-  name: string;
-  description: string | null;
-  cost: number;
-  shipping_type: string;
-  estimated_days_min: number;
-  estimated_days_max: number;
-  enabled: boolean;
-}
+import { Loader2, Truck, MapPin, Clock, Plus, AlertCircle } from 'lucide-react';
+import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliveryTime, getShippingTypeLabel } from '../../services/shippingService';
 
 interface ShippingSelectorProps {
   cartTotal: number;
@@ -42,82 +31,27 @@ export function ShippingSelector({
   const [selectedMethod, setSelectedMethod] = useState<string>('custom');
   const [customCost, setCustomCost] = useState<string>(selectedCost.toString());
 
-  // Métodos de envío predeterminados (fallback si no hay base de datos)
-  const defaultMethods: ShippingMethod[] = [
-    {
-      id: 1,
-      name: 'Envío Gratis',
-      description: 'Envío gratuito para compras sobre $100.000',
-      cost: 0,
-      shipping_type: 'free',
-      estimated_days_min: 3,
-      estimated_days_max: 7,
-      enabled: true
-    },
-    {
-      id: 2,
-      name: 'Envío Estándar',
-      description: 'Envío estándar a todo Chile',
-      cost: 5000,
-      shipping_type: 'flat_rate',
-      estimated_days_min: 2,
-      estimated_days_max: 5,
-      enabled: true
-    },
-    {
-      id: 3,
-      name: 'Retiro en Tienda',
-      description: 'Retira tu pedido en nuestra tienda',
-      cost: 0,
-      shipping_type: 'local_pickup',
-      estimated_days_min: 1,
-      estimated_days_max: 1,
-      enabled: true
-    },
-    {
-      id: 4,
-      name: 'Envío Express',
-      description: 'Entrega en 24-48 horas',
-      cost: 12000,
-      shipping_type: 'express',
-      estimated_days_min: 1,
-      estimated_days_max: 2,
-      enabled: true
-    }
-  ];
-
-  // Cargar métodos de envío
+  // Cargar métodos de envío únicamente desde la base de datos
   useEffect(() => {
     const loadShippingMethods = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Intentar cargar desde la API
-        try {
-          const response = await fetch('/api/shipping-methods', {
-            credentials: 'include'
-          });
-
-          if (response.ok) {
-            const result = await response.json();
-            if (result.success && result.data) {
-              setShippingMethods(result.data);
-            } else {
-              throw new Error('No se pudieron cargar los métodos de envío');
-            }
-          } else {
-            throw new Error('API no disponible');
-          }
-        } catch (apiError) {
-          console.warn('Using default shipping methods:', apiError);
-          // Usar métodos predeterminados si la API no está disponible
-          setShippingMethods(defaultMethods);
+        // Cargar métodos desde la base de datos usando ShippingService
+        const result = await ShippingService.getAllShippingMethods(1, 100, true); // Solo métodos habilitados
+        
+        if (result && result.shippingMethods && result.shippingMethods.length > 0) {
+          console.log('✅ Loaded shipping methods from database:', result.shippingMethods.length);
+          setShippingMethods(result.shippingMethods);
+        } else {
+          setError('No hay métodos de envío configurados en la base de datos');
+          setShippingMethods([]);
         }
       } catch (err) {
-        console.error('Error loading shipping methods:', err);
-        setError('Error al cargar métodos de envío');
-        setShippingMethods(defaultMethods);
+        console.error('Error loading shipping methods from database:', err);
+        setError('Error al cargar métodos de envío desde la base de datos. Verifique la configuración.');
+        setShippingMethods([]);
       } finally {
         setLoading(false);
       }
@@ -135,8 +69,9 @@ export function ShippingSelector({
     } else {
       const method = shippingMethods.find(m => m.id.toString() === value);
       if (method) {
-        onShippingSelect(method.cost, method.id);
-        setCustomCost(method.cost.toString());
+        const cost = typeof method.cost === 'string' ? parseFloat(method.cost) : method.cost;
+        onShippingSelect(cost, method.id);
+        setCustomCost(cost.toString());
       }
     }
   };
@@ -149,18 +84,9 @@ export function ShippingSelector({
     }
   };
 
-  // Formatear costo
-  const formatCost = (cost: number): string => {
-    if (cost === 0) return 'Gratis';
-    return `$${cost.toLocaleString('es-CL')}`;
-  };
-
-  // Formatear tiempo de entrega
-  const formatDeliveryTime = (minDays: number, maxDays: number): string => {
-    if (minDays === maxDays) {
-      return `${minDays} ${minDays === 1 ? 'día' : 'días'}`;
-    }
-    return `${minDays}-${maxDays} días`;
+  // Función auxiliar para obtener el costo como número
+  const getCostAsNumber = (cost: string | number): number => {
+    return typeof cost === 'string' ? parseFloat(cost) : cost;
   };
 
   if (loading) {
@@ -197,37 +123,42 @@ export function ShippingSelector({
           disabled={disabled}
           className="space-y-3"
         >
-          {/* Métodos predefinidos */}
+          {/* Métodos desde base de datos */}
           {shippingMethods.map((method) => {
-            const isAvailable = method.enabled && (
-              !method.cost || cartTotal >= 0 // Lógica simple para el backend
-            );
+            // Usar validación del ShippingService
+            const validation = ShippingService.validateShippingMethod(method, cartTotal);
+            const cost = getCostAsNumber(method.cost);
 
             return (
               <div key={method.id} className="space-y-2">
                 <div className={`flex items-center space-x-3 p-3 rounded-lg border transition-colors ${
                   selectedMethod === method.id.toString() 
                     ? 'border-blue-500 bg-blue-50' 
-                    : 'border-gray-200 hover:border-gray-300'
-                } ${!isAvailable ? 'opacity-50' : ''}`}>
+                    : validation.isValid 
+                      ? 'border-gray-200 hover:border-gray-300'
+                      : 'border-red-200 bg-red-50'
+                } ${!validation.isValid ? 'opacity-75' : ''}`}>
                   <RadioGroupItem 
                     value={method.id.toString()} 
                     id={`shipping-${method.id}`}
-                    disabled={disabled || !isAvailable}
+                    disabled={disabled || !validation.isValid}
                   />
                   
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <Label 
                         htmlFor={`shipping-${method.id}`}
-                        className="font-medium text-sm cursor-pointer"
+                        className="font-medium text-sm cursor-pointer flex items-center gap-2"
                       >
                         {method.name}
+                        <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                          {getShippingTypeLabel(method.shipping_type)}
+                        </span>
                       </Label>
                       <span className={`text-sm font-semibold ${
-                        method.cost === 0 ? 'text-green-600' : 'text-gray-900'
+                        cost === 0 ? 'text-green-600' : 'text-gray-900'
                       }`}>
-                        {formatCost(method.cost)}
+                        {formatShippingCost(method.cost)}
                       </span>
                     </div>
                     
@@ -245,14 +176,30 @@ export function ShippingSelector({
                       
                       <div className="flex items-center space-x-1">
                         <MapPin className="h-3 w-3" />
-                        <span className="capitalize">{method.shipping_type.replace('_', ' ')}</span>
+                        <span>{getShippingTypeLabel(method.shipping_type)}</span>
                       </div>
                     </div>
+                    
+                    {!validation.isValid && validation.message && (
+                      <div className="mt-2 text-xs text-red-600 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {validation.message}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             );
           })}
+          
+          {/* Mensaje cuando no hay métodos */}
+          {shippingMethods.length === 0 && !loading && (
+            <div className="text-center py-6 text-muted-foreground">
+              <AlertCircle className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+              <p className="text-sm">No hay métodos de envío configurados</p>
+              <p className="text-xs mt-1">Configure métodos de envío en la base de datos</p>
+            </div>
+          )}
 
           {/* Opción personalizada */}
           <div className="space-y-2">
@@ -309,7 +256,7 @@ export function ShippingSelector({
         <div className="text-xs text-muted-foreground bg-gray-50 p-2 rounded">
           <div className="flex items-center justify-between">
             <span>Costo de envío seleccionado:</span>
-            <span className="font-medium">{formatCost(parseFloat(customCost) || 0)}</span>
+            <span className="font-medium">{formatShippingCost(parseFloat(customCost) || 0)}</span>
           </div>
         </div>
       </CardContent>

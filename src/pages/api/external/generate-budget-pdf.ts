@@ -8,10 +8,18 @@ import type { APIRoute } from 'astro';
 export const POST: APIRoute = async ({ request }) => {
   try {
     // Enable CORS for cross-origin requests from frontend
+    const allowedOrigins = [
+      'http://localhost:4321', // Frontend development server
+      'http://localhost:3000', // Alternative frontend port
+      import.meta.env.PUBLIC_FRONTEND_URL || 'http://localhost:4321'
+    ].filter(Boolean);
+    
+    const origin = request.headers.get('Origin');
     const corsHeaders = {
-      'Access-Control-Allow-Origin': '*', // In production, specify the exact frontend domain
+      'Access-Control-Allow-Origin': allowedOrigins.includes(origin || '') ? origin : allowedOrigins[0],
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, x-frontend-source',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, x-frontend-source, Accept',
+      'Access-Control-Allow-Credentials': 'true',
       'Access-Control-Max-Age': '86400',
     };
 
@@ -294,13 +302,22 @@ export const POST: APIRoute = async ({ request }) => {
 };
 
 // Handle preflight OPTIONS requests for CORS
-export const OPTIONS: APIRoute = async () => {
+export const OPTIONS: APIRoute = async ({ request }) => {
+  const allowedOrigins = [
+    'http://localhost:4321', // Frontend development server
+    'http://localhost:3000', // Alternative frontend port
+    import.meta.env.PUBLIC_FRONTEND_URL || 'http://localhost:4321'
+  ].filter(Boolean);
+  
+  const origin = request.headers.get('Origin');
+  
   return new Response(null, {
     status: 200,
     headers: {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': allowedOrigins.includes(origin || '') ? origin : allowedOrigins[0],
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, x-frontend-source',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, x-frontend-source, Accept',
+      'Access-Control-Allow-Credentials': 'true',
       'Access-Control-Max-Age': '86400',
     }
   });

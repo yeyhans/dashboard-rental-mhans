@@ -1,19 +1,21 @@
 ---
 import Base from "../../layout/Base.astro";
 import PaymentsTable from "../../components/payments/PaymentsTable";
-import { supabase } from "../../lib/supabase";
+import { getServerAdmin, clearAuthCookies } from "../../lib/supabase";
 import { OrderService } from "../../services/orderService";
 
 export const prerender = false;
 
-if (!supabase) {
-  throw new Error("Supabase client is not initialized.");
-}
-const { data: { session } } = await supabase.auth.getSession();
+// Verificar autenticación usando el nuevo sistema
+const adminSession = await getServerAdmin(Astro);
 
-if (!session) {
+if (!adminSession) {
+  console.log('🚫 Acceso denegado a payments - Usuario no es administrador');
+  clearAuthCookies(Astro);
   return Astro.redirect("/");
 }
+
+console.log('✅ Admin autenticado en payments:', adminSession.admin.email);
 
 // Load only COMPLETED orders for payments table
 // This ensures we only show orders that have been completed
@@ -24,7 +26,7 @@ const ordersData = {
   total: total || 0
 };
 
-const title = "Tabla de Pagos";
+const title = `Tabla de Pagos | ${adminSession.admin.email}`;
 ---
 
 <Base title={title}>

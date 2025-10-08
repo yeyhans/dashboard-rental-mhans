@@ -1,27 +1,20 @@
 ---
 import Base from '../../layout/Base.astro';
-import { supabase } from '../../lib/supabase';
+import { getServerAdmin, clearAuthCookies } from '../../lib/supabase';
 import { ShippingService } from '../../services/shippingService';
 import ShippingDashboard from '../../components/shipping/ShippingDashboard';
 import { Toaster } from '../../components/ui/sonner';
 
-// Check if user is authenticated
-const { data: { session } } = await supabase.auth.getSession();
+// Verificar autenticación usando el nuevo sistema
+const adminSession = await getServerAdmin(Astro);
 
-if (!session) {
+if (!adminSession) {
+  console.log('🚫 Acceso denegado a shipping - Usuario no es administrador');
+  clearAuthCookies(Astro);
   return Astro.redirect('/');
 }
 
-// Verify admin access
-const { data: adminUser } = await supabase
-  .from('admin_users')
-  .select('*')
-  .eq('user_id', session.user.id)
-  .single();
-
-if (!adminUser) {
-  return Astro.redirect('/');
-}
+console.log('✅ Admin autenticado en shipping:', adminSession.admin.email);
 
 // Cargar datos iniciales de métodos de envío
 let initialShippingMethods = [];

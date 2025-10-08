@@ -28,7 +28,6 @@ import UserLoadingSkeleton from './users/UserLoadingSkeleton';
 import UserEmptyState from './users/UserEmptyState';
 import UserPagination from './users/UserPagination';
 import { calculateCompletionPercentage } from './users/utils/userUtils';
-import { setSessionToken } from '../lib/authService';
 
 interface UsersDashboardProps {
   initialUsers: UserProfile[];
@@ -53,11 +52,9 @@ const UsersDashboard = ({
   const [completionFilter, setCompletionFilter] = useState<{min: number, max: number}>({min: 0, max: 100});
   const [clientTypeFilter, setClientTypeFilter] = useState<string>('all');
 
-  // Initialize session token and detect mobile view
+  // Initialize mobile view detection
   useEffect(() => {
-    // Set the session token for API calls
-    setSessionToken(sessionToken);
-    console.log('🔑 Session token initialized for UsersDashboard');
+    console.log('🔑 Session token available for UsersDashboard');
     
     const checkIfMobile = () => {
       setIsMobileView(window.innerWidth < 768);

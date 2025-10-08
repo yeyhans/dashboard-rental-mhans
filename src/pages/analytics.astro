@@ -2,36 +2,20 @@
 import Base from '../layout/Base.astro';
 import AdvancedAnalyticsDashboard from '../components/AdvancedAnalyticsDashboard';
 import { AdvancedAnalyticsService } from '../services/advancedAnalyticsService';
-import { supabase } from '../lib/supabase';
+import { getServerAdmin, clearAuthCookies } from '../lib/supabase';
 
 export const prerender = false;
 
-// Verificar autenticación de admin
-if (!supabase) {
-  console.error('Supabase client is not initialized. Check environment variables.');
+// Verificar autenticación usando el nuevo sistema
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  console.log('🚫 Acceso denegado a analytics - Usuario no es administrador');
+  clearAuthCookies(Astro);
   return Astro.redirect("/");
 }
 
-const { data: { session } } = await supabase.auth.getSession();
-
-if (!session) {
-  return Astro.redirect("/");
-}
-
-// Verificar que el usuario es admin
-const { data: adminUser, error: adminError } = await supabase
-  .from('admin_users')
-  .select('*')
-  .eq('user_id', session.user.id)
-  .eq('role', 'admin')
-  .single();
-
-if (adminError || !adminUser) {
-  console.error('Admin verification failed:', adminError?.message);
-  Astro.cookies.delete('sb-access-token', { path: '/' });
-  Astro.cookies.delete('sb-refresh-token', { path: '/' });
-  return Astro.redirect("/");
-}
+console.log('✅ Admin autenticado en analytics:', adminSession.admin.email);
 
 // Obtener parámetros de fecha desde la URL
 const urlParams = new URLSearchParams(Astro.url.search);
@@ -57,7 +41,7 @@ try {
   error = err instanceof Error ? err.message : 'Error desconocido al cargar analytics';
 }
 
-const title = "Analytics Avanzados - Rental Mario Hans";
+const title = `Analytics Avanzados - Rental Mario Hans | ${adminSession.admin.email}`;
 ---
 
 <Base title={title}>

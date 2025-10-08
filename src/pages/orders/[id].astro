@@ -2,28 +2,22 @@
 import Base from "../../layout/Base.astro";
 import ProcessOrder from "../../components/orders/ProcessOrder";
 import { OrderService } from "../../services/orderService";
-import { getServerUserProfile, supabase } from "../../lib/supabase";
-import { AdminService } from "../../services/adminService";
+import { getServerAdmin, clearAuthCookies } from "../../lib/supabase";
 import { ProductService } from "../../services/productService";
+import { ShippingService } from "../../services/shippingService";
 
 export const prerender = false;
 
-// El usuario ya está autenticado por el middleware
-const user = Astro.locals.user;
+// Verificar autenticación usando el nuevo sistema
+const adminSession = await getServerAdmin(Astro);
 
-if (!user) {
-  console.log('🔒 Access denied: No authenticated user found in locals');
+if (!adminSession) {
+  console.log('🚫 Acceso denegado a order detail - Usuario no es administrador');
+  clearAuthCookies(Astro);
   return Astro.redirect("/");
 }
 
-// Get the Supabase session for API authentication
-const { data: { session } } = await supabase.auth.getSession();
-console.log('🔑 Session data:', { hasSession: !!session, hasAccessToken: !!session?.access_token });
-
-if (!session) {
-  console.log('🔒 No Supabase session found, redirecting to login');
-  return Astro.redirect("/");
-}
+console.log('✅ Admin autenticado en order detail:', adminSession.admin.email);
 
 // Get the order ID from the URL parameter
 const { id } = Astro.params;
@@ -40,33 +34,8 @@ if (!order) {
   return Astro.redirect("/orders");
 }
 
-// Verificar autorización - administradores pueden ver todas las órdenes, usuarios solo las suyas
-// Primero verificar si el usuario es administrador
-const isAdmin = await AdminService.isAdmin(user.id);
-
-if (isAdmin) {
-  console.log('✅ Admin access granted for user:', user.id, 'order:', order.id);
-} else {
-  // Si no es admin, verificar si es el propietario de la orden
-  const userProfile = await getServerUserProfile(Astro);
-  if (!userProfile?.profile) {
-    console.log('🔒 Access denied: No user profile found');
-    return Astro.redirect("/");
-  }
-
-  // Verificar si el usuario puede acceder a esta orden
-  const canAccess = 
-    order.customer_id === userProfile.profile.user_id || // Numeric user_id
-    order.billing_email === userProfile.profile.email || // Email match
-    order.billing_email === user.email; // Session email match
-
-  if (!canAccess) {
-    console.log(`🔒 Access denied: User ${user.id} cannot access order ${order.id} (customer_id: ${order.customer_id})`);
-    return Astro.redirect("/orders");
-  }
-  
-  console.log('✅ Customer access granted for user:', user.id, 'order:', order.id);
-}
+// Los administradores pueden ver todas las órdenes
+console.log('✅ Admin access granted for:', adminSession.admin.email, 'order:', order.id);
 
 // Load all products for the product selector using direct service call
 let allProducts: any[] = [];
@@ -78,13 +47,30 @@ try {
   
   if (result && result.products && Array.isArray(result.products)) {
     allProducts = result.products;
-
-
+    console.log('✅ Loaded products:', allProducts.length);
   } else {
     console.error('❌ ProductService returned invalid data:', result);
   }
 } catch (error) {
   console.error('❌ Error loading products from ProductService:', error);
+}
+
+// Load shipping methods for ProcessOrder component
+let allShippingMethods: any[] = [];
+try {
+  console.log('🔄 Loading shipping methods for ProcessOrder...');
+  
+  // Use ShippingService directly to load enabled shipping methods
+  const shippingResult = await ShippingService.getAllShippingMethods(1, 100, true); // Only enabled methods
+  
+  if (shippingResult && shippingResult.shippingMethods && Array.isArray(shippingResult.shippingMethods)) {
+    allShippingMethods = shippingResult.shippingMethods;
+    console.log('✅ Loaded shipping methods from database:', allShippingMethods.length);
+  } else {
+    console.warn('⚠️ No shipping methods found in database');
+  }
+} catch (error) {
+  console.error('❌ Error loading shipping methods from ShippingService:', error);
 }
 
 
@@ -118,19 +104,17 @@ const orderData = {
       { key: 'order_retire_rut', value: order.order_retire_rut || '' },
       { key: 'order_comments', value: order.order_comments || '' },
       { key: '_pdf_on_hold_url', value: order.new_pdf_on_hold_url || '' },
-      { key: '_pdf_processing_url', value: order.new_pdf_processing_url || '' }
     ]
   } : null,
   message: order ? '' : `No se encontró la orden con ID ${id}`
 };
 
-const title = `Orden #${id}`;
+const title = `Procesar Orden #${id} | ${adminSession.admin.email}`;
 ---
 
 <Base title={title}>
   <div class="container py-6">
     {orderData.success && orderData.data ? (
-      <>
 
 
         <ProcessOrder
@@ -149,10 +133,18 @@ const title = `Orden #${id}`;
               } as any]
             }
           }}
-          sessionData={session}
+          sessionData={{
+            access_token: 'admin-session',
+            user: {
+              id: adminSession.user.id,
+              email: adminSession.admin.email,
+              role: adminSession.admin.role
+            },
+            admin: adminSession.admin
+          }}
           allProducts={allProducts}
+          allShippingMethods={allShippingMethods}
         />
-      </>
     ) : (
       <div class="p-4 bg-destructive/10 text-destructive rounded-md">
         <p>Error al cargar el pedido: {orderData.message}</p>

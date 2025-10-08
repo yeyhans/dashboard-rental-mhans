@@ -58,74 +58,74 @@ export const POST: APIRoute = withCors(async (context) => {
       });
     }
 
-    // Set extended Supabase session cookies for administrators
+    // Configurar sesión extendida para administradores (30 días)
     if (authData.session) {
       const { access_token, refresh_token } = authData.session;
       
-      // Configuración extendida para administradores (30 días)
-      const extendedMaxAge = 60 * 60 * 24 * 30; // 30 días
+      // Configuración profesional de cookies para sesión extendida
+      const EXTENDED_SESSION_DAYS = 30;
+      const extendedMaxAge = 60 * 60 * 24 * EXTENDED_SESSION_DAYS; // 30 días en segundos
+      const isProduction = import.meta.env.PROD;
       
-      context.cookies.set('sb-access-token', access_token, {
+      // Configuración base de cookies
+      const cookieConfig = {
         path: '/',
         maxAge: extendedMaxAge,
         httpOnly: true,
-        secure: import.meta.env.PROD,
-        sameSite: 'lax',
-      });
+        secure: isProduction,
+        sameSite: 'lax' as const,
+      };
       
-      context.cookies.set('sb-refresh-token', refresh_token, {
-        path: '/',
-        maxAge: extendedMaxAge,
-        httpOnly: true,
-        secure: import.meta.env.PROD,
-        sameSite: 'lax',
-      });
+      // Tokens de autenticación
+      context.cookies.set('sb-access-token', access_token, cookieConfig);
+      context.cookies.set('sb-refresh-token', refresh_token, cookieConfig);
       
-      // Marcar como sesión de administrador extendida
+      // Marcador de sesión administrativa extendida
       context.cookies.set('sb-admin-session', 'true', {
-        path: '/',
-        maxAge: extendedMaxAge,
-        httpOnly: false, // Permitir acceso desde JavaScript para verificaciones
-        secure: import.meta.env.PROD,
-        sameSite: 'lax',
+        ...cookieConfig,
+        httpOnly: false, // Accesible desde JavaScript para verificaciones rápidas
       });
       
-      // Configurar fecha de expiración extendida
-      const extendedExpiry = new Date();
-      extendedExpiry.setDate(extendedExpiry.getDate() + 30);
-      
-      context.cookies.set('sb-session-expiry', extendedExpiry.toISOString(), {
-        path: '/',
-        maxAge: extendedMaxAge,
-        httpOnly: false, // Permitir acceso desde JavaScript
-        secure: import.meta.env.PROD,
-        sameSite: 'lax',
+      // Fecha de expiración para verificación rápida
+      const expiryDate = new Date(Date.now() + extendedMaxAge * 1000);
+      context.cookies.set('sb-session-expiry', expiryDate.toISOString(), {
+        ...cookieConfig,
+        httpOnly: false, // Accesible desde JavaScript
       });
+      
+      console.log('✅ Sesión extendida configurada hasta:', expiryDate.toLocaleDateString());
     }
 
+    // Preparar respuesta con información de sesión extendida
+    const sessionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    
     return new Response(JSON.stringify({
       success: true,
       data: {
         user: {
           id: authData.user.id,
           email: authData.user.email,
-          role: adminUser.role
+          role: adminUser.role,
+          admin_id: adminUser.id
         },
         session: {
           access_token: authData.session?.access_token,
-          expires_at: authData.session?.expires_at
+          expires_at: sessionExpiry.toISOString(),
+          is_extended: true,
+          duration_days: 30
         },
-        preferences: {
-          remember_me: true,
-          session_duration: 30 * 24 * 60 * 60, // 30 días en segundos
-          expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        admin: {
+          verified: true,
+          role: adminUser.role,
+          email: adminUser.email
         }
       },
-      message: 'Inicio de sesión exitoso - Sesión extendida configurada por 30 días'
+      message: `✅ Bienvenido ${adminUser.email} - Sesión configurada hasta ${sessionExpiry.toLocaleDateString('es-ES')}`
     }), {
       status: 200,
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
       }
     });
 

@@ -9,7 +9,7 @@ import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Min
 import EditOrderForm from './EditOrderForm';
 import { CouponSelector } from './CouponSelector';
 import { ProductSelector } from './ProductSelector';
-import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliveryTime } from '../../services/shippingService';
+import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliveryTime, getShippingTypeLabel } from '../../services/shippingService';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { apiClient } from '@/services/apiClient';
 import type { Database } from '@/types/database';
@@ -62,7 +62,12 @@ interface WPOrderResponse {
 }
 
 
-function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderResponse, sessionData?: any, allProducts?: DatabaseProduct[] }) {
+function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: { 
+  order: WPOrderResponse, 
+  sessionData?: any, 
+  allProducts?: DatabaseProduct[], 
+  allShippingMethods?: ShippingMethod[] 
+}) {
 
   const orderData = order?.orders?.orders?.[0];
   
@@ -82,10 +87,49 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
   const [selectedShippingMethod, setSelectedShippingMethod] = useState<ShippingMethod | null>(null);
   const [shippingLoading, setShippingLoading] = useState(false);
-  const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'shipping'>(
-    orderData?.shipping_total && parseFloat(orderData.shipping_total.toString()) > 0 ? 'shipping' : 'pickup'
-  );
+  const [shippingMethodsSource, setShippingMethodsSource] = useState<'database' | 'fallback' | null>(null);
+  const [userHasChangedDeliveryMethod, setUserHasChangedDeliveryMethod] = useState(false);
+  const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'shipping'>(() => {
+    // Determinar método de entrega inicial basado en shipping_lines existentes
+    try {
+      const shippingLines = typeof orderData?.shipping_lines === 'string' 
+        ? JSON.parse(orderData.shipping_lines) 
+        : orderData?.shipping_lines;
+      
+      if (Array.isArray(shippingLines) && shippingLines.length > 0) {
+        const firstShippingLine = shippingLines[0];
+        const metaData = firstShippingLine.meta_data || {};
+        const deliveryMethodFromMeta = metaData.delivery_method || metaData['delivery_method'];
+        const methodTitle = firstShippingLine.method_title || '';
+        const methodId = firstShippingLine.method_id || '';
+        const shippingType = metaData.shipping_type || '';
+        
+        // Detectar pickup por múltiples criterios
+        const isPickupMethod = deliveryMethodFromMeta === 'pickup' || 
+                             shippingType === 'pickup' ||
+                             methodId === 'pickup' ||
+                             methodTitle.toLowerCase().includes('retiro') ||
+                             methodTitle.toLowerCase().includes('pickup');
+        
+        if (isPickupMethod) {
+          console.log('🚀 Initial delivery method: PICKUP (detected from shipping_lines)');
+          return 'pickup';
+        } else if (deliveryMethodFromMeta === 'shipping') {
+          console.log('🚀 Initial delivery method: SHIPPING (detected from shipping_lines)');
+          return 'shipping';
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing initial shipping_lines:', error);
+    }
+    
+    // Fallback a la lógica original basada en shipping_total
+    const fallbackMethod = orderData?.shipping_total && parseFloat(orderData.shipping_total.toString()) > 0 ? 'shipping' : 'pickup';
+    console.log('🚀 Initial delivery method: ' + fallbackMethod.toUpperCase() + ' (fallback based on shipping_total)');
+    return fallbackMethod;
+  });
   const [shippingAddress, setShippingAddress] = useState('');
+  const [shippingPhone, setShippingPhone] = useState('');
   
   // Custom shipping states
   const [showCustomShippingForm, setShowCustomShippingForm] = useState(false);
@@ -513,18 +557,52 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
   const handleSaveFinancials = async () => {
     try {
       setSavingFinancials(true);
+      console.log('🔄 Iniciando handleSaveFinancials...');
+      console.log('📦 Order ID:', orderData.id);
       
       // Usar las nuevas funciones de cálculo siguiendo CreateOrderForm.tsx
+      console.log('🔢 Calculando valores...');
       const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
       const shipping = parseFloat(editedShipping || '0');
+      console.log('📊 numDays:', numDays, 'shipping:', shipping, 'couponDiscountAmount:', couponDiscountAmount);
+      console.log('📦 editedProducts length:', editedProducts.length);
+      
       const calculations = updateAllCalculations(
         editedProducts,
         numDays,
         shipping,
         couponDiscountAmount
       );
+      console.log('✅ Cálculos completados:', calculations);
+      
+      // Validar campos requeridos para métodos de envío (más flexible)
+      console.log('🚚 Validando método de envío:', deliveryMethod);
+      if (deliveryMethod === 'shipping' && selectedShippingMethod) {
+        console.log('📋 Validando campos de envío...');
+        
+        // Solo validar si el método específicamente requiere estos campos Y están marcados como obligatorios
+        if (selectedShippingMethod.requires_address && selectedShippingMethod.requires_address === true && !shippingAddress.trim()) {
+          console.log('⚠️ Advertencia: Dirección recomendada pero no obligatoria');
+          // Solo mostrar advertencia, no bloquear
+          toast.warning('⚠️ Recomendación', {
+            description: 'Se recomienda agregar una dirección de envío',
+            duration: 3000
+          });
+        }
+        
+        if (selectedShippingMethod.requires_phone && selectedShippingMethod.requires_phone === true && !shippingPhone.trim()) {
+          console.log('⚠️ Advertencia: Teléfono recomendado pero no obligatorio');
+          // Solo mostrar advertencia, no bloquear
+          toast.warning('⚠️ Recomendación', {
+            description: 'Se recomienda agregar un teléfono de contacto',
+            duration: 3000
+          });
+        }
+      }
+      console.log('✅ Validaciones de envío completadas');
       
       // Prepare updated order data
+      console.log('📦 Preparando datos de la orden...');
       const updatedOrderData = {
         id: orderData.id,
         line_items: editedProducts.map(item => ({
@@ -541,7 +619,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
         calculated_subtotal: calculations.calculated_subtotal,
         calculated_discount: calculations.calculated_discount, // Descuento aplicado (cupones)
         calculated_iva: calculations.calculated_iva,
-        shipping_total: shipping,
+        shipping_total: deliveryMethod === 'pickup' ? 0 : shipping,
         coupon_lines: appliedCoupon ? [{
           id: appliedCoupon.id,
           code: appliedCoupon.code,
@@ -557,7 +635,22 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
           }
         }] : [],
         // Shipping lines según método de entrega seleccionado
-        shipping_lines: deliveryMethod === 'shipping' && selectedShippingMethod ? [{
+        shipping_lines: deliveryMethod === 'pickup' ? [{
+          "id": "pickup_0",
+          "taxes": [],
+          "total": "0",
+          "meta_data": {
+            "shipping_type": "pickup",
+            "delivery_method": "pickup",
+            "pickup_location": "Tienda principal",
+            "pickup_instructions": "Coordinar retiro con anticipación"
+          },
+          "method_id": "pickup",
+          "total_tax": "0",
+          "instance_id": "pickup_0",
+          "method_type": "pickup",
+          "method_title": "Retiro en tienda"
+        }] : deliveryMethod === 'shipping' && selectedShippingMethod ? [{
           ...(selectedShippingMethod.metadata?.custom 
             ? {
                 // Método customizado - crear shipping line manualmente
@@ -570,7 +663,8 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                 meta_data: {
                   estimated_delivery: formatDeliveryTime(selectedShippingMethod.estimated_days_min, selectedShippingMethod.estimated_days_max),
                   delivery_method: deliveryMethod,
-                  shipping_address: shippingAddress.trim(),
+                  shipping_address: shippingAddress.trim() || 'No especificada',
+                  shipping_phone: shippingPhone.trim() || 'No especificado',
                   custom_shipping: true,
                   tracking_number: null
                 }
@@ -590,7 +684,8 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                 meta_data: {
                   ...ShippingService.createShippingLine(selectedShippingMethod).meta_data,
                   delivery_method: deliveryMethod,
-                  shipping_address: shippingAddress.trim()
+                  shipping_address: shippingAddress.trim() || 'No especificada',
+                  shipping_phone: shippingPhone.trim() || 'No especificado'
                 }
               }
           )
@@ -598,21 +693,26 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
         calculated_total: calculations.calculated_total
       };
 
+      console.log('📤 Datos a enviar:', updatedOrderData);
+      
+      // Con el nuevo sistema de autenticación, usamos cookies en lugar de Bearer token
       const response = await fetch(`/api/orders/${orderData.id}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          ...(sessionData?.access_token && {
-            'Authorization': `Bearer ${sessionData.access_token}`
-          })
+          'Content-Type': 'application/json'
         },
-        credentials: 'include',
+        credentials: 'include', // Esto envía las cookies de sesión automáticamente
         body: JSON.stringify(updatedOrderData)
       });
+      
+      console.log('📡 Response status:', response.status);
+      console.log('📡 Response ok:', response.ok);
 
       const result = await response.json();
+      console.log('📋 Response result:', result);
       
       if (result.success) {
+        console.log('✅ Pedido actualizado exitosamente');
         toast.success('Pedido actualizado correctamente');
         setIsEditingFinancials(false);
         // Reload the page to show updated data
@@ -620,6 +720,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
           window.location.reload();
         }, 1000);
       } else {
+        console.error('❌ Error en la respuesta:', result.error);
         throw new Error(result.error || 'Error al actualizar');
       }
     } catch (error) {
@@ -700,9 +801,29 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
   const loadShippingMethods = async () => {
     setShippingLoading(true);
     try {
+      // Usar métodos pasados como prop si están disponibles
+      if (allShippingMethods && allShippingMethods.length > 0) {
+        console.log('✅ Using shipping methods from server-side props:', allShippingMethods.length);
+        setShippingMethods(allShippingMethods);
+        setShippingMethodsSource('database');
+        
+        // Si estamos en modo shipping y no hay método seleccionado, seleccionar el primero
+        if (deliveryMethod === 'shipping' && !selectedShippingMethod) {
+          const defaultMethod = allShippingMethods[0];
+          if (defaultMethod) {
+            setSelectedShippingMethod(defaultMethod);
+            setEditedShipping(defaultMethod.cost.toString());
+          }
+        }
+        return; // Salir temprano si usamos props
+      }
+
+      // Fallback: cargar desde API si no hay props
       const shippingResult = await ShippingService.getAllShippingMethods(1, 100, true); // Solo métodos habilitados
-      if (shippingResult.shippingMethods && shippingResult.shippingMethods.length > 0) {
+      if (shippingResult && shippingResult.shippingMethods) {
+        console.log('✅ Loaded shipping methods from API:', shippingResult.shippingMethods.length);
         setShippingMethods(shippingResult.shippingMethods);
+        setShippingMethodsSource('database');
         
         // Si estamos en modo shipping y no hay método seleccionado, seleccionar el primero
         if (deliveryMethod === 'shipping' && !selectedShippingMethod) {
@@ -715,29 +836,71 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
       }
     } catch (shippingError) {
       console.error('Error loading shipping methods:', shippingError);
-      // Fallback a métodos por defecto
+      // Fallback a métodos por defecto siguiendo la interfaz del ShippingService
       const defaultMethods: ShippingMethod[] = [
+        {
+          id: 1,
+          name: 'Envío Gratis',
+          description: 'Envío gratuito para órdenes mayores a $50.000',
+          cost: '0',
+          shipping_type: 'free',
+          enabled: true,
+          min_amount: '50000',
+          max_amount: null,
+          available_regions: null,
+          excluded_regions: null,
+          estimated_days_min: '3',
+          estimated_days_max: '5',
+          requires_address: true,
+          requires_phone: true,
+          metadata: {},
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          created_by: null
+        },
         {
           id: 2,
           name: 'Envío Estándar',
           description: 'Envío estándar a todo Chile',
-          cost: 5000,
+          cost: '5000',
           shipping_type: 'flat_rate',
           enabled: true,
           min_amount: null,
           max_amount: null,
           available_regions: null,
           excluded_regions: null,
-          estimated_days_min: 2,
-          estimated_days_max: 4,
+          estimated_days_min: '2',
+          estimated_days_max: '4',
           requires_address: true,
           requires_phone: true,
           metadata: {},
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          created_by: null
+        },
+        {
+          id: 3,
+          name: 'Envío Express',
+          description: 'Entrega rápida en 24-48 horas',
+          cost: '12000',
+          shipping_type: 'express',
+          enabled: true,
+          min_amount: null,
+          max_amount: null,
+          available_regions: null,
+          excluded_regions: null,
+          estimated_days_min: '1',
+          estimated_days_max: '2',
+          requires_address: true,
+          requires_phone: true,
+          metadata: {},
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          created_by: null
         }
       ];
       setShippingMethods(defaultMethods);
+      setShippingMethodsSource('fallback');
       if (deliveryMethod === 'shipping' && !selectedShippingMethod) {
         const firstMethod = defaultMethods[0];
         if (firstMethod) {
@@ -756,16 +919,33 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
   };
 
   const handleDeliveryMethodChange = (method: 'pickup' | 'shipping') => {
+    console.log('🔄 handleDeliveryMethodChange called with:', method);
+    console.log('🔄 Current deliveryMethod:', deliveryMethod);
+    console.log('🔄 Current selectedShippingMethod:', selectedShippingMethod);
+    
+    // Marcar que el usuario ha hecho un cambio manual
+    setUserHasChangedDeliveryMethod(true);
     setDeliveryMethod(method);
+    
     if (method === 'pickup') {
+      console.log('✅ Switching to PICKUP method (user manual change)');
       setSelectedShippingMethod(null);
       setEditedShipping('0');
+      toast.info('📦 Método cambiado a Retiro en tienda', {
+        description: 'Los cambios se guardarán al hacer clic en "Guardar Cambios"',
+        duration: 3000
+      });
     } else if (method === 'shipping' && shippingMethods.length > 0) {
+      console.log('✅ Switching to SHIPPING method (user manual change)');
       // Auto-seleccionar el primer método disponible cuando se cambia a shipping
       const firstMethod = shippingMethods[0];
       if (firstMethod) {
         setSelectedShippingMethod(firstMethod);
         setEditedShipping(firstMethod.cost.toString());
+        toast.info('🚚 Método cambiado a Envío a domicilio', {
+          description: `Método seleccionado: ${firstMethod.name}`,
+          duration: 3000
+        });
       }
     }
   };
@@ -889,7 +1069,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
 
   // Initialize shipping method from existing shipping_lines when entering edit mode
   useEffect(() => {
-    if (isEditingFinancials && orderData?.shipping_lines && !selectedShippingMethod) {
+    if (isEditingFinancials && orderData?.shipping_lines && !selectedShippingMethod && !userHasChangedDeliveryMethod) {
       try {
         const shippingLines = typeof orderData.shipping_lines === 'string' 
           ? JSON.parse(orderData.shipping_lines) 
@@ -923,15 +1103,20 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
           setSelectedShippingMethod(existingMethod);
           setEditedShipping(existingMethod.cost.toString());
           
-          // Determinar el método de entrega basado en metadata primero, luego en el costo
+          // Determinar el método de entrega basado en metadata y características del shipping line
           const metaData = firstShippingLine.meta_data || {};
           const deliveryMethodFromMeta = metaData.delivery_method || metaData['delivery_method'];
+          const methodTitle = firstShippingLine.method_title || '';
+          const methodId = firstShippingLine.method_id || '';
+          const shippingType = metaData.shipping_type || '';
           
           console.log('🔍 Determining delivery method:', {
             metaData,
             deliveryMethodFromMeta,
             cost: existingMethod.cost,
-            method_title: firstShippingLine.method_title,
+            method_title: methodTitle,
+            method_id: methodId,
+            shipping_type: shippingType,
             shipping_address: metaData.shipping_address
           });
           
@@ -941,28 +1126,39 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
             setShippingAddress(metaData.shipping_address);
           }
           
-          if (deliveryMethodFromMeta === 'shipping') {
-            console.log('✅ Setting delivery method to SHIPPING based on metadata');
-            setDeliveryMethod('shipping');
-          } else if (deliveryMethodFromMeta === 'pickup') {
-            console.log('✅ Setting delivery method to PICKUP based on metadata');
+          // Cargar teléfono de envío si existe
+          if (metaData.shipping_phone) {
+            console.log('📞 Loading shipping phone:', metaData.shipping_phone);
+            setShippingPhone(metaData.shipping_phone);
+          }
+          
+          // Detectar pickup por múltiples criterios
+          const isPickupMethod = deliveryMethodFromMeta === 'pickup' || 
+                               shippingType === 'pickup' ||
+                               methodId === 'pickup' ||
+                               methodTitle.toLowerCase().includes('retiro') ||
+                               methodTitle.toLowerCase().includes('pickup');
+          
+          if (isPickupMethod) {
+            console.log('✅ Setting delivery method to PICKUP - detected pickup method');
             setDeliveryMethod('pickup');
+            setSelectedShippingMethod(null); // Clear shipping method for pickup
+            setEditedShipping('0'); // Set shipping cost to 0 for pickup
+          } else if (deliveryMethodFromMeta === 'shipping' || existingMethod.cost > 0) {
+            console.log('✅ Setting delivery method to SHIPPING based on metadata or cost > 0');
+            setDeliveryMethod('shipping');
           } else {
-            // Fallback: determinar por costo (lógica anterior)
-            if (existingMethod.cost > 0) {
-              console.log('✅ Setting delivery method to SHIPPING based on cost > 0');
-              setDeliveryMethod('shipping');
-            } else {
-              console.log('✅ Setting delivery method to PICKUP based on cost = 0');
-              setDeliveryMethod('pickup');
-            }
+            console.log('✅ Setting delivery method to PICKUP as fallback (cost = 0)');
+            setDeliveryMethod('pickup');
+            setSelectedShippingMethod(null);
+            setEditedShipping('0');
           }
         }
       } catch (error) {
         console.error('Error parsing shipping_lines:', error);
       }
     }
-  }, [isEditingFinancials, orderData?.shipping_lines, selectedShippingMethod]);
+  }, [isEditingFinancials, orderData?.shipping_lines, selectedShippingMethod, userHasChangedDeliveryMethod]);
 
   // Use products from props (loaded server-side with proper authentication)
   const availableProducts = allProducts || [];
@@ -1595,6 +1791,7 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
           const firstShippingLine = hasShippingInfo ? shippingLines[0] : null;
           const deliveryMethodFromData = firstShippingLine?.meta_data?.delivery_method;
           const shippingAddressFromData = firstShippingLine?.meta_data?.shipping_address;
+          const shippingPhoneFromData = firstShippingLine?.meta_data?.shipping_phone;
           
           if (!hasShippingInfo) return null;
           
@@ -1628,6 +1825,12 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                   <div className="flex justify-between">
                     <span className="font-medium">Dirección de envío:</span>
                     <span className="text-right max-w-xs">{shippingAddressFromData}</span>
+                  </div>
+                )}
+                {shippingPhoneFromData && (
+                  <div className="flex justify-between">
+                    <span className="font-medium">Teléfono de envío:</span>
+                    <span className="text-right max-w-xs">{shippingPhoneFromData}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
@@ -2662,6 +2865,9 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                   {/* Método de Entrega */}
                   <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                     <h4 className="font-medium text-sm mb-3">¿Cómo desea entregar el pedido?</h4>
+                    <div className="mb-2 text-xs text-blue-600 bg-blue-50 p-2 rounded">
+                      <strong>Estado actual:</strong> {deliveryMethod === 'pickup' ? '📦 Retiro en tienda' : '🚚 Envío a domicilio'}
+                    </div>
                     <RadioGroup
                       value={deliveryMethod}
                       onValueChange={handleDeliveryMethodChange}
@@ -2703,25 +2909,61 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                         Información de Envío
                       </h4>
                       
-                      {/* Campo de dirección de envío */}
-                      <div className="space-y-2">
-                        <Label htmlFor="shippingAddressEdit" className="text-sm font-medium text-gray-700">
-                          Dirección de envío
-                        </Label>
-                        <Input
-                          id="shippingAddressEdit"
-                          type="text"
-                          placeholder="Dirección completa de envío"
-                          value={shippingAddress}
-                          onChange={(e) => setShippingAddress(e.target.value)}
-                          className="w-full bg-white"
-                        />
-                        {shippingAddress && (
-                          <p className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
-                            📍 <strong>Dirección guardada:</strong> {shippingAddress}
-                          </p>
-                        )}
-                      </div>
+                      {/* Campos de dirección y teléfono según requisitos del método */}
+                      {selectedShippingMethod?.requires_address && (
+                        <div className="space-y-2">
+                          <Label htmlFor="shippingAddressEdit" className="text-sm font-medium text-gray-700">
+                            Dirección de envío *
+                          </Label>
+                          <Input
+                            id="shippingAddressEdit"
+                            type="text"
+                            placeholder="Dirección completa de envío"
+                            value={shippingAddress}
+                            onChange={(e) => setShippingAddress(e.target.value)}
+                            className="w-full bg-white"
+                            required
+                          />
+                          {shippingAddress && (
+                            <p className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
+                              📍 <strong>Dirección guardada:</strong> {shippingAddress}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {selectedShippingMethod?.requires_phone && (
+                        <div className="space-y-2">
+                          <Label htmlFor="shippingPhoneEdit" className="text-sm font-medium text-gray-700">
+                            Teléfono de contacto *
+                          </Label>
+                          <Input
+                            id="shippingPhoneEdit"
+                            type="tel"
+                            placeholder="Teléfono para coordinar la entrega"
+                            value={shippingPhone}
+                            onChange={(e) => setShippingPhone(e.target.value)}
+                            className="w-full bg-white"
+                            required
+                          />
+                          {shippingPhone && (
+                            <p className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
+                              📞 <strong>Teléfono guardado:</strong> {shippingPhone}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Información sobre campos requeridos */}
+                      {selectedShippingMethod && (selectedShippingMethod.requires_address || selectedShippingMethod.requires_phone) && (
+                        <div className="text-xs text-gray-600 bg-gray-100 p-2 rounded">
+                          <strong>Campos requeridos para este método de envío:</strong>
+                          <ul className="list-disc list-inside mt-1">
+                            {selectedShippingMethod.requires_address && <li>Dirección de envío</li>}
+                            {selectedShippingMethod.requires_phone && <li>Teléfono de contacto</li>}
+                          </ul>
+                        </div>
+                      )}
                       {shippingLoading ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
@@ -2755,8 +2997,11 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                                       {isSelected && <CheckCircle className="h-3 w-3 text-primary-foreground" />}
                                     </div>
                                     <div>
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-2 flex-wrap">
                                         <span className="font-medium">{method.name}</span>
+                                        <Badge variant="outline" className="text-xs px-2 py-0.5">
+                                          {getShippingTypeLabel(method.shipping_type)}
+                                        </Badge>
                                         {method.metadata?.custom && (
                                           <Badge variant="secondary" className="text-xs px-2 py-0.5">
                                             <Settings className="h-3 w-3 mr-1" />
@@ -2770,9 +3015,22 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                                       {method.description && (
                                         <p className="text-sm text-muted-foreground">{method.description}</p>
                                       )}
-                                      <p className="text-xs text-muted-foreground">
-                                        Entrega: {formatDeliveryTime(method.estimated_days_min, method.estimated_days_max)}
-                                      </p>
+                                      <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+                                        <span>📅 Entrega: {formatDeliveryTime(method.estimated_days_min, method.estimated_days_max)}</span>
+                                        {method.requires_address && (
+                                          <span>📍 Requiere dirección</span>
+                                        )}
+                                        {method.requires_phone && (
+                                          <span>📞 Requiere teléfono</span>
+                                        )}
+                                      </div>
+                                      {(method.min_amount || method.max_amount) && (
+                                        <div className="text-xs text-blue-600 mt-1">
+                                          {method.min_amount && `Mín: ${formatShippingCost(method.min_amount)}`}
+                                          {method.min_amount && method.max_amount && ' • '}
+                                          {method.max_amount && `Máx: ${formatShippingCost(method.max_amount)}`}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -2787,6 +3045,21 @@ function ProcessOrder({ order, sessionData, allProducts }: { order: WPOrderRespo
                           {shippingMethods.length === 0 && !shippingLoading && (
                             <div className="text-sm text-muted-foreground text-center py-4">
                               No hay métodos de envío disponibles
+                            </div>
+                          )}
+                          
+                          {/* Indicador de fuente de métodos */}
+                          {shippingMethodsSource && (
+                            <div className={`text-xs p-2 rounded mt-2 ${
+                              shippingMethodsSource === 'database' 
+                                ? 'bg-green-50 text-green-700 border border-green-200' 
+                                : 'bg-yellow-50 text-yellow-700 border border-yellow-200'
+                            }`}>
+                              {shippingMethodsSource === 'database' ? (
+                                <>✅ Métodos cargados desde base de datos ({shippingMethods.length} disponibles)</>
+                              ) : (
+                                <>⚠️ Usando métodos de respaldo (base de datos no disponible)</>
+                              )}
                             </div>
                           )}
                           

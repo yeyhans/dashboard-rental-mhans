@@ -611,6 +611,69 @@ export interface Database {
         }
         Relationships: []
       }
+      shipping_methods: {
+        Row: {
+          id: number
+          name: string
+          description: string | null
+          cost: string
+          shipping_type: 'free' | 'flat_rate' | 'local_pickup' | 'calculated' | 'express'
+          enabled: boolean
+          min_amount: string | null
+          max_amount: string | null
+          available_regions: Json | null
+          excluded_regions: Json | null
+          estimated_days_min: string
+          estimated_days_max: string
+          requires_address: boolean
+          requires_phone: boolean
+          metadata: Json
+          created_at: string
+          updated_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: number
+          name: string
+          description?: string | null
+          cost: string
+          shipping_type: 'free' | 'flat_rate' | 'local_pickup' | 'calculated' | 'express'
+          enabled?: boolean
+          min_amount?: string | null
+          max_amount?: string | null
+          available_regions?: Json | null
+          excluded_regions?: Json | null
+          estimated_days_min: string
+          estimated_days_max: string
+          requires_address?: boolean
+          requires_phone?: boolean
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: number
+          name?: string
+          description?: string | null
+          cost?: string
+          shipping_type?: 'free' | 'flat_rate' | 'local_pickup' | 'calculated' | 'express'
+          enabled?: boolean
+          min_amount?: string | null
+          max_amount?: string | null
+          available_regions?: Json | null
+          excluded_regions?: Json | null
+          estimated_days_min?: string
+          estimated_days_max?: string
+          requires_address?: boolean
+          requires_phone?: boolean
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

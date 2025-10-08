@@ -1,16 +1,20 @@
 ---
 import Base from '../../layout/Base.astro';
-import { supabase } from '../../lib/supabase';
+import { getServerAdmin, clearAuthCookies } from '../../lib/supabase';
 import { CategoryService } from '../../services/categoryService';
 import CategoriesDashboard from '../../components/CategoriesDashboard';
 import { Toaster } from '../../components/ui/sonner';
 
-// Verificar autenticación
-const { data: { session } } = await supabase?.auth.getSession() || { data: { session: null } };
+// Verificar autenticación usando el nuevo sistema
+const adminSession = await getServerAdmin(Astro);
 
-if (!session) {
+if (!adminSession) {
+  console.log('🚫 Acceso denegado a categories - Usuario no es administrador');
+  clearAuthCookies(Astro);
   return Astro.redirect('/');
 }
+
+console.log('✅ Admin autenticado en categories:', adminSession.admin.email);
 
 // Cargar datos iniciales de categorías
 let initialData = null;

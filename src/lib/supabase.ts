@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../types/database';
 import type { APIContext } from 'astro';
 import type { AstroGlobal } from 'astro';
+import type { User } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -44,8 +45,23 @@ export { supabaseAdmin };
 
 // Types for authentication
 export interface AuthenticatedUser {
-  auth: any;
+  auth: User | null;
   profile: Database['public']['Tables']['user_profiles']['Row'] | null;
+}
+
+export interface AdminUser {
+  id: number;
+  user_id: string;
+  email: string;
+  role: string;
+  created_at: string;
+}
+
+export interface ExtendedSession {
+  user: User;
+  admin: AdminUser;
+  expiresAt: Date;
+  isExtended: boolean;
 }
 
 // Cliente regular para autenticación de usuarios (cliente y servidor)
@@ -117,6 +133,99 @@ export const getServerUser = async (context: APIContext | AstroGlobal) => {
     console.error('❌ Error in getServerUser:', error);
     return null;
   }
+};
+
+// Función optimizada para verificar admin con cache
+const adminCache = new Map<string, { admin: AdminUser | null, timestamp: number }>();
+const ADMIN_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+export const getServerAdmin = async (context: APIContext | AstroGlobal): Promise<ExtendedSession | null> => {
+  try {
+    const user = await getServerUser(context);
+    if (!user) {
+      console.log('🔒 No user found in session');
+      return null;
+    }
+
+    // Check admin cache first
+    const cached = adminCache.get(user.id);
+    if (cached && (Date.now() - cached.timestamp) < ADMIN_CACHE_TTL) {
+      if (!cached.admin) {
+        console.log('🔒 User not admin (cached)');
+        return null;
+      }
+      
+      return {
+        user,
+        admin: cached.admin,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
+        isExtended: true
+      };
+    }
+
+    if (!supabaseAdmin) {
+      console.error('❌ Supabase admin client not available');
+      return null;
+    }
+
+    // Verify admin user exists in admin_users table
+    const { data: adminUser, error: adminError } = await supabaseAdmin
+      .from('admin_users')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .single();
+
+    // Cache the result
+    adminCache.set(user.id, {
+      admin: adminUser,
+      timestamp: Date.now()
+    });
+
+    if (adminError || !adminUser) {
+      console.log('🔒 User is not admin:', user.email);
+      return null;
+    }
+
+    console.log('✅ Admin verified:', adminUser.email);
+    return {
+      user,
+      admin: adminUser,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
+      isExtended: true
+    };
+  } catch (error) {
+    console.error('❌ Error in getServerAdmin:', error);
+    return null;
+  }
+};
+
+// Función para verificar si una sesión extendida es válida
+export const isExtendedSessionValid = (context: APIContext | AstroGlobal): boolean => {
+  const adminSession = context.cookies.get('sb-admin-session')?.value;
+  const sessionExpiry = context.cookies.get('sb-session-expiry')?.value;
+  
+  if (!adminSession || adminSession !== 'true') return false;
+  if (!sessionExpiry) return false;
+  
+  const expiryDate = new Date(sessionExpiry);
+  return expiryDate > new Date();
+};
+
+// Función para limpiar cookies de sesión
+export const clearAuthCookies = (context: APIContext | AstroGlobal) => {
+  const cookiesToClear = [
+    'sb-access-token',
+    'sb-refresh-token', 
+    'sb-admin-session',
+    'sb-session-expiry'
+  ];
+  
+  cookiesToClear.forEach(name => {
+    context.cookies.delete(name, { path: '/' });
+  });
+  
+  console.log('🧹 Auth cookies cleared');
 };
 
 export const getServerUserProfile = async (context: APIContext | AstroGlobal) => {

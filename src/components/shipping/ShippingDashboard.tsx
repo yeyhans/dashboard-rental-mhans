@@ -135,13 +135,29 @@ export default function ShippingDashboard({
   const handleCreateMethod = async () => {
     setLoading(true);
     try {
+      // Validar que los días sean válidos
+      if (formData.estimated_days_min < 1) {
+        toast.error('Los días mínimos deben ser al menos 1');
+        setLoading(false);
+        return;
+      }
+      
+      if (formData.estimated_days_max < formData.estimated_days_min) {
+        toast.error('Los días máximos deben ser mayor o igual a los días mínimos');
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch('/api/shipping/methods', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
 
-      if (!response.ok) throw new Error('Error creating shipping method');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Error creating shipping method');
+      }
 
       const newMethod = await response.json();
       setShippingMethods(prev => [...prev, newMethod]);
@@ -343,18 +359,22 @@ export default function ShippingDashboard({
                   <Input
                     id="min_days"
                     type="number"
+                    min="1"
                     value={formData.estimated_days_min}
-                    onChange={(e) => setFormData(prev => ({ ...prev, estimated_days_min: Number(e.target.value) }))}
+                    onChange={(e) => setFormData(prev => ({ ...prev, estimated_days_min: Math.max(1, Number(e.target.value)) }))}
                   />
+                  <p className="text-xs text-gray-500 mt-1">Mínimo 1 día</p>
                 </div>
                 <div>
                   <Label htmlFor="max_days">Días máximos</Label>
                   <Input
                     id="max_days"
                     type="number"
+                    min={formData.estimated_days_min}
                     value={formData.estimated_days_max}
-                    onChange={(e) => setFormData(prev => ({ ...prev, estimated_days_max: Number(e.target.value) }))}
+                    onChange={(e) => setFormData(prev => ({ ...prev, estimated_days_max: Math.max(formData.estimated_days_min, Number(e.target.value)) }))}
                   />
+                  <p className="text-xs text-gray-500 mt-1">Debe ser mayor o igual a días mínimos</p>
                 </div>
               </div>
 
@@ -634,18 +654,22 @@ export default function ShippingDashboard({
                 <Input
                   id="edit-min_days"
                   type="number"
+                  min="1"
                   value={formData.estimated_days_min}
-                  onChange={(e) => setFormData(prev => ({ ...prev, estimated_days_min: Number(e.target.value) }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, estimated_days_min: Math.max(1, Number(e.target.value)) }))}
                 />
+                <p className="text-xs text-gray-500 mt-1">Mínimo 1 día</p>
               </div>
               <div>
                 <Label htmlFor="edit-max_days">Días máximos</Label>
                 <Input
                   id="edit-max_days"
                   type="number"
+                  min={formData.estimated_days_min}
                   value={formData.estimated_days_max}
-                  onChange={(e) => setFormData(prev => ({ ...prev, estimated_days_max: Number(e.target.value) }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, estimated_days_max: Math.max(formData.estimated_days_min, Number(e.target.value)) }))}
                 />
+                <p className="text-xs text-gray-500 mt-1">Debe ser mayor o igual a días mínimos</p>
               </div>
             </div>
 

@@ -1,25 +1,22 @@
 ---
 import Base from "../../layout/Base.astro";
-import { supabase } from "../../lib/supabase";
+import { getServerAdmin, clearAuthCookies } from "../../lib/supabase";
 import { ProductDetailController } from "../../components/products/ProductDetailController";
 import { ProductService } from "../../services/productService";
 import { CategoryService } from "../../services/categoryService";
 
 export const prerender = false;
 
-if (!supabase) {
-  throw new Error("Supabase client is not initialized.");
-}
+// Verificar autenticación usando el nuevo sistema
+const adminSession = await getServerAdmin(Astro);
 
-// Get the user session
-const { data: { session } } = await supabase.auth.getSession();
-
-if (!session) {
+if (!adminSession) {
+  console.log('🚫 Acceso denegado a product detail - Usuario no es administrador');
+  clearAuthCookies(Astro);
   return Astro.redirect("/");
 }
 
-// Extract the access token for client-side use
-const accessToken = session.access_token;
+console.log('✅ Admin autenticado en product detail:', adminSession.admin.email);
 
 // Get the product ID from the URL parameter
 const { id } = Astro.params;

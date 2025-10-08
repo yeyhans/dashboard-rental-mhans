@@ -1,21 +1,28 @@
 ---
 import Base from "../../layout/Base.astro";
 import OrdersDashboard from "../../components/orders/OrdersDashboard";
-import { supabase } from "../../lib/supabase";
+import { getServerAdmin, clearAuthCookies } from "../../lib/supabase";
 import { OrderService } from "../../services/orderService";
 import { UserService } from "../../services/userService";
 export const prerender = false;
 
-const { data: { session } } = await supabase.auth.getSession();
+// Verificar autenticación usando el nuevo sistema
+const adminSession = await getServerAdmin(Astro);
 
-if (!session) {
+if (!adminSession) {
+  console.log('🚫 Acceso denegado a orders - Usuario no es administrador');
+  clearAuthCookies(Astro);
   return Astro.redirect("/");
 }
 
-// Preparar datos de sesión para el cliente
-const sessionData = {
-  access_token: session.access_token,
-  user: session.user
+console.log('✅ Admin autenticado en orders:', adminSession.admin.email);
+
+// Preparar datos de administrador para el cliente
+const adminData = {
+  email: adminSession.admin.email,
+  role: adminSession.admin.role,
+  userId: adminSession.user.id,
+  sessionExpiry: adminSession.expiresAt.toISOString()
 };
 
 // Load ALL orders for client-side pagination and filtering
@@ -90,7 +97,19 @@ try {
   console.error('Error fetching users data:', error);
 }
 
-const title = "Gestión de Órdenes";
+const title = `Gestión de Órdenes | ${adminSession.admin.email}`;
+
+// Datos de sesión para compatibilidad con componentes
+const sessionData = {
+  access_token: 'admin-session', // Token placeholder para admin
+  user: {
+    id: adminSession.user.id,
+    email: adminSession.admin.email,
+    role: adminSession.admin.role
+  },
+  admin: adminSession.admin,
+  expiresAt: adminSession.expiresAt
+};
 ---
 
 <Base title={title}>

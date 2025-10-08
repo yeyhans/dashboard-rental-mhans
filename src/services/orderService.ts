@@ -378,12 +378,18 @@ export class OrderService {
    */
   static async updateOrder(orderId: number, updates: OrderUpdate): Promise<Order> {
     try {
+      console.log('🔄 OrderService.updateOrder - Order ID:', orderId);
+      console.log('📤 OrderService.updateOrder - Updates:', JSON.stringify(updates, null, 2));
+      
       const { data, error } = await supabaseAdmin
         .from('orders')
         .update(updates)
         .eq('id', orderId)
         .select()
         .single();
+        
+      console.log('📡 Supabase response error:', error);
+      console.log('📡 Supabase response data:', data);
 
       if (error) {
         throw error;

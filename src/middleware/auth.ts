@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabase";
+import { getServerAdmin } from "../lib/supabase";
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -9,58 +9,59 @@ export interface AuthenticatedRequest extends Request {
 }
 
 /**
- * Middleware para validar JWT tokens de Supabase
+ * Middleware para validar sesiones de administrador usando el nuevo sistema
  */
 export const withAuth = (handler: (context: any) => Promise<Response>) => {
   return async (context: any) => {
     try {
-      const authHeader = context.request.headers.get('Authorization');
-      
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return new Response(
-          JSON.stringify({ error: 'Token de autorización requerido' }), 
-          { 
-            status: 401,
-            headers: { 'Content-Type': 'application/json' }
+      // Crear un objeto Astro-like para getServerAdmin
+      const astroLike = {
+        cookies: context.cookies || {
+          get: (name: string) => {
+            const cookieHeader = context.request.headers.get('cookie');
+            if (!cookieHeader) return undefined;
+            
+            const cookies = cookieHeader.split(';').reduce((acc: Record<string, string>, cookie: string) => {
+              const [key, value] = cookie.trim().split('=');
+              if (key && value) acc[key] = decodeURIComponent(value);
+              return acc;
+            }, {});
+            
+            return cookies[name] ? { value: cookies[name] } : undefined;
           }
-        );
-      }
-
-      const token = authHeader.substring(7);
-
-      // Verificar el token con Supabase
-      if (!supabase) {
-        return new Response(
-          JSON.stringify({ error: 'Error de configuración de Supabase' }), 
-          { 
-            status: 500,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-      }
-
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-
-      if (error || !user) {
-        return new Response(
-          JSON.stringify({ error: 'Token inválido' }), 
-          { 
-            status: 401,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-      }
-
-      // TODO: Verificar si el usuario es administrador
-      // Por ahora, permitir acceso a cualquier usuario autenticado
-      console.log('User authenticated:', { id: user.id, email: user.email });
-
-      // Agregar información del usuario al contexto
-      context.user = {
-        id: user.id,
-        email: user.email || '',
-        role: 'user' // Rol temporal hasta implementar verificación de admin
+        }
       };
+
+      // Verificar autenticación usando el nuevo sistema
+      const adminSession = await getServerAdmin(astroLike as any);
+
+      if (!adminSession) {
+        return new Response(
+          JSON.stringify({ error: 'Acceso denegado - Usuario no es administrador' }), 
+          { 
+            status: 401,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      }
+
+      // Usuario administrador autenticado exitosamente
+      console.log('✅ Admin authenticated via middleware:', { 
+        id: adminSession.user.id, 
+        email: adminSession.admin.email,
+        role: adminSession.admin.role,
+        method: context.request.method,
+        url: context.url?.pathname
+      });
+
+      // Agregar información del administrador al contexto
+      context.user = {
+        id: adminSession.user.id,
+        email: adminSession.admin.email,
+        role: adminSession.admin.role
+      };
+      
+      context.adminSession = adminSession;
 
       return handler(context);
     } catch (error) {
