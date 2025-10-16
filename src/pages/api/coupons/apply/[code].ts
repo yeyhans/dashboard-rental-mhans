@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { CouponService } from '../../../../services/couponService';
-import { withAuth, withCors } from '../../../../middleware/auth';
+// withAuth and withCors removed - global middleware handles CORS, endpoint is public
 
-export const POST: APIRoute = withCors(withAuth(async (context) => {
+export const POST: APIRoute = async (context) => {
   try {
     const couponCode = context.params.code as string;
     const { userId, discountAmount, orderId } = await context.request.json();
@@ -54,8 +54,6 @@ export const POST: APIRoute = withCors(withAuth(async (context) => {
       }
     });
   }
-}));
+};
 
-export const OPTIONS: APIRoute = withCors(async () => {
-  return new Response(null, { status: 200 });
-});
+// OPTIONS handler removed - handled by global middleware

@@ -1,8 +1,9 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabase';
-import { withAuth, withCors } from '../../../middleware/auth';
+import { withAuth } from '../../../middleware/auth';
+// withCors removed - global middleware handles CORS
 
-export const GET: APIRoute = withCors(withAuth(async () => {
+export const GET: APIRoute = withAuth(async () => {
   try {
     console.log('🔍 Debug: Checking coupons table...');
 
@@ -63,7 +64,7 @@ export const GET: APIRoute = withCors(withAuth(async () => {
       usage_limit: coupon.usage_limit,
       amount: coupon.amount,
       discount_type: coupon.discount_type
-    }));
+    });
 
     return new Response(JSON.stringify({
       success: true,
@@ -94,8 +95,6 @@ export const GET: APIRoute = withCors(withAuth(async () => {
       }
     });
   }
-}));
-
-export const OPTIONS: APIRoute = withCors(async () => {
-  return new Response(null, { status: 200 });
 });
+
+// OPTIONS handler removed - handled by global middleware

@@ -15,6 +15,16 @@ export default defineConfig({
     ssr: {
       external: ["micromatch"],
     },
+    server: {
+      cors: {
+        origin: ['http://localhost:4321', 'http://localhost:3000'],
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+        exposedHeaders: ['Set-Cookie'],
+        maxAge: 86400,
+      },
+    },
   },
 
   env: {

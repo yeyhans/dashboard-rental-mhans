@@ -79,28 +79,44 @@ export const withAuth = (handler: (context: any) => Promise<Response>) => {
 
 /**
  * Middleware para CORS
+ * IMPORTANTE: Este middleware debe estar ANTES de withAuth para manejar preflight OPTIONS
  */
 export const withCors = (handler: (context: any) => Promise<Response>) => {
   return async (context: any) => {
-    // Manejar preflight requests
+    // Get origin from request or use default
+    const origin = context.request.headers.get('origin') || process.env.FRONTEND_URL || 'http://localhost:4321';
+    
+    console.log('🌐 CORS Middleware:', {
+      method: context.request.method,
+      origin,
+      url: context.url?.pathname
+    });
+    
+    // Manejar preflight requests ANTES de cualquier autenticación
     if (context.request.method === 'OPTIONS') {
+      console.log('✅ Handling OPTIONS preflight request');
       return new Response(null, {
-        status: 200,
+        status: 204,
         headers: {
-          'Access-Control-Allow-Origin': process.env.FRONTEND_URL || '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
+          'Access-Control-Allow-Credentials': 'true',
           'Access-Control-Max-Age': '86400',
         },
       });
     }
 
+    // Para requests normales, ejecutar handler y agregar headers CORS
     const response = await handler(context);
 
     // Agregar headers CORS a la respuesta
-    response.headers.set('Access-Control-Allow-Origin', process.env.FRONTEND_URL || '*');
-    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    response.headers.set('Access-Control-Allow-Origin', origin);
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+
+    console.log('✅ CORS headers added to response');
 
     return response;
   };

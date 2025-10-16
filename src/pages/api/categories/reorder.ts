@@ -1,8 +1,9 @@
 import type { APIRoute } from 'astro';
 import { CategoryService } from '../../../services/categoryService';
-import { withAuth, withCors } from '../../../middleware/auth';
+import { withAuth } from '../../../middleware/auth';
+// withCors removed - global middleware handles CORS
 
-export const PUT: APIRoute = withCors(withAuth(async (context) => {
+export const PUT: APIRoute = withAuth(async (context) => {
   try {
     const { categoryOrders } = await context.request.json();
 
@@ -56,8 +57,6 @@ export const PUT: APIRoute = withCors(withAuth(async (context) => {
       }
     });
   }
-}));
-
-export const OPTIONS: APIRoute = withCors(async () => {
-  return new Response(null, { status: 200 });
 });
+
+// OPTIONS handler removed - handled by global middleware

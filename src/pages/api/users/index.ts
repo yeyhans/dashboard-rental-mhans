@@ -1,8 +1,9 @@
 import type { APIRoute } from 'astro';
 import { UserService } from '../../../services/userService';
-import { withMiddleware, withCors, withAuth } from '../../../middleware/auth';
+import { withAuth } from '../../../middleware/auth';
+// withCors and withMiddleware removed - global middleware handles CORS
 
-export const GET: APIRoute = withMiddleware(withCors, withAuth)(async (context) => {
+export const GET: APIRoute = withAuth(async (context) => {
   try {
     console.log('=== DEBUG: Starting users API call ===');
     
@@ -50,7 +51,7 @@ export const GET: APIRoute = withMiddleware(withCors, withAuth)(async (context) 
   }
 });
 
-export const POST: APIRoute = withMiddleware(withCors, withAuth)(async (context) => {
+export const POST: APIRoute = withAuth(async (context) => {
   try {
     const userData = await context.request.json();
     

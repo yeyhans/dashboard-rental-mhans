@@ -190,8 +190,13 @@ export const generateOrderProcessingPdf = async (
       total: orderData.metadata?.calculated_total || orderData.calculated_total
     });
     
-    // Use relative URL since we're in the same backend
-    const response = await fetch('/api/order/generate-processing-pdf', {
+    // Construct full URL for server-side fetch
+    const baseUrl = import.meta.env.PUBLIC_SITE_URL || 'http://localhost:4321';
+    const apiUrl = `${baseUrl}/api/order/generate-processing-pdf`;
+    
+    console.log('📡 Calling processing PDF API:', apiUrl);
+    
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -375,8 +380,14 @@ export const generateBudgetPdfFromId = async (
 
     console.log('✅ Order data fetched successfully for budget PDF');
 
+    // Construct full URL for server-side fetch
+    const baseUrl = import.meta.env.PUBLIC_SITE_URL || 'http://localhost:4322';
+    const apiUrl = `${baseUrl}/api/order/generate-budget-pdf`;
+    
+    console.log('📡 Calling budget PDF API:', apiUrl);
+
     // Call the budget PDF generation API
-    const response = await fetch('/api/order/generate-budget-pdf', {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

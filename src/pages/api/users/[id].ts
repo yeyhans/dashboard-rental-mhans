@@ -1,8 +1,9 @@
 import type { APIRoute } from 'astro';
 import { UserService } from '../../../services/userService';
-import { withMiddleware, withCors, withAuth } from '../../../middleware/auth';
+import { withAuth } from '../../../middleware/auth';
+// withCors and withMiddleware removed - global middleware handles CORS
 
-export const GET: APIRoute = withMiddleware(withCors, withAuth)(async (context: any) => {
+export const GET: APIRoute = withAuth(async (context: any) => {
   try {
     const userId = parseInt(context.params.id as string);
     
@@ -44,7 +45,7 @@ export const GET: APIRoute = withMiddleware(withCors, withAuth)(async (context: 
   }
 });
 
-export const PUT: APIRoute = withMiddleware(withCors, withAuth)(async (context: any) => {
+export const PUT: APIRoute = withAuth(async (context: any) => {
   try {
     const userId = parseInt(context.params.id as string);
     
@@ -78,7 +79,7 @@ export const PUT: APIRoute = withMiddleware(withCors, withAuth)(async (context: 
   }
 });
 
-export const PATCH: APIRoute = withMiddleware(withCors, withAuth)(async (context: any) => {
+export const PATCH: APIRoute = withAuth(async (context: any) => {
   try {
     const userId = parseInt(context.params.id as string);
     
@@ -136,7 +137,7 @@ export const PATCH: APIRoute = withMiddleware(withCors, withAuth)(async (context
   }
 });
 
-export const DELETE: APIRoute = withMiddleware(withCors, withAuth)(async (context: any) => {
+export const DELETE: APIRoute = withAuth(async (context: any) => {
   try {
     const userId = parseInt(context.params.id as string);
     

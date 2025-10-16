@@ -1,8 +1,10 @@
 import type { APIRoute } from 'astro';
 import { BackendApiService } from '../../../services/backendApiService';
-import { withMiddleware, withCors, withAuth } from '../../../middleware/auth';
+import { withAuth } from '../../../middleware/auth';
+// withCors and withMiddleware removed - global middleware handles CORS
 
-export const GET: APIRoute = withMiddleware(withCors, withAuth)(async (context) => {
+// GET requires admin authentication
+export const GET: APIRoute = withAuth(async (context) => {
   try {
     const url = new URL(context.request.url);
     const page = parseInt(url.searchParams.get('page') || '1');

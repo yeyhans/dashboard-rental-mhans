@@ -3,10 +3,10 @@ import { UserService } from '../../../services/userService';
 import { OrderService } from '../../../services/orderService';
 import { ProductService } from '../../../services/productService';
 import { CouponService } from '../../../services/couponService';
-import { withCors } from '../../../middleware/auth';
 import { supabaseAdmin } from '../../../lib/supabase';
+// withCors removed - global middleware handles CORS
 
-export const GET: APIRoute = withCors(async (context) => {
+export const GET: APIRoute = async (context) => {
   // Check for admin session from HTTP-only cookie
   const sessionCookie = context.cookies.get('admin_session')?.value;
   
@@ -157,6 +157,4 @@ export const GET: APIRoute = withCors(async (context) => {
   }
 });
 
-export const OPTIONS: APIRoute = withCors(async () => {
-  return new Response(null, { status: 200 });
-});
+// OPTIONS handler removed - handled by global middleware

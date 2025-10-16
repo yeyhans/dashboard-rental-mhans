@@ -1,8 +1,10 @@
 import type { APIRoute } from 'astro';
 import { ProductService } from '../../../services/productService';
-import { withAuth, withCors } from '../../../middleware/auth';
+import { withAuth } from '../../../middleware/auth';
+// withCors removed - global middleware handles CORS
 
-export const GET: APIRoute = withCors(withAuth(async (context) => {
+// GET is public - no auth required for product listing
+export const GET: APIRoute = async (context) => {
   try {
     const url = new URL(context.request.url);
     const page = parseInt(url.searchParams.get('page') || '1');
@@ -46,9 +48,10 @@ export const GET: APIRoute = withCors(withAuth(async (context) => {
       }
     });
   }
-}));
+};
 
-export const POST: APIRoute = withCors(withAuth(async (context) => {
+// POST requires admin authentication
+export const POST: APIRoute = withAuth(async (context) => {
   try {
     const productData = await context.request.json();
 
@@ -93,8 +96,6 @@ export const POST: APIRoute = withCors(withAuth(async (context) => {
       }
     });
   }
-}));
-
-export const OPTIONS: APIRoute = withCors(async () => {
-  return new Response(null, { status: 200 });
 });
+
+// OPTIONS handler removed - handled by global middleware
