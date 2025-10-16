@@ -10,44 +10,55 @@ export const POST: APIRoute = async ({ request }) => {
     console.log('📄 Internal contract PDF generation API called');
     
     // Parse request body
-    const { user_id, email, uploadToR2 = true, sendEmail = false } = await request.json();
+    const { userData, uploadToR2 = true, sendEmail = false } = await request.json();
     
     console.log('📋 Contract generation request:', {
-      user_id,
-      email,
+      user_id: userData?.user_id,
+      email: userData?.email,
+      nombre: userData?.nombre,
       uploadToR2,
       sendEmail
     });
 
     // Validate required parameters
-    if (!user_id) {
+    if (!userData || !userData.user_id || !userData.email) {
       return new Response(JSON.stringify({
         success: false,
-        message: 'user_id es requerido'
+        message: 'userData con user_id y email son requeridos'
       }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
+    
+    const user_id = userData.user_id;
 
-    console.log('📄 Generating contract PDF using astro-pdf...');
+    console.log('📄 Generating contract PDF with provided user data...');
     
     // Generate PDF using HTML template + Puppeteer service (same as budget-pdf)
-    console.log('📄 Making internal request to contract-pdf page...');
+    console.log('📄 Making internal request to contract-pdf page with POST data...');
     
     const baseUrl = new URL(request.url).origin;
     const htmlUrl = `${baseUrl}/contract-pdf/${user_id}`;
     
     console.log('🔗 HTML URL:', htmlUrl);
+    console.log('📋 Sending userData to template:', {
+      nombre: userData.nombre,
+      apellido: userData.apellido,
+      rut: userData.rut,
+      email: userData.email,
+      tipo_cliente: userData.tipo_cliente
+    });
     
-    // Get HTML content (not .pdf extension, just HTML)
+    // Get HTML content with userData via POST
     const htmlResponse = await fetch(htmlUrl, {
-      method: 'GET',
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'X-Internal-Request': 'true',
-        'X-Requested-User-Id': user_id.toString(),
         'Accept': 'text/html'
-      }
+      },
+      body: JSON.stringify({ userData })
     });
 
     if (!htmlResponse.ok) {
@@ -129,9 +140,9 @@ export const POST: APIRoute = async ({ request }) => {
       }
     }
 
-    // Update user profile with contract URL if we have one
+    // Update user profile with contract URL and all user data
     if (contractUrl) {
-      console.log('💾 Updating user profile with contract URL...');
+      console.log('💾 Updating user profile with contract URL and user data...');
       
       try {
         const { createClient } = await import('@supabase/supabase-js');
@@ -140,18 +151,59 @@ export const POST: APIRoute = async ({ request }) => {
           import.meta.env.SUPABASE_SERVICE_ROLE_KEY!
         );
 
+        // Prepare update data - include all fields from userData
+        const updateData: any = {
+          url_user_contrato: contractUrl,
+          updated_at: new Date().toISOString()
+        };
+
+        // Add all user profile fields if they exist in userData
+        if (userData.nombre) updateData.nombre = userData.nombre;
+        if (userData.apellido) updateData.apellido = userData.apellido;
+        if (userData.email) updateData.email = userData.email;
+        if (userData.rut) updateData.rut = userData.rut;
+        if (userData.direccion) updateData.direccion = userData.direccion;
+        if (userData.ciudad) updateData.ciudad = userData.ciudad;
+        if (userData.pais) updateData.pais = userData.pais;
+        if (userData.telefono) updateData.telefono = userData.telefono;
+        if (userData.instagram) updateData.instagram = userData.instagram;
+        if (userData.fecha_nacimiento) updateData.fecha_nacimiento = userData.fecha_nacimiento;
+        if (userData.tipo_cliente) updateData.tipo_cliente = userData.tipo_cliente;
+        if (userData.usuario) updateData.usuario = userData.usuario;
+        
+        // Company fields
+        if (userData.empresa_nombre) updateData.empresa_nombre = userData.empresa_nombre;
+        if (userData.empresa_rut) updateData.empresa_rut = userData.empresa_rut;
+        if (userData.empresa_ciudad) updateData.empresa_ciudad = userData.empresa_ciudad;
+        if (userData.empresa_direccion) updateData.empresa_direccion = userData.empresa_direccion;
+        
+        // Document URLs
+        if (userData.url_rut_anverso) updateData.url_rut_anverso = userData.url_rut_anverso;
+        if (userData.url_rut_reverso) updateData.url_rut_reverso = userData.url_rut_reverso;
+        if (userData.url_firma) updateData.url_firma = userData.url_firma;
+        if (userData.url_empresa_erut) updateData.url_empresa_erut = userData.url_empresa_erut;
+        if (userData.new_url_e_rut_empresa) updateData.new_url_e_rut_empresa = userData.new_url_e_rut_empresa;
+        
+        // Terms acceptance - convert boolean to string if needed
+        if (userData.terminos_aceptados !== undefined) {
+          updateData.terminos_aceptados = userData.terminos_aceptados === true || userData.terminos_aceptados === '1' ? '1' : '0';
+        }
+
+        console.log('📋 Updating user profile with data:', {
+          user_id: user_id,
+          fields: Object.keys(updateData),
+          terminos_aceptados: updateData.terminos_aceptados
+        });
+
         const { data: updateResult, error: updateError } = await supabase
           .from('user_profiles')
-          .update({
-            url_user_contrato: contractUrl,
-            updated_at: new Date().toISOString()
-          })
+          .update(updateData)
           .eq('user_id', parseInt(user_id));
 
         if (updateError) {
           console.error('❌ Failed to update user profile:', updateError);
         } else {
-          console.log('✅ User profile updated with contract URL');
+          console.log('✅ User profile updated with contract URL and all user data');
         }
       } catch (dbError) {
         console.error('❌ Database update failed:', dbError);
@@ -160,13 +212,13 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // Send email notification if requested
-    if (sendEmail && contractUrl && email) {
+    if (sendEmail && contractUrl && userData.email) {
       console.log('📧 Sending contract notification email...');
       
       try {
         // TODO: Implement email sending using Resend API
         // For now, just log that we would send an email
-        console.log('📧 Email would be sent to:', email);
+        console.log('📧 Email would be sent to:', userData.email);
         console.log('🔗 Contract URL for email:', contractUrl);
       } catch (emailError) {
         console.error('❌ Failed to send email:', emailError);
@@ -184,11 +236,11 @@ export const POST: APIRoute = async ({ request }) => {
       pdfUrl: contractUrl, // For compatibility
       metadata: {
         user_id: parseInt(user_id),
-        email: email,
+        email: userData.email,
         generatedAt: new Date().toISOString(),
         fileSize: pdfBuffer.byteLength,
         uploadedToR2: uploadToR2 && !!contractUrl,
-        emailSent: sendEmail && !!contractUrl && !!email
+        emailSent: sendEmail && !!contractUrl && !!userData.email
       }
     }), {
       status: 200,

@@ -721,25 +721,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
               )}
             </div>
             
-            {/* Botón de archivo */}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={sending}
-              className="h-[36px] w-[36px]"
-            >
-              <Upload className="h-4 w-4" />
-            </Button>
-            
-            {/* Input de archivo oculto */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,.pdf,.doc,.docx,.txt"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
+
             
             <Button
               onClick={handleSendMessage}
@@ -760,10 +742,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
               <AlertCircle className="h-3 w-3" />
               <span>Enter para enviar • Shift+Enter para nueva línea</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Filter className="h-3 w-3" />
-              <span>Máximo 10MB por archivo</span>
-            </div>
+
           </div>
         </div>
       </CardContent>

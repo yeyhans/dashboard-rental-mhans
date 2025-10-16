@@ -7,12 +7,23 @@ import { createClient } from '@supabase/supabase-js';
  * Follows the same pattern as generate-budget-pdf.ts but for user contracts
  */
 
-// CORS headers for cross-origin requests
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Accept, User-Agent, X-Frontend-Source',
-  'Access-Control-Max-Age': '86400',
+// Helper function to get CORS headers with proper origin handling
+const getCorsHeaders = (origin: string | null) => {
+  const allowedOrigins = [
+    'http://localhost:4321', // Frontend development server
+    'http://localhost:3000', // Alternative frontend port
+    import.meta.env.PUBLIC_FRONTEND_URL || 'http://localhost:4321'
+  ].filter(Boolean);
+  
+  const originAllowed = allowedOrigins.includes(origin || '') ? origin : allowedOrigins[0];
+  
+  return {
+    'Access-Control-Allow-Origin': originAllowed,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Max-Age': '86400',
+  };
 };
 
 // Contract data interface
@@ -51,8 +62,12 @@ interface ContractGenerationRequest {
 }
 
 export const POST: APIRoute = async ({ request }) => {
+  const origin = request.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+  
   try {
     console.log('🌍 External contract PDF generation API called');
+    console.log('📋 Request origin:', origin);
     
     // Parse request body
     const requestBody: ContractGenerationRequest = await request.json();
@@ -276,19 +291,25 @@ export const POST: APIRoute = async ({ request }) => {
   } catch (error) {
     console.error('💥 External contract PDF generation error:', error);
     
+    const origin = request.headers.get('Origin');
+    const errorCorsHeaders = getCorsHeaders(origin);
+    
     return new Response(JSON.stringify({
       success: false,
       message: 'Error interno del servidor al generar contrato',
       error: error instanceof Error ? error.message : 'Unknown error'
     }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      headers: { 'Content-Type': 'application/json', ...errorCorsHeaders }
     });
   }
 };
 
 // Handle preflight OPTIONS requests for CORS
-export const OPTIONS: APIRoute = async () => {
+export const OPTIONS: APIRoute = async ({ request }) => {
+  const origin = request.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(origin);
+  
   return new Response(null, {
     status: 200,
     headers: corsHeaders

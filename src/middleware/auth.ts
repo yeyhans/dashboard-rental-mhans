@@ -100,7 +100,7 @@ export const withCors = (handler: (context: any) => Promise<Response>) => {
         headers: {
           'Access-Control-Allow-Origin': origin,
           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie, X-Frontend-Source, x-frontend-source, X-External-Source, X-API-Key, X-Requested-With, Accept, X-Internal-Request, X-Requested-User-Id, X-Requested-Order-Id',
           'Access-Control-Allow-Credentials': 'true',
           'Access-Control-Max-Age': '86400',
         },
@@ -113,7 +113,7 @@ export const withCors = (handler: (context: any) => Promise<Response>) => {
     // Agregar headers CORS a la respuesta
     response.headers.set('Access-Control-Allow-Origin', origin);
     response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie, X-Frontend-Source, x-frontend-source, X-External-Source, X-API-Key, X-Requested-With, Accept, X-Internal-Request, X-Requested-User-Id, X-Requested-Order-Id');
     response.headers.set('Access-Control-Allow-Credentials', 'true');
 
     console.log('✅ CORS headers added to response');
