@@ -62,6 +62,7 @@ export const GET: APIRoute = async (context) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
+
   try {
     // Obtener estadísticas de todos los servicios en paralelo
     const [userStats, orderStats, productStats, couponStats] = await Promise.all([
@@ -155,6 +156,6 @@ export const GET: APIRoute = async (context) => {
       }
     });
   }
-});
+};
 
 // OPTIONS handler removed - handled by global middleware

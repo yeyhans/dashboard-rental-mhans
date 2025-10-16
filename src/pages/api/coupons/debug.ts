@@ -64,7 +64,7 @@ export const GET: APIRoute = withAuth(async () => {
       usage_limit: coupon.usage_limit,
       amount: coupon.amount,
       discount_type: coupon.discount_type
-    });
+    }));
 
     return new Response(JSON.stringify({
       success: true,
