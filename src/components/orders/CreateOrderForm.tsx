@@ -761,12 +761,8 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
       if (data.success) {
         console.log('✅ Order created successfully:', data.data);
         
-        // No enviar email inmediato - se enviará después de generar el presupuesto
-        console.log('✅ Order created successfully, proceeding to generate budget with email...');
-        
-        // Generar presupuesto automáticamente después de crear la orden
-        console.log('🚀 Auto-generating budget for created order...');
-        await generateBudgetForCreatedOrder(data.data);
+        // El presupuesto se genera automáticamente en el backend para órdenes 'on-hold'
+        console.log('✅ Order created successfully, backend will handle budget generation.');
         
         onOrderCreated(data.data);
         setIsOpen(false);

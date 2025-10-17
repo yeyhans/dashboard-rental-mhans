@@ -71,7 +71,9 @@ export const POST: APIRoute = async ({ request }) => {
     
     // Parse request body
     const requestBody: ContractGenerationRequest = await request.json();
-    const { userData, uploadToR2, sendEmail = false } = requestBody;
+    const { userData, uploadToR2 } = requestBody;
+    // ALWAYS send email when generating contracts
+    const sendEmail = true;
 
     console.log('📋 Contract generation request:', {
       user_id: userData.user_id,
@@ -80,7 +82,8 @@ export const POST: APIRoute = async ({ request }) => {
       apellido: userData.apellido,
       rut: userData.rut,
       uploadToR2,
-      sendEmail
+      sendEmail: sendEmail,
+      note: 'Email sending is ALWAYS enabled for contracts'
     });
 
     // Validate required data
@@ -233,8 +236,10 @@ export const POST: APIRoute = async ({ request }) => {
         'X-External-Source': 'frontend'
       },
       body: JSON.stringify({
-        user_id: userData.user_id,
-        email: userData.email,
+        userData: {
+          ...userData,
+          ...existingProfile
+        },
         uploadToR2,
         sendEmail
       })

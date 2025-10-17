@@ -411,12 +411,30 @@ Descarga el detalle del pedido aquí
           pdf_url: finalPdfUrl
         });
         
-        // Send customer email
+        // Fetch PDF from R2 to attach it
+        console.log('📎 Fetching PDF from R2 for email attachment...');
+        const pdfResponse = await fetch(finalPdfUrl);
+        
+        if (!pdfResponse.ok) {
+          throw new Error(`Failed to fetch PDF from R2: ${pdfResponse.status}`);
+        }
+        
+        const pdfArrayBuffer = await pdfResponse.arrayBuffer();
+        const pdfBuffer = Buffer.from(pdfArrayBuffer);
+        console.log('✅ PDF fetched, size:', pdfBuffer.length, 'bytes');
+        
+        // Send customer email with PDF attachment
         const { data, error } = await resend.emails.send({
           from: `Rental Mario Hans <presupuestos@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
           to: [customerEmail],
           subject,
           html: emailHtml,
+          attachments: [
+            {
+              filename: `presupuesto_${orderId}_${projectName.replace(/\s+/g, '_')}.pdf`,
+              content: pdfBuffer,
+            },
+          ],
         });
 
         if (error) {
@@ -424,7 +442,7 @@ Descarga el detalle del pedido aquí
         } else {
           console.log('✅ Email notification sent successfully:', data?.id);
           
-          // Send admin backup (non-blocking)
+          // Send admin backup (non-blocking) with PDF attachment
           try {
             const adminSubject = `[RESPALDO ORDEN] ${subject}`;
             await resend.emails.send({
@@ -432,6 +450,12 @@ Descarga el detalle del pedido aquí
               to: ['rental.mariohans@gmail.com'],
               subject: adminSubject,
               html: emailHtml,
+              attachments: [
+                {
+                  filename: `presupuesto_${orderId}_${projectName.replace(/\s+/g, '_')}.pdf`,
+                  content: pdfBuffer,
+                },
+              ],
             });
             console.log('✅ Admin backup sent successfully');
           } catch (adminError) {
