@@ -83,30 +83,7 @@ export const POST: APIRoute = async (context) => {
     });
 
     console.log('✅ Order created successfully:', order.id);
-
-    // Auto-generate budget PDF for on-hold orders (matching admin behavior)
-    if (order.status === 'on-hold' && order.id) {
-      console.log('🚀 Auto-generating budget PDF for on-hold order:', order.id);
-      
-      // Import the budget generation function
-      const { generateBudgetPdfFromId } = await import('../../../lib/orderPdfGenerationService');
-      
-      // Generate budget PDF in the background (don't block order response)
-      generateBudgetPdfFromId(
-        order.id,
-        true, // uploadToR2
-        true  // sendEmail
-      ).then(result => {
-        if (result.success) {
-          console.log('✅ Budget PDF generated and email sent for order:', order.id);
-          console.log('📎 Budget URL:', result.pdfUrl);
-        } else {
-          console.error('❌ Budget generation failed for order:', order.id, result.error);
-        }
-      }).catch(err => {
-        console.error('💥 Error in auto budget generation for order:', order.id, err);
-      });
-    }
+    console.log('📋 PDF generation will be handled by frontend via /api/orders/:id/generate-budget');
 
     return new Response(JSON.stringify({
       success: true,

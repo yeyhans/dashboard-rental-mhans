@@ -15,7 +15,8 @@ import { apiClient } from '@/services/apiClient';
 import type { Database } from '@/types/database';
 import { toast } from 'sonner';
 import { WarrantyImageUpload } from './WarrantyImageUpload';
-import { generateOrderProcessingPdfFromId, generateBudgetPdfFromId } from '@/lib/orderPdfGenerationService';
+import { generateOrderProcessingPdfFromId } from '@/lib/orderPdfGenerationService';
+// generateBudgetPdfFromId removed - now using dedicated endpoint
 import { createEventFromOrder, openGoogleCalendar } from '@/lib/simpleCalendar';
 import { sendManualEmail, validateManualEmailData, type ManualEmailData } from '@/services/manualEmailService';
 import { AdminCommunications } from './AdminCommunications';
@@ -1324,11 +1325,22 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     try {
       console.log('🚀 Generating budget PDF for order:', orderData.id);
       
-      const result = await generateBudgetPdfFromId(
-        orderData.id,
-        true, // uploadToR2
-        false // sendEmail (not needed for admin generation)
-      );
+      // Usar el endpoint dedicado /api/orders/:id/generate-budget
+      // sendEmail: false porque la notificación se envía manualmente desde el admin
+      const response = await fetch(`/api/orders/${orderData.id}/generate-budget`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sendEmail: false }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al generar presupuesto');
+      }
+
+      const result = await response.json();
 
       if (result.success) {
         toast.success('Presupuesto generado exitosamente');
@@ -1376,11 +1388,22 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     try {
       console.log('🔄 Updating budget PDF for order:', orderData.id);
       
-      const result = await generateBudgetPdfFromId(
-        orderData.id,
-        true, // uploadToR2
-        false // sendEmail (not needed for admin generation)
-      );
+      // Usar el endpoint dedicado /api/orders/:id/generate-budget
+      // sendEmail: false porque la notificación se envía manualmente desde el admin
+      const response = await fetch(`/api/orders/${orderData.id}/generate-budget`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sendEmail: false }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al actualizar presupuesto');
+      }
+
+      const result = await response.json();
 
       if (result.success) {
         toast.success('Presupuesto actualizado exitosamente');

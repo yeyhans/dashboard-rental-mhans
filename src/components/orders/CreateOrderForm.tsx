@@ -13,7 +13,8 @@ import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Plus, Search, FileText, Mail, Truck, CheckCircle, MapPin } from 'lucide-react';
-import { generateBudgetPdfFromId } from '../../lib/orderPdfGenerationService';
+// Removed direct import - now using dedicated endpoint
+// import { generateBudgetPdfFromId } from '../../lib/orderPdfGenerationService';
 import type { Database } from '../../types/database';
 import type { Product } from '../../types/product';
 import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliveryTime } from '../../services/shippingService';
@@ -562,16 +563,25 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
   };
 
   // Función para generar presupuesto automáticamente después de crear la orden
+  // Usa el mismo endpoint dedicado que el frontend para evitar timeouts en Vercel
   const generateBudgetForCreatedOrder = async (createdOrder: any) => {
     try {
       console.log('📄 Generating budget for created order:', createdOrder.id);
       
-      // Usar el mismo sistema que ProcessOrder.tsx para generar presupuesto
-      const result = await generateBudgetPdfFromId(
-        createdOrder.id,
-        true, // uploadToR2
-        true  // sendEmail (enviar email con PDF adjunto)
-      );
+      // Usar el endpoint dedicado /api/orders/:id/generate-budget
+      // Nota: No se especifica sendEmail, usa el default (true) para enviar email automáticamente
+      const response = await fetch(`/api/orders/${createdOrder.id}/generate-budget`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
 
       if (result.success) {
         console.log('✅ Budget generated and email sent successfully for order:', createdOrder.id);
@@ -650,12 +660,26 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
 
       console.log('🚀 Generating budget with data:', budgetData);
 
-      // Usar el mismo sistema que ProcessOrder.tsx para generar presupuesto
-      const result = await generateBudgetPdfFromId(
-        budgetData.order_id,
-        true, // uploadToR2
-        true  // sendEmail (enviar email con PDF adjunto)
-      );
+      // Crear orden temporal para generar presupuesto
+      // Nota: Este presupuesto es solo una vista previa, no se guarda en la base de datos
+      console.warn('⚠️ Generating preview budget with temporary order ID');
+      console.warn('⚠️ For production budgets, create the order first');
+      
+      // Usar el endpoint dedicado /api/orders/:id/generate-budget
+      // Nota: Como es un ID temporal, puede fallar si el ID no existe en DB
+      const response = await fetch(`/api/orders/${budgetData.order_id}/generate-budget`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al generar presupuesto');
+      }
+
+      const result = await response.json();
 
       if (result.success) {
         console.log('✅ Budget generated and email sent successfully:', result.pdfUrl);
@@ -761,8 +785,14 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
       if (data.success) {
         console.log('✅ Order created successfully:', data.data);
         
-        // El presupuesto se genera automáticamente en el backend para órdenes 'on-hold'
-        console.log('✅ Order created successfully, backend will handle budget generation.');
+        // Generar presupuesto automáticamente para órdenes 'on-hold'
+        if (data.data.status === 'on-hold') {
+          console.log('🚀 Triggering budget generation for on-hold order...');
+          // No esperar la generación del presupuesto para no bloquear el cierre del formulario
+          generateBudgetForCreatedOrder(data.data).catch(err => {
+            console.error('Budget generation failed (non-blocking):', err);
+          });
+        }
         
         onOrderCreated(data.data);
         setIsOpen(false);
