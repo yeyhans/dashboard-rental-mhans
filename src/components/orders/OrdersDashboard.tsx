@@ -130,7 +130,6 @@ const OrdersDashboard = ({
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [total, setTotal] = useState(parseInt(initialTotal));
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
 
   // Detect mobile view
@@ -197,27 +196,6 @@ const OrdersDashboard = ({
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter]);
-
-  // Auto-refresh polling when enabled
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-
-    if (autoRefreshEnabled && !loading) {
-      console.log('🔄 Starting auto-refresh polling every 10 seconds...');
-      intervalId = setInterval(async () => {
-        console.log('🔄 Auto-refresh polling: checking for updates...');
-        await refreshData();
-      }, 10000); // Poll every 10 seconds
-    }
-
-    return () => {
-      if (intervalId) {
-        console.log('⏹️ Stopping auto-refresh polling');
-        clearInterval(intervalId);
-      }
-    };
-  }, [autoRefreshEnabled, loading]);
-
 
   // Get unique statuses from filtered orders
   const uniqueStatuses = Array.from(new Set(allOrders.map(order => order.status)));
@@ -380,21 +358,12 @@ const OrdersDashboard = ({
     setAllOrders([transformedOrder, ...allOrders]);
     setTotal(total + 1);
 
-    // Enable auto-refresh to monitor PDF generation
-    setAutoRefreshEnabled(true);
-    
     // Schedule automatic refresh after a short delay to get updated data including PDFs
     console.log('⏰ Scheduling automatic refresh to get updated PDF URLs...');
     setTimeout(async () => {
       console.log('🔄 Auto-refreshing data to get latest PDF URLs...');
       await refreshData();
     }, 3000); // Wait 3 seconds for budget generation to complete
-    
-    // Disable auto-refresh after 2 minutes to avoid excessive polling
-    setTimeout(() => {
-      console.log('⏹️ Disabling auto-refresh after 2 minutes');
-      setAutoRefreshEnabled(false);
-    }, 120000); // 2 minutes
   };
 
   // Función para manejar el cambio de página
@@ -700,7 +669,7 @@ const OrdersDashboard = ({
                 variant="outline"
                 title={lastRefreshTime ? `Última actualización: ${lastRefreshTime.toLocaleTimeString()}` : 'Actualizar datos'}
               >
-                <RefreshCw className={`h-4 w-4 mr-2 ${autoRefreshEnabled ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 {loading ? 'Actualizando...' : 'Actualizar'}
               </Button>
 
