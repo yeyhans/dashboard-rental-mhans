@@ -106,3 +106,22 @@ Su panel administrativo le proporciona **control total** sobre todos los aspecto
 ---
 
 **Su panel administrativo está diseñado para hacer crecer su negocio de manera eficiente y profesional, proporcionándole todas las herramientas necesarias para gestionar exitosamente su empresa de alquiler.**
+
+flowchart TD
+
+A[🟢 Creación de orden\n(Frontend o Backend)] -->|Se crea presupuesto| B[🟡 En Espera\n📧 Correo automático]
+B -->|Se genera o edita presupuesto| C[🟠 Revisando\n✉️ Sin correo automático]
+C -->|Confirmar pedido o ítems| D[🟢 Procesando\n👤 Usuario ve "Esperando"]
+D -->|Generar contrato y pagar 25%| E[🔵 Preparando\n👤 Usuario ve "Preparando"]
+E -->|Subir fotos del pedido\n(Validar entrega)| F[🟣 Entregando\n👤 Usuario ve "Entregando"]
+F -->|Devolución de equipos| G[🟢 Completado\n📧 Correo automático]
+G -->|Pago final recibido| H[💰 Pagado\n✉️ Sin correo automático]
+
+%% Opcional: flujo alternativo en caso de error
+B -->|Error o cancelación| X[🔴 Fallido\n📧 Correo automático]
+
+%% Leyenda
+subgraph Legend[📘 Leyenda]
+L1[📧 Correo automático: En Espera, Completado, Fallido]
+L2[✉️ Correos manuales: Confirmación, Actualización, Fotos, Personalizados]
+end

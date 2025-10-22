@@ -554,19 +554,23 @@ class CommunicationsService {
   }
 
   /**
-   * Eliminar un mensaje (solo el autor puede eliminarlo)
+   * Eliminar un mensaje a través del API (permite a admins eliminar cualquier mensaje)
    */
   async deleteMessage(messageId: number, userId: string): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('order_communications')
-        .delete()
-        .eq('id', messageId)
-        .eq('user_id', userId); // Solo el autor puede eliminar
+      // Usar API endpoint en lugar de acceso directo a Supabase
+      // Esto permite que el servidor verifique permisos de admin con service role
+      const response = await fetch(`/api/communications/${messageId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId })
+      });
 
-      if (error) {
-        console.error('Error deleting message:', error);
-        throw error;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Error al eliminar el mensaje');
       }
     } catch (error) {
       console.error('Error in deleteMessage:', error);

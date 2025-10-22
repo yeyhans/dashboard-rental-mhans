@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye, Settings } from 'lucide-react';
+import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye, Settings, Calendar } from 'lucide-react';
 import EditOrderForm from './EditOrderForm';
 import { CouponSelector } from './CouponSelector';
 import { ProductSelector } from './ProductSelector';
@@ -165,6 +165,9 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     includeBudget: false,
     includeContract: false
   });
+
+  // PDF deletion states
+  const [deletingPdf, setDeletingPdf] = useState(false);
 
   // Order notifications hook
   const {
@@ -1314,6 +1317,26 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     }
   };
 
+  // Calendar event handler
+  const handleAddToCalendar = () => {
+    try {
+      console.log('📅 Creating calendar event for order:', orderData.id);
+      const eventData = createEventFromOrder(orderData);
+      
+      // Open Google Calendar
+      openGoogleCalendar(eventData);
+      
+      toast.success('Calendario abierto', {
+        description: `Agregando evento para orden #${orderData.id}` 
+      });
+      
+      console.log('✅ Calendar event opened successfully');
+    } catch (error) {
+      console.error('💥 Error opening calendar:', error);
+      toast.error('Error al abrir el calendario');
+    }
+  };
+
   // Budget PDF generation function
   const handleGenerateBudgetPdf = async () => {
     if (!orderData?.id) {
@@ -1437,6 +1460,111 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       );
     } finally {
       setGeneratingBudget(false);
+    }
+  };
+
+  // Delete Budget PDF function
+  const handleDeleteBudgetPdf = async (budgetUrl: string) => {
+    if (!orderData?.id) {
+      toast.error('ID de orden no disponible');
+      return;
+    }
+
+    // Confirmation dialog
+    const confirmed = confirm('¿Eliminar este presupuesto? Esta acción actualizará la base de datos.');
+    if (!confirmed) return;
+
+    setDeletingPdf(true);
+    try {
+      console.log('🗑️ Deleting budget PDF:', budgetUrl);
+      
+      const response = await fetch(`/api/orders/${orderData.id}/delete-pdf`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          pdfType: 'budget',
+          pdfUrl: budgetUrl 
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al eliminar presupuesto');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success('Presupuesto eliminado exitosamente');
+        console.log('✅ Budget PDF deleted successfully');
+        
+        // Reload the page to reflect changes
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      } else {
+        throw new Error(result.message || 'Error al eliminar el presupuesto');
+      }
+    } catch (error) {
+      console.error('💥 Error deleting budget PDF:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Error al eliminar el presupuesto';
+      toast.error(errorMessage);
+    } finally {
+      setDeletingPdf(false);
+    }
+  };
+
+  // Delete Contract PDF function
+  const handleDeleteContractPdf = async () => {
+    if (!orderData?.id) {
+      toast.error('ID de orden no disponible');
+      return;
+    }
+
+    // Confirmation dialog
+    const confirmed = confirm('¿Eliminar contrato de procesamiento? Podrás regenerarlo después.');
+    if (!confirmed) return;
+
+    setDeletingPdf(true);
+    try {
+      console.log('🗑️ Deleting contract PDF');
+      
+      const response = await fetch(`/api/orders/${orderData.id}/delete-pdf`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          pdfType: 'contract'
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al eliminar contrato');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success('Contrato eliminado exitosamente');
+        console.log('✅ Contract PDF deleted successfully');
+        
+        // Reload the page to reflect changes
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      } else {
+        throw new Error(result.message || 'Error al eliminar el contrato');
+      }
+    } catch (error) {
+      console.error('💥 Error deleting contract PDF:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Error al eliminar el contrato';
+      toast.error(errorMessage);
+    } finally {
+      setDeletingPdf(false);
     }
   };
 
@@ -1921,31 +2049,54 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                 
                 return (
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      className="bg-blue-200 text-blue-900 hover:bg-blue-300"
-                      onClick={() => window.open(latestUrl, '_blank')}
-                      title={`Ver presupuesto más reciente (${budgetUrls.length > 1 ? `Versión ${budgetUrls.length} de ${budgetUrls.length}` : 'Versión única'})`}
-                    >
-                      <FileText className="h-4 w-4 mr-2" />
-                      Presupuesto {budgetUrls.length > 1 && `(v${budgetUrls.length})`}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        className="bg-blue-200 text-blue-900 hover:bg-blue-300"
+                        onClick={() => window.open(latestUrl, '_blank')}
+                        title={`Ver presupuesto más reciente (${budgetUrls.length > 1 ? `Versión ${budgetUrls.length} de ${budgetUrls.length}` : 'Versión única'})`}
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Presupuesto {budgetUrls.length > 1 && `(v${budgetUrls.length})`}
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        className="h-6 w-6 p-0 text-red-600 hover:bg-red-100"
+                        onClick={() => handleDeleteBudgetPdf(latestUrl)}
+                        disabled={deletingPdf}
+                        title="Eliminar presupuesto"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                     
                     {budgetUrls.length > 1 && (
                       <div className="flex items-center gap-1">
                         <span className="text-xs text-muted-foreground">Historial:</span>
                         {budgetUrls.slice(0, -1).map((url, index) => (
-                          <Button
-                            key={index}
-                            variant="outline"
-                            size="sm"
-                            className="h-6 px-2 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
-                            onClick={() => window.open(url.trim(), '_blank')}
-                            title={`Ver versión ${index + 1} del presupuesto`}
-                          >
-                            v{index + 1}
-                          </Button>
+                          <div key={index} className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
+                              onClick={() => window.open(url.trim(), '_blank')}
+                              title={`Ver versión ${index + 1} del presupuesto`}
+                            >
+                              v{index + 1}
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              className="h-5 w-5 p-0 text-red-600 hover:bg-red-100"
+                              onClick={() => handleDeleteBudgetPdf(url.trim())}
+                              disabled={deletingPdf}
+                              title="Eliminar versión"
+                            >
+                              <Trash2 className="h-2.5 w-2.5" />
+                            </Button>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -1954,16 +2105,28 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
               })()}
               
               {orderData.new_pdf_processing_url && (
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  className="bg-green-200 text-green-900 hover:bg-green-300"
-                  onClick={() => window.open(orderData.new_pdf_processing_url, '_blank')}
-                  title="Ver contrato de procesamiento"
-                >
-                  <FileCheck className="h-4 w-4 mr-2" />
-                  Contrato
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="bg-green-200 text-green-900 hover:bg-green-300"
+                    onClick={() => window.open(orderData.new_pdf_processing_url, '_blank')}
+                    title="Ver contrato de procesamiento"
+                  >
+                    <FileCheck className="h-4 w-4 mr-2" />
+                    Contrato
+                  </Button>
+                  <Button 
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-red-600 hover:bg-red-100"
+                    onClick={handleDeleteContractPdf}
+                    disabled={deletingPdf}
+                    title="Eliminar contrato"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
               )}
               
               {!orderData.new_pdf_processing_url && (
@@ -2047,15 +2210,26 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
               <Mail className="w-5 h-5" />
               Comunicación Manual
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowEmailModal(true)}
-              className="flex items-center gap-2 bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100"
-            >
-              <Send className="w-4 h-4" />
-              Enviar Correo
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleAddToCalendar}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100"
+                title="Agregar recordatorio a Google Calendar"
+              >
+                <Calendar className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowEmailModal(true)}
+                className="flex items-center gap-2 bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100"
+              >
+                <Send className="w-4 h-4" />
+                Enviar Correo
+              </Button>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>

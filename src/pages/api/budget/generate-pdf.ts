@@ -633,11 +633,11 @@ function generateBudgetHTML(orderData: BudgetData): string {
             </div>
             <div class="info-row">
                 <span class="info-label">Cuenta:</span>
-                <span class="info-value">FAN Emprende, Cuenta vista</span>
+                <span class="info-value">Cuenta Corriente</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Número:</span>
-                <span class="info-value">306024355</span>
+                <span class="info-value">8140915407</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Email:</span>

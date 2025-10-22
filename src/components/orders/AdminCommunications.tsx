@@ -18,11 +18,9 @@ import {
   Mail,
   Package,
   Settings,
-  Upload,
   Download,
   BarChart3,
   Search,
-  Filter,
   Image,
   Paperclip,
   X
@@ -226,6 +224,12 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
 
     try {
       await communicationsService.deleteMessage(messageId, adminInfo.id);
+      
+      // Actualizar el estado local inmediatamente
+      setMessages(prev => prev.filter(msg => msg.id !== messageId));
+      setFilteredMessages(prev => prev.filter(msg => msg.id !== messageId));
+      setTotalMessages(prev => prev - 1);
+      
       toast.success('Mensaje eliminado');
     } catch (error) {
       console.error('Error deleting message:', error);
@@ -250,19 +254,6 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
-    }
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validar tamaño (10MB máximo)
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error('El archivo es demasiado grande. Máximo 10MB.');
-        return;
-      }
-      setSelectedFile(file);
-      toast.success(`Archivo seleccionado: ${file.name}`);
     }
   };
 
@@ -643,31 +634,35 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
                           </div>
                           
                           {/* Indicadores de estado y controles admin */}
-                          {isMyMessage(message) && (
-                            <div className={`flex items-center justify-end mt-1 opacity-0 group-hover/message:opacity-100 transition-opacity ${
-                              isGrouped ? 'absolute -bottom-5 right-0' : ''
-                            }`}>
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground/70">
-                                {isGrouped && (
-                                  <span>{formatMessageTime(message.created_at)}</span>
-                                )}
-                                {message.is_read ? (
-                                  <CheckCheck className="h-3 w-3 text-blue-500" />
-                                ) : (
-                                  <Clock className="h-3 w-3" />
-                                )}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground rounded-full ml-1"
-                                  onClick={() => handleDeleteMessage(message.id)}
-                                  title="Eliminar mensaje"
-                                >
-                                  <Trash2 className="h-2.5 w-2.5" />
-                                </Button>
-                              </div>
+                          <div className={`flex items-center ${isMyMessage(message) ? 'justify-end' : 'justify-start'} mt-1 opacity-0 group-hover/message:opacity-100 transition-opacity ${
+                            isGrouped ? 'absolute -bottom-5' : ''
+                          } ${isMyMessage(message) ? 'right-0' : 'left-0'}`}>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground/70">
+                              {/* Indicadores de lectura solo para mensajes propios */}
+                              {isMyMessage(message) && (
+                                <>
+                                  {isGrouped && (
+                                    <span>{formatMessageTime(message.created_at)}</span>
+                                  )}
+                                  {message.is_read ? (
+                                    <CheckCheck className="h-3 w-3 text-blue-500" />
+                                  ) : (
+                                    <Clock className="h-3 w-3" />
+                                  )}
+                                </>
+                              )}
+                              {/* Botón de eliminar visible para todos los mensajes */}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground rounded-full ml-1"
+                                onClick={() => handleDeleteMessage(message.id)}
+                                title="Eliminar mensaje"
+                              >
+                                <Trash2 className="h-2.5 w-2.5" />
+                              </Button>
                             </div>
-                          )}
+                          </div>
                         </div>
                       </div>
                     </div>
