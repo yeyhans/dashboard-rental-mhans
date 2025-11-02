@@ -358,28 +358,37 @@ const page2Offset = -1553;
   <meta charset="UTF-8">
   <title>Anexo Contrato Rental Mario Hans - Pedido #{orderIdNum}</title>
   <style>
-    body {
+    * {
       margin: 0;
       padding: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background: #f5f5f5;
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #fff;
     }
     .container {
       width: 100%;
-      max-width: 1920px;
+      background: #fff;
     }
     svg {
       width: 100%;
       height: auto;
       display: block;
+      background: #fff;
     }
     .page-break {
       page-break-before: always;
+      break-before: page;
     }
     @media print {
-      body {
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #fff;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
@@ -387,9 +396,16 @@ const page2Offset = -1553;
         max-width: none;
         margin: 0;
         padding: 0;
+        background: #fff;
       }
       svg {
         page-break-inside: avoid;
+        break-inside: avoid;
+        background: #fff;
+      }
+      .page-break {
+        page-break-before: always;
+        break-before: page;
       }
     }
   </style>
@@ -609,8 +625,7 @@ abono de reserva, el arrendatario acepta plenamente todas las condiciones de arr
     </svg>
 
     <!-- Page 2: Contract Text and Signatures -->
-    <div class="page-break"></div>
-    <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1400" height={page2Height} viewBox={page2ViewBox} class="page-break">
+    <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1400" height={page2Height} viewBox={page2ViewBox} class="page-break" style="page-break-before: always;">
     <defs>
       <clipPath id="clip-Web_1920_2">
         <rect width="1400" height={page2Height}/>
