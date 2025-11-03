@@ -105,7 +105,7 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
   };
 
   const handleImagesUpdate = (images: string[]) => {
-    setUpdatedProduct(prev => ({ ...prev, images: JSON.stringify(images) }));
+    setUpdatedProduct(prev => ({ ...prev, images }));
   };
 
   // Helper function to parse images JSON

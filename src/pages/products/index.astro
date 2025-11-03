@@ -18,6 +18,15 @@ if (!adminSession) {
 
 console.log('✅ Admin autenticado en products:', adminSession.admin.email);
 
+// Extract access token from cookies
+const accessToken = Astro.cookies.get('sb-access-token')?.value || '';
+
+if (!accessToken) {
+  console.error('❌ No access token found in cookies');
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+
 // Load ALL products and categories for client-side pagination and filtering
 // This ensures we have all data available for proper pagination
 const { products, total } = await ProductService.searchProducts('', 1, 1000); // Load up to 1000 products
@@ -42,11 +51,7 @@ const title = `Gestión de Productos | ${adminSession.admin.email}`;
       initialProducts={productsData.products as any}
       initialTotal={productsData.total}
       initialCategories={categoriesData.categories as any}
-      adminData={{
-        email: adminSession.admin.email,
-        role: adminSession.admin.role,
-        userId: adminSession.user.id
-      }}
+      accessToken={accessToken}
     />
   </div>
 </Base>

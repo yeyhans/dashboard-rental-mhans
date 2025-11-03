@@ -18,6 +18,15 @@ if (!adminSession) {
 
 console.log('✅ Admin autenticado en product detail:', adminSession.admin.email);
 
+// Extract access token from cookies
+const accessToken = Astro.cookies.get('sb-access-token')?.value || '';
+
+if (!accessToken) {
+  console.error('❌ No access token found in cookies');
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+
 // Get the product ID from the URL parameter
 const { id } = Astro.params;
 
