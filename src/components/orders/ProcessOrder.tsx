@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye, Settings, Calendar } from 'lucide-react';
 import EditOrderForm from './EditOrderForm';
 import { CouponSelector } from './CouponSelector';
@@ -131,6 +132,15 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   });
   const [shippingAddress, setShippingAddress] = useState('');
   const [shippingPhone, setShippingPhone] = useState('');
+  
+  // IVA toggle state
+  const [applyIva, setApplyIva] = useState<boolean>(() => {
+    // Initialize based on whether calculated_iva > 0 in existing order
+    if (orderData?.calculated_iva) {
+      return parseFloat(orderData.calculated_iva.toString()) > 0;
+    }
+    return false;
+  });
   
   // Custom shipping states
   const [showCustomShippingForm, setShowCustomShippingForm] = useState(false);
@@ -264,6 +274,14 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       console.log('💰 Found existing calculated_discount:', orderData.calculated_discount);
       // The calculated_discount is now handled automatically through coupon calculations
       // but we log it for reference
+    }
+    
+    // Initialize applyIva state based on calculated_iva
+    if (orderData?.calculated_iva) {
+      const ivaValue = parseFloat(orderData.calculated_iva.toString());
+      const shouldApplyIva = ivaValue > 0;
+      console.log('💵 Initializing applyIva:', shouldApplyIva, 'from calculated_iva:', ivaValue);
+      setApplyIva(shouldApplyIva);
     }
     
     console.log('ℹ️ Order data initialization completed');
@@ -514,7 +532,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     lineItems: any[], 
     numDays: number,
     shipping: number = 0,
-    couponDiscount: number = 0
+    couponDiscount: number = 0,
+    applyIva: boolean = true
   ) => {
     // 1. Subtotal de productos
     const productsSubtotal = calculateProductsSubtotal(lineItems, numDays);
@@ -522,8 +541,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     // 2. CALCULATED_SUBTOTAL = productos + envío - descuento cupón
     const calculatedSubtotal = calculateCalculatedSubtotal(productsSubtotal, shipping, couponDiscount);
     
-    // 3. CALCULATED_IVA = calculated_subtotal × 0.19
-    const calculatedIva = calculateCalculatedIVA(calculatedSubtotal, true);
+    // 3. CALCULATED_IVA = calculated_subtotal × 0.19 (solo si applyIva es true)
+    const calculatedIva = calculateCalculatedIVA(calculatedSubtotal, applyIva);
     
     // 4. CALCULATED_TOTAL = calculated_subtotal + calculated_iva
     const calculatedTotal = calculateCalculatedTotal(calculatedSubtotal, calculatedIva);
@@ -553,7 +572,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       editedProducts,
       numDays,
       shipping,
-      couponDiscountAmount
+      couponDiscountAmount,
+      applyIva
     );
     return calculations.calculated_total;
   };
@@ -568,14 +588,15 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       console.log('🔢 Calculando valores...');
       const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
       const shipping = parseFloat(editedShipping || '0');
-      console.log('📊 numDays:', numDays, 'shipping:', shipping, 'couponDiscountAmount:', couponDiscountAmount);
+      console.log('📊 numDays:', numDays, 'shipping:', shipping, 'couponDiscountAmount:', couponDiscountAmount, 'applyIva:', applyIva);
       console.log('📦 editedProducts length:', editedProducts.length);
       
       const calculations = updateAllCalculations(
         editedProducts,
         numDays,
         shipping,
-        couponDiscountAmount
+        couponDiscountAmount,
+        applyIva
       );
       console.log('✅ Cálculos completados:', calculations);
       
@@ -795,6 +816,14 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     );
     setSelectedShippingMethod(null);
     setShippingMethods([]);
+    
+    // Reset applyIva to original value from order
+    if (orderData?.calculated_iva) {
+      const ivaValue = parseFloat(orderData.calculated_iva.toString());
+      setApplyIva(ivaValue > 0);
+    } else {
+      setApplyIva(false);
+    }
     
     setIsEditingFinancials(false);
     setShowProductSelector(false);
@@ -3033,7 +3062,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                     editedProducts,
                     numDays,
                     shipping,
-                    couponDiscountAmount
+                    couponDiscountAmount,
+                    applyIva
                   );
                   return calculations.calculated_discount > 0 ? (
                     <div className="flex justify-between items-center bg-orange-50 p-3 rounded-lg border border-orange-200">
@@ -3408,7 +3438,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                     editedProducts,
                     numDays,
                     shipping,
-                    couponDiscountAmount
+                    couponDiscountAmount,
+                    applyIva
                   );
                   return (
                     <div className="flex justify-between items-center bg-blue-50 p-2 rounded">
@@ -3431,6 +3462,25 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                 }
               })()}
               
+              {/* IVA Toggle Checkbox - Only visible when editing */}
+              {isEditingFinancials && (
+                <div className="flex items-center justify-between gap-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="apply-iva-order"
+                      checked={applyIva}
+                      onCheckedChange={(checked) => setApplyIva(checked === true)}
+                    />
+                    <Label 
+                      htmlFor="apply-iva-order" 
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      Incluir IVA (19%)
+                    </Label>
+                  </div>
+                </div>
+              )}
+              
               {/* IVA */}
               {(() => {
                 const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
@@ -3441,7 +3491,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                     editedProducts,
                     numDays,
                     shipping,
-                    couponDiscountAmount
+                    couponDiscountAmount,
+                    applyIva
                   );
                   return calculations.calculated_iva > 0;
                 } else {
@@ -3459,7 +3510,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                           editedProducts,
                           numDays,
                           shipping,
-                          couponDiscountAmount
+                          couponDiscountAmount,
+                          applyIva
                         );
                         return calculations.calculated_iva.toLocaleString('es-CL');
                       } else {

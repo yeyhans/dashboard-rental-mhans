@@ -274,15 +274,12 @@ export default function OrderStatusTables({
       </div>
 
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="on-hold" className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
             En Espera ({ordersByStatus.onHold.length})
           </TabsTrigger>
-          <TabsTrigger value="pending" className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Pendientes ({ordersByStatus.pending.length})
-          </TabsTrigger>
+
           <TabsTrigger value="processing" className="flex items-center gap-2">
             <Clock className="h-4 w-4" />
             Procesando ({ordersByStatus.processing.length})
