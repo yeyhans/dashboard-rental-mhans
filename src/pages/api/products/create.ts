@@ -67,6 +67,7 @@ export const POST: APIRoute = async ({ request }) => {
       categories_ids: productData.categories_ids || null,
       categories_name: productData.categories_name || null,
       tags: productData.tags || null,
+      collage_image_url: productData.collage_image_url || null,
     };
 
     // Create the product

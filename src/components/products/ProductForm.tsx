@@ -52,6 +52,7 @@ interface ProductFormData {
   categories_name: string;
   tags: string[];
   images: string[];
+  collage_image_url: string | null;
 }
 
 interface ProductFormProps {
@@ -100,6 +101,7 @@ const ProductForm = ({
     categories_name: '',
     tags: [],
     images: [],
+    collage_image_url: null,
     ...initialData
   });
 
@@ -189,6 +191,10 @@ const ProductForm = ({
     setFormData(prev => ({ ...prev, images }));
   };
 
+  const handleCollageImageSelect = (imageUrl: string | null) => {
+    setFormData(prev => ({ ...prev, collage_image_url: imageUrl }));
+  };
+
   const handleFilesSelected = (files: File[]) => {
     setSelectedFiles(files);
   };
@@ -261,7 +267,8 @@ const ProductForm = ({
         categories_ids: formData.categories_ids,
         categories_name: formData.categories_name,
         tags: formData.tags,
-        images: [] // Inicialmente vacío
+        images: [], // Inicialmente vacío
+        collage_image_url: formData.collage_image_url || null
       };
 
       console.log('🚀 Preparando datos del producto:', productData);
@@ -348,7 +355,8 @@ const ProductForm = ({
           categories_ids: [],
           categories_name: '',
           tags: [],
-          images: []
+          images: [],
+          collage_image_url: null
         });
         
         // Limpiar archivos seleccionados
@@ -779,6 +787,8 @@ const ProductForm = ({
             currentImages={formData.images}
             onImagesUpdate={handleImagesChange}
             onFilesSelected={handleFilesSelected}
+            selectedCollageImage={formData.collage_image_url}
+            onCollageImageSelect={handleCollageImageSelect}
           />
           {selectedFiles.length > 0 && (
             <div className="mt-4 p-4 bg-blue-50 rounded-lg">

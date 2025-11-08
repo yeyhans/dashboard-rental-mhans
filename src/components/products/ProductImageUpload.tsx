@@ -13,6 +13,8 @@ interface ProductImageUploadProps {
   currentImages?: string[];
   onImagesUpdate: (images: string[]) => void;
   onFilesSelected?: (files: File[]) => void;
+  selectedCollageImage?: string | null;
+  onCollageImageSelect?: (imageUrl: string | null) => void;
   disabled?: boolean;
 }
 
@@ -27,6 +29,8 @@ export function ProductImageUpload({
   currentImages = [], 
   onImagesUpdate, 
   onFilesSelected,
+  selectedCollageImage = null,
+  onCollageImageSelect,
   disabled = false 
 }: ProductImageUploadProps) {
   const [selectedFiles, setSelectedFiles] = useState<FileWithPreview[]>([]);
@@ -195,6 +199,19 @@ export function ProductImageUpload({
     window.open(imageUrl, '_blank');
   }, []);
 
+  // Handle collage image selection
+  const handleCollageImageClick = useCallback((imageUrl: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (disabled || !onCollageImageSelect) return;
+    
+    // If clicking the same image, deselect it
+    if (selectedCollageImage === imageUrl) {
+      onCollageImageSelect(null);
+    } else {
+      onCollageImageSelect(imageUrl);
+    }
+  }, [selectedCollageImage, onCollageImageSelect, disabled]);
+
   return (
     <Card>
       <CardHeader>
@@ -211,37 +228,68 @@ export function ProductImageUpload({
         {currentImages.length > 0 && (
           <div>
             <Label className="text-sm font-medium mb-2 block">Imágenes Actuales</Label>
+            {onCollageImageSelect && (
+              <p className="text-xs text-muted-foreground mb-2">
+                Haz clic en una imagen para seleccionarla como imagen de collage
+              </p>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {currentImages.map((imageUrl, index) => (
-                <div key={index} className="relative group">
-                  <div className="aspect-square bg-muted rounded-lg overflow-hidden border">
-                    <img
-                      src={imageUrl}
-                      alt={`Producto ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
+              {currentImages.map((imageUrl, index) => {
+                const isSelected = selectedCollageImage === imageUrl;
+                return (
+                  <div 
+                    key={index} 
+                    className={`relative group ${
+                      onCollageImageSelect ? 'cursor-pointer' : ''
+                    }`}
+                    onClick={(e) => onCollageImageSelect && handleCollageImageClick(imageUrl, e)}
+                  >
+                    <div className={`aspect-square bg-muted rounded-lg overflow-hidden border-4 transition-all ${
+                      isSelected 
+                        ? 'border-primary ring-2 ring-primary ring-offset-2' 
+                        : 'border-border hover:border-primary/50'
+                    }`}>
+                      <img
+                        src={imageUrl}
+                        alt={`Producto ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    {isSelected && (
+                      <div className="absolute top-2 left-2">
+                        <Badge className="bg-primary text-primary-foreground">
+                          Imagen de Collage
+                        </Badge>
+                      </div>
+                    )}
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-6 w-6 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          viewImage(imageUrl);
+                        }}
+                      >
+                        <Eye className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-6 w-6 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeCurrentImage(imageUrl);
+                        }}
+                        disabled={disabled}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="h-6 w-6 p-0"
-                      onClick={() => viewImage(imageUrl)}
-                    >
-                      <Eye className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="h-6 w-6 p-0"
-                      onClick={() => removeCurrentImage(imageUrl)}
-                      disabled={disabled}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

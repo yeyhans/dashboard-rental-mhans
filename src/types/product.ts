@@ -52,6 +52,7 @@ export type Product = {
   categories_ids: any | null;
   categories_name: string | null;
   tags: any | null;
+  collage_image_url: string | null;
   created_at: string;
   updated_at: string;
 };

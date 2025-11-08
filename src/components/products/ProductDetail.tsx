@@ -108,6 +108,10 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
     setUpdatedProduct(prev => ({ ...prev, images }));
   };
 
+  const handleCollageImageSelect = (imageUrl: string | null) => {
+    setUpdatedProduct(prev => ({ ...prev, collage_image_url: imageUrl }));
+  };
+
   // Helper function to parse images JSON
   const parseImages = (imagesJson: any): string[] => {
     if (!imagesJson) return [];
@@ -384,6 +388,8 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
                 productId={product.id}
                 currentImages={parseImages(updatedProduct.images || product.images)}
                 onImagesUpdate={handleImagesUpdate}
+                selectedCollageImage={updatedProduct.collage_image_url || product.collage_image_url || null}
+                onCollageImageSelect={handleCollageImageSelect}
                 disabled={isSaving}
               />
             </TabsContent>

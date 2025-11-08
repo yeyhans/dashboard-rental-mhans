@@ -514,6 +514,7 @@ export interface Database {
           categories_ids: Json | null;
           categories_name: string | null;
           tags: Json | null;
+          collage_image_url: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -548,6 +549,7 @@ export interface Database {
           categories_ids?: Json | null;
           categories_name?: string | null;
           tags?: Json | null;
+          collage_image_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -582,6 +584,7 @@ export interface Database {
           categories_ids?: Json | null;
           categories_name?: string | null;
           tags?: Json | null;
+          collage_image_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
