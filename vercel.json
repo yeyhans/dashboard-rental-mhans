@@ -17,5 +17,13 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "src/pages/api/order/generate-budget-pdf.ts": {
+      "maxDuration": 10
+    },
+    "src/pages/api/orders/[id]/generate-budget.ts": {
+      "maxDuration": 10
+    }
+  }
 }

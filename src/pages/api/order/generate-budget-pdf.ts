@@ -62,46 +62,97 @@ export const POST: APIRoute = async ({ request }) => {
     
     console.log('🔗 HTML URL:', htmlUrl);
     
-    // Get HTML content (not .pdf extension, just HTML)
-    const htmlResponse = await fetch(htmlUrl, {
-      method: 'GET',
-      headers: {
-        'X-Internal-Request': 'true',
-        'X-Requested-Order-Id': orderId.toString(),
-        'Accept': 'text/html'
-      }
-    });
-
-    if (!htmlResponse.ok) {
-      console.error('❌ Failed to get HTML:', htmlResponse.status, htmlResponse.statusText);
-      const errorText = await htmlResponse.text();
-      console.error('Error details:', errorText);
+    // Get HTML content with timeout for Vercel free tier (optimized fetch)
+    console.log('📄 Fetching HTML template with timeout...');
+    let htmlContent: string;
+    
+    try {
+      // Create AbortController for timeout handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
       
+      const htmlResponse = await fetch(htmlUrl, {
+        method: 'GET',
+        headers: {
+          'X-Internal-Request': 'true',
+          'X-Requested-Order-Id': orderId.toString(),
+          'Accept': 'text/html'
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+
+      if (!htmlResponse.ok) {
+        console.error('❌ Failed to get HTML:', htmlResponse.status, htmlResponse.statusText);
+        const errorText = await htmlResponse.text();
+        console.error('Error details:', errorText);
+        
+        return new Response(JSON.stringify({
+          success: false,
+          message: 'Error al obtener HTML',
+          error: `HTML generation failed: ${htmlResponse.status} ${htmlResponse.statusText}`
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      htmlContent = await htmlResponse.text();
+      console.log('✅ HTML template loaded successfully, size:', htmlContent.length, 'characters');
+    } catch (error) {
+      console.error('❌ HTML fetch error:', error);
       return new Response(JSON.stringify({
         success: false,
-        message: 'Error al obtener HTML',
-        error: `HTML generation failed: ${htmlResponse.status} ${htmlResponse.statusText}`
+        message: 'Error al obtener HTML (timeout o error de red)',
+        error: error instanceof Error ? error.message : 'Unknown error'
       }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const htmlContent = await htmlResponse.text();
-    console.log('✅ HTML template loaded successfully, size:', htmlContent.length, 'characters');
-
-    // Generate PDF using Puppeteer service
+    // Generate PDF using Puppeteer service with timeout handling for Vercel free tier
     console.log('🔄 Generating PDF with Puppeteer service...');
     
     const { generatePdfFromHtml } = await import('../../../lib/pdfService');
     
-    const pdfBuffer = await generatePdfFromHtml({
-      htmlContent,
-      format: 'A4',
-      margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' },
-      printBackground: true
-    });
-    console.log('✅ PDF generated successfully, size:', pdfBuffer.byteLength);
+    let pdfBuffer: Buffer;
+    try {
+      // Wrap PDF generation in a timeout to ensure we stay within Vercel's 10s limit
+      // We allocate 7 seconds for PDF generation (HTML fetch took ~3s, leaving 7s for PDF)
+      pdfBuffer = await Promise.race([
+        generatePdfFromHtml({
+          htmlContent,
+          format: 'A4',
+          margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' },
+          printBackground: true
+        }),
+        new Promise<Buffer>((_, reject) => 
+          setTimeout(() => reject(new Error('PDF generation timeout after 7 seconds')), 7000)
+        )
+      ]) as Promise<Buffer>;
+      
+      console.log('✅ PDF generated successfully, size:', pdfBuffer.byteLength);
+    } catch (error) {
+      console.error('❌ PDF generation error:', error);
+      
+      // Check if it's a timeout error
+      if (error instanceof Error && error.message.includes('timeout')) {
+        return new Response(JSON.stringify({
+          success: false,
+          message: 'La generación del PDF excedió el tiempo límite. Por favor, intente nuevamente.',
+          error: 'PDF generation timeout - Vercel free tier limit',
+          retry: true
+        }), {
+          status: 504,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      // Re-throw other errors to be caught by outer try-catch
+      throw error;
+    }
 
     // Verify PDF content is valid
     const pdfUint8Array = new Uint8Array(pdfBuffer);

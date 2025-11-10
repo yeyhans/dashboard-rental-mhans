@@ -30,18 +30,14 @@ export async function generatePdfFromHtml(options: PdfGenerationOptions): Promis
   
   try {
     if (isVercel) {
-      // Vercel configuration - use @sparticuz/chromium
+      // Vercel configuration - use @sparticuz/chromium with optimized args for faster startup
       console.log('🌐 Using Vercel/serverless configuration with @sparticuz/chromium');
       browser = await puppeteer.launch({
         args: [
           ...chromium.args,
           '--disable-blink-features=AutomationControlled', // Prevents email anonymization
-          '--disable-features=VizDisplayCompositor',
           '--disable-web-security',
-          '--disable-features=TranslateUI',
-          '--disable-ipc-flooding-protection',
           '--allow-running-insecure-content', // Allow loading external images
-          '--disable-site-isolation-trials'
         ],
         executablePath: await chromium.executablePath(),
         headless: true,
@@ -71,15 +67,12 @@ export async function generatePdfFromHtml(options: PdfGenerationOptions): Promis
     // Set viewport for consistent rendering
     await page.setViewport({ width: 1200, height: 800 });
     
-    // Set content and wait for network to be idle
+    // Set content with optimized wait strategy for Vercel free tier (8s timeout)
+    // Using 'load' instead of 'networkidle2' for faster completion
     await page.setContent(htmlContent, { 
-      waitUntil: 'networkidle2', // Standard wait for network requests
-      timeout: 30000 // Standard timeout
+      waitUntil: 'load', // Faster - waits only for page load, not all network requests
+      timeout: 8000 // Reduced to 8s to stay within Vercel's 10s limit
     });
-    
-    // Brief wait to ensure images are rendered
-    console.log('⏳ Brief wait for image rendering...');
-    await new Promise(resolve => setTimeout(resolve, 1000));
     
     console.log('📄 Generating PDF...');
     
@@ -115,10 +108,15 @@ export async function generatePdfFromUrl(url: string, headers?: Record<string, s
   
   try {
     if (isVercel) {
-      // Vercel configuration - use @sparticuz/chromium
+      // Vercel configuration - use @sparticuz/chromium with optimized args
       console.log('🌐 Using Vercel/serverless configuration with @sparticuz/chromium');
       browser = await puppeteer.launch({
-        args: chromium.args,
+        args: [
+          ...chromium.args,
+          '--disable-blink-features=AutomationControlled',
+          '--disable-web-security',
+          '--allow-running-insecure-content',
+        ],
         executablePath: await chromium.executablePath(),
         headless: true,
       });
@@ -142,10 +140,10 @@ export async function generatePdfFromUrl(url: string, headers?: Record<string, s
     // Set viewport
     await page.setViewport({ width: 1200, height: 800 });
     
-    // Navigate to URL
+    // Navigate to URL with optimized wait strategy for Vercel free tier
     await page.goto(url, { 
-      waitUntil: 'networkidle2',
-      timeout: 30000 
+      waitUntil: 'load', // Faster - waits only for page load
+      timeout: 8000 // Reduced to 8s to stay within Vercel's 10s limit
     });
     
     console.log('📄 Generating PDF from URL...');
