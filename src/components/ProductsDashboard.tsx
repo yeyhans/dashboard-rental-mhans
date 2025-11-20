@@ -27,15 +27,6 @@ import {
   SelectValue,
 } from "./ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from "./ui/dialog";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -48,7 +39,6 @@ import {
 import type { Product, ProductCategory } from '../types/product';
 import { ExternalLink, RefreshCw, Plus, Trash2 } from 'lucide-react';
 import React from 'react';
-import ProductForm from './products/ProductForm';
 
 // Helper function to format currency with thousands separator
 const formatCurrency = (value: string | number) => {
@@ -73,8 +63,6 @@ const ProductsDashboard = ({
   const [allProducts, setAllProducts] = useState<Product[]>(initialProducts);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState<number | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
@@ -232,51 +220,10 @@ const ProductsDashboard = ({
     setShowDeleteDialog(true);
   };
 
-  // Handle product creation
-  const handleCreateProduct = async (productData: any) => {
-    if (!accessToken) {
-      console.error('❌ Dashboard: Access token not available');
-      alert('Error: No se encontró token de autenticación. Por favor, inicia sesión nuevamente.');
-      return;
-    }
-
-    setIsCreating(true);
-    try {
-      console.log('📎 Dashboard: Creando producto via API');
-      const response = await fetch('/api/products/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(productData),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Error al crear el producto');
-      }
-
-      console.log('✅ Dashboard: Producto creado exitosamente:', result.data);
-      
-      // Add new product to the list
-      setAllProducts(prev => [result.data, ...prev]);
-      setShowCreateForm(false);
-      
-      // Show success message
-      console.log('🎉 Dashboard: Mostrando mensaje de éxito');
-      alert('Producto creado exitosamente');
-      
-      // Return the created product so ProductForm can handle images
-      return result.data;
-      
-    } catch (error) {
-      console.error('❌ Dashboard: Error creating product:', error);
-      alert(error instanceof Error ? error.message : 'Error al crear el producto');
-      throw error; // Re-throw so ProductForm can handle it
-    } finally {
-      setIsCreating(false);
+  // Navigate to create product page
+  const handleNavigateToCreate = () => {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/products/create';
     }
   };
 
@@ -707,28 +654,13 @@ const ProductsDashboard = ({
                 </SelectContent>
               </Select>
               
-              <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
-                <DialogTrigger asChild>
-                  <Button className="h-10 text-xs">
-                    <Plus className="h-3 w-3 mr-1" />
-                    Crear Producto
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Crear Nuevo Producto</DialogTitle>
-                    <DialogDescription>
-                      Completa la información del producto. Los campos marcados con * son obligatorios.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <ProductForm
-                    onSubmit={handleCreateProduct}
-                    onCancel={() => setShowCreateForm(false)}
-                    categories={categories}
-                    loading={isCreating}
-                  />
-                </DialogContent>
-              </Dialog>
+              <Button 
+                className="h-10 text-xs"
+                onClick={handleNavigateToCreate}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Crear Producto
+              </Button>
 
               <Button 
                 variant="outline"

@@ -52,6 +52,18 @@ export interface ProductAnalytics {
   }>;
 }
 
+export interface ProductRental {
+  orderId: number;
+  orderStatus: string;
+  fechaInicio: string;
+  fechaTermino: string;
+  cliente: string;
+  clienteEmail: string;
+  precio: number;
+  cantidad: number;
+  fechaCreacion: string;
+}
+
 export interface CouponAnalytics {
   totalCouponsUsed: number;
   totalDiscountAmount: number;
@@ -901,6 +913,111 @@ export class AdvancedAnalyticsService {
       };
     } catch (error) {
       console.error('Error fetching KPI analytics:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener todas las rentas de un producto específico
+   */
+  static async getProductRentals(productId: number, startDate?: Date, endDate?: Date): Promise<ProductRental[]> {
+    try {
+      if (!supabaseAdmin) {
+        throw new Error('Supabase admin client is not initialized');
+      }
+
+      // Construir query base
+      let baseQuery = supabaseAdmin
+        .from('orders')
+        .select(`
+          id,
+          status,
+          date_created,
+          order_fecha_inicio,
+          order_fecha_termino,
+          billing_first_name,
+          billing_last_name,
+          billing_email,
+          calculated_total,
+          line_items
+        `, { count: 'exact' })
+        .order('date_created', { ascending: false });
+
+      // Aplicar filtros de fecha si están disponibles
+      if (startDate) {
+        baseQuery = baseQuery.gte('date_created', startDate.toISOString());
+      }
+      if (endDate) {
+        baseQuery = baseQuery.lte('date_created', endDate.toISOString());
+      }
+
+      // Obtener todas las órdenes usando paginación automática
+      const allOrders: any[] = [];
+      const pageSize = 1000;
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const query = baseQuery.range(offset, offset + pageSize - 1);
+        const { data: orders, error, count } = await query;
+
+        if (error) throw error;
+
+        if (orders && orders.length > 0) {
+          allOrders.push(...orders);
+          offset += pageSize;
+          hasMore = orders.length === pageSize && (count === null || offset < count);
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const orders = allOrders;
+
+      const rentals: ProductRental[] = [];
+
+      // Procesar cada orden para encontrar el producto
+      orders?.forEach(order => {
+        if (!order.line_items) return;
+
+        let lineItems: any[] = [];
+        try {
+          lineItems = typeof order.line_items === 'string' 
+            ? JSON.parse(order.line_items) 
+            : order.line_items;
+        } catch (e) {
+          return;
+        }
+
+        // Buscar el producto en los line_items
+        lineItems.forEach(item => {
+          const itemProductId = item.product_id || item.id;
+          if (itemProductId === productId) {
+            const cliente = `${order.billing_first_name || ''} ${order.billing_last_name || ''}`.trim() || 'Cliente sin nombre';
+            
+            rentals.push({
+              orderId: order.id,
+              orderStatus: order.status || 'unknown',
+              fechaInicio: order.order_fecha_inicio || '',
+              fechaTermino: order.order_fecha_termino || '',
+              cliente,
+              clienteEmail: order.billing_email || '',
+              precio: (item.price || 0) * (item.quantity || 1),
+              cantidad: item.quantity || 1,
+              fechaCreacion: order.date_created || ''
+            });
+          }
+        });
+      });
+
+      // Ordenar por fecha de creación descendente (más recientes primero)
+      return rentals.sort((a, b) => {
+        const dateA = new Date(a.fechaCreacion).getTime();
+        const dateB = new Date(b.fechaCreacion).getTime();
+        return dateB - dateA;
+      });
+    } catch (error) {
+      console.error('Error fetching product rentals:', error);
       throw error;
     }
   }

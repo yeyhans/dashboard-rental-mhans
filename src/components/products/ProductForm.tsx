@@ -57,12 +57,13 @@ interface ProductFormData {
 
 interface ProductFormProps {
   onSubmit?: (data: ProductFormData) => Promise<void>;
-  onCancel: () => void;
+  onCancel?: () => void; // Made optional for standalone page mode
   categories: ProductCategory[];
   loading?: boolean;
   initialData?: Partial<ProductFormData>;
   onSuccess?: (productId: number) => void;
   onProductCreated?: (product: any) => void; // Callback when product is created (for Dashboard)
+  redirectOnSuccess?: string; // URL to redirect to after successful creation (for standalone page mode)
 }
 
 const ProductForm = ({ 
@@ -71,7 +72,8 @@ const ProductForm = ({
   categories, 
   loading = false,
   initialData,
-  onSuccess 
+  onSuccess,
+  redirectOnSuccess
 }: ProductFormProps) => {
   const [formData, setFormData] = useState<ProductFormData>({
     name: '',
@@ -365,6 +367,14 @@ const ProductForm = ({
         // Llamar callback de éxito
         if (onSuccess) {
           onSuccess(createdProduct.id);
+        }
+        
+        // Redirigir si estamos en modo standalone (sin onSubmit) y hay redirectOnSuccess definido
+        if (!onSubmit && redirectOnSuccess && typeof window !== 'undefined') {
+          // Esperar un breve delay para mostrar el mensaje de éxito antes de redirigir
+          setTimeout(() => {
+            window.location.href = redirectOnSuccess;
+          }, 2000);
         }
       }
 
@@ -861,7 +871,19 @@ const ProductForm = ({
 
       {/* Form Actions */}
       <div className="flex justify-end gap-4 pt-6 border-t">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isCreating || loading}>
+        <Button 
+          type="button" 
+          variant="outline" 
+          onClick={() => {
+            if (onCancel) {
+              onCancel();
+            } else if (typeof window !== 'undefined') {
+              // Default navigation if no onCancel provided (standalone mode)
+              window.location.href = '/products';
+            }
+          }} 
+          disabled={isCreating || loading}
+        >
           Cancelar
         </Button>
         <Button type="submit" disabled={isCreating || loading}>

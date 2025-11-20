@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { Package, TrendingUp, Tag, BarChart3, DollarSign } from 'lucide-react';
-import type { ProductAnalytics } from '../../services/advancedAnalyticsService';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+import { Package, TrendingUp, Tag, BarChart3, DollarSign, Loader2, Calendar, User, ShoppingCart } from 'lucide-react';
+import type { ProductAnalytics, ProductRental } from '../../services/advancedAnalyticsService';
 
 interface ProductAnalyticsCardProps {
   data: ProductAnalytics;
@@ -11,6 +12,63 @@ interface ProductAnalyticsCardProps {
 export default function ProductAnalyticsCard({ data }: ProductAnalyticsCardProps) {
   const formatNumber = (num: number) => num.toLocaleString('es-CL');
   const formatCurrency = (num: number) => `$${num.toLocaleString('es-CL')}`;
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'No disponible';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('es-CL', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Estado para manejar datos cargados por producto
+  const [rentalsData, setRentalsData] = useState<Record<number, { data: ProductRental[]; loading: boolean; error: string | null }>>({});
+
+  const loadProductRentals = async (productId: number) => {
+    // Si ya tenemos los datos, no cargar de nuevo
+    if (rentalsData[productId]?.data && rentalsData[productId].data.length > 0) {
+      return;
+    }
+
+    // Si ya está cargando, no hacer nada
+    if (rentalsData[productId]?.loading) {
+      return;
+    }
+
+    // Marcar como cargando
+    setRentalsData(prev => ({
+      ...prev,
+      [productId]: { data: [], loading: true, error: null }
+    }));
+
+    try {
+      const response = await fetch(`/api/analytics/product-rentals/${productId}`);
+      const result = await response.json();
+
+      if (result.success) {
+        setRentalsData(prev => ({
+          ...prev,
+          [productId]: { data: result.data, loading: false, error: null }
+        }));
+      } else {
+        setRentalsData(prev => ({
+          ...prev,
+          [productId]: { data: [], loading: false, error: result.error || 'Error al cargar las rentas' }
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching product rentals:', error);
+      setRentalsData(prev => ({
+        ...prev,
+        [productId]: { data: [], loading: false, error: 'Error al cargar las rentas' }
+      }));
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -81,34 +139,126 @@ export default function ProductAnalyticsCard({ data }: ProductAnalyticsCardProps
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {data.mostRentedProducts.slice(0, 10).map((product, index) => (
-              <div key={product.id} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Badge variant="outline" className="w-6 h-6 p-0 flex items-center justify-center text-xs">
-                    {index + 1}
-                  </Badge>
-                  {product.image && (
-                    <img 
-                      src={product.image} 
-                      alt={product.name}
-                      className="w-10 h-10 object-cover rounded border"
-                    />
-                  )}
-                  <div>
-                    <div className="text-sm font-medium">{product.name}</div>
-                    {product.sku && (
-                      <div className="text-xs text-muted-foreground">SKU: {product.sku}</div>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-bold">{formatNumber(product.totalRentals)} rentas</div>
-                  <div className="text-xs text-muted-foreground">{formatCurrency(product.revenue)}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <Accordion 
+            type="single" 
+            collapsible 
+            className="w-full"
+            onValueChange={(value) => {
+              if (value) {
+                const productId = parseInt(value.replace('product-', ''));
+                if (!isNaN(productId)) {
+                  loadProductRentals(productId);
+                }
+              }
+            }}
+          >
+            {data.mostRentedProducts.slice(0, 10).map((product, index) => {
+              const productRentals = rentalsData[product.id];
+
+              return (
+                <AccordionItem key={product.id} value={`product-${product.id}`}>
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex items-center justify-between w-full pr-4">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="w-6 h-6 p-0 flex items-center justify-center text-xs">
+                          {index + 1}
+                        </Badge>
+                        {product.image && (
+                          <img 
+                            src={product.image} 
+                            alt={product.name}
+                            className="w-10 h-10 object-cover rounded border"
+                          />
+                        )}
+                        <div>
+                          <div className="text-sm font-medium">{product.name}</div>
+                          {product.sku && (
+                            <div className="text-xs text-muted-foreground">SKU: {product.sku}</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold">{formatNumber(product.totalRentals)} rentas</div>
+                        <div className="text-xs text-muted-foreground">{formatCurrency(product.revenue)}</div>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="pt-2 space-y-3">
+                      {productRentals?.loading && (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                          <span className="ml-2 text-sm text-muted-foreground">Cargando rentas...</span>
+                        </div>
+                      )}
+
+                      {productRentals?.error && (
+                        <div className="text-center py-8 text-sm text-red-500">
+                          {productRentals.error}
+                        </div>
+                      )}
+
+                      {productRentals?.data && !productRentals.loading && !productRentals.error && (
+                        <>
+                          {productRentals.data.length === 0 ? (
+                            <div className="text-center py-8 text-sm text-muted-foreground">
+                              No se encontraron rentas para este producto
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {productRentals.data.map((rental) => (
+                                <div key={rental.orderId} className="p-3 border rounded-lg bg-muted/50">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-2">
+                                        <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-sm font-medium">Orden #{rental.orderId}</span>
+                                        <Badge 
+                                          variant={rental.orderStatus === 'completed' ? 'default' : 'secondary'}
+                                          className="text-xs"
+                                        >
+                                          {rental.orderStatus}
+                                        </Badge>
+                                      </div>
+                                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <User className="h-3 w-3" />
+                                        <span>{rental.cliente}</span>
+                                      </div>
+                                      {rental.clienteEmail && (
+                                        <div className="text-xs text-muted-foreground ml-5">
+                                          {rental.clienteEmail}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-2 text-xs">
+                                        <Calendar className="h-3 w-3 text-muted-foreground" />
+                                        <div>
+                                          <div>Inicio: {formatDate(rental.fechaInicio)}</div>
+                                          <div>Término: {formatDate(rental.fechaTermino)}</div>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center justify-between text-sm">
+                                        <span className="text-muted-foreground">Cantidad: {formatNumber(rental.cantidad)}</span>
+                                        <span className="font-bold text-green-600">{formatCurrency(rental.precio)}</span>
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        Fecha orden: {formatDate(rental.fechaCreacion)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              );
+            })}
+          </Accordion>
         </CardContent>
       </Card>
 
@@ -127,7 +277,7 @@ export default function ProductAnalyticsCard({ data }: ProductAnalyticsCardProps
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {data.categoriesPerformance.slice(0, 8).map((category, index) => (
+              {data.categoriesPerformance.slice(0, 8).map((category) => (
                 <div key={category.category} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
