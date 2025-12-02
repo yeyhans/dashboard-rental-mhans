@@ -17,6 +17,13 @@ if (!adminSession) {
 
 console.log('✅ Admin autenticado en users:', adminSession.admin.email);
 
+// Obtener el token de sesión de las cookies para pasarlo al componente
+const sessionToken = Astro.cookies.get('sb-access-token')?.value || '';
+
+if (!sessionToken) {
+  console.warn('⚠️ No se encontró token de sesión en cookies');
+}
+
 // Cargar usuarios para paginación y filtrado del lado del cliente
 const { users, total } = await UserService.searchUsers('', 1, 1000); // Cargar hasta 1000 usuarios
 
@@ -39,7 +46,7 @@ const title = `Gestión de Usuarios | ${adminSession.admin.email}`;
       client:load
       initialUsers={usersData.users}
       initialTotal={usersData.total}
-      adminInfo={usersData.adminInfo}
+      sessionToken={sessionToken}
     />
   </div>
 </Base>
