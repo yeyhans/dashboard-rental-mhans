@@ -34,7 +34,7 @@ export default defineConfig({
       SUPABASE_SERVICE_ROLE_KEY: envField.string({ context: "server", access: "secret" }),
       PORT: envField.number({ context: "server", access: "public", default: 4000 }),
       NODE_ENV: envField.string({ context: "server", access: "public", default: "development" }),
-      FRONTEND_URL: envField.string({ context: "server", access: "public", default: "http://localhost:4321" }),
+      PUBLIC_FRONTEND_URL: envField.string({ context: "server", access: "public", default: "http://localhost:4321" }),
       ALLOWED_ORIGINS: envField.string({ context: "server", access: "public", default: "http://localhost:4321,http://localhost:3000" }),
       JWT_SECRET: envField.string({ context: "server", access: "secret" }),
     }

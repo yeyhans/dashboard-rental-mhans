@@ -52,7 +52,7 @@ WITH CHECK (auth.jwt() ->> 'role' = 'service_role');
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-FRONTEND_URL=https://your-frontend-domain.com
+PUBLIC_FRONTEND_URL=https://your-frontend-domain.com
 ```
 
 3. **Verificar despliegue:**
@@ -115,7 +115,7 @@ WHERE email = 'tu-email@ejemplo.com';
 
 1. **CORS en Vercel:**
    - Ya configurado en `vercel.json`
-   - Verificar que `FRONTEND_URL` sea correcto
+   - Verificar que `PUBLIC_FRONTEND_URL` sea correcto
 
 2. **RLS en Supabase:**
    - Políticas ya creadas para `admin_users`
@@ -160,7 +160,7 @@ WHERE email = 'tu-email@ejemplo.com';
 - Agregar manualmente o usar interfaz de admin
 
 ### Error: CORS
-- Verificar `FRONTEND_URL` en variables de entorno
+- Verificar `PUBLIC_FRONTEND_URL` en variables de entorno
 - Comprobar configuración en `vercel.json`
 
 ### Error: "Cannot find module 'astro'"

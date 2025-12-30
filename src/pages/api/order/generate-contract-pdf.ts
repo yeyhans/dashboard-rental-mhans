@@ -1,39 +1,31 @@
 import type { APIRoute } from 'astro';
 import React from 'react';
-import { ProcessingDocument } from '../../../lib/pdf/components/processing/ProcessingDocument';
-import type { ProcessingDocumentData } from '../../../lib/pdf/core/types';
+import { ContractDocument } from '../../../lib/pdf/components/contract/ContractDocument';
+import type { BudgetDocumentData } from '../../../lib/pdf/core/types';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
 import { formatDateDDMMAAAA, getOrderStatusInSpanish } from '../../../lib/pdf/utils/formatters';
 
 export const POST: APIRoute = async ({ request }) => {
   try {
-    console.log('🚀 Order processing PDF generation API called');
+    console.log('🚀 Contract PDF generation API called');
 
     const requestData = await request.json();
-
-    // Support both formats: direct fields or nested orderData object
-    const orderDataNested = requestData.orderData;
-    const orderId = requestData.order_id || orderDataNested?.order_id || orderDataNested?.id;
-    const customer_id = requestData.customer_id || orderDataNested?.customer_id;
-    const uploadToR2 = requestData.uploadToR2 ?? true;
-    const sendEmail = requestData.sendEmail ?? false;
-
-    console.log('📋 Received request data:', {
-      order_id: orderId,
-      customer_id: customer_id,
-      uploadToR2: uploadToR2,
-      sendEmail: sendEmail,
-      hasNestedOrderData: !!orderDataNested
+    console.log('📋 Received order data:', {
+      order_id: requestData.order_id,
+      customer_id: requestData.customer_id,
+      billing_email: requestData.billing_email,
+      project_name: requestData.project_name
     });
+
+    const {
+      order_id: orderId,
+      customer_id,
+      uploadToR2 = true,
+      sendEmail = false
+    } = requestData;
 
     // Validate required fields
     if (!orderId || !customer_id) {
-      console.error('❌ Missing required fields:', {
-        orderId,
-        customer_id,
-        requestKeys: Object.keys(requestData),
-        nestedKeys: orderDataNested ? Object.keys(orderDataNested) : []
-      });
       return new Response(JSON.stringify({
         success: false,
         message: 'Campos requeridos faltantes: order_id, customer_id'
@@ -72,13 +64,13 @@ export const POST: APIRoute = async ({ request }) => {
 
     let pdfBuffer: Buffer;
     try {
-      // Fetch customer RUT from user_profiles table
+      // Fetch customer RUT and signature URL from user_profiles table
       let customerRut = '';
-      let companyRut = '';
+      let userSignatureUrl = '';
       if (orderData.customer_id) {
         const { data: customerProfile } = await supabase
           .from('user_profiles')
-          .select('rut, empresa_rut')
+          .select('rut, url_firma')
           .eq('user_id', parseInt(orderData.customer_id))
           .single();
 
@@ -86,19 +78,19 @@ export const POST: APIRoute = async ({ request }) => {
           // Try with auth_uid
           const { data: customerProfile2 } = await supabase
             .from('user_profiles')
-            .select('rut, empresa_rut')
+            .select('rut, url_firma')
             .eq('auth_uid', orderData.customer_id)
             .single();
 
           customerRut = customerProfile2?.rut || '';
-          companyRut = customerProfile2?.empresa_rut || '';
+          userSignatureUrl = customerProfile2?.url_firma || '';
         } else {
           customerRut = customerProfile.rut || '';
-          companyRut = customerProfile.empresa_rut || '';
+          userSignatureUrl = customerProfile.url_firma || '';
         }
       }
 
-      // Process shipping information
+      // Transform orderData to BudgetDocumentData (reused for contract)
       const shippingInfoData = orderData.shipping_lines && orderData.shipping_lines.length > 0 ? {
         method: orderData.shipping_lines[0].method_title || orderData.shipping_lines[0].method_id || 'Delivery',
         total: parseFloat(orderData.shipping_lines[0].total || '0'),
@@ -108,21 +100,29 @@ export const POST: APIRoute = async ({ request }) => {
         shippingPhone: orderData.shipping_lines[0].meta_data?.shipping_phone,
       } : undefined;
 
-      // Transform orderData to ProcessingDocumentData
-      const documentData: ProcessingDocumentData = {
+      const documentData: BudgetDocumentData = {
         orderId: orderData.id,
-        customerName: `${orderData.billing?.first_name || orderData.billing_first_name || ''} ${orderData.billing?.last_name || orderData.billing_last_name || ''}`.trim(),
-        customerEmail: orderData.billing?.email || orderData.billing_email || '',
-        customerRut: customerRut,
-        customerCompany: orderData.billing?.company || orderData.billing_company || '',
-        customerPhone: orderData.billing?.phone || orderData.billing_phone || '',
-        projectName: orderData.metadata?.order_proyecto || orderData.order_proyecto || 'Proyecto de Arriendo',
-        startDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_inicio || orderData.order_fecha_inicio || ''),
-        endDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_termino || orderData.order_fecha_termino || ''),
-        numJornadas: parseInt(orderData.metadata?.num_jornadas || orderData.num_jornadas?.toString() || '1'),
-        companyRut: companyRut || orderData.metadata?.company_rut || orderData.company_rut || '',
-        retireName: orderData.metadata?.order_retire_name || orderData.order_retire_name || '',
-        comments: orderData.metadata?.order_comments || orderData.order_comments || '',
+        billing: {
+          firstName: orderData.billing?.first_name || orderData.billing_first_name || '',
+          lastName: orderData.billing?.last_name || orderData.billing_last_name || '',
+          email: orderData.billing?.email || orderData.billing_email || '',
+          phone: orderData.billing?.phone || orderData.billing_phone,
+          company: orderData.billing?.company || orderData.billing_company,
+          address: orderData.billing?.address_1 || orderData.billing_address_1,
+          city: orderData.billing?.city || orderData.billing_city,
+          rut: customerRut,
+        },
+        project: {
+          name: orderData.metadata?.order_proyecto || orderData.order_proyecto || 'Proyecto de Arriendo',
+          startDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_inicio || orderData.order_fecha_inicio || ''),
+          endDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_termino || orderData.order_fecha_termino || ''),
+          numJornadas: parseInt(orderData.metadata?.num_jornadas || orderData.num_jornadas?.toString() || '1'),
+          companyRut: orderData.metadata?.company_rut || orderData.company_rut,
+          retireName: orderData.metadata?.order_retire_name || orderData.order_retire_name,
+          retirePhone: orderData.metadata?.order_retire_phone || orderData.order_retire_phone,
+          retireRut: orderData.metadata?.order_retire_rut || orderData.order_retire_rut,
+          comments: orderData.metadata?.order_comments || orderData.order_comments,
+        },
         lineItems: (orderData.line_items || []).map((item: any) => ({
           name: item.name,
           sku: item.sku,
@@ -136,15 +136,15 @@ export const POST: APIRoute = async ({ request }) => {
           total: parseFloat(orderData.metadata?.calculated_total || orderData.calculated_total?.toString() || '0'),
           reserve: parseFloat(orderData.metadata?.calculated_total || orderData.calculated_total?.toString() || '0') * 0.25,
         },
-        hasCoupon: (orderData.coupon_lines?.length || 0) > 0,
-        hasShipping: (orderData.shipping_lines?.length || 0) > 0,
-        ...(shippingInfoData && { shippingInfo: shippingInfoData }),
         couponCode: orderData.coupon_code,
+        status: getOrderStatusInSpanish(orderData.status || 'on-hold'),
+        ...(shippingInfoData && { shippingInfo: shippingInfoData }),
+        userSignatureUrl: userSignatureUrl || undefined,
       };
 
       // Generate PDF using React-PDF
       pdfBuffer = await generatePdfBuffer({
-        document: React.createElement(ProcessingDocument, { data: documentData })
+        document: React.createElement(ContractDocument, { data: documentData })
       });
 
       console.log('✅ PDF generated successfully with React-PDF, size:', pdfBuffer.byteLength);
@@ -200,7 +200,7 @@ export const POST: APIRoute = async ({ request }) => {
         try {
           // Create FormData for Cloudflare Worker with proper PDF content
           const formData = new FormData();
-          const fileName = `order_processing_${orderId}_${Date.now()}.pdf`;
+          const fileName = `Contrato_${orderId}_${Date.now()}.pdf`;
 
           // Create blob with explicit PDF content type and proper buffer
           const pdfBlob = new Blob([pdfBuffer], {
@@ -211,6 +211,7 @@ export const POST: APIRoute = async ({ request }) => {
 
           formData.append('file', pdfBlob, fileName);
           formData.append('userId', orderData.customer_id.toString());
+          formData.append('documentType', 'contract');
 
           // Upload to Cloudflare Worker with proper headers
           const uploadResponse = await fetch(`${cloudflareWorkerUrl}/upload-pdf-only`, {
@@ -228,20 +229,26 @@ export const POST: APIRoute = async ({ request }) => {
             finalPdfUrl = uploadResult.fileUrl || uploadResult.url;
             console.log('✅ PDF uploaded to R2:', finalPdfUrl);
 
-            // Update order with new_pdf_processing_url
-            console.log('💾 Updating order with PDF URL...');
+            // Update order with contract PDF URL
+            console.log('💾 Updating order with contract PDF URL...');
+            const { createClient } = await import('@supabase/supabase-js');
+            const supabase = createClient(
+              import.meta.env.PUBLIC_SUPABASE_URL!,
+              import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
+            );
+
             const { error: updateError } = await supabase
               .from('orders')
               .update({
-                new_pdf_processing_url: finalPdfUrl,
+                url_contrato: finalPdfUrl,
                 date_modified: new Date().toISOString()
               })
               .eq('id', orderId);
 
             if (updateError) {
-              console.error('⚠️ Failed to update order with PDF URL:', updateError);
+              console.error('⚠️ Failed to update order with contract PDF URL:', updateError);
             } else {
-              console.log('✅ Order updated with PDF URL');
+              console.log('✅ Order updated with contract PDF URL');
             }
           } else {
             console.warn('⚠️ R2 upload succeeded but no fileUrl in response:', uploadResult);
@@ -264,31 +271,18 @@ export const POST: APIRoute = async ({ request }) => {
       finalPdfUrl = `data:application/pdf;base64,${base64PDF}`;
     }
 
-    // Optional: Send email notification
-    if (sendEmail && orderData.billing?.email) {
-      console.log('📧 Sending email notification...');
-      try {
-        // Email sending logic would go here
-        console.log('✅ Email notification sent');
-      } catch (emailError) {
-        console.warn('⚠️ Email sending failed (non-critical):', emailError);
-      }
-    }
-
     return new Response(JSON.stringify({
       success: true,
-      message: 'PDF de procesamiento generado exitosamente',
+      message: 'Contrato generado exitosamente',
       pdf_url: finalPdfUrl,
-      pdfUrl: finalPdfUrl,
+      contractUrl: finalPdfUrl,
       metadata: {
         order_id: orderId,
-        pdfType: 'processing',
+        pdfType: 'contract',
         generatedAt: new Date().toISOString(),
         projectName: orderData.metadata?.order_proyecto || orderData.order_proyecto,
         totalAmount: orderData.metadata?.calculated_total || orderData.calculated_total,
         numJornadas: orderData.metadata?.num_jornadas || orderData.num_jornadas,
-        hasLineItems: (orderData.line_items?.length || 0) > 0,
-        hasCoupon: (orderData.coupon_lines?.length || 0) > 0,
         pdfValidation: {
           size: pdfBuffer.byteLength,
           header: pdfHeaderString,
@@ -301,7 +295,7 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
   } catch (error) {
-    console.error('💥 Error in order processing PDF generation API:', error);
+    console.error('💥 Error in contract PDF generation API:', error);
 
     return new Response(JSON.stringify({
       success: false,

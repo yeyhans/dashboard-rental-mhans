@@ -84,7 +84,7 @@ export const withAuth = (handler: (context: any) => Promise<Response>) => {
 export const withCors = (handler: (context: any) => Promise<Response>) => {
   return async (context: any) => {
     // Get origin from request or use default
-    const origin = context.request.headers.get('origin') || process.env.FRONTEND_URL || 'http://localhost:4321';
+    const origin = context.request.headers.get('origin') || process.env.PUBLIC_FRONTEND_URL || 'http://localhost:4321';
     
     console.log('🌐 CORS Middleware:', {
       method: context.request.method,

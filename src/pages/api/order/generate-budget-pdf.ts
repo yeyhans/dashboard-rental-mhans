@@ -1,4 +1,9 @@
 import type { APIRoute } from 'astro';
+import React from 'react';
+import { BudgetDocument } from '../../../lib/pdf/components/budget/BudgetDocument';
+import type { BudgetDocumentData } from '../../../lib/pdf/core/types';
+import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
+import { formatDateDDMMAAAA, getOrderStatusInSpanish } from '../../../lib/pdf/utils/formatters';
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -54,86 +59,91 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    // Generate PDF using HTML template + Puppeteer service
-    console.log('📄 Making internal request to budget-pdf page...');
-    
-    const baseUrl = new URL(request.url).origin;
-    const htmlUrl = `${baseUrl}/budget-pdf/${orderId}`;
-    
-    console.log('🔗 HTML URL:', htmlUrl);
-    
-    // Get HTML content with timeout for Vercel free tier (optimized fetch)
-    console.log('📄 Fetching HTML template with timeout...');
-    let htmlContent: string;
-    
-    try {
-      // Create AbortController for timeout handling
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
-      
-      const htmlResponse = await fetch(htmlUrl, {
-        method: 'GET',
-        headers: {
-          'X-Internal-Request': 'true',
-          'X-Requested-Order-Id': orderId.toString(),
-          'Accept': 'text/html'
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
+    // Generate PDF using React-PDF (replaces Puppeteer)
+    console.log('📄 Generating PDF with React-PDF...');
 
-      if (!htmlResponse.ok) {
-        console.error('❌ Failed to get HTML:', htmlResponse.status, htmlResponse.statusText);
-        const errorText = await htmlResponse.text();
-        console.error('Error details:', errorText);
-        
-        return new Response(JSON.stringify({
-          success: false,
-          message: 'Error al obtener HTML',
-          error: `HTML generation failed: ${htmlResponse.status} ${htmlResponse.statusText}`
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      htmlContent = await htmlResponse.text();
-      console.log('✅ HTML template loaded successfully, size:', htmlContent.length, 'characters');
-    } catch (error) {
-      console.error('❌ HTML fetch error:', error);
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'Error al obtener HTML (timeout o error de red)',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Generate PDF using Puppeteer service with timeout handling for Vercel free tier
-    console.log('🔄 Generating PDF with Puppeteer service...');
-    
-    const { generatePdfFromHtml } = await import('../../../lib/pdfService');
-    
     let pdfBuffer: Buffer;
     try {
-      // Wrap PDF generation in a timeout to ensure we stay within Vercel's 10s limit
-      // We allocate 7 seconds for PDF generation (HTML fetch took ~3s, leaving 7s for PDF)
-      pdfBuffer = await Promise.race([
-        generatePdfFromHtml({
-          htmlContent,
-          format: 'A4',
-          margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' },
-          printBackground: true
-        }),
-        new Promise<Buffer>((_, reject) => 
-          setTimeout(() => reject(new Error('PDF generation timeout after 7 seconds')), 7000)
-        )
-      ]) as Promise<Buffer>;
-      
-      console.log('✅ PDF generated successfully, size:', pdfBuffer.byteLength);
+      // Fetch customer RUT from user_profiles table
+      let customerRut = '';
+      if (orderData.customer_id) {
+        const { data: customerProfile } = await supabase
+          .from('user_profiles')
+          .select('rut')
+          .eq('user_id', parseInt(orderData.customer_id))
+          .single();
+
+        if (!customerProfile) {
+          // Try with auth_uid
+          const { data: customerProfile2 } = await supabase
+            .from('user_profiles')
+            .select('rut')
+            .eq('auth_uid', orderData.customer_id)
+            .single();
+
+          customerRut = customerProfile2?.rut || '';
+        } else {
+          customerRut = customerProfile.rut || '';
+        }
+      }
+
+      // Transform orderData to BudgetDocumentData
+      const shippingInfoData = orderData.shipping_lines && orderData.shipping_lines.length > 0 ? {
+        method: orderData.shipping_lines[0].method_title || orderData.shipping_lines[0].method_id || 'Delivery',
+        total: parseFloat(orderData.shipping_lines[0].total || '0'),
+        deliveryMethod: orderData.shipping_lines[0].meta_data?.delivery_method ||
+                       (orderData.shipping_lines[0].method_id === 'pickup' ? 'pickup' : 'shipping'),
+        shippingAddress: orderData.shipping_lines[0].meta_data?.shipping_address,
+        shippingPhone: orderData.shipping_lines[0].meta_data?.shipping_phone,
+      } : undefined;
+
+      const documentData: BudgetDocumentData = {
+        orderId: orderData.id,
+        billing: {
+          firstName: orderData.billing?.first_name || orderData.billing_first_name || '',
+          lastName: orderData.billing?.last_name || orderData.billing_last_name || '',
+          email: orderData.billing?.email || orderData.billing_email || '',
+          phone: orderData.billing?.phone || orderData.billing_phone,
+          company: orderData.billing?.company || orderData.billing_company,
+          address: orderData.billing?.address_1 || orderData.billing_address_1,
+          city: orderData.billing?.city || orderData.billing_city,
+          rut: customerRut,
+        },
+        project: {
+          name: orderData.metadata?.order_proyecto || orderData.order_proyecto || 'Proyecto de Arriendo',
+          startDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_inicio || orderData.order_fecha_inicio || ''),
+          endDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_termino || orderData.order_fecha_termino || ''),
+          numJornadas: parseInt(orderData.metadata?.num_jornadas || orderData.num_jornadas?.toString() || '1'),
+          companyRut: orderData.metadata?.company_rut || orderData.company_rut,
+          retireName: orderData.metadata?.order_retire_name || orderData.order_retire_name,
+          retirePhone: orderData.metadata?.order_retire_phone || orderData.order_retire_phone,
+          retireRut: orderData.metadata?.order_retire_rut || orderData.order_retire_rut,
+          comments: orderData.metadata?.order_comments || orderData.order_comments,
+        },
+        lineItems: (orderData.line_items || []).map((item: any) => ({
+          name: item.name,
+          sku: item.sku,
+          price: parseFloat(item.price),
+          quantity: item.quantity,
+        })),
+        totals: {
+          subtotal: parseFloat(orderData.metadata?.calculated_subtotal || orderData.calculated_subtotal?.toString() || '0'),
+          discount: parseFloat(orderData.metadata?.calculated_discount || orderData.calculated_discount?.toString() || '0'),
+          iva: parseFloat(orderData.metadata?.calculated_iva || orderData.calculated_iva?.toString() || '0'),
+          total: parseFloat(orderData.metadata?.calculated_total || orderData.calculated_total?.toString() || '0'),
+          reserve: parseFloat(orderData.metadata?.calculated_total || orderData.calculated_total?.toString() || '0') * 0.25,
+        },
+        couponCode: orderData.coupon_code,
+        status: getOrderStatusInSpanish(orderData.status || 'on-hold'),
+        ...(shippingInfoData && { shippingInfo: shippingInfoData }),
+      };
+
+      // Generate PDF using React-PDF
+      pdfBuffer = await generatePdfBuffer({
+        document: React.createElement(BudgetDocument, { data: documentData })
+      });
+
+      console.log('✅ PDF generated successfully with React-PDF, size:', pdfBuffer.byteLength);
     } catch (error) {
       console.error('❌ PDF generation error:', error);
       
@@ -173,16 +183,16 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    let finalPdfUrl = htmlUrl;
+    let finalPdfUrl = '';
 
     // Upload to Cloudflare R2 if requested
     if (uploadToR2) {
       console.log('☁️ Uploading PDF to Cloudflare R2...');
-      
+
       const cloudflareWorkerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL;
       if (!cloudflareWorkerUrl) {
         console.warn('⚠️ PUBLIC_CLOUDFLARE_WORKER_URL not configured, skipping R2 upload');
-        finalPdfUrl = htmlUrl; // Use local HTML URL
+        // Will return base64 PDF if R2 upload is not configured
       } else {
         try {
           // Create FormData for Cloudflare Worker with proper PDF content
@@ -519,6 +529,13 @@ Descarga el detalle del pedido aquí
       }
     } else if (sendEmail) {
       console.warn('⚠️ Email requested but no billing email found in order data');
+    }
+
+    // If no R2 URL, provide base64 fallback
+    if (!finalPdfUrl) {
+      console.log('📄 No R2 URL available, using base64 fallback');
+      const base64PDF = Buffer.from(pdfBuffer).toString('base64');
+      finalPdfUrl = `data:application/pdf;base64,${base64PDF}`;
     }
 
     return new Response(JSON.stringify({

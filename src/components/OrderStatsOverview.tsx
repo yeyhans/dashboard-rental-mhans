@@ -3,13 +3,10 @@ import {
   Card, 
   CardContent,
   CardHeader,
-  CardTitle,
-  CardFooter,
-  CardDescription
+  CardTitle
 } from './ui/card';
 import { Badge } from './ui/badge';
 import { cn } from "@/lib/utils";
-import { Separator } from './ui/separator';
 import { Filter } from 'lucide-react';
 import {
   Accordion,
@@ -68,8 +65,7 @@ interface OrderStatsData {
 }
 
 const OrderStatsOverview: React.FC<OrderStatsOverviewProps> = ({ 
-  orders, 
-  totalOrders, 
+  orders,
   isFiltered = false, 
   filterInfo = '' 
 }): React.ReactNode => {
@@ -150,23 +146,7 @@ const OrderStatsOverview: React.FC<OrderStatsOverviewProps> = ({
       : 0
   };
 
-  // Calcular el porcentaje de monto cobrado vs total
-  const porcentajeMontoRecaudado = (): number => {
-    const totalVentas = orders.reduce((sum: number, order) => sum + (parseInt(order.metadata.calculated_total) || 0), 0);
-    if (totalVentas === 0) return 0;
-    
-    const montoRecaudado = orders.reduce((sum: number, order) => {
-      if (order.wordpress_data?.pago_completo) {
-        return sum + (parseInt(order.metadata.calculated_total) || 0);
-      } else if (order.status === 'completed') {
-        const subtotal = parseInt(order.metadata.calculated_subtotal) || 0;
-        return sum + (subtotal * 0.25); // Abono del 25%
-      }
-      return sum;
-    }, 0);
-    
-    return (montoRecaudado / totalVentas) * 100;
-  };
+
 
   // Create stats groups 
   const orderStatusStats: OrderStat[] = [

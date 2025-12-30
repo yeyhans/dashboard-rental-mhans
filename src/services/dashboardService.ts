@@ -147,7 +147,7 @@ export class DashboardService {
           )
         `)
         .in('status', ['on-hold', 'pending', 'processing', 'completed'])
-        .order('date_created', { ascending: false })
+        .order('order_fecha_inicio', { ascending: false, nullsFirst: false })
         .limit(1000); // Aumentar límite significativamente para mostrar todas las órdenes
 
       if (error) throw error;

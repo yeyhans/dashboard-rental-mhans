@@ -1,5 +1,10 @@
 import type { APIRoute } from 'astro';
 import { sendBudgetGeneratedEmail } from '../../../lib/emailService';
+import React from 'react';
+import { BudgetDocument } from '../../../lib/pdf/components/budget/BudgetDocument';
+import type { BudgetDocumentData } from '../../../lib/pdf/core/types';
+import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
+import { formatDateDDMMAAAA, getOrderStatusInSpanish } from '../../../lib/pdf/utils/formatters';
 
 // Interface for the budget data
 interface BudgetData {
@@ -108,9 +113,9 @@ export const POST: APIRoute = async ({ request }) => {
       import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    // Generate PDF using Puppeteer by making internal request to the template page
-    console.log('📄 Generating budget PDF using Puppeteer template...');
-    const pdfResult = await generateBudgetPDFWithPuppeteer(orderData);
+    // Generate PDF using React-PDF (replaces Puppeteer)
+    console.log('📄 Generating budget PDF using React-PDF...');
+    const pdfResult = await generateBudgetPDFWithReactPDF(orderData);
     
     if (!pdfResult.success) {
       return new Response(JSON.stringify({
@@ -661,50 +666,74 @@ function generateBudgetHTML(orderData: BudgetData): string {
 }
 
 /**
- * Generate budget PDF using Puppeteer by making internal request to HTML template
+ * Generate budget PDF using React-PDF (replaces Puppeteer)
  */
-async function generateBudgetPDFWithPuppeteer(orderData: BudgetData): Promise<{
+async function generateBudgetPDFWithReactPDF(orderData: BudgetData): Promise<{
   success: boolean;
   message?: string;
   pdfBuffer?: ArrayBuffer;
 }> {
   try {
-    // Generate HTML directly instead of making HTTP request
-    console.log('📄 Generating budget HTML directly from order data');
-    
-    const htmlContent = generateBudgetHTML(orderData);
-    
-    console.log('✅ Budget HTML generated successfully, size:', htmlContent.length, 'characters');
+    console.log('📄 Generating budget PDF with React-PDF');
 
-    // Generate PDF using our PDF service (supports both development and Vercel)
-    console.log('🔄 Generating budget PDF with PDF service...');
-    
-    try {
-      const { generatePdfFromHtml } = await import('../../../lib/pdfService');
-      
-      const pdfBuffer = await generatePdfFromHtml({
-        htmlContent,
-        format: 'A4',
-        margin: { top: '20mm', right: '20mm', bottom: '20mm', left: '20mm' },
-        printBackground: true
-      });
-      
-      console.log('✅ Budget PDF generated successfully with PDF service, size:', pdfBuffer.byteLength, 'bytes');
+    // Transform orderData to BudgetDocumentData
+    const documentData: BudgetDocumentData = {
+      orderId: orderData.order_id,
+      billing: {
+        firstName: orderData.billing?.first_name || '',
+        lastName: orderData.billing?.last_name || '',
+        email: orderData.billing?.email || '',
+        phone: orderData.billing?.phone,
+        company: orderData.billing?.company,
+        address: orderData.billing?.address_1,
+        city: orderData.billing?.city,
+        rut: (orderData.billing as any)?.rut || '',
+      },
+      project: {
+        name: orderData.metadata?.order_proyecto || 'Proyecto de Arriendo',
+        startDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_inicio || ''),
+        endDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_termino || ''),
+        numJornadas: parseInt(orderData.metadata?.num_jornadas || '1'),
+        companyRut: orderData.metadata?.company_rut,
+        retireName: orderData.metadata?.order_retire_name,
+        retirePhone: orderData.metadata?.order_retire_phone,
+        retireRut: orderData.metadata?.order_retire_rut,
+        comments: orderData.metadata?.order_comments,
+      },
+      lineItems: orderData.line_items.map(item => ({
+        name: item.name,
+        sku: item.sku,
+        price: parseFloat(item.price),
+        quantity: item.quantity,
+      })),
+      totals: {
+        subtotal: parseFloat(orderData.metadata?.calculated_subtotal || '0'),
+        discount: parseFloat(orderData.metadata?.calculated_discount || '0'),
+        iva: parseFloat(orderData.metadata?.calculated_iva || '0'),
+        total: parseFloat(orderData.metadata?.calculated_total || '0'),
+        reserve: parseFloat(orderData.metadata?.calculated_total || '0') * 0.25,
+      },
+      couponCode: orderData.coupon_code,
+      status: getOrderStatusInSpanish(orderData.status || 'on-hold'),
+      shippingInfo: orderData.shipping_lines && orderData.shipping_lines.length > 0 ? {
+        method: orderData.shipping_lines[0].method_title || 'Delivery',
+        total: parseFloat(orderData.shipping_lines[0].total || '0'),
+      } : undefined,
+    };
 
-      return {
-        success: true,
-        pdfBuffer: pdfBuffer.buffer as ArrayBuffer
-      };
-    } catch (error) {
-      console.error('❌ PDF service not available or failed:', error);
-      return {
-        success: false,
-        message: 'PDF generation service failed: ' + (error instanceof Error ? error.message : 'Unknown error')
-      };
-    }
+    // Generate PDF using React-PDF
+    const pdfBuffer = await generatePdfBuffer({
+      document: React.createElement(BudgetDocument, { data: documentData })
+    });
 
+    console.log('✅ Budget PDF generated successfully with React-PDF, size:', pdfBuffer.byteLength, 'bytes');
+
+    return {
+      success: true,
+      pdfBuffer: pdfBuffer.buffer as ArrayBuffer
+    };
   } catch (error) {
-    console.error('Error generating budget PDF with Puppeteer:', error);
+    console.error('❌ Error generating budget PDF with React-PDF:', error);
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Error desconocido al generar PDF de presupuesto'

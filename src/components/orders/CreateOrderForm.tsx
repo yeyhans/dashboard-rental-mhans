@@ -268,45 +268,38 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
         try {
           const shippingResult = await ShippingService.getAllShippingMethods(1, 100, true); // Solo métodos habilitados
           if (shippingResult.shippingMethods && shippingResult.shippingMethods.length > 0) {
+            console.log('📦 Loaded shipping methods:', shippingResult.shippingMethods.length, shippingResult.shippingMethods);
             setShippingMethods(shippingResult.shippingMethods);
-            // Seleccionar automáticamente el primer método disponible
-            const defaultMethod = shippingResult.shippingMethods[0];
-            if (defaultMethod) {
-              setSelectedShippingMethod(defaultMethod);
-              // Actualizar el shipping_total en el formulario
-              handleShippingChange(defaultMethod.cost.toString());
-            }
+            // No auto-seleccionar - el usuario debe elegir manualmente
           }
         } catch (shippingError) {
           console.error('Error loading shipping methods:', shippingError);
+          console.warn('⚠️ Using fallback shipping method - configure proper methods in /orders/shipping');
           // No mostrar error crítico, usar métodos por defecto
           const defaultMethods: ShippingMethod[] = [
             {
               id: 2,
               name: 'Envío Estándar',
               description: 'Envío estándar a todo Chile',
-              cost: 5000,
+              cost: '5000',
               shipping_type: 'flat_rate',
               enabled: true,
               min_amount: null,
               max_amount: null,
               available_regions: null,
               excluded_regions: null,
-              estimated_days_min: 2,
-              estimated_days_max: 4,
+              estimated_days_min: '2',
+              estimated_days_max: '4',
               requires_address: true,
               requires_phone: true,
               metadata: {},
               created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
+              updated_at: new Date().toISOString(),
+              created_by: null
             }
           ];
           setShippingMethods(defaultMethods);
-          const firstMethod = defaultMethods[0];
-          if (firstMethod) {
-            setSelectedShippingMethod(firstMethod);
-            handleShippingChange(firstMethod.cost.toString());
-          }
+          // No auto-seleccionar - el usuario debe elegir manualmente
         } finally {
           setShippingLoading(false);
         }
@@ -476,13 +469,10 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
     if (method === 'pickup') {
       setSelectedShippingMethod(null);
       handleShippingChange('0');
-    } else if (method === 'shipping' && shippingMethods.length > 0) {
-      // Auto-seleccionar el primer método disponible cuando se cambia a shipping
-      const firstMethod = shippingMethods[0];
-      if (firstMethod) {
-        setSelectedShippingMethod(firstMethod);
-        handleShippingChange(firstMethod.cost.toString());
-      }
+    } else if (method === 'shipping') {
+      // Reset to null - el usuario debe elegir explícitamente
+      setSelectedShippingMethod(null);
+      handleShippingChange('0');
     }
   };
 
@@ -701,6 +691,13 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
     try {
       setLoading(true);
       setError(null);
+
+      // Validar que se haya seleccionado un método de envío si se eligió despacho
+      if (deliveryMethod === 'shipping' && !selectedShippingMethod) {
+        setError('Por favor seleccione un método de envío');
+        setLoading(false);
+        return;
+      }
 
       // Intentar obtener headers de autenticación
       let headers: HeadersInit = { 'Content-Type': 'application/json' };
@@ -1176,6 +1173,11 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
                 <Truck className="h-4 w-4" />
                 Método de Envío
               </h4>
+              {!selectedShippingMethod && !shippingLoading && (
+                <p className="text-sm text-orange-600 font-medium">
+                  * Debe seleccionar un método de envío para continuar
+                </p>
+              )}
               {shippingLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>

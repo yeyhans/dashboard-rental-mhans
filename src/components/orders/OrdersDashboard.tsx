@@ -306,11 +306,10 @@ const OrdersDashboard = ({
   // Format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
   };
 
 
@@ -416,7 +415,14 @@ const OrdersDashboard = ({
                     {statusTranslations[order.status] || order.status}
                   </span>
                   <div className="text-right">
-                    <div className="text-sm text-muted-foreground">{formatDate(order.date_created)}</div>
+                    {order.order_fecha_inicio && order.order_fecha_termino ? (
+                      <div className="flex flex-col gap-1 text-xs">
+                        <div className="text-green-600 font-medium">{formatDate(order.order_fecha_inicio)}</div>
+                        <div className="text-red-600 font-medium">{formatDate(order.order_fecha_termino)}</div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">Sin fechas</div>
+                    )}
                   </div>
                 </div>
                 
@@ -508,7 +514,7 @@ const OrdersDashboard = ({
               <TableHead className="text-foreground font-semibold">Estado</TableHead>
               <TableHead className="text-foreground font-semibold">Cliente</TableHead>
               <TableHead className="text-foreground font-semibold">Proyecto</TableHead>
-              <TableHead className="text-foreground font-semibold">Fecha</TableHead>
+              <TableHead className="text-foreground font-semibold">Inicio - Término</TableHead>
               <TableHead className="text-foreground font-semibold text-right">Total</TableHead>
               <TableHead className="text-right text-foreground font-semibold">Acciones</TableHead>
             </TableRow>
@@ -556,7 +562,16 @@ const OrdersDashboard = ({
                   <div className="text-sm text-muted-foreground">{order.billing_email}</div>
                 </TableCell>
                 <TableCell className="text-foreground font-medium">{order.order_proyecto || ''}</TableCell>
-                <TableCell className="text-foreground">{formatDate(order.date_created)}</TableCell>
+                <TableCell className="text-foreground">
+                  {order.order_fecha_inicio && order.order_fecha_termino ? (
+                    <div className="flex flex-col gap-1 text-sm">
+                      <div className="text-green-600 font-medium">{formatDate(order.order_fecha_inicio)}</div>
+                      <div className="text-red-600 font-medium">{formatDate(order.order_fecha_termino)}</div>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Sin fechas</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-foreground text-right font-bold">${formatCurrency(order.calculated_total || '0')}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex flex-row gap-2 justify-end">

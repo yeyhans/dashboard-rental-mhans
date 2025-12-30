@@ -20,7 +20,7 @@ SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
 # CORS Configuration
-FRONTEND_URL=https://your-frontend-domain.com
+PUBLIC_FRONTEND_URL=https://your-frontend-domain.com
 ```
 
 ## Autenticación
@@ -471,7 +471,7 @@ El sistema incluye logging estructurado con los siguientes tipos:
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-FRONTEND_URL=https://your-frontend-domain.com
+PUBLIC_FRONTEND_URL=https://your-frontend-domain.com
 ```
 
 ## Seguridad

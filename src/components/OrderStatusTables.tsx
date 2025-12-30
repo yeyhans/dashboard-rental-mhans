@@ -26,6 +26,8 @@ interface Order {
   id: number;
   order_proyecto: string | null;
   date_created: string;
+  order_fecha_inicio: string | null;
+  order_fecha_termino: string | null;
   calculated_total: number;
   status: string;
   billing_first_name?: string;
@@ -124,11 +126,11 @@ export default function OrderStatusTables({
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
   };
 
   const getCustomerName = (order: Order) => {
@@ -185,7 +187,7 @@ export default function OrderStatusTables({
                   <TableHead className="w-[100px]">N° Pedido</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Proyecto</TableHead>
-                  <TableHead>Fecha</TableHead>
+                  <TableHead>Inicio - Término</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
@@ -210,9 +212,21 @@ export default function OrderStatusTables({
                       </span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        {formatDate(order.date_created)}
+                      <div className="flex flex-col gap-1 text-sm">
+                        {order.order_fecha_inicio && order.order_fecha_termino ? (
+                          <>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3 text-green-600" />
+                              <span className="text-xs">{formatDate(order.order_fecha_inicio)}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3 text-red-600" />
+                              <span className="text-xs">{formatDate(order.order_fecha_termino)}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Sin fechas</span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
