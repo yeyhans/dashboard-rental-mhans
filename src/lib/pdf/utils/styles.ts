@@ -146,7 +146,7 @@ export const budgetStyles = StyleSheet.create({
     color: '#000000',
     padding: 15,
     borderRadius: 6,
-    border: '1pt solid #000000',
+    border: '1pt solid #ffffff',
     marginTop: 15,
     fontSize: 10,
   },

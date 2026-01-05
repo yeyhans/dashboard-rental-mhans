@@ -47,7 +47,7 @@ export const BudgetDocument: React.FC<{ data: BudgetDocumentData }> = ({
         {/* Three Column Layout */}
         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
           {/* Column 1: Client Information */}
-          <View style={{ flex: 1, backgroundColor: '#f8f9fa', padding: 12, borderRadius: 6, border: '1pt solid #000000' }}>
+          <View style={{ flex: 1, backgroundColor: '#f8f9fa', padding: 12, borderRadius: 6, border: '1pt solid #ffffff' }}>
             <Text style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 8, color: '#000000' }}>
               INFORMACIÓN DEL CLIENTE
             </Text>
@@ -95,7 +95,7 @@ export const BudgetDocument: React.FC<{ data: BudgetDocumentData }> = ({
           </View>
 
           {/* Column 2: Project Information */}
-          <View style={{ flex: 1, backgroundColor: '#f8f9fa', padding: 12, borderRadius: 6, border: '1pt solid #000000' }}>
+          <View style={{ flex: 1, backgroundColor: '#f8f9fa', padding: 12, borderRadius: 6, border: '1pt solid #ffffff' }}>
             <Text style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 8, color: '#000000' }}>
               INFORMACIÓN DEL PROYECTO
             </Text>
@@ -122,7 +122,7 @@ export const BudgetDocument: React.FC<{ data: BudgetDocumentData }> = ({
           </View>
 
           {/* Column 3: Additional Information (Retire/Comments/Delivery) */}
-          <View style={{ flex: 1, backgroundColor: '#f8f9fa', padding: 12, borderRadius: 6, border: '1pt solid #000000' }}>
+          <View style={{ flex: 1, backgroundColor: '#f8f9fa', padding: 12, borderRadius: 6, border: '1pt solid #ffffff' }}>
             <Text style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 8, color: '#000000' }}>
               INFORMACIÓN ADICIONAL
             </Text>
@@ -404,7 +404,7 @@ export const BudgetDocument: React.FC<{ data: BudgetDocumentData }> = ({
             backgroundColor: '#f8f9fa',
             padding: 15,
             borderRadius: 6,
-            border: '1pt solid #000000'
+            border: '1pt solid #ffffff'
           }}>
             <Text style={{
               fontSize: 11,

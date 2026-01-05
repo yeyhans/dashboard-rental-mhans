@@ -64,7 +64,7 @@ export const UserContractDocument: React.FC<{ data: UserContractData }> = ({ dat
         </View>
 
         {/* Client Information */}
-        <View style={{ backgroundColor: '#f8f9fa', padding: 15, borderRadius: 6, border: '1pt solid #000000', marginBottom: 15 }}>
+        <View style={{ backgroundColor: '#f8f9fa', padding: 15, borderRadius: 6, border: '1pt solid #ffffff', marginBottom: 15 }}>
           <View style={{ flexDirection: 'row', gap: 15 }}>
             <View style={{ flex: 1 }}>
               <View style={{ marginBottom: 6 }}>
@@ -418,7 +418,7 @@ export const UserContractDocument: React.FC<{ data: UserContractData }> = ({ dat
         </View>
 
         {/* Firmas */}
-        <View style={{ marginTop: 20, padding: 15, backgroundColor: '#f8f9fa', borderRadius: 6, border: '1pt solid #000000' }}>
+        <View style={{ marginTop: 20, padding: 15, backgroundColor: '#f8f9fa', borderRadius: 6, border: '1pt solid #ffffff' }}>
           <Text style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 15, textAlign: 'center', color: '#000000' }}>
             FIRMAS
           </Text>

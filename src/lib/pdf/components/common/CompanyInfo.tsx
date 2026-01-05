@@ -12,7 +12,7 @@ export const CompanyInfo: React.FC = () => {
         backgroundColor: '#f8f9fa',
         padding: 15,
         borderRadius: 6,
-        border: '1pt solid #000000',
+        border: '1pt solid #ffffff',
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
