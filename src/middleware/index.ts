@@ -1,5 +1,5 @@
 import { defineMiddleware } from "astro:middleware";
-import { getServerAdmin, clearAuthCookies, isExtendedSessionValid } from "../lib/supabase";
+import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
 import micromatch from "micromatch";
 
 const { isMatch } = micromatch;
@@ -70,17 +70,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   console.log('🔒 Verificando admin para ruta protegida:', url.pathname);
 
-  // Verificar si tiene sesión extendida válida primero
-  if (isExtendedSessionValid(context)) {
-    console.log('⚡ Sesión extendida válida, omitiendo verificación completa');
-    return next();
-  }
-
-  // Verificar admin completo
+  // SIEMPRE verificar admin en base de datos (usa cache interno de 5 min)
   const adminSession = await getServerAdmin(context);
-  
+
   if (!adminSession) {
-    console.log('🔒 Acceso denegado: No es administrador o sesión inválida');
+    console.log('🚫 Acceso denegado al dashboard - Usuario no es administrador');
     clearAuthCookies(context);
     return redirect(homeRoute);
   }
