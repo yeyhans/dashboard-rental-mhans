@@ -277,7 +277,7 @@ export class AdvancedAnalyticsService {
       // Nuevos usuarios este mes
       const currentMonth = new Date();
       currentMonth.setDate(1);
-      const newUsersThisMonth = allUsers?.filter(u => 
+      const newUsersThisMonth = allUsers?.filter(u =>
         new Date(u.created_at) >= currentMonth
       ).length || 0;
 
@@ -289,8 +289,8 @@ export class AdvancedAnalyticsService {
         return created >= lastMonth && created < currentMonth;
       }).length || 0;
 
-      const userGrowthRate = newUsersLastMonth > 0 
-        ? ((newUsersThisMonth - newUsersLastMonth) / newUsersLastMonth) * 100 
+      const userGrowthRate = newUsersLastMonth > 0
+        ? ((newUsersThisMonth - newUsersLastMonth) / newUsersLastMonth) * 100
         : 0;
 
       return {
@@ -335,21 +335,58 @@ export class AdvancedAnalyticsService {
 
       // Análisis de productos más rentados
       const productStats = new Map<number, { name: string; sku: string; totalRentals: number; revenue: number; image?: string }>();
-      
+
+      // Inicializar estadísticas con todos los productos
+      products?.forEach(product => {
+        let imageUrl: string | undefined;
+        try {
+          // Manejar imágenes que pueden venir como JSON o string
+          if (product.images) {
+            const images = typeof product.images === 'string'
+              ? JSON.parse(product.images)
+              : product.images;
+
+            if (Array.isArray(images) && images.length > 0) {
+              imageUrl = images[0];
+            } else if (typeof images === 'string') {
+              imageUrl = images;
+            }
+          }
+        } catch (e) {
+          // Si falla el parseo, usar el valor tal cual si es string
+          if (typeof product.images === 'string') imageUrl = product.images;
+        }
+
+        productStats.set(product.id, {
+          name: product.name || 'Producto sin nombre',
+          sku: product.sku || '',
+          totalRentals: 0,
+          revenue: 0,
+          ...(imageUrl ? { image: imageUrl } : {})
+        });
+      });
+
+      // Actualizar con datos de renta
       orders?.forEach(order => {
         if (order.line_items) {
           let lineItems: any[] = [];
           try {
-            lineItems = typeof order.line_items === 'string' 
-              ? JSON.parse(order.line_items) 
+            lineItems = typeof order.line_items === 'string'
+              ? JSON.parse(order.line_items)
               : order.line_items;
           } catch (e) {
             return;
           }
 
           lineItems.forEach(item => {
-            const productId = item.product_id || item.id;
+            let productId = item.product_id || item.id;
+            // Asegurar que productId sea número para coincidir con las llaves del Map
+            if (productId && !isNaN(parseInt(productId.toString()))) {
+              productId = parseInt(productId.toString());
+            }
+
             if (productId) {
+              // Obtener o crear (por si acaso hay un producto en ordenes que no está en la tabla products)
               const existing = productStats.get(productId) || {
                 name: item.name || 'Producto sin nombre',
                 sku: item.sku || '',
@@ -357,7 +394,7 @@ export class AdvancedAnalyticsService {
                 revenue: 0,
                 image: item.image
               };
-              
+
               existing.totalRentals += item.quantity || 1;
               existing.revenue += (item.price || 0) * (item.quantity || 1);
               productStats.set(productId, existing);
@@ -368,27 +405,26 @@ export class AdvancedAnalyticsService {
 
       const mostRentedProducts = Array.from(productStats.entries())
         .map(([id, stats]) => ({ id, ...stats }))
-        .sort((a, b) => b.totalRentals - a.totalRentals)
-        .slice(0, 10);
+        .sort((a, b) => b.totalRentals - a.totalRentals);
 
       // Análisis por categorías
       const categoryStats = new Map<string, { productCount: number; totalRevenue: number; prices: number[] }>();
-      
+
       products?.forEach(product => {
         const categories = product.categories_name || ['Sin categoría'];
         const categoryList = typeof categories === 'string' ? [categories] : categories;
-        
+
         categoryList.forEach(category => {
           const existing = categoryStats.get(category) || { productCount: 0, totalRevenue: 0, prices: [] };
           existing.productCount += 1;
           existing.prices.push(product.price || 0);
-          
+
           // Buscar revenue de este producto
           const productStat = productStats.get(product.id);
           if (productStat) {
             existing.totalRevenue += productStat.revenue;
           }
-          
+
           categoryStats.set(category, existing);
         });
       });
@@ -398,8 +434,8 @@ export class AdvancedAnalyticsService {
           category,
           productCount: stats.productCount,
           totalRevenue: stats.totalRevenue,
-          avgPrice: stats.prices.length > 0 
-            ? stats.prices.reduce((a, b) => a + b, 0) / stats.prices.length 
+          avgPrice: stats.prices.length > 0
+            ? stats.prices.reduce((a, b) => a + b, 0) / stats.prices.length
             : 0
         }))
         .sort((a, b) => b.totalRevenue - a.totalRevenue);
@@ -450,20 +486,20 @@ export class AdvancedAnalyticsService {
 
       const ordersWithDiscount = orders?.filter(o => (o.calculated_discount || 0) > 0) || [];
       const ordersWithoutDiscount = orders?.filter(o => (o.calculated_discount || 0) === 0) || [];
-      
+
       const totalCouponsUsed = ordersWithDiscount.length;
       const totalDiscountAmount = ordersWithDiscount.reduce((sum, o) => sum + (o.calculated_discount || 0), 0);
       const avgDiscountPerOrder = totalCouponsUsed > 0 ? totalDiscountAmount / totalCouponsUsed : 0;
 
       // Análisis de cupones más usados
       const couponStats = new Map<string, { usageCount: number; totalDiscount: number }>();
-      
+
       ordersWithDiscount.forEach(order => {
         if (order.coupon_lines) {
           let coupons: any[] = [];
           try {
-            coupons = typeof order.coupon_lines === 'string' 
-              ? JSON.parse(order.coupon_lines) 
+            coupons = typeof order.coupon_lines === 'string'
+              ? JSON.parse(order.coupon_lines)
               : order.coupon_lines;
           } catch (e) {
             return;
@@ -485,17 +521,17 @@ export class AdvancedAnalyticsService {
         .slice(0, 10);
 
       // Impacto de descuentos
-      const avgOrderValueWithDiscount = ordersWithDiscount.length > 0 
+      const avgOrderValueWithDiscount = ordersWithDiscount.length > 0
         ? ordersWithDiscount.reduce((sum, o) => sum + (o.calculated_total || 0), 0) / ordersWithDiscount.length
         : 0;
-      
+
       const avgOrderValueWithoutDiscount = ordersWithoutDiscount.length > 0
         ? ordersWithoutDiscount.reduce((sum, o) => sum + (o.calculated_total || 0), 0) / ordersWithoutDiscount.length
         : 0;
 
       // Tendencias de descuentos por mes
       const monthlyDiscounts = new Map<string, { totalDiscount: number; orderCount: number }>();
-      
+
       ordersWithDiscount.forEach(order => {
         const month = new Date(order.date_created).toISOString().slice(0, 7); // YYYY-MM
         const existing = monthlyDiscounts.get(month) || { totalDiscount: 0, orderCount: 0 };
@@ -542,19 +578,19 @@ export class AdvancedAnalyticsService {
 
       const totalShippingRevenue = orders?.reduce((sum, o) => sum + (o.shipping_total || 0), 0) || 0;
       const ordersWithShipping = orders?.filter(o => (o.shipping_total || 0) > 0) || [];
-      const avgShippingCost = ordersWithShipping.length > 0 
-        ? totalShippingRevenue / ordersWithShipping.length 
+      const avgShippingCost = ordersWithShipping.length > 0
+        ? totalShippingRevenue / ordersWithShipping.length
         : 0;
 
       // Análisis de métodos de envío
       const shippingMethodStats = new Map<string, { count: number; totalRevenue: number }>();
-      
+
       orders?.forEach(order => {
         if (order.shipping_lines) {
           let shippingLines: any[] = [];
           try {
-            shippingLines = typeof order.shipping_lines === 'string' 
-              ? JSON.parse(order.shipping_lines) 
+            shippingLines = typeof order.shipping_lines === 'string'
+              ? JSON.parse(order.shipping_lines)
               : order.shipping_lines;
           } catch (e) {
             return;
@@ -586,7 +622,7 @@ export class AdvancedAnalyticsService {
 
       // Análisis por regiones
       const regionStats = new Map<string, { orderCount: number; totalShippingCost: number }>();
-      
+
       orders?.forEach(order => {
         const region = order.billing_city || 'Región desconocida';
         const existing = regionStats.get(region) || { orderCount: 0, totalShippingCost: 0 };
@@ -606,7 +642,7 @@ export class AdvancedAnalyticsService {
 
       // Tendencias de shipping por mes
       const monthlyShipping = new Map<string, { totalShipping: number; orderCount: number }>();
-      
+
       orders?.forEach(order => {
         const month = new Date(order.date_created).toISOString().slice(0, 7);
         const existing = monthlyShipping.get(month) || { totalShipping: 0, orderCount: 0 };
@@ -668,7 +704,7 @@ export class AdvancedAnalyticsService {
 
       // Tendencias mensuales
       const monthlyStats = new Map<string, { totalOrders: number; completedOrders: number; revenue: number }>();
-      
+
       orders?.forEach(order => {
         const month = new Date(order.date_created).toISOString().slice(0, 7);
         const existing = monthlyStats.get(month) || { totalOrders: 0, completedOrders: 0, revenue: 0 };
@@ -691,14 +727,14 @@ export class AdvancedAnalyticsService {
         const completed = new Date(order.date_completed).getTime();
         return (completed - created) / (1000 * 60 * 60 * 24); // días
       });
-      
-      const averageOrderProcessingTime = processingTimes.length > 0 
-        ? processingTimes.reduce((a, b) => a + b, 0) / processingTimes.length 
+
+      const averageOrderProcessingTime = processingTimes.length > 0
+        ? processingTimes.reduce((a, b) => a + b, 0) / processingTimes.length
         : 0;
 
       // Análisis por método de pago
       const paymentMethodStats = new Map<string, { count: number; totalAmount: number }>();
-      
+
       orders?.forEach(order => {
         const method = order.payment_method || 'No especificado';
         const existing = paymentMethodStats.get(method) || { count: 0, totalAmount: 0 };
@@ -713,12 +749,12 @@ export class AdvancedAnalyticsService {
 
       // Top clientes
       const customerStats = new Map<number, { orderCount: number; totalSpent: number; customerName: string }>();
-      
+
       orders?.forEach(order => {
         if (order.customer_id) {
-          const existing = customerStats.get(order.customer_id) || { 
-            orderCount: 0, 
-            totalSpent: 0, 
+          const existing = customerStats.get(order.customer_id) || {
+            orderCount: 0,
+            totalSpent: 0,
             customerName: `${order.billing_first_name || ''} ${order.billing_last_name || ''}`.trim() || 'Cliente sin nombre'
           };
           existing.orderCount += 1;
@@ -735,7 +771,7 @@ export class AdvancedAnalyticsService {
       // Distribución de valor de órdenes
       const orderValues = orders?.map(o => o.calculated_total || 0).filter(v => v > 0) || [];
       orderValues.sort((a, b) => a - b);
-      
+
       const ranges = [
         { range: '$0 - $50,000', min: 0, max: 50000 },
         { range: '$50,001 - $100,000', min: 50001, max: 100000 },
@@ -759,13 +795,13 @@ export class AdvancedAnalyticsService {
 
       // Análisis de proyectos
       const projectStats = new Map<string, { orderCount: number; totalRevenue: number; durations: number[] }>();
-      
+
       orders?.forEach(order => {
         const projectName = order.order_proyecto || 'Sin proyecto';
         const existing = projectStats.get(projectName) || { orderCount: 0, totalRevenue: 0, durations: [] };
         existing.orderCount += 1;
         existing.totalRevenue += order.calculated_total || 0;
-        
+
         // Calcular duración si hay fechas
         if (order.order_fecha_inicio && order.order_fecha_termino) {
           const start = new Date(order.order_fecha_inicio).getTime();
@@ -775,7 +811,7 @@ export class AdvancedAnalyticsService {
             existing.durations.push(duration);
           }
         }
-        
+
         projectStats.set(projectName, existing);
       });
 
@@ -784,8 +820,8 @@ export class AdvancedAnalyticsService {
           projectName,
           orderCount: stats.orderCount,
           totalRevenue: stats.totalRevenue,
-          avgDuration: stats.durations.length > 0 
-            ? stats.durations.reduce((a, b) => a + b, 0) / stats.durations.length 
+          avgDuration: stats.durations.length > 0
+            ? stats.durations.reduce((a, b) => a + b, 0) / stats.durations.length
             : 0
         }))
         .sort((a, b) => b.totalRevenue - a.totalRevenue)
@@ -794,7 +830,7 @@ export class AdvancedAnalyticsService {
       // Tasas de completación y cancelación
       const completedCount = orders?.filter(o => o.status === 'completed').length || 0;
       const canceledCount = orders?.filter(o => o.status === 'cancelled' || o.status === 'failed').length || 0;
-      
+
       const completionRate = totalOrders > 0 ? (completedCount / totalOrders) * 100 : 0;
       const cancelationRate = totalOrders > 0 ? (canceledCount / totalOrders) * 100 : 0;
 
@@ -851,23 +887,23 @@ export class AdvancedAnalyticsService {
       // Customer Lifetime Value (simplificado)
       const customerOrderCounts = new Map<number, number>();
       const customerRevenue = new Map<number, number>();
-      
+
       completedOrders.forEach(order => {
         const customerId = order.customer_id;
         customerOrderCounts.set(customerId, (customerOrderCounts.get(customerId) || 0) + 1);
         customerRevenue.set(customerId, (customerRevenue.get(customerId) || 0) + (order.calculated_total || 0));
       });
 
-      const avgOrdersPerCustomer = customerOrderCounts.size > 0 
-        ? Array.from(customerOrderCounts.values()).reduce((a, b) => a + b, 0) / customerOrderCounts.size 
+      const avgOrdersPerCustomer = customerOrderCounts.size > 0
+        ? Array.from(customerOrderCounts.values()).reduce((a, b) => a + b, 0) / customerOrderCounts.size
         : 0;
-      
+
       const customerLifetimeValue = averageOrderValue * avgOrdersPerCustomer;
 
       // Customer Retention Rate (usuarios que hicieron más de una orden)
       const repeatCustomers = Array.from(customerOrderCounts.values()).filter(count => count > 1).length;
-      const customerRetentionRate = customerOrderCounts.size > 0 
-        ? (repeatCustomers / customerOrderCounts.size) * 100 
+      const customerRetentionRate = customerOrderCounts.size > 0
+        ? (repeatCustomers / customerOrderCounts.size) * 100
         : 0;
 
       // Churn Rate (inverso de retention)
@@ -877,7 +913,7 @@ export class AdvancedAnalyticsService {
       const totalUsers = users.length;
       const usersWithOrders = new Set(orders.map(o => o.customer_id)).size;
       const completedOrdersCount = completedOrders.length;
-      
+
       const conversionFunnel = {
         totalVisitors: totalUsers, // Simplificado, en realidad sería tráfico web
         registeredUsers: totalUsers,
@@ -886,7 +922,7 @@ export class AdvancedAnalyticsService {
       };
 
       // Monthly Recurring Revenue (MRR) - simplificado
-      const monthlyRecurringRevenue = totalRevenue / Math.max(1, 
+      const monthlyRecurringRevenue = totalRevenue / Math.max(1,
         Math.ceil((endDate.getTime() - startDate.getTime()) / (30 * 24 * 60 * 60 * 1000))
       );
 
@@ -895,11 +931,11 @@ export class AdvancedAnalyticsService {
         const created = new Date(u.created_at);
         return created >= startDate && created <= endDate;
       }).length;
-      
+
       // Asumiendo un costo de marketing del 10% del revenue
       const estimatedMarketingCost = totalRevenue * 0.1;
-      const customerAcquisitionCost = newCustomersInPeriod > 0 
-        ? estimatedMarketingCost / newCustomersInPeriod 
+      const customerAcquisitionCost = newCustomersInPeriod > 0
+        ? estimatedMarketingCost / newCustomersInPeriod
         : 0;
 
       return {
@@ -982,8 +1018,8 @@ export class AdvancedAnalyticsService {
 
         let lineItems: any[] = [];
         try {
-          lineItems = typeof order.line_items === 'string' 
-            ? JSON.parse(order.line_items) 
+          lineItems = typeof order.line_items === 'string'
+            ? JSON.parse(order.line_items)
             : order.line_items;
         } catch (e) {
           return;
@@ -994,7 +1030,7 @@ export class AdvancedAnalyticsService {
           const itemProductId = item.product_id || item.id;
           if (itemProductId === productId) {
             const cliente = `${order.billing_first_name || ''} ${order.billing_last_name || ''}`.trim() || 'Cliente sin nombre';
-            
+
             rentals.push({
               orderId: order.id,
               orderStatus: order.status || 'unknown',
