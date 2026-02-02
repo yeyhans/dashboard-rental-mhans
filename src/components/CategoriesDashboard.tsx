@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
 } from './ui/card';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from './ui/table';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
@@ -36,11 +36,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "./ui/dialog";
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
   RefreshCw,
   FolderTree,
   Tag,
@@ -53,13 +53,7 @@ import React from 'react';
 type Category = Database['public']['Tables']['categories']['Row'];
 type CategoryInsert = Database['public']['Tables']['categories']['Insert'];
 
-interface CategoriesResponse {
-  categories: Category[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
+
 
 interface CategoriesDashboardProps {
   initialCategories?: Category[];
@@ -72,7 +66,7 @@ interface CategoriesDashboardProps {
   };
 }
 
-const CategoriesDashboard = ({ 
+const CategoriesDashboard = ({
   initialCategories = [],
   initialTotal = 0,
   initialStats
@@ -80,10 +74,10 @@ const CategoriesDashboard = ({
   // All categories loaded from server
   const [allCategories] = useState<Category[]>(initialCategories);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isMobileView, setIsMobileView] = useState(false);
-  
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
@@ -105,10 +99,10 @@ const CategoriesDashboard = ({
     const checkIfMobile = () => {
       setIsMobileView(window.innerWidth < 768);
     };
-    
+
     checkIfMobile();
     window.addEventListener('resize', checkIfMobile);
-    
+
     return () => {
       window.removeEventListener('resize', checkIfMobile);
     };
@@ -118,7 +112,7 @@ const CategoriesDashboard = ({
   const filteredCategories = React.useMemo(() => {
     if (!searchTerm) return allCategories;
     const searchLower = searchTerm.toLowerCase();
-    return allCategories.filter(category => 
+    return allCategories.filter(category =>
       category.name.toLowerCase().includes(searchLower) ||
       category.slug.toLowerCase().includes(searchLower) ||
       (category.description && category.description.toLowerCase().includes(searchLower))
@@ -322,12 +316,12 @@ const CategoriesDashboard = ({
     const maxVisiblePages = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
     let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-    
+
     // Adjust start if we're near the end
     if (endPage - startPage + 1 < maxVisiblePages) {
       startPage = Math.max(1, endPage - maxVisiblePages + 1);
     }
-    
+
     // Show first page and ellipsis if needed
     if (startPage > 1) {
       pages.push({ type: 'page', number: 1 });
@@ -335,12 +329,12 @@ const CategoriesDashboard = ({
         pages.push({ type: 'ellipsis', key: 'ellipsis1' });
       }
     }
-    
+
     // Show visible page range
     for (let i = startPage; i <= endPage; i++) {
       pages.push({ type: 'page', number: i });
     }
-    
+
     // Show last page and ellipsis if needed
     if (endPage < totalPages) {
       if (endPage < totalPages - 1) {
@@ -348,17 +342,14 @@ const CategoriesDashboard = ({
       }
       pages.push({ type: 'page', number: totalPages });
     }
-    
+
     return pages;
   };
 
   // Format date
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    const date = new Date(dateString);
+    return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
   };
 
   return (
@@ -371,7 +362,7 @@ const CategoriesDashboard = ({
             Administra las categorías de productos de tu inventario
           </p>
         </div>
-        
+
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={() => resetForm()}>
@@ -386,7 +377,7 @@ const CategoriesDashboard = ({
                 Completa los datos para crear una nueva categoría de productos.
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="name">Nombre *</Label>
@@ -397,7 +388,7 @@ const CategoriesDashboard = ({
                   placeholder="Nombre de la categoría"
                 />
               </div>
-              
+
               <div className="grid gap-2">
                 <Label htmlFor="slug">Slug</Label>
                 <Input
@@ -407,7 +398,7 @@ const CategoriesDashboard = ({
                   placeholder="slug-de-la-categoria"
                 />
               </div>
-              
+
               <div className="grid gap-2">
                 <Label htmlFor="description">Descripción</Label>
                 <Textarea
@@ -418,11 +409,11 @@ const CategoriesDashboard = ({
                   rows={3}
                 />
               </div>
-              
+
               <div className="grid gap-2">
                 <Label htmlFor="parent">Categoría Padre</Label>
-                <Select 
-                  value={formData.parent?.toString() || 'none'} 
+                <Select
+                  value={formData.parent?.toString() || 'none'}
                   onValueChange={(value) => handleInputChange('parent', value === 'none' ? null : parseInt(value))}
                 >
                   <SelectTrigger>
@@ -438,7 +429,7 @@ const CategoriesDashboard = ({
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="grid gap-2">
                 <Label htmlFor="image_src">URL de Imagen</Label>
                 <Input
@@ -449,7 +440,7 @@ const CategoriesDashboard = ({
                 />
               </div>
             </div>
-            
+
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                 Cancelar
@@ -477,7 +468,7 @@ const CategoriesDashboard = ({
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Principales</CardTitle>
@@ -492,7 +483,7 @@ const CategoriesDashboard = ({
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Subcategorías</CardTitle>
@@ -507,7 +498,7 @@ const CategoriesDashboard = ({
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Con Imágenes</CardTitle>
@@ -550,8 +541,8 @@ const CategoriesDashboard = ({
               <Button onClick={handleSearch} disabled={loading}>
                 {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setSearchTerm('')}
               >
                 Limpiar
@@ -602,8 +593,8 @@ const CategoriesDashboard = ({
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         {category.image_src && (
-                          <img 
-                            src={category.image_src} 
+                          <img
+                            src={category.image_src}
                             alt={category.name}
                             className="w-8 h-8 rounded object-cover"
                             onError={(e) => {
@@ -616,24 +607,24 @@ const CategoriesDashboard = ({
                           <Badge variant="secondary">Principal</Badge>
                         )}
                       </div>
-                      
+
                       <p className="text-sm text-muted-foreground mb-2">
                         Slug: {category.slug}
                       </p>
-                      
+
                       {category.description && (
                         <p className="text-sm text-gray-600 mb-2">
                           {category.description}
                         </p>
                       )}
-                      
+
                       <div className="text-xs text-muted-foreground">
                         <p>Padre: {getParentCategoryName(category.parent)}</p>
                         <p>Productos: {category.count}</p>
                         <p>Creado: {formatDate(category.created_at)}</p>
                       </div>
                     </div>
-                    
+
                     <div className="flex gap-2 ml-4">
                       <Button
                         variant="outline"
@@ -674,8 +665,8 @@ const CategoriesDashboard = ({
                     <TableCell>
                       <div className="flex items-center gap-3">
                         {category.image_src && (
-                          <img 
-                            src={category.image_src} 
+                          <img
+                            src={category.image_src}
                             alt={category.name}
                             className="w-8 h-8 rounded object-cover"
                             onError={(e) => {
@@ -744,7 +735,7 @@ const CategoriesDashboard = ({
                 </select>
                 <span className="text-sm text-muted-foreground">por página</span>
               </div>
-              
+
               <div className="text-sm text-muted-foreground">
                 Mostrando {startIndex + 1}-{Math.min(endIndex, totalFilteredCategories)} de {totalFilteredCategories} categorías
                 {searchTerm && ` (filtradas de ${initialStats?.total || initialTotal} total)`}
@@ -763,7 +754,7 @@ const CategoriesDashboard = ({
                   >
                     Primera
                   </Button>
-                  
+
                   <Button
                     variant="outline"
                     size="sm"
@@ -772,12 +763,12 @@ const CategoriesDashboard = ({
                   >
                     Anterior
                   </Button>
-                  
+
                   {/* Page numbers */}
                   <div className="flex items-center gap-1 mx-2">
                     {(() => {
                       const pages = generatePageNumbers();
-                      return pages.map((item, index) => {
+                      return pages.map((item) => {
                         if (item.type === 'ellipsis') {
                           return (
                             <span key={item.key} className="px-2 text-muted-foreground">
@@ -785,7 +776,7 @@ const CategoriesDashboard = ({
                             </span>
                           );
                         }
-                        
+
                         return (
                           <Button
                             key={item.number}
@@ -800,7 +791,7 @@ const CategoriesDashboard = ({
                       });
                     })()}
                   </div>
-                  
+
                   <Button
                     variant="outline"
                     size="sm"
@@ -809,7 +800,7 @@ const CategoriesDashboard = ({
                   >
                     Siguiente
                   </Button>
-                  
+
                   <Button
                     variant="outline"
                     size="sm"
@@ -834,7 +825,7 @@ const CategoriesDashboard = ({
               Modifica los datos de la categoría seleccionada.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="edit-name">Nombre *</Label>
@@ -845,7 +836,7 @@ const CategoriesDashboard = ({
                 placeholder="Nombre de la categoría"
               />
             </div>
-            
+
             <div className="grid gap-2">
               <Label htmlFor="edit-slug">Slug</Label>
               <Input
@@ -855,7 +846,7 @@ const CategoriesDashboard = ({
                 placeholder="slug-de-la-categoria"
               />
             </div>
-            
+
             <div className="grid gap-2">
               <Label htmlFor="edit-description">Descripción</Label>
               <Textarea
@@ -866,29 +857,29 @@ const CategoriesDashboard = ({
                 rows={3}
               />
             </div>
-            
+
             <div className="grid gap-2">
               <Label htmlFor="edit-parent">Categoría Padre</Label>
-              <Select 
-                value={formData.parent?.toString() || 'none'} 
+              <Select
+                value={formData.parent?.toString() || 'none'}
                 onValueChange={(value) => handleInputChange('parent', value === 'none' ? null : parseInt(value))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar categoría padre" />
                 </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Ninguna (Categoría principal)</SelectItem>
-                    {allCategories
-                      .filter(cat => cat.id !== editingCategory?.id) // Evitar auto-referencia
-                      .map((category) => (
+                <SelectContent>
+                  <SelectItem value="none">Ninguna (Categoría principal)</SelectItem>
+                  {allCategories
+                    .filter(cat => cat.id !== editingCategory?.id) // Evitar auto-referencia
+                    .map((category) => (
                       <SelectItem key={category.id} value={category.id.toString()}>
                         {category.name}
                       </SelectItem>
                     ))}
-                  </SelectContent>
+                </SelectContent>
               </Select>
             </div>
-            
+
             <div className="grid gap-2">
               <Label htmlFor="edit-image_src">URL de Imagen</Label>
               <Input
@@ -899,7 +890,7 @@ const CategoriesDashboard = ({
               />
             </div>
           </div>
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancelar

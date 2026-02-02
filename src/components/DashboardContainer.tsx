@@ -25,6 +25,7 @@ import type { DashboardStats } from '../services/dashboardService';
 
 interface DashboardContainerProps {
   initialData: DashboardStats;
+  adminContext?: any;
 }
 
 export default function DashboardContainer({ initialData }: DashboardContainerProps) {
@@ -36,7 +37,7 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
   // Función para generar descripción de filtros
   const getFilterDescription = (filters: FilterState): string => {
     const parts: string[] = [];
-    
+
     // Período
     if (filters.dateRange.period === 'weekly') parts.push('última semana');
     else if (filters.dateRange.period === 'monthly') parts.push('último mes');
@@ -44,18 +45,18 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
     else if (filters.dateRange.period === 'all') parts.push('todo el período');
     else if (filters.dateRange.period === 'month-year') {
       const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-                         'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
       const monthName = monthNames[filters.dateRange.selectedMonth ?? new Date().getMonth()];
       const year = filters.dateRange.selectedYear ?? new Date().getFullYear();
       parts.push(`${monthName} ${year}`);
     }
     else if (filters.dateRange.period === 'custom') parts.push('período personalizado');
-    
+
     // Estados
     if (filters.status.length > 0) {
       parts.push(`estados: ${filters.status.join(', ')}`);
     }
-    
+
     // Estado financiero
     if (filters.financialStatus !== 'all') {
       const statusMap = {
@@ -65,12 +66,12 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
       };
       parts.push(`estado: ${statusMap[filters.financialStatus as keyof typeof statusMap]}`);
     }
-    
+
     // Búsqueda
     if (filters.searchTerm) {
       parts.push(`búsqueda: "${filters.searchTerm}"`);
     }
-    
+
     return parts.join(', ') || 'filtros aplicados';
   };
 
@@ -87,17 +88,17 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
       financialStatus: 'all',
       searchTerm: ''
     };
-    
+
     // Generar fechas del último mes con horas precisas
     const end = new Date();
     const start = new Date();
     end.setHours(23, 59, 59, 999); // Fin del día actual
     start.setMonth(end.getMonth() - 1);
     start.setHours(0, 0, 0, 0); // Inicio del día hace un mes
-    
+
     initialFilters.dateRange.start = start.toISOString().split('T')[0] || '';
     initialFilters.dateRange.end = end.toISOString().split('T')[0] || '';
-    
+
     // Aplicar filtros iniciales para asegurar que todos los componentes usen datos del último mes
     handleFiltersChange(initialFilters);
   }, []);
@@ -125,7 +126,7 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
         const end = new Date();
         const start = new Date();
         start.setMonth(end.getMonth() - 1);
-        
+
         dateRange = {
           ...dateRange,
           start: start.toISOString().split('T')[0] || '',
@@ -158,7 +159,7 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
 
       // Procesar datos filtrados y actualizar estado
       const filteredData = result.data;
-      
+
       // Reorganizar órdenes por estado
       const ordersByStatus = {
         onHold: filteredData.orders.filter((order: any) => order.status === 'on-hold'),
@@ -183,11 +184,11 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
         const total = order.calculated_total || 0;
         return sum + (order.pago_completo ? total : total * 0.25);
       }, 0);
-      
+
       const reservationPayments = completedOrders
         .filter((order: any) => !order.pago_completo)
         .reduce((sum: number, order: any) => sum + (order.calculated_total || 0) * 0.25, 0);
-      
+
       const finalPayments = completedOrders
         .filter((order: any) => order.pago_completo)
         .reduce((sum: number, order: any) => sum + (order.calculated_total || 0), 0);
@@ -225,7 +226,7 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
   return (
     <div className="space-y-6">
       {/* Filtros del Dashboard */}
-      <DashboardFilters 
+      <DashboardFilters
         onFiltersChange={handleFiltersChange}
         isLoading={isLoading}
       />
@@ -253,16 +254,16 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
       {/* Contenido del Dashboard */}
       <div className={isLoading ? 'opacity-50 pointer-events-none' : ''}>
         {/* Estadísticas del Mes */}
-        <OrderSummaryStats 
+        <OrderSummaryStats
           monthlyStats={dashboardData.monthlyOrderStats}
           isFiltered={lastFilters !== null}
           filterInfo={lastFilters ? getFilterDescription(lastFilters) : ''}
         />
 
         <Separator />
-        
+
         {/* Tablas de Órdenes por Estado */}
-        <OrderStatusTables 
+        <OrderStatusTables
           ordersByStatus={dashboardData.ordersByStatus}
           isFiltered={lastFilters !== null}
           filterInfo={lastFilters ? getFilterDescription(lastFilters) : ''}
@@ -271,16 +272,16 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
         <Separator />
 
         {/* Equipos Rentados */}
-        <RentedEquipmentTable 
+        <RentedEquipmentTable
           rentedEquipment={dashboardData.rentedEquipment}
           isFiltered={lastFilters !== null}
           filterInfo={lastFilters ? getFilterDescription(lastFilters) : ''}
         />
-        
+
         <Separator />
 
         {/* Resumen Financiero */}
-        <FinancialSummary 
+        <FinancialSummary
           financialSummary={dashboardData.financialSummary}
           isFiltered={lastFilters !== null}
           filterInfo={lastFilters ? getFilterDescription(lastFilters) : ''}

@@ -171,13 +171,12 @@ export const OrderHistory = ({
 
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
-    return date.toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${day}-${month}-${year} ${hours}:${minutes}`;
   };
 
   const filterOptions = [
@@ -277,13 +276,13 @@ export const OrderHistory = ({
                   {index < displayHistory.length - 1 && (
                     <div className="absolute left-4 top-8 w-0.5 h-12 bg-border" />
                   )}
-                  
+
                   <div className="flex gap-3">
                     {/* Icon */}
                     <div className={`flex-shrink-0 w-8 h-8 rounded-full border-2 bg-background flex items-center justify-center ${getTypeColor(entry.type)}`}>
                       {getTypeIcon(entry.type)}
                     </div>
-                    
+
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
@@ -294,13 +293,13 @@ export const OrderHistory = ({
                               {getTypeLabel(entry.type)}
                             </Badge>
                           </div>
-                          
+
                           {entry.description && (
                             <p className="text-sm text-muted-foreground mb-2">
                               {entry.description}
                             </p>
                           )}
-                          
+
                           {/* Metadata */}
                           {entry.metadata && (
                             <div className="text-xs text-muted-foreground space-y-1">
@@ -316,7 +315,7 @@ export const OrderHistory = ({
                               )}
                             </div>
                           )}
-                          
+
                           {/* User and timestamp */}
                           <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                             {entry.user && (

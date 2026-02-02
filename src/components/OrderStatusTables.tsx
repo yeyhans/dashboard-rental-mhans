@@ -3,20 +3,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from './ui/table';
-import { 
-  Clock, 
-  AlertCircle, 
-  CheckCircle, 
-  Eye, 
-  Calendar,
+import {
+  Clock,
+  AlertCircle,
+  CheckCircle,
+  Eye,
   User,
   DollarSign,
   Filter
@@ -53,13 +52,13 @@ interface OrderStatusTablesProps {
   filterInfo?: string;
 }
 
-export default function OrderStatusTables({ 
-  ordersByStatus, 
-  isFiltered = false, 
-  filterInfo = '' 
+export default function OrderStatusTables({
+  ordersByStatus,
+  isFiltered = false,
+  filterInfo = ''
 }: OrderStatusTablesProps) {
   const [selectedTab, setSelectedTab] = useState('on-hold');
-  const [showAllOrders, setShowAllOrders] = useState<{[key: string]: boolean}>({
+  const [showAllOrders, setShowAllOrders] = useState<{ [key: string]: boolean }>({
     'on-hold': false,
     'pending': false,
     'processing': false,
@@ -126,10 +125,12 @@ export default function OrderStatusTables({
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return '';
     const date = new Date(dateString);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
+    // Usar métodos UTC para evitar que la zona horaria reste un día
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const year = date.getUTCFullYear();
     return `${day}/${month}/${year}`;
   };
 
@@ -216,12 +217,12 @@ export default function OrderStatusTables({
                         {order.order_fecha_inicio && order.order_fecha_termino ? (
                           <>
                             <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3 text-green-600" />
-                              <span className="text-xs">{formatDate(order.order_fecha_inicio)}</span>
+                              <span className="text-xs text-muted-foreground w-12">Inicio:</span>
+                              <span className="text-green-600 font-medium">{formatDate(order.order_fecha_inicio)}</span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3 text-red-600" />
-                              <span className="text-xs">{formatDate(order.order_fecha_termino)}</span>
+                              <span className="text-xs text-muted-foreground w-12">Término:</span>
+                              <span className="text-red-600 font-medium">{formatDate(order.order_fecha_termino)}</span>
                             </div>
                           </>
                         ) : (
@@ -254,16 +255,16 @@ export default function OrderStatusTables({
           </div>
           {hasMoreOrders && (
             <div className="mt-4 text-center">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => setShowAllOrders(prev => ({
                   ...prev,
                   [status]: !prev[status]
                 }))}
               >
-                {showAll 
-                  ? `Mostrar menos (${displayOrders.length} de ${orders.length})` 
+                {showAll
+                  ? `Mostrar menos (${displayOrders.length} de ${orders.length})`
                   : `Ver todas las ${orders.length} órdenes ${config.label.toLowerCase()}`
                 }
               </Button>

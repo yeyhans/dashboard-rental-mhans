@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
 } from '../ui/card';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '../ui/table';
 import {
   Dialog,
@@ -51,7 +51,7 @@ const statusTranslations: { [key: string]: string } = {
 
 const statusColors: { [key: string]: string } = {
   'pending': 'bg-[#f8dda7] text-[#94660c]',
-  'processing': 'bg-[#c6e1c6] text-[#5b841b]', 
+  'processing': 'bg-[#c6e1c6] text-[#5b841b]',
   'on-hold': 'bg-[#e5e5e5] text-[#777777]',
   'completed': 'bg-[#c8d7e1] text-[#2e4453]',
   'cancelled': 'bg-[#eba3a3] text-[#761919]',
@@ -112,7 +112,7 @@ interface NewOrderForm {
   }>;
 }
 
-const OrdersDashboard = ({ 
+const OrdersDashboard = ({
   initialOrders,
   initialTotal,
   sessionData,
@@ -137,10 +137,10 @@ const OrdersDashboard = ({
     const checkIfMobile = () => {
       setIsMobileView(window.innerWidth < 768);
     };
-    
+
     checkIfMobile();
     window.addEventListener('resize', checkIfMobile);
-    
+
     return () => {
       window.removeEventListener('resize', checkIfMobile);
     };
@@ -150,16 +150,16 @@ const OrdersDashboard = ({
   const filteredOrders = React.useMemo(() => {
     return allOrders.filter(order => {
       // Filter by search term usando campos directos
-      const matchesSearch = !searchTerm || 
+      const matchesSearch = !searchTerm ||
         (order.billing_first_name && order.billing_first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (order.billing_last_name && order.billing_last_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (order.billing_email && order.billing_email.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (order.order_proyecto && order.order_proyecto.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (order.id && order.id.toString().includes(searchTerm));
-      
+
       // Filter by status
       const matchesStatus = !statusFilter || order.status === statusFilter;
-      
+
       return matchesSearch && matchesStatus;
     });
   }, [allOrders, searchTerm, statusFilter]);
@@ -183,7 +183,7 @@ const OrdersDashboard = ({
     const pageParam = urlParams.get('page');
     const statusParam = urlParams.get('status');
     const searchParam = urlParams.get('search');
-    
+
     if (pageParam) {
       const page = parseInt(pageParam);
       if (page > 0) setCurrentPage(page);
@@ -205,12 +205,12 @@ const OrdersDashboard = ({
     try {
       setLoading(true);
       setError(null);
-      
+
       console.log('🔄 Refreshing orders data from server...');
-      
+
       // Prepare auth headers
       let headers: HeadersInit = { 'Content-Type': 'application/json' };
-      
+
       if (sessionData?.access_token) {
         headers = {
           'Authorization': `Bearer ${sessionData.access_token}`,
@@ -229,7 +229,7 @@ const OrdersDashboard = ({
       }
 
       const data = await response.json();
-      
+
       if (data.success && data.data) {
         // Transform orders to match expected structure
         const transformedOrders = data.data.orders.map((order: any) => ({
@@ -265,7 +265,7 @@ const OrdersDashboard = ({
         setAllOrders(transformedOrders);
         setTotal(data.data.total || transformedOrders.length);
         setLastRefreshTime(new Date());
-        
+
         console.log('✅ Orders data refreshed successfully:', transformedOrders.length, 'orders loaded');
       } else {
         throw new Error(data.error || 'Error loading orders');
@@ -282,19 +282,19 @@ const OrdersDashboard = ({
   const updateURLWithFilters = () => {
     const url = new URL(window.location.href);
     url.searchParams.set('page', currentPage.toString());
-    
+
     if (statusFilter) {
       url.searchParams.set('status', statusFilter);
     } else {
       url.searchParams.delete('status');
     }
-    
+
     if (searchTerm) {
       url.searchParams.set('search', searchTerm);
     } else {
       url.searchParams.delete('search');
     }
-    
+
     window.history.pushState({}, '', url.toString());
   };
 
@@ -303,12 +303,13 @@ const OrdersDashboard = ({
     updateURLWithFilters();
   }, [currentPage, statusFilter, searchTerm]);
 
-  // Format date
+  // Format date using UTC to avoid timezone shift
   const formatDate = (dateString: string) => {
+    if (!dateString) return '';
     const date = new Date(dateString);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const year = date.getUTCFullYear();
     return `${day}/${month}/${year}`;
   };
 
@@ -316,7 +317,7 @@ const OrdersDashboard = ({
 
   const handleOrderCreated = async (newOrder: any) => {
     console.log('🎉 New order created:', newOrder.id);
-    
+
     // Immediately add the new order to the list for instant feedback
     const transformedOrder: Order = {
       ...newOrder,
@@ -417,18 +418,24 @@ const OrdersDashboard = ({
                   <div className="text-right">
                     {order.order_fecha_inicio && order.order_fecha_termino ? (
                       <div className="flex flex-col gap-1 text-xs">
-                        <div className="text-green-600 font-medium">{formatDate(order.order_fecha_inicio)}</div>
-                        <div className="text-red-600 font-medium">{formatDate(order.order_fecha_termino)}</div>
+                        <div className="flex items-center justify-end gap-1">
+                          <span className="text-muted-foreground">Inicio:</span>
+                          <span className="text-green-600 font-medium">{formatDate(order.order_fecha_inicio)}</span>
+                        </div>
+                        <div className="flex items-center justify-end gap-1">
+                          <span className="text-muted-foreground">Término:</span>
+                          <span className="text-red-600 font-medium">{formatDate(order.order_fecha_termino)}</span>
+                        </div>
                       </div>
                     ) : (
                       <div className="text-xs text-muted-foreground">Sin fechas</div>
                     )}
                   </div>
                 </div>
-                
+
                 <h3 className="font-semibold text-foreground text-lg mb-1">{order.billing_first_name} {order.billing_last_name}</h3>
                 <p className="text-sm text-muted-foreground mb-2">{order.billing_email}</p>
-                
+
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <div>
                     <p className="text-xs text-muted-foreground">Proyecto</p>
@@ -439,17 +446,17 @@ const OrdersDashboard = ({
                     <p className="text-lg font-bold text-foreground">${formatCurrency(order.calculated_total || '0')}</p>
                   </div>
                 </div>
-                
+
                 <div className="mt-2 flex gap-2">
 
                   {order.new_pdf_on_hold_url && (() => {
                     const budgetUrls = order.new_pdf_on_hold_url.split(',').filter(url => url.trim());
                     const latestUrl = budgetUrls[budgetUrls.length - 1]?.trim();
-                    
+
                     return (
                       <div className="flex items-center gap-1 flex-1">
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="sm"
                           className="bg-blue-200 text-blue-900 hover:bg-blue-300"
                           onClick={() => window.open(latestUrl, '_blank')}
@@ -458,7 +465,7 @@ const OrdersDashboard = ({
                           <FileText className="h-4 w-4" />
                           {budgetUrls.length > 1 && <span className="ml-1 text-xs">v{budgetUrls.length}</span>}
                         </Button>
-                        
+
                         {budgetUrls.length > 1 && (
                           <div className="flex gap-1">
                             {budgetUrls.slice(0, -1).map((url, index) => (
@@ -479,8 +486,8 @@ const OrdersDashboard = ({
                     );
                   })()}
                   {order.new_pdf_processing_url && (
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
                       className="flex-1 bg-green-200 text-green-900 hover:bg-green-300"
                       onClick={() => window.open(order.new_pdf_processing_url, '_blank')}
@@ -490,9 +497,9 @@ const OrdersDashboard = ({
                   )}
                 </div>
                 <a href={`/orders/${order.id}`} className="no-underline w-full block mt-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="w-full"
                   >
                     Ver detalles <ChevronRight className="h-4 w-4 ml-2" />
@@ -565,8 +572,14 @@ const OrdersDashboard = ({
                 <TableCell className="text-foreground">
                   {order.order_fecha_inicio && order.order_fecha_termino ? (
                     <div className="flex flex-col gap-1 text-sm">
-                      <div className="text-green-600 font-medium">{formatDate(order.order_fecha_inicio)}</div>
-                      <div className="text-red-600 font-medium">{formatDate(order.order_fecha_termino)}</div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground w-12">Inicio:</span>
+                        <span className="text-green-600 font-medium">{formatDate(order.order_fecha_inicio)}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground w-12">Término:</span>
+                        <span className="text-red-600 font-medium">{formatDate(order.order_fecha_termino)}</span>
+                      </div>
                     </div>
                   ) : (
                     <span className="text-xs text-muted-foreground">Sin fechas</span>
@@ -578,11 +591,11 @@ const OrdersDashboard = ({
                     {order.new_pdf_on_hold_url && (() => {
                       const budgetUrls = order.new_pdf_on_hold_url.split(',').filter(url => url.trim());
                       const latestUrl = budgetUrls[budgetUrls.length - 1]?.trim();
-                      
+
                       return (
                         <div className="flex items-center gap-1">
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             className="bg-blue-200 text-blue-900 hover:bg-blue-300"
                             onClick={() => window.open(latestUrl, '_blank')}
@@ -591,7 +604,7 @@ const OrdersDashboard = ({
                             <FileText className="h-4 w-4" />
                             {budgetUrls.length > 1 && <span className="ml-1 text-xs">v{budgetUrls.length}</span>}
                           </Button>
-                          
+
                           {budgetUrls.length > 1 && (
                             <div className="flex gap-1">
                               {budgetUrls.slice(0, -1).map((url, index) => (
@@ -612,8 +625,8 @@ const OrdersDashboard = ({
                       );
                     })()}
                     {order.new_pdf_processing_url && (
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         className="bg-green-200 text-green-900 hover:bg-green-300"
                         onClick={() => window.open(order.new_pdf_processing_url, '_blank')}
@@ -622,8 +635,8 @@ const OrdersDashboard = ({
                       </Button>
                     )}
                     <a href={`/orders/${order.id}`} className="no-underline" target="_blank">
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
                       >
                         Ver detalles
@@ -654,15 +667,15 @@ const OrdersDashboard = ({
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  id="search" 
-                  placeholder="Buscar por cliente, proyecto, email..." 
-                  value={searchTerm} 
+                <Input
+                  id="search"
+                  placeholder="Buscar por cliente, proyecto, email..."
+                  value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="text-foreground pl-10"
                 />
               </div>
-              
+
               <div className="w-full sm:w-48">
                 <select
                   id="status"
@@ -676,9 +689,9 @@ const OrdersDashboard = ({
                   ))}
                 </select>
               </div>
-              
-              <Button 
-                className="w-full sm:w-auto" 
+
+              <Button
+                className="w-full sm:w-auto"
                 onClick={refreshData}
                 disabled={loading}
                 variant="outline"
@@ -700,7 +713,7 @@ const OrdersDashboard = ({
             <div className="text-sm text-muted-foreground order-2 sm:order-1">
               Mostrando {Math.min(startIndex + 1, totalFilteredOrders)}-{Math.min(endIndex, totalFilteredOrders)} de {totalFilteredOrders} pedidos filtrados ({total} total)
             </div>
-            
+
             <div className="flex flex-wrap justify-center gap-2 order-1 sm:order-2">
               <Button
                 variant="outline"
@@ -712,7 +725,7 @@ const OrdersDashboard = ({
               >
                 Anterior
               </Button>
-              
+
               <div className="flex items-center gap-1">
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   // Calculamos las páginas a mostrar
@@ -746,7 +759,7 @@ const OrdersDashboard = ({
                     </Button>
                   );
                 })}
-                
+
                 {/* En móvil mostramos el indicador de página actual */}
                 <div className="sm:hidden flex items-center px-3 h-9 border rounded">
                   <span className="text-sm font-medium">
@@ -754,7 +767,7 @@ const OrdersDashboard = ({
                   </span>
                 </div>
               </div>
-              
+
               <Button
                 variant="outline"
                 size="sm"

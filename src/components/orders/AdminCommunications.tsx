@@ -5,9 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Send, 
-  Clock, 
+import {
+  Send,
+  Clock,
   CheckCheck,
   User,
   MessageSquare,
@@ -71,7 +71,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
   // Iniciar polling para actualizaciones automáticas
   useEffect(() => {
     console.log('🔄 Starting admin polling for order communications', orderId);
-    
+
     communicationsService.startPollingForOrder(
       orderId,
       (newMessage: OrderCommunication) => {
@@ -82,17 +82,17 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
             console.log('🔄 Admin message already exists, skipping:', newMessage.id);
             return prev;
           }
-          
+
           console.log('📨 Adding new admin message:', newMessage.id);
           return [...prev, newMessage];
         });
-        
+
         // Solo incrementar si es realmente un mensaje nuevo
         setTotalMessages(prev => {
           // Verificar si ya contamos este mensaje
           return prev + 1;
         });
-        
+
         // Si el mensaje no es del admin actual, mostrar notificación
         if (newMessage.user_id !== adminInfo.id) {
           toast.info('Nuevo mensaje del cliente', {
@@ -102,15 +102,15 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
               onClick: scrollToBottom
             }
           });
-          
+
           // Actualizar contador de no leídos
           setUnreadCount(prev => prev + 1);
         }
-        
+
         setTimeout(scrollToBottom, 100);
       },
       (updatedMessage: OrderCommunication) => {
-        setMessages(prev => 
+        setMessages(prev =>
           prev.map(msg => msg.id === updatedMessage.id ? updatedMessage : msg)
         );
       },
@@ -138,7 +138,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
     const timeoutId = setTimeout(() => {
       scrollToBottom();
     }, 100);
-    
+
     return () => clearTimeout(timeoutId);
   }, [messages]);
 
@@ -148,12 +148,12 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
       const communications = await communicationsService.getOrderCommunications(orderId);
       setMessages(communications);
       setFilteredMessages(communications);
-      
+
       // Obtener estadísticas básicas
       const stats = await communicationsService.getCommunicationStats(orderId, adminInfo.id);
       setUnreadCount(stats.unread_messages);
       setTotalMessages(stats.total_messages);
-      
+
       // Obtener estadísticas avanzadas
       try {
         const advStats = await communicationsService.getAdvancedCommunicationStats(orderId);
@@ -183,7 +183,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
 
     try {
       setSending(true);
-      
+
       if (selectedFile) {
         // Enviar mensaje con archivo
         await communicationsService.sendMessageWithFile(
@@ -206,7 +206,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
           adminInfo.email
         );
       }
-      
+
       setNewMessage('');
       setSelectedFile(null);
       toast.success('Mensaje enviado');
@@ -224,12 +224,12 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
 
     try {
       await communicationsService.deleteMessage(messageId, adminInfo.id);
-      
+
       // Actualizar el estado local inmediatamente
       setMessages(prev => prev.filter(msg => msg.id !== messageId));
       setFilteredMessages(prev => prev.filter(msg => msg.id !== messageId));
       setTotalMessages(prev => prev - 1);
-      
+
       toast.success('Mensaje eliminado');
     } catch (error) {
       console.error('Error deleting message:', error);
@@ -242,7 +242,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
     if (!searchTerm.trim()) {
       setFilteredMessages(messages);
     } else {
-      const filtered = messages.filter(msg => 
+      const filtered = messages.filter(msg =>
         msg.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
         msg.user_name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
@@ -288,13 +288,13 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
     const now = new Date();
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
     const diffInDays = diffInHours / 24;
-    
+
     if (diffInHours < 1) {
       return 'Ahora';
     } else if (diffInHours < 24) {
-      return date.toLocaleTimeString('es-CL', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
+      return date.toLocaleTimeString('es-CL', {
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } else if (diffInDays < 7) {
       return date.toLocaleDateString('es-CL', {
@@ -303,12 +303,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
         minute: '2-digit'
       });
     } else {
-      return date.toLocaleDateString('es-CL', {
-        day: '2-digit',
-        month: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
     }
   };
 
@@ -337,22 +332,22 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
 
     // Procesar contenido markdown básico
     let content = message;
-    
+
     // Convertir títulos markdown
     content = content.replace(/## (.*?)\n/g, '<h3 class="font-semibold text-base mb-2 mt-1">$1</h3>');
     content = content.replace(/### (.*?)\n/g, '<h4 class="font-medium text-sm mb-1 mt-1">$1</h4>');
-    
+
     // Convertir texto en negrita
     content = content.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>');
-    
+
     // Convertir saltos de línea
     content = content.replace(/\n/g, '<br />');
-    
+
     // Añadir espaciado para emojis de notificación
     content = content.replace(/(📧|📄|✅|❌|🎉|📊|📋|💬|📎|ℹ️)/g, '<span class="inline-block mr-1">$1</span>');
-    
+
     return (
-      <div 
+      <div
         className="text-sm break-words leading-relaxed"
         dangerouslySetInnerHTML={{ __html: content }}
       />
@@ -368,7 +363,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
     if (message.message_type === 'file') {
       return <Paperclip className="h-3 w-3 mr-1" />;
     }
-    
+
     // Icono por contenido
     const content = message.message.toLowerCase();
     if (content.includes('correo') || content.includes('email')) {
@@ -389,10 +384,10 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
   // Renderizar archivo adjunto
   const renderAttachment = (message: OrderCommunication) => {
     if (!message.file_url || !message.file_name) return null;
-    
-    const isImage = message.message_type === 'image' || 
-                   message.file_name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-    
+
+    const isImage = message.message_type === 'image' ||
+      message.file_name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+
     return (
       <div className="mt-2 p-2 bg-muted/30 rounded border">
         <div className="flex items-center gap-2">
@@ -408,8 +403,8 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
           </Button>
         </div>
         {isImage && (
-          <img 
-            src={message.file_url} 
+          <img
+            src={message.file_url}
             alt={message.file_name}
             className="mt-2 max-w-full h-auto max-h-32 rounded border"
             loading="lazy"
@@ -479,7 +474,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
             )}
           </div>
         </CardTitle>
-        
+
         {/* Barra de búsqueda */}
         <div className="flex items-center gap-2 mt-2">
           <div className="relative flex-1">
@@ -502,7 +497,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
             </Button>
           )}
         </div>
-        
+
         {/* Panel de estadísticas */}
         {showStats && advancedStats && (
           <div className="mt-3 p-3 bg-muted/20 rounded-lg">
@@ -521,7 +516,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
               </div>
               <div className="text-center">
                 <div className="font-semibold text-purple-600">
-                  {advancedStats.average_response_time_hours ? 
+                  {advancedStats.average_response_time_hours ?
                     `${advancedStats.average_response_time_hours.toFixed(1)}h` : 'N/A'}
                 </div>
                 <div className="text-muted-foreground">Tiempo resp.</div>
@@ -567,7 +562,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
                 const isSameUser = prevMessage && prevMessage.user_id === message.user_id;
                 const timeDiff = prevMessage ? new Date(message.created_at).getTime() - new Date(prevMessage.created_at).getTime() : 0;
                 const isGrouped = isSameUser && timeDiff < 5 * 60 * 1000; // 5 minutos
-                
+
                 return (
                   <div key={message.id}>
                     {/* Separador de tiempo para mensajes con mucha diferencia */}
@@ -578,15 +573,14 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
                         </div>
                       </div>
                     )}
-                    
+
                     <div className={`flex gap-2 ${isMyMessage(message) ? 'flex-row-reverse' : 'flex-row'} group ${isGrouped ? 'mt-0.5' : 'mt-2'}`}>
                       {/* Avatar solo para el primer mensaje del grupo */}
                       {!isGrouped ? (
-                        <div className={`h-6 w-6 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-medium mt-0.5 ${
-                          message.user_type === 'admin' 
-                            ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+                        <div className={`h-6 w-6 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-medium mt-0.5 ${message.user_type === 'admin'
+                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
                             : 'bg-green-100 text-green-700 border border-green-200'
-                        }`}>
+                          }`}>
                           {getUserInitials(message)}
                         </div>
                       ) : (
@@ -619,24 +613,20 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
                           </div>
                         )}
 
-                        <div className={`group/message relative ${
-                          isMyMessage(message) ? 'ml-6' : 'mr-6'
-                        }`}>
-                          <div className={`rounded-xl px-2.5 py-1.5 shadow-sm transition-all duration-200 hover:shadow-md ${
-                            isMyMessage(message)
+                        <div className={`group/message relative ${isMyMessage(message) ? 'ml-6' : 'mr-6'
+                          }`}>
+                          <div className={`rounded-xl px-2.5 py-1.5 shadow-sm transition-all duration-200 hover:shadow-md ${isMyMessage(message)
                               ? 'bg-primary text-primary-foreground'
                               : 'bg-muted/60 hover:bg-muted/80 border border-border/30'
-                          } ${
-                            isGrouped ? 'rounded-t-md' : ''
-                          }`}>
+                            } ${isGrouped ? 'rounded-t-md' : ''
+                            }`}>
                             {renderMessageContent(message.message)}
                             {renderAttachment(message)}
                           </div>
-                          
+
                           {/* Indicadores de estado y controles admin */}
-                          <div className={`flex items-center ${isMyMessage(message) ? 'justify-end' : 'justify-start'} mt-1 opacity-0 group-hover/message:opacity-100 transition-opacity ${
-                            isGrouped ? 'absolute -bottom-5' : ''
-                          } ${isMyMessage(message) ? 'right-0' : 'left-0'}`}>
+                          <div className={`flex items-center ${isMyMessage(message) ? 'justify-end' : 'justify-start'} mt-1 opacity-0 group-hover/message:opacity-100 transition-opacity ${isGrouped ? 'absolute -bottom-5' : ''
+                            } ${isMyMessage(message) ? 'right-0' : 'left-0'}`}>
                             <div className="flex items-center gap-1 text-xs text-muted-foreground/70">
                               {/* Indicadores de lectura solo para mensajes propios */}
                               {isMyMessage(message) && (
@@ -696,7 +686,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
               </Button>
             </div>
           )}
-          
+
           <div className="flex gap-2">
             <div className="flex-1 relative">
               <Input
@@ -715,9 +705,9 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
                 </div>
               )}
             </div>
-            
 
-            
+
+
             <Button
               onClick={handleSendMessage}
               disabled={(!newMessage.trim() && !selectedFile) || sending}
@@ -731,7 +721,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
               )}
             </Button>
           </div>
-          
+
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-3 w-3" />

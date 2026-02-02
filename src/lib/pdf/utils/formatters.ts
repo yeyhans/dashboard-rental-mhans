@@ -57,11 +57,11 @@ export function formatDateLong(date: Date | string): string {
  * Current date in DD-MM-YYYY format
  */
 export function getCurrentDateFormatted(): string {
-  return new Date().toLocaleDateString('es-CL', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  const date = new Date();
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
 }
 
 /**

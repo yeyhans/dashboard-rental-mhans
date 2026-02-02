@@ -3,18 +3,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from './ui/table';
-import { 
-  Package, 
-  Calendar, 
-  Search, 
+import {
+  Package,
+  Calendar,
+  Search,
   AlertTriangle,
   CheckCircle,
   Clock,
@@ -38,21 +38,21 @@ interface RentedEquipmentTableProps {
   filterInfo?: string;
 }
 
-export default function RentedEquipmentTable({ 
-  rentedEquipment, 
-  isFiltered = false, 
-  filterInfo = '' 
+export default function RentedEquipmentTable({
+  rentedEquipment,
+  isFiltered = false,
+  filterInfo = ''
 }: RentedEquipmentTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
   const filteredEquipment = rentedEquipment.filter(item => {
     const matchesSearch = item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.orderProject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.orderId.toString().includes(searchTerm);
-    
+      item.orderProject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.orderId.toString().includes(searchTerm);
+
     const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-    
+
     return matchesSearch && matchesStatus;
   });
 
@@ -118,11 +118,8 @@ export default function RentedEquipmentTable({
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    const date = new Date(dateString);
+    return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
   };
 
   const statusOptions = [
@@ -160,7 +157,7 @@ export default function RentedEquipmentTable({
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -172,7 +169,7 @@ export default function RentedEquipmentTable({
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -184,7 +181,7 @@ export default function RentedEquipmentTable({
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -247,7 +244,7 @@ export default function RentedEquipmentTable({
             <div className="text-center py-8">
               <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
-                {rentedEquipment.length === 0 
+                {rentedEquipment.length === 0
                   ? 'No hay equipos rentados actualmente'
                   : 'No se encontraron equipos con los filtros aplicados'
                 }
@@ -272,7 +269,7 @@ export default function RentedEquipmentTable({
                     const statusConfig = getStatusConfig(item.status);
                     const daysConfig = getDaysRemainingConfig(item.daysRemaining);
                     const StatusIcon = statusConfig.icon;
-                    
+
                     return (
                       <TableRow key={index}>
                         <TableCell className="font-medium">

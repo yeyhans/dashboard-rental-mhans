@@ -65,17 +65,17 @@ export const CouponSelector = ({
   // Load available coupons
   const loadAvailableCoupons = async () => {
     setIsLoadingCoupons(true);
-    
+
     try {
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       };
-      
+
       // Add authorization header if accessToken is available
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
-      
+
       // Try different status values - first try 'publish' (as used in CouponService)
       let response = await fetch(`/api/coupons?limit=100&status=publish`, {
         method: 'GET',
@@ -84,17 +84,17 @@ export const CouponSelector = ({
       });
 
       let data = await response.json();
-      
+
       // If no results with 'publish', try without status filter to get all coupons
       if (!data.success || !data.data || !data.data.coupons || data.data.coupons.length === 0) {
         console.log('No coupons found with status=publish, trying without status filter...');
-        
+
         response = await fetch(`/api/coupons?limit=100`, {
           method: 'GET',
           headers,
           credentials: 'include'
         });
-        
+
         data = await response.json();
       }
 
@@ -102,22 +102,22 @@ export const CouponSelector = ({
 
       if (data.success && data.data && data.data.coupons) {
         console.log(`Found ${data.data.coupons.length} coupons from API`);
-        
+
         // Filter active coupons that haven't expired
         const activeCoupons = data.data.coupons.filter((coupon: Coupon) => {
           const now = new Date();
           const expiryDate = coupon.date_expires ? new Date(coupon.date_expires) : null;
-          
+
           // Accept both 'publish' and 'active' status, or any status if we're not filtering
           const isActive = coupon.status === 'publish' || coupon.status === 'active' || !coupon.status;
           const isNotExpired = !expiryDate || expiryDate > now;
           const hasUsagesLeft = coupon.usage_limit === null || (coupon.usage_count || 0) < coupon.usage_limit;
-          
+
           console.log(`Coupon ${coupon.code}: status=${coupon.status}, isActive=${isActive}, isNotExpired=${isNotExpired}, hasUsagesLeft=${hasUsagesLeft}`);
-          
+
           return isActive && isNotExpired && hasUsagesLeft;
         });
-        
+
         console.log(`Filtered to ${activeCoupons.length} active coupons`);
         setAvailableCoupons(activeCoupons);
       } else {
@@ -167,17 +167,17 @@ export const CouponSelector = ({
     }
 
     setIsValidating(true);
-    
+
     try {
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       };
-      
+
       // Add authorization header if accessToken is available
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
-      
+
       const response = await fetch(`/api/coupons/validate/${encodeURIComponent(code)}?subtotal=${subtotal}&userId=${userId || 0}`, {
         method: 'GET',
         headers,
@@ -188,10 +188,10 @@ export const CouponSelector = ({
 
       if (data.success && data.data) {
         const result = data.data;
-        
+
         if (result.is_valid && result.coupon_data) {
           const discountAmount = calculateDiscountAmount(result.coupon_data, subtotal);
-          
+
           setValidationResult({
             ...result,
             discount_amount: discountAmount
@@ -221,7 +221,7 @@ export const CouponSelector = ({
   // Handle coupon code input change
   const handleCouponCodeChange = (value: string) => {
     setCouponCode(value.toUpperCase());
-    
+
     // Clear previous validation when code changes
     if (validationResult) {
       setValidationResult(null);
@@ -250,7 +250,7 @@ export const CouponSelector = ({
   const handleCouponSelect = async (coupon: Coupon) => {
     setCouponCode(coupon.code);
     setShowCouponList(false);
-    
+
     // Validate the selected coupon
     await validateCoupon(coupon.code);
   };
@@ -269,11 +269,11 @@ export const CouponSelector = ({
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       };
-      
+
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
       }
-      
+
       const response = await fetch('/api/coupons/debug', {
         method: 'GET',
         headers,
@@ -282,7 +282,7 @@ export const CouponSelector = ({
 
       const data = await response.json();
       console.log('🔍 Coupon Debug Results:', data);
-      
+
       if (data.success) {
         const debug = data.debug;
         toast.info(`Diagnóstico de Cupones`, {
@@ -483,16 +483,16 @@ export const CouponSelector = ({
                       Puede que no haya cupones creados o todos estén expirados/agotados.
                     </p>
                     <div className="flex gap-2 mt-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={loadAvailableCoupons}
                       >
                         Recargar cupones
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handleDebugCoupons}
                       >
                         Diagnóstico
@@ -542,7 +542,10 @@ export const CouponSelector = ({
                         <span>Usos: {coupon.usage_count || 0}/{coupon.usage_limit}</span>
                       )}
                       {coupon.date_expires && (
-                        <span>Expira: {new Date(coupon.date_expires).toLocaleDateString()}</span>
+                        <span>Expira: {(() => {
+                          const d = new Date(coupon.date_expires);
+                          return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+                        })()}</span>
                       )}
                     </div>
                   </CommandItem>
@@ -556,7 +559,7 @@ export const CouponSelector = ({
       {/* Help Text */}
       {!appliedCoupon && (
         <p className="text-xs text-muted-foreground">
-          Ingresa un código de cupón o <button 
+          Ingresa un código de cupón o <button
             onClick={handleShowCouponList}
             className="text-blue-600 hover:text-blue-700 underline"
             disabled={disabled}

@@ -1,8 +1,8 @@
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle
 } from './ui/card';
 
 import { DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
@@ -24,7 +24,7 @@ const statusTranslations: { [key: string]: string } = {
 
 const statusColors: { [key: string]: string } = {
   'pending': 'bg-[#f8dda7] text-[#94660c]',
-  'processing': 'bg-[#c6e1c6] text-[#5b841b]', 
+  'processing': 'bg-[#c6e1c6] text-[#5b841b]',
   'on-hold': 'bg-[#e5e5e5] text-[#777777]',
   'completed': 'bg-[#c8d7e1] text-[#2e4453]',
   'cancelled': 'bg-[#eba3a3] text-[#761919]',
@@ -37,11 +37,11 @@ const statusColors: { [key: string]: string } = {
 // Helper function to format dates
 const formatDate = (dateString: string): string => {
   if (!dateString) return '';
-  return new Date(dateString).toLocaleDateString('es-CL', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
+  const date = new Date(dateString);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
 };
 
 
@@ -104,17 +104,12 @@ interface OrderSummaryCardsProps {
   users: User[];
 }
 
-const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProps) => {
+const OrderSummaryCards = ({ orders, users }: OrderSummaryCardsProps) => {
   // Find user by customer_id
   const findUserById = (customerId?: number) => {
     if (!customerId || !users) return null;
     return users.find(user => user.id === customerId);
   };
-  
-  // Calculate totals and metrics
-  const totalSales = orders.reduce((sum, order) => {
-    return sum + (parseFloat(order.metadata.calculated_total) || 0);
-  }, 0);
 
 
   // Filter orders for current week deliveries and returns
@@ -130,21 +125,21 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
   // Parse date from format DD-MM-YYYY
   const parseDate = (dateStr?: string): Date | null => {
     if (!dateStr) return null;
-    
+
     const parts = dateStr.split('-');
     if (parts.length !== 3) return null;
-    
+
     // Make sure we have strings before parsing
     const dayStr = parts[0] || '';
     const monthStr = parts[1] || '';
     const yearStr = parts[2] || '';
-    
+
     const day = parseInt(dayStr, 10);
     const month = parseInt(monthStr, 10) - 1; // Months are 0-indexed in JS
     const year = parseInt(yearStr, 10);
-    
+
     if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
-    
+
     return new Date(year, month, day);
   };
 
@@ -186,8 +181,8 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                           </div>
                           <p className="font-semibold text-xs mt-0.5 truncate">{order.metadata.order_proyecto || 'Sin proyecto'}</p>
                           <p className="text-[10px] truncate">
-                            {user ? (user.customer_type === 'empresa' ? user.billing_company : `${user.first_name} ${user.last_name}`) : 
-                                   (order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`)}
+                            {user ? (user.customer_type === 'empresa' ? user.billing_company : `${user.first_name} ${user.last_name}`) :
+                              (order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`)}
                           </p>
                           {user && user.instagram && (
                             <p className="text-[10px] text-muted-foreground truncate">{user.instagram}</p>
@@ -228,8 +223,8 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                               <div>
                                 <Label className="text-[10px]">Nombre</Label>
                                 <div className="mt-0.5 text-[10px]">
-                                  {user ? `${user.first_name} ${user.last_name}` : 
-                                         `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}
+                                  {user ? `${user.first_name} ${user.last_name}` :
+                                    `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}
                                 </div>
                               </div>
                               <div>
@@ -287,9 +282,9 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                                           <TableRow key={index}>
                                             <TableCell className="p-1">
                                               {item.image && (
-                                                <img 
-                                                  src={item.image} 
-                                                  alt={item.name} 
+                                                <img
+                                                  src={item.image}
+                                                  alt={item.name}
                                                   className="w-8 h-8 object-cover rounded-md"
                                                 />
                                               )}
@@ -361,19 +356,19 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                                   <span className="text-[10px] text-muted-foreground">Subtotal:</span>
                                   <span className="text-[10px]">${parseInt(order.metadata.calculated_subtotal || '0').toLocaleString('es-CL')}</span>
                                 </div>
-                                
+
                                 {order.metadata.calculated_discount && parseInt(order.metadata.calculated_discount) > 0 && (
                                   <div className="flex justify-between">
                                     <span className="text-[10px] text-muted-foreground">Descuento:</span>
                                     <span className="text-[10px] text-green-600">-${parseInt(order.metadata.calculated_discount).toLocaleString('es-CL')}</span>
                                   </div>
                                 )}
-                                
+
                                 <div className="flex justify-between">
                                   <span className="text-[10px] text-muted-foreground">IVA (19%):</span>
                                   <span className="text-[10px]">${parseInt(order.metadata.calculated_iva || '0').toLocaleString('es-CL')}</span>
                                 </div>
-                                
+
                                 <div className="flex justify-between border-t pt-1 mt-1">
                                   <span className="text-[10px] font-medium">Total:</span>
                                   <span className="text-sm font-bold text-primary">${parseInt(order.metadata.calculated_total).toLocaleString('es-CL')}</span>
@@ -384,7 +379,7 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
 
                           {/* Botón Ver Detalle */}
                           <div className="flex justify-end pt-2">
-                            <a 
+                            <a
                               href={`/orders/${order.id}`} target="_blank"
                               className="inline-flex items-center justify-center rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 py-1"
                             >
@@ -427,8 +422,8 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                           </div>
                           <p className="font-semibold text-xs mt-0.5 truncate">{order.metadata.order_proyecto || 'Sin proyecto'}</p>
                           <p className="text-[10px] truncate">
-                            {user ? (user.customer_type === 'empresa' ? user.billing_company : `${user.first_name} ${user.last_name}`) : 
-                                   (order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`)}
+                            {user ? (user.customer_type === 'empresa' ? user.billing_company : `${user.first_name} ${user.last_name}`) :
+                              (order.billing?.company || `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`)}
                           </p>
                           {user && user.instagram && (
                             <p className="text-[10px] text-muted-foreground truncate">{user.instagram}</p>
@@ -469,8 +464,8 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                               <div>
                                 <Label className="text-[10px]">Nombre</Label>
                                 <div className="mt-0.5 text-[10px]">
-                                  {user ? `${user.first_name} ${user.last_name}` : 
-                                         `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}
+                                  {user ? `${user.first_name} ${user.last_name}` :
+                                    `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`}
                                 </div>
                               </div>
 
@@ -529,9 +524,9 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                                           <TableRow key={index}>
                                             <TableCell className="p-1">
                                               {item.image && (
-                                                <img 
-                                                  src={item.image} 
-                                                  alt={item.name} 
+                                                <img
+                                                  src={item.image}
+                                                  alt={item.name}
                                                   className="w-8 h-8 object-cover rounded-md"
                                                 />
                                               )}
@@ -603,19 +598,19 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
                                   <span className="text-[10px] text-muted-foreground">Subtotal:</span>
                                   <span className="text-[10px]">${parseInt(order.metadata.calculated_subtotal || '0').toLocaleString('es-CL')}</span>
                                 </div>
-                                
+
                                 {order.metadata.calculated_discount && parseInt(order.metadata.calculated_discount) > 0 && (
                                   <div className="flex justify-between">
                                     <span className="text-[10px] text-muted-foreground">Descuento:</span>
                                     <span className="text-[10px] text-green-600">-${parseInt(order.metadata.calculated_discount).toLocaleString('es-CL')}</span>
                                   </div>
                                 )}
-                                
+
                                 <div className="flex justify-between">
                                   <span className="text-[10px] text-muted-foreground">IVA (19%):</span>
                                   <span className="text-[10px]">${parseInt(order.metadata.calculated_iva || '0').toLocaleString('es-CL')}</span>
                                 </div>
-                                
+
                                 <div className="flex justify-between border-t pt-1 mt-1">
                                   <span className="text-[10px] font-medium">Total:</span>
                                   <span className="text-sm font-bold text-primary">${parseInt(order.metadata.calculated_total).toLocaleString('es-CL')}</span>
@@ -626,7 +621,7 @@ const OrderSummaryCards = ({ orders, totalOrders, users }: OrderSummaryCardsProp
 
                           {/* Botón Ver Detalle */}
                           <div className="flex justify-end pt-2">
-                            <a 
+                            <a
                               href={`/orders/${order.id}`}
                               className="inline-flex items-center justify-center rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 py-1"
                             >

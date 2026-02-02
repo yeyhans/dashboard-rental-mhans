@@ -24,12 +24,12 @@ function getAuthHeaders(): HeadersInit {
   const headers: HeadersInit = {
     'Content-Type': 'application/json'
   };
-  
+
   try {
     // Get access token from cookie (this is how the system stores auth)
     const cookies = document.cookie.split('; ');
     const accessTokenCookie = cookies.find(row => row.startsWith('sb-access-token='));
-    
+
     if (accessTokenCookie) {
       const token = accessTokenCookie.split('=')[1];
       if (token) {
@@ -39,7 +39,7 @@ function getAuthHeaders(): HeadersInit {
   } catch (error) {
     console.error('Error in getAuthHeaders:', error);
   }
-  
+
   return headers;
 }
 
@@ -113,7 +113,7 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
       setValue('maximum_amount', coupon.maximum_amount || undefined);
       setValue('individual_use', coupon.individual_use);
       setValue('exclude_sale_items', coupon.exclude_sale_items);
-      
+
       // Format date for datetime-local input
       if (coupon.date_expires) {
         const date = new Date(coupon.date_expires);
@@ -231,7 +231,7 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
               <Label htmlFor="status">Estado</Label>
               <Select
                 value={watch('status') || 'publish'}
-                onValueChange={(value: 'publish' | 'draft' | 'private') => 
+                onValueChange={(value: 'publish' | 'draft' | 'private') =>
                   setValue('status', value)
                 }
               >
@@ -251,8 +251,14 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
               <h4 className="font-medium mb-2">Estadísticas de Uso</h4>
               <div className="text-sm space-y-1">
                 <div>Usos actuales: <span className="font-medium">{coupon.usage_count}</span></div>
-                <div>Creado: <span className="font-medium">{new Date(coupon.date_created).toLocaleDateString('es-CL')}</span></div>
-                <div>Modificado: <span className="font-medium">{new Date(coupon.date_modified).toLocaleDateString('es-CL')}</span></div>
+                <div>Creado: <span className="font-medium">{(() => {
+                  const d = new Date(coupon.date_created);
+                  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+                })()}</span></div>
+                <div>Modificado: <span className="font-medium">{(() => {
+                  const d = new Date(coupon.date_modified);
+                  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+                })()}</span></div>
               </div>
             </div>
           </CardContent>
@@ -268,7 +274,7 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
               <Label htmlFor="discount_type">Tipo de Descuento *</Label>
               <Select
                 value={watch('discount_type') || 'percent'}
-                onValueChange={(value: 'percent' | 'fixed_cart') => 
+                onValueChange={(value: 'percent' | 'fixed_cart') =>
                   setValue('discount_type', value)
                 }
               >

@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react';
-import { 
+import {
   Card,
-  CardContent, 
-  CardDescription, 
-  CardHeader, 
-  CardTitle 
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
 } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Alert, AlertDescription } from './ui/alert';
 import { toast } from 'sonner';
 import type { UserProfile } from '../types/user';
-import { 
-  RefreshCw, 
-  Search, 
-  Users, 
+import {
+  RefreshCw,
+  Search,
+  Users,
   AlertCircle
 } from 'lucide-react';
 
@@ -27,6 +27,8 @@ import UserCardView from './users/UserCardView';
 import UserLoadingSkeleton from './users/UserLoadingSkeleton';
 import UserEmptyState from './users/UserEmptyState';
 import UserPagination from './users/UserPagination';
+// Import CreateUserDialog
+import CreateUserDialog from './CreateUserDialog';
 import { calculateCompletionPercentage } from './users/utils/userUtils';
 
 interface UsersDashboardProps {
@@ -35,13 +37,14 @@ interface UsersDashboardProps {
   sessionToken: string;
 }
 
-const UsersDashboard = ({ 
+const UsersDashboard = ({
   initialUsers,
   initialTotal,
   sessionToken
 }: UsersDashboardProps) => {
   // State management
   const [allUsers, setAllUsers] = useState<UserProfile[]>(initialUsers);
+  const [totalUsers, setTotalUsers] = useState(initialTotal);
   const [loading] = useState(false);
   const [error] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,20 +52,20 @@ const UsersDashboard = ({
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isMobileView, setIsMobileView] = useState(false);
-  const [completionFilter, setCompletionFilter] = useState<{min: number, max: number}>({min: 0, max: 100});
+  const [completionFilter, setCompletionFilter] = useState<{ min: number, max: number }>({ min: 0, max: 100 });
   const [clientTypeFilter, setClientTypeFilter] = useState<string>('all');
 
   // Initialize mobile view detection
   useEffect(() => {
     console.log('🔑 Session token available for UsersDashboard');
-    
+
     const checkIfMobile = () => {
       setIsMobileView(window.innerWidth < 768);
     };
-    
+
     checkIfMobile();
     window.addEventListener('resize', checkIfMobile);
-    
+
     return () => {
       window.removeEventListener('resize', checkIfMobile);
     };
@@ -125,12 +128,19 @@ const UsersDashboard = ({
 
   // Handle user update
   const handleUserUpdated = (updatedUser: UserProfile) => {
-    setAllUsers(prevUsers => 
-      prevUsers.map(user => 
+    setAllUsers(prevUsers =>
+      prevUsers.map(user =>
         user.user_id === updatedUser.user_id ? updatedUser : user
       )
     );
     toast.success('Usuario actualizado correctamente');
+  };
+
+  // Handle user creation
+  const handleUserCreated = (newUser: UserProfile) => {
+    setAllUsers(prevUsers => [newUser, ...prevUsers]);
+    setTotalUsers(prev => prev + 1);
+    toast.success('Usuario creado correctamente');
   };
 
   // Handle view details
@@ -151,7 +161,7 @@ const UsersDashboard = ({
   };
 
   // Check if there are active filters
-  const hasActiveFilters = searchTerm || completionFilter.min > 0 || completionFilter.max < 100 || clientTypeFilter !== 'all';
+  const hasActiveFilters = Boolean(searchTerm || completionFilter.min > 0 || completionFilter.max < 100 || clientTypeFilter !== 'all');
 
   // Render error state
   if (error) {
@@ -166,9 +176,9 @@ const UsersDashboard = ({
   return (
     <div className="space-y-6">
       {/* Statistics */}
-      <UserStatsCards 
+      <UserStatsCards
         users={allUsers}
-        initialTotal={initialTotal}
+        initialTotal={totalUsers}
         currentPage={currentPage}
       />
 
@@ -180,16 +190,16 @@ const UsersDashboard = ({
             Gestión de Usuarios
           </CardTitle>
           <CardDescription>
-            Gestiona y visualiza todos los usuarios registrados {initialTotal > 0 ? `(${initialTotal} en total)` : ''}
+            Gestiona y visualiza todos los usuarios registrados {totalUsers > 0 ? `(${totalUsers} en total)` : ''}
             {hasActiveFilters && (
               <span className="block text-sm mt-1">
                 Mostrando {totalFilteredUsers} resultados
                 {searchTerm && ` para "${searchTerm}"`}
-                {clientTypeFilter !== 'all' && 
-                  ` tipo ${clientTypeFilter === 'individual' ? 'Individual' : 
-                           clientTypeFilter === 'empresa' ? 'Empresa' : 'Sin Definir'}`
+                {clientTypeFilter !== 'all' &&
+                  ` tipo ${clientTypeFilter === 'individual' ? 'Individual' :
+                    clientTypeFilter === 'empresa' ? 'Empresa' : 'Sin Definir'}`
                 }
-                {(completionFilter.min > 0 || completionFilter.max < 100) && 
+                {(completionFilter.min > 0 || completionFilter.max < 100) &&
                   ` con perfil ${completionFilter.min}%-${completionFilter.max}%`
                 }
               </span>
@@ -202,22 +212,29 @@ const UsersDashboard = ({
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Buscar por nombre, email, RUT, empresa..." 
-                  value={searchTerm} 
+                <Input
+                  placeholder="Buscar por nombre, email, RUT, empresa..."
+                  value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="text-foreground pl-10"
                 />
               </div>
-              
-              <Button 
-                onClick={refreshData}
-                disabled={loading}
-                variant="outline"
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                {loading ? 'Actualizando...' : 'Actualizar'}
-              </Button>
+
+              <div className="flex gap-2">
+                <CreateUserDialog
+                  onUserCreated={handleUserCreated}
+                  sessionToken={sessionToken}
+                />
+
+                <Button
+                  onClick={refreshData}
+                  disabled={loading}
+                  variant="outline"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                  {loading ? 'Actualizando...' : 'Actualizar'}
+                </Button>
+              </div>
             </div>
 
             {/* Filters */}
@@ -256,7 +273,7 @@ const UsersDashboard = ({
             totalPages={totalPages}
             itemsPerPage={itemsPerPage}
             totalFilteredUsers={totalFilteredUsers}
-            initialTotal={initialTotal}
+            initialTotal={totalUsers}
             startIndex={startIndex}
             endIndex={endIndex}
             loading={loading}

@@ -1,4 +1,4 @@
---- 
+---
 import Base from "../layout/Base.astro";
 import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
 import { DashboardService } from "../services/dashboardService";
@@ -10,28 +10,28 @@ export const prerender = false;
 const adminSession = await getServerAdmin(Astro);
 
 if (!adminSession) {
-  console.log('🚫 Acceso denegado al dashboard - Usuario no es administrador');
+  console.log("🚫 Acceso denegado al dashboard - Usuario no es administrador");
   clearAuthCookies(Astro);
   return Astro.redirect("/");
 }
 
-console.log('✅ Admin autenticado en dashboard:', adminSession.admin.email);
+console.log("✅ Admin autenticado en dashboard:", adminSession.admin.email);
 
 // Cargar datos del dashboard con manejo de errores mejorado
 let dashboardStats;
 try {
-  console.log('📊 Cargando estadísticas del dashboard...');
+  console.log("📊 Cargando estadísticas del dashboard...");
   dashboardStats = await DashboardService.getDashboardStats();
-  
-  console.log('✅ Dashboard Stats cargadas:', {
+
+  console.log("✅ Dashboard Stats cargadas:", {
     adminUser: adminSession.admin.email,
     monthlyOrders: dashboardStats.monthlyOrderStats.totalOrders,
     rentedEquipment: dashboardStats.rentedEquipment.length,
     totalSales: dashboardStats.financialSummary.totalSales,
-    sessionType: adminSession.isExtended ? 'Extendida (30 días)' : 'Regular'
+    sessionType: adminSession.isExtended ? "Extendida (30 días)" : "Regular",
   });
 } catch (error) {
-  console.error('❌ Error cargando dashboard stats:', error);
+  console.error("❌ Error cargando dashboard stats:", error);
   // Estructura de datos vacía para evitar errores de renderizado
   dashboardStats = {
     monthlyOrderStats: {
@@ -40,13 +40,13 @@ try {
       createdOrders: 0,
       pendingOrders: 0,
       processingOrders: 0,
-      onHoldOrders: 0
+      onHoldOrders: 0,
     },
     ordersByStatus: {
       onHold: [],
       pending: [],
       processing: [],
-      completed: []
+      completed: [],
     },
     rentedEquipment: [],
     financialSummary: {
@@ -54,8 +54,8 @@ try {
       totalPaid: 0,
       totalPending: 0,
       reservationPayments: 0,
-      finalPayments: 0
-    }
+      finalPayments: 0,
+    },
   };
 }
 
@@ -64,13 +64,16 @@ const dashboardContext = {
   adminUser: {
     email: adminSession.admin.email,
     role: adminSession.admin.role,
-    id: adminSession.admin.id
+    id: adminSession.admin.id,
   },
   session: {
     isExtended: adminSession.isExtended,
-    expiresAt: adminSession.expiresAt.toLocaleDateString('es-ES'),
-    userId: adminSession.user.id
-  }
+    expiresAt: (() => {
+      const d = new Date(adminSession.expiresAt);
+      return `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
+    })(),
+    userId: adminSession.user.id,
+  },
 };
 
 const title = `Dashboard - Rental Mario Hans | ${adminSession.admin.email}`;
@@ -80,13 +83,28 @@ const title = `Dashboard - Rental Mario Hans | ${adminSession.admin.email}`;
   <div class="container py-3 px-2 sm:px-4">
     <!-- Dashboard Header con Badge de Admin -->
     <div class="mb-4">
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
+      <div
+        class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3"
+      >
         <div class="flex-1">
           <div class="flex items-center gap-3 mb-2">
             <h1 class="text-2xl font-bold">Panel de Administración</h1>
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border border-green-300 dark:border-green-700">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            <span
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border border-green-300 dark:border-green-700"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-3.5 w-3.5 mr-1"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                ></path>
               </svg>
               Administrador
             </span>
@@ -100,8 +118,19 @@ const title = `Dashboard - Rental Mario Hans | ${adminSession.admin.email}`;
             href="/analytics"
             class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm hover:shadow-md"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              ></path>
             </svg>
             Analytics Avanzados
           </a>
@@ -109,26 +138,64 @@ const title = `Dashboard - Rental Mario Hans | ${adminSession.admin.email}`;
       </div>
 
       <!-- Admin Info Bar -->
-      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+      <div
+        class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3"
+      >
         <div class="flex items-center justify-between flex-wrap gap-3">
           <div class="flex items-center gap-4 text-sm">
             <div class="flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-5 w-5 text-blue-600 dark:text-blue-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                ></path>
               </svg>
-              <span class="font-medium text-blue-900 dark:text-blue-200">{adminSession.admin.email}</span>
+              <span class="font-medium text-blue-900 dark:text-blue-200"
+                >{adminSession.admin.email}</span
+              >
             </div>
             <div class="h-4 w-px bg-blue-300 dark:bg-blue-700"></div>
-            <div class="flex items-center gap-2 text-blue-700 dark:text-blue-300">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <div
+              class="flex items-center gap-2 text-blue-700 dark:text-blue-300"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
               </svg>
-              <span class="text-xs">Sesión activa hasta {adminSession.expiresAt.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+              <span class="text-xs"
+                >Sesión activa hasta {
+                  (() => {
+                    const d = new Date(adminSession.expiresAt);
+                    return `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
+                  })()
+                }</span
+              >
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-              <span class="h-1.5 w-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"></span>
+            <span
+              class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300"
+            >
+              <span
+                class="h-1.5 w-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"
+              ></span>
               Sesión Extendida (30 días)
             </span>
           </div>
@@ -142,6 +209,5 @@ const title = `Dashboard - Rental Mario Hans | ${adminSession.admin.email}`;
       initialData={dashboardStats}
       adminContext={dashboardContext}
     />
-
   </div>
 </Base>

@@ -42,7 +42,7 @@ const statusTranslations: { [key: string]: string } = {
 
 const statusColors: { [key: string]: string } = {
   'pending': 'bg-[#f8dda7] text-[#94660c]',
-  'processing': 'bg-[#c6e1c6] text-[#5b841b]', 
+  'processing': 'bg-[#c6e1c6] text-[#5b841b]',
   'on-hold': 'bg-[#e5e5e5] text-[#777777]',
   'completed': 'bg-[#c8d7e1] text-[#2e4453]',
   'cancelled': 'bg-[#eba3a3] text-[#761919]',
@@ -67,14 +67,13 @@ const paymentStatusText: { [key: string]: string } = {
 // Format date
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
-  return date.toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
 };
 
 
@@ -209,7 +208,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
     }
     return 'false'; // Valor por defecto
   });
-  
+
   // Nuevos estados para OC y número de factura
   const [ordenCompra, setOrdenCompra] = useState<string>(rawOrder.orden_compra || '');
   const [numeroFactura, setNumeroFactura] = useState<string>(rawOrder.numero_factura || '');
@@ -221,47 +220,47 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       orden_compra: rawOrder.orden_compra,
       numero_factura: rawOrder.numero_factura
     });
-    
+
     // Actualizar status de pago
     if (typeof rawOrder.pago_completo === 'boolean') {
       setPaymentStatus(rawOrder.pago_completo ? 'true' : 'false');
     } else if (typeof rawOrder.pago_completo === 'string') {
       setPaymentStatus(rawOrder.pago_completo === 'true' ? 'true' : 'false');
     }
-    
+
     // Actualizar OC y factura
     if (rawOrder.orden_compra) setOrdenCompra(rawOrder.orden_compra);
     if (rawOrder.numero_factura) setNumeroFactura(rawOrder.numero_factura);
   }, [rawOrder.pago_completo, rawOrder.orden_compra, rawOrder.numero_factura]);
 
   const handlePaymentUpdate = async (isPaymentComplete: boolean) => {
-    console.log('Actualizando estado de pago:', { 
-      isPaymentComplete, 
-      ordenCompra, 
+    console.log('Actualizando estado de pago:', {
+      isPaymentComplete,
+      ordenCompra,
       numeroFactura,
-      orderId: rawOrder.id 
+      orderId: rawOrder.id
     });
-    
+
     try {
       // Simplificar: solo enviar true/false como string
       const paymentValue = isPaymentComplete ? 'true' : 'false';
-      
+
       // Preparar los datos a enviar
       const metaData = [
         { key: 'pago_completo', value: paymentValue }
       ];
-      
+
       // Agregar orden_compra y numero_factura solo si tienen valor
       if (ordenCompra.trim()) {
         metaData.push({ key: 'orden_compra', value: ordenCompra.trim() });
       }
-      
+
       if (numeroFactura.trim()) {
         metaData.push({ key: 'numero_factura', value: numeroFactura.trim() });
       }
-      
+
       console.log('Enviando meta_data a WooCommerce:', metaData);
-      
+
       // Actualización en WooCommerce
       const wooResponse = await fetch(`/api/woo/update-orders`, {
         method: 'PUT',
@@ -287,18 +286,18 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       } = {
         pago_completo: paymentValue
       };
-      
+
       // Agregar OC y factura solo si tienen valor
       if (ordenCompra.trim()) {
         wpData.orden_compra = ordenCompra.trim();
       }
-      
+
       if (numeroFactura.trim()) {
         wpData.numero_factura = numeroFactura.trim();
       }
-      
+
       console.log('Enviando datos a WordPress:', wpData);
-      
+
       // Actualización en WordPress
       const wpResponse = await fetch(`/api/wp/update-order/${rawOrder.id}`, {
         method: 'PUT',
@@ -312,7 +311,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
         console.error('Error en respuesta de WordPress:', await wpResponse.text());
         throw new Error('Error al actualizar el estado de pago en WordPress');
       }
-      
+
       const wpResponseData = await wpResponse.json();
       console.log('Respuesta de la API WordPress:', wpResponseData);
 
@@ -323,10 +322,10 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
         // Actualizar estados locales
         setPaymentStatus(isPaymentComplete ? 'true' : 'false');
         setIsEditingPayment(false);
-        
+
         // Mensaje de éxito
         alert('Estado de pago actualizado correctamente');
-        
+
         // Recargar la página para mostrar los datos actualizados
         window.location.reload();
       } else {
@@ -367,7 +366,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
         lineItemsArray = rawOrder.line_items;
       }
     }
-    
+
     const lineItems: LineItem[] = lineItemsArray.map((item: any) => ({
       id: item.id || Math.random(),
       name: item.name || 'Producto sin nombre',
@@ -383,7 +382,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       order_fecha_inicio: getMetaValue('order_fecha_inicio'),
       order_fecha_termino: getMetaValue('order_fecha_termino'),
       num_jornadas: getMetaValue('num_jornadas'),
-      calculated_subtotal: getMetaValue('calculated_subtotal'), 
+      calculated_subtotal: getMetaValue('calculated_subtotal'),
       calculated_discount: getMetaValue('calculated_discount'),
       calculated_iva: getMetaValue('calculated_iva'),
       calculated_total: getMetaValue('calculated_total'),
@@ -392,7 +391,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       pdf_on_hold_url: getMetaValue('_pdf_on_hold_url'),
       pdf_processing_url: getMetaValue('_pdf_processing_url'),
       order_retire_name: getMetaValue('order_retire_name'),
-      order_retire_rut: getMetaValue('order_retire_rut'), 
+      order_retire_rut: getMetaValue('order_retire_rut'),
       order_retire_phone: getMetaValue('order_retire_phone'),
       order_comments: getMetaValue('order_comments')
     };
@@ -438,7 +437,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
 
       const data = await response.json();
       console.log('Respuesta de la API:', data);
-      
+
       if (data.success) {
         // Reload the page to show updated status
         window.location.reload();
@@ -473,32 +472,32 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       // Calcular con los valores actualizados
       const startDate = field === 'order_fecha_inicio' ? value : editedOrderData.metadata.order_fecha_inicio;
       const endDate = field === 'order_fecha_termino' ? value : editedOrderData.metadata.order_fecha_termino;
-      
+
       // Solo calcular si ambas fechas son válidas
       if (startDate && endDate) {
         console.log(`Recalculando con fechas actualizadas: inicio=${startDate}, termino=${endDate}`);
         const numDays = calculateDays(startDate, endDate);
-        
+
         // Calcular todos los valores financieros con las líneas actuales
         if (transformedOrder) {
           // Calcular base subtotal (antes de multiplicar por días)
-          const baseSubtotal = transformedOrder.line_items.reduce((sum, item) => 
+          const baseSubtotal = transformedOrder.line_items.reduce((sum, item) =>
             sum + (parseFloat(item.price) * item.quantity), 0);
-          
+
           // Calcular subtotal (después de multiplicar por días) con precisión
           const subtotal = Math.round((baseSubtotal * numDays) * 100) / 100;
-          
+
           // Obtener valores actuales con precisión
           const discount = Math.round((parseFloat(editedOrderData.metadata.calculated_discount) || 0) * 100) / 100;
           const currentIva = parseFloat(editedOrderData.metadata.calculated_iva) || 0;
           const applyIva = currentIva > 0;
-          
+
           // Calcular IVA con precisión
           const iva = applyIva ? Math.round((subtotal * 0.19) * 100) / 100 : 0;
-          
+
           // Calcular total con precisión
           const total = Math.round((subtotal - discount + iva) * 100) / 100;
-          
+
           console.log(`Nuevos valores con fechas actualizadas:`, {
             numDays,
             baseSubtotal,
@@ -508,7 +507,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
             iva,
             total
           });
-          
+
           // Actualizar el estado con todos los valores calculados de una vez
           setEditedOrderData({
             ...editedOrderData,
@@ -521,11 +520,11 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
               calculated_total: total.toString()
             }
           });
-          
+
           return;
         }
       }
-      
+
       // Si no podemos calcular (faltan fechas o productos), solo actualizar la fecha
       setEditedOrderData({
         ...editedOrderData,
@@ -534,7 +533,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
           [field]: value
         }
       });
-      
+
       return;
     }
 
@@ -554,7 +553,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       try {
         const response = await fetch('/api/woo/get-products');
         const data = await response.json();
-      console.log('Respuesta de la API:', data);
+        console.log('Respuesta de la API:', data);
         if (data.success) {
           setProducts(data.data.products);
         }
@@ -634,18 +633,18 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
   // Calculate days between dates
   const calculateDays = (startDate: string, endDate: string) => {
     if (!startDate || !endDate) return 0;
-    
+
     try {
       console.log(`Calculando días entre ${startDate} y ${endDate}`);
       const start = new Date(startDate);
       const end = new Date(endDate);
-      
+
       // Verificar que las fechas sean válidas
       if (isNaN(start.getTime()) || isNaN(end.getTime())) {
         console.error('Fechas inválidas al calcular días', { startDate, endDate });
         return 0;
       }
-      
+
       const diffTime = Math.abs(end.getTime() - start.getTime());
       const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both days
       console.log(`Días calculados: ${days}`);
@@ -659,7 +658,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
   // Update all calculations
   const updateCalculations = (lineItems: LineItem[]) => {
     if (!editedOrderData) return;
-    
+
     console.log('Actualizando cálculos con fechas:', {
       inicio: editedOrderData.metadata.order_fecha_inicio,
       termino: editedOrderData.metadata.order_fecha_termino
@@ -671,7 +670,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
     );
 
     // Calculate base subtotal (before multiplying by days)
-    const baseSubtotal = lineItems.reduce((sum, item) => 
+    const baseSubtotal = lineItems.reduce((sum, item) =>
       sum + (parseFloat(item.price) * item.quantity), 0);
 
     console.log(`Base subtotal: ${baseSubtotal}, Días: ${numDays}`);
@@ -681,11 +680,11 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
 
     // Get current discount value - round to 2 decimals
     const discount = Math.round((parseFloat(editedOrderData.metadata.calculated_discount) || 0) * 100) / 100;
-    
+
     // Check if IVA should be applied - this could come from metadata or checkbox state
     const currentIva = parseFloat(editedOrderData.metadata.calculated_iva) || 0;
     const applyIva = currentIva > 0;
-    
+
     // Calculate IVA - round to 2 decimals
     const iva = applyIva ? Math.round((subtotal * 0.19) * 100) / 100 : 0;
 
@@ -725,7 +724,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
     const subtotal = Math.round((parseFloat(editedOrderData.metadata.calculated_subtotal) || 0) * 100) / 100;
     const discount = Math.round((parseFloat(value) || 0) * 100) / 100;
     const iva = Math.round((parseFloat(editedOrderData.metadata.calculated_iva) || 0) * 100) / 100;
-    
+
     // Calcular nuevo total
     const total = Math.round((subtotal - discount + iva) * 100) / 100;
 
@@ -805,7 +804,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
 
       const data = await response.json();
       console.log('Respuesta de la API:', data);
-      
+
       if (data.success) {
         // Update the local state with new data
         setTransformedOrder(data.data);
@@ -831,7 +830,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
     if (transformedOrder && isEditingOrder && !editedOrderData) {
       setEditedOrderData({
         billing: { ...transformedOrder.billing },
-        metadata: { 
+        metadata: {
           ...transformedOrder.metadata,
           // Preserve the calculated fields
           calculated_subtotal: transformedOrder.metadata.calculated_subtotal,
@@ -842,7 +841,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
           pdf_processing_url: transformedOrder.metadata.pdf_processing_url
         }
       });
-      
+
       // Also enable product editing when we're editing the order
       setIsEditingProducts(true);
     }
@@ -1094,7 +1093,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                   } else {
                     imageData = p.images;
                   }
-                  
+
                   // Ensure images array has the correct structure
                   if (Array.isArray(imageData)) {
                     transformedImages = imageData.map((img, index) => ({
@@ -1115,7 +1114,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                   transformedImages = null;
                 }
               }
-              
+
               return {
                 ...p,
                 images: transformedImages
@@ -1166,7 +1165,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                   const itemTotal = parseFloat(item.price) * item.quantity;
                   const numDays = parseInt(transformedOrder.metadata.num_jornadas) || 0;
                   const totalWithDays = numDays > 0 ? itemTotal * numDays : itemTotal;
-                  
+
                   return (
                     <tr key={index} className="border-t">
                       <td className="py-3">
@@ -1233,9 +1232,9 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
               const discountNum = parseFloat((editedOrderData as any).metadata.calculated_discount) || 0;
               const shippingNum = parseFloat(value) || 0;
               const ivaNum = parseFloat((editedOrderData as any).metadata.calculated_iva) || 0;
-              
+
               const newTotal = subtotalNum - discountNum + shippingNum + ivaNum;
-              
+
               setEditedOrderData({
                 ...editedOrderData,
                 shipping_total: parseFloat(value),
@@ -1260,17 +1259,17 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
 
     // Get shipping total from order
     const shippingTotal = transformedOrder.shipping_total?.toString() || '0';
-    
+
     // Get coupon information from coupon_lines
     let couponDiscount = '0';
     let appliedCouponCode = '';
-    
+
     if (transformedOrder.coupon_lines) {
       try {
-        const couponLines = typeof transformedOrder.coupon_lines === 'string' 
-          ? JSON.parse(transformedOrder.coupon_lines) 
+        const couponLines = typeof transformedOrder.coupon_lines === 'string'
+          ? JSON.parse(transformedOrder.coupon_lines)
           : transformedOrder.coupon_lines;
-        
+
         if (Array.isArray(couponLines) && couponLines.length > 0) {
           const firstCoupon = couponLines[0];
           couponDiscount = firstCoupon.discount?.toString() || '0';
@@ -1341,9 +1340,9 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus, reason })
       });
-      
+
       if (!response.ok) throw new Error('Failed to update status');
-      
+
       // Reload page to show updated data
       window.location.reload();
     } catch (error) {
@@ -1360,7 +1359,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: emailType, message: customMessage })
     });
-    
+
     if (!response.ok) throw new Error('Failed to send email');
   };
 
@@ -1370,9 +1369,9 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: documentType })
     });
-    
+
     if (!response.ok) throw new Error('Failed to generate document');
-    
+
     // Open generated document
     const result = await response.json();
     if (result.url) {
@@ -1385,9 +1384,9 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
-    
+
     if (!response.ok) throw new Error('Failed to duplicate order');
-    
+
     const result = await response.json();
     if (result.newOrderId) {
       window.location.href = `/orders/${result.newOrderId}`;
@@ -1396,7 +1395,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
 
   const handleRecalculateOrder = async (orderId: number) => {
     if (!transformedOrder || !editedOrderData) return;
-    
+
     // Trigger recalculation with current line items
     updateCalculations(transformedOrder.line_items);
   };
@@ -1408,8 +1407,8 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
         <CardHeader>
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex items-center gap-4">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => window.location.href = '/orders'}
               >
@@ -1422,7 +1421,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2">
               {(isEditingOrder || isEditingProducts) && (
                 <>
@@ -1464,7 +1463,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
           <TabsTrigger value="actions">Acciones</TabsTrigger>
           <TabsTrigger value="history">Historial</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="details" className="space-y-6">
           <Card>
             <CardHeader>
@@ -1510,8 +1509,8 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                           <div className="flex items-center w-full gap-2">
                             <div className="flex items-center gap-2">
                               <label className="inline-flex items-center cursor-pointer">
-                                <input 
-                                  type="checkbox" 
+                                <input
+                                  type="checkbox"
                                   className="sr-only peer"
                                   checked={paymentStatus === 'true'}
                                   onChange={(e) => setPaymentStatus(e.target.checked ? 'true' : 'false')}
@@ -1550,7 +1549,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                         <>
                           <div className="flex flex-col space-y-1">
                             <div className="flex items-center gap-2">
-                              <div 
+                              <div
                                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${paymentStatusColors[paymentStatus]}`}
                                 style={{ cursor: 'pointer' }}
                                 onClick={() => setIsEditingPayment(true)}
@@ -1576,7 +1575,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                       {isEditingPayment ? <SaveIcon /> : <EditIcon />}
                     </Button>
                   </div>
-                  
+
                   {/* Información de OC y Factura (visible cuando no está editando) */}
                   {!isEditingPayment && (
                     <div className="space-y-2 p-3 rounded-md">
@@ -1603,8 +1602,8 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
               {/* Enlaces a PDFs */}
               <div className="space-y-2 p-4 bg-muted/50 rounded-lg">
                 {order.metadata.pdf_on_hold_url && (
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full justify-start gap-2 h-auto py-3"
                     onClick={() => window.open(order.metadata.pdf_on_hold_url, '_blank')}
                   >
@@ -1613,8 +1612,8 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                   </Button>
                 )}
                 {order.metadata.pdf_processing_url && (
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full justify-start gap-2 h-auto py-3"
                     onClick={() => window.open(order.metadata.pdf_processing_url, '_blank')}
                   >
@@ -1634,7 +1633,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
 
               {/* Cost Summary */}
               {renderCostSummary()}
-              
+
               {/* Notas */}
               <div className="space-y-2">
                 <Label className="font-medium">Notas</Label>
@@ -1643,7 +1642,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
             </CardContent>
           </Card>
         </TabsContent>
-        
+
         <TabsContent value="status">
           <OrderStatusManager
             orderId={order.id}
@@ -1656,7 +1655,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
             loading={loading}
           />
         </TabsContent>
-        
+
         <TabsContent value="actions">
           <OrderActions
             orderId={order.id}
@@ -1673,7 +1672,7 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
             allowDangerousActions={true}
           />
         </TabsContent>
-        
+
         <TabsContent value="history">
           <OrderHistory
             orderId={order.id}

@@ -1,205 +1,216 @@
 ---
-import { getServerUser, getServerUserProfile } from '../../lib/supabase';
+import { getServerUser, getServerUserProfile } from "../../lib/supabase";
 
 let { orderId } = Astro.params;
 
 if (!orderId) {
-  return new Response('Order ID is required', { status: 400 });
+  return new Response("Order ID is required", { status: 400 });
 }
 
 // Remove .pdf extension if present
-if (orderId.endsWith('.pdf')) {
-  orderId = orderId.replace('.pdf', '');
+if (orderId.endsWith(".pdf")) {
+  orderId = orderId.replace(".pdf", "");
 }
 
 // Check if it's an internal API request
-const isInternalRequest = Astro.request.headers.get('X-Internal-Request') === 'true';
-const requestedOrderIdFromHeader = Astro.request.headers.get('X-Requested-Order-Id');
+const isInternalRequest =
+  Astro.request.headers.get("X-Internal-Request") === "true";
+const requestedOrderIdFromHeader = Astro.request.headers.get(
+  "X-Requested-Order-Id",
+);
 
 if (isInternalRequest) {
   // Validate internal request
   if (requestedOrderIdFromHeader !== orderId) {
-    console.error(`Internal request orderId mismatch: header=${requestedOrderIdFromHeader}, param=${orderId}`);
-    return new Response('Internal request validation failed', { status: 400 });
+    console.error(
+      `Internal request orderId mismatch: header=${requestedOrderIdFromHeader}, param=${orderId}`,
+    );
+    return new Response("Internal request validation failed", { status: 400 });
   }
-  console.log('✅ Internal request validated for orderId:', orderId);
+  console.log("✅ Internal request validated for orderId:", orderId);
 } else {
   // For direct requests, verify authentication using server-side method
   const user = await getServerUser(Astro);
-  
+
   if (!user) {
-    console.log('No authenticated user found');
-    return Astro.redirect('/login');
+    console.log("No authenticated user found");
+    return Astro.redirect("/login");
   }
 
   // Get current user profile for authorization
-  console.log('🔍 Getting current user profile for authorization...');
-  console.log('🔍 Current user from getServerUser:', { id: user.id, email: user.email });
-  console.log('🔍 Requested orderId:', orderId);
-  
+  console.log("🔍 Getting current user profile for authorization...");
+  console.log("🔍 Current user from getServerUser:", {
+    id: user.id,
+    email: user.email,
+  });
+  console.log("🔍 Requested orderId:", orderId);
+
   const currentUserProfile = await getServerUserProfile(Astro);
-  console.log('🔍 Current user profile result:', {
+  console.log("🔍 Current user profile result:", {
     hasProfile: !!currentUserProfile,
     hasProfileData: !!currentUserProfile?.profile,
     profileUserId: currentUserProfile?.profile?.user_id,
-    profileAuthUid: currentUserProfile?.profile?.auth_uid
+    profileAuthUid: currentUserProfile?.profile?.auth_uid,
   });
-  
-  
+
   if (!currentUserProfile || !currentUserProfile.profile) {
-    console.error('❌ No user profile found for current user');
-    return new Response('User profile not found', { status: 404 });
+    console.error("❌ No user profile found for current user");
+    return new Response("User profile not found", { status: 404 });
   }
 }
-
-
 
 // Get order data
 let orderData;
 try {
   if (isInternalRequest) {
     // For internal requests, use service role key to get order data directly
-    console.log('🔧 Internal request: fetching order data with service role key');
-    const { createClient } = await import('@supabase/supabase-js');
+    console.log(
+      "🔧 Internal request: fetching order data with service role key",
+    );
+    const { createClient } = await import("@supabase/supabase-js");
     const serviceSupabase = createClient(
       import.meta.env.PUBLIC_SUPABASE_URL!,
-      import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
+      import.meta.env.SUPABASE_SERVICE_ROLE_KEY ||
+        import.meta.env.PUBLIC_SUPABASE_ANON_KEY!,
     );
-    
+
     const { data: order, error } = await serviceSupabase
-      .from('orders')
-      .select('*')
-      .eq('id', parseInt(orderId))
+      .from("orders")
+      .select("*")
+      .eq("id", parseInt(orderId))
       .single();
-    
+
     if (error || !order) {
-      console.error('Error fetching order data for internal request:', error);
-      return new Response('Order not found', { status: 404 });
+      console.error("Error fetching order data for internal request:", error);
+      return new Response("Order not found", { status: 404 });
     }
-    
+
     orderData = order;
-    console.log('✅ Internal request: order data fetched successfully');
+    console.log("✅ Internal request: order data fetched successfully");
   } else {
     // For regular requests, use the server method with authorization check
-    const { createClient } = await import('@supabase/supabase-js');
+    const { createClient } = await import("@supabase/supabase-js");
     const supabase = createClient(
       import.meta.env.PUBLIC_SUPABASE_URL!,
-      import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
+      import.meta.env.PUBLIC_SUPABASE_ANON_KEY!,
     );
-    
+
     const { data: order, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('id', parseInt(orderId))
+      .from("orders")
+      .select("*")
+      .eq("id", parseInt(orderId))
       .single();
-      
+
     if (error || !order) {
-      console.error('Error fetching order data:', error);
-      return new Response('Order not found', { status: 404 });
+      console.error("Error fetching order data:", error);
+      return new Response("Order not found", { status: 404 });
     }
-    
+
     // Verify user can only access their own orders
     const currentUserProfile = await getServerUserProfile(Astro);
     if (!currentUserProfile?.profile) {
-      return new Response('User profile not found', { status: 404 });
+      return new Response("User profile not found", { status: 404 });
     }
 
     // Note: customerRut will be fetched from user_profiles table using customer_id
-    
+
     // Check if the order belongs to the current user
-    const userMatches = order.customer_id === currentUserProfile.profile.user_id?.toString() ||
-                       order.customer_id === currentUserProfile.profile.auth_uid ||
-                       order.customer_id === currentUserProfile.auth?.id;
-    
+    const userMatches =
+      order.customer_id === currentUserProfile.profile.user_id?.toString() ||
+      order.customer_id === currentUserProfile.profile.auth_uid ||
+      order.customer_id === currentUserProfile.auth?.id;
+
     if (!userMatches) {
-      console.warn(`❌ Unauthorized access attempt to order ${orderId} by user ${currentUserProfile.profile.user_id}`);
-      return Astro.redirect('/404');
+      console.warn(
+        `❌ Unauthorized access attempt to order ${orderId} by user ${currentUserProfile.profile.user_id}`,
+      );
+      return Astro.redirect("/404");
     }
-    
+
     orderData = order;
   }
 } catch (error) {
-  console.error('Error fetching order data:', error);
-  return new Response('Error fetching order data', { status: 500 });
+  console.error("Error fetching order data:", error);
+  return new Response("Error fetching order data", { status: 500 });
 }
 
 // Get customer RUT from user_profiles table using customer_id
-let customerRut = '';
-let customerCompanyRut = '';
+let customerRut = "";
+let customerCompanyRut = "";
 try {
   if (orderData.customer_id) {
-    console.log('🔍 Fetching customer RUT for customer_id:', orderData.customer_id);
-    
-    const { createClient } = await import('@supabase/supabase-js');
+    console.log(
+      "🔍 Fetching customer RUT for customer_id:",
+      orderData.customer_id,
+    );
+
+    const { createClient } = await import("@supabase/supabase-js");
     const supabase = createClient(
       import.meta.env.PUBLIC_SUPABASE_URL!,
-      import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
+      import.meta.env.SUPABASE_SERVICE_ROLE_KEY ||
+        import.meta.env.PUBLIC_SUPABASE_ANON_KEY!,
     );
-    
+
     // Try to find user by different possible customer_id formats
     let customerProfile = null;
-    
+
     // First try: customer_id as user_id (numeric)
     if (!isNaN(parseInt(orderData.customer_id))) {
       const { data: profile1 } = await supabase
-        .from('user_profiles')
-        .select('rut, nombre, apellido, empresa_rut')
-        .eq('user_id', parseInt(orderData.customer_id))
+        .from("user_profiles")
+        .select("rut, nombre, apellido, empresa_rut")
+        .eq("user_id", parseInt(orderData.customer_id))
         .single();
-      
+
       if (profile1) {
         customerProfile = profile1;
-        console.log('✅ Found customer profile by user_id:', profile1);
+        console.log("✅ Found customer profile by user_id:", profile1);
       }
     }
-    
+
     // Second try: customer_id as auth_uid (UUID)
     if (!customerProfile) {
       const { data: profile2 } = await supabase
-        .from('user_profiles')
-        .select('rut, nombre, apellido, empresa_rut')
-        .eq('auth_uid', orderData.customer_id)
+        .from("user_profiles")
+        .select("rut, nombre, apellido, empresa_rut")
+        .eq("auth_uid", orderData.customer_id)
         .single();
-      
+
       if (profile2) {
         customerProfile = profile2;
-        console.log('✅ Found customer profile by auth_uid:', profile2);
+        console.log("✅ Found customer profile by auth_uid:", profile2);
       }
     }
-    
+
     if (customerProfile && customerProfile.rut && customerProfile.empresa_rut) {
       customerRut = customerProfile.rut;
       customerCompanyRut = customerProfile.empresa_rut;
-      console.log('✅ Customer RUT found:', customerRut);
+      console.log("✅ Customer RUT found:", customerRut);
     } else {
-      console.warn('⚠️ No RUT found for customer_id:', orderData.customer_id);
+      console.warn("⚠️ No RUT found for customer_id:", orderData.customer_id);
     }
   }
 } catch (error) {
-  console.error('Error fetching customer RUT:', error);
+  console.error("Error fetching customer RUT:", error);
   // Continue without RUT if there's an error
 }
 
 // Set security headers
-Astro.response.headers.set('X-Frame-Options', 'DENY');
-Astro.response.headers.set('X-Content-Type-Options', 'nosniff');
-Astro.response.headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-
-// Generate current date
-const currentDate = new Date().toLocaleDateString('es-CL', {
-  year: 'numeric',
-  month: 'long',
-  day: 'numeric'
-});
+Astro.response.headers.set("X-Frame-Options", "DENY");
+Astro.response.headers.set("X-Content-Type-Options", "nosniff");
+Astro.response.headers.set(
+  "Cache-Control",
+  "private, no-cache, no-store, must-revalidate",
+);
 
 // Function to format date to DD-MM-AAAA
 const formatDateToDDMMAAAA = (dateString: string) => {
-  if (!dateString) return '';
-  
+  if (!dateString) return "";
+
   try {
     // Try to parse the date string
     const date = new Date(dateString);
-    
+
     // Check if the date is valid
     if (isNaN(date.getTime())) {
       // If it's not a valid date, check if it's already in DD-MM-AAAA format
@@ -208,15 +219,15 @@ const formatDateToDDMMAAAA = (dateString: string) => {
       }
       return dateString; // Return as-is if we can't parse it
     }
-    
+
     // Format to DD-MM-AAAA
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, "0");
+    const month = (date.getMonth() + 1).toString().padStart(2, "0");
     const year = date.getFullYear();
-    
+
     return `${day}-${month}-${year}`;
   } catch (error) {
-    console.error('Error formatting date:', error);
+    console.error("Error formatting date:", error);
     return dateString; // Return original string if there's an error
   }
 };
@@ -229,96 +240,88 @@ const couponLines = orderData.coupon_lines || [];
 const shippingLines = orderData.shipping_lines || [];
 
 // Extract data with fallbacks (supports both nested and flat structures)
-const customerFirstName = billing.first_name || orderData.billing_first_name || '';
-const customerLastName = billing.last_name || orderData.billing_last_name || '';
-const customerCompany = billing.company || orderData.billing_company || '';
-const customerEmail = billing.email || orderData.billing_email || '';
-const customerPhone = billing.phone || orderData.billing_phone || '';
-const customerAddress = billing.address_1 || orderData.billing_address_1 || '';
-const customerCity = billing.city || orderData.billing_city || '';
-const customerName = customerFirstName + ' ' + customerLastName;
+const customerFirstName =
+  billing.first_name || orderData.billing_first_name || "";
+const customerLastName = billing.last_name || orderData.billing_last_name || "";
+const customerCompany = billing.company || orderData.billing_company || "";
+const customerEmail = billing.email || orderData.billing_email || "";
+const customerPhone = billing.phone || orderData.billing_phone || "";
+
+const customerName = customerFirstName + " " + customerLastName;
 // Project information with fallbacks
-const projectName = metadata.order_proyecto || orderData.order_proyecto || 'Proyecto de Arriendo';
-const startDate = formatDateToDDMMAAAA(metadata.order_fecha_inicio || orderData.order_fecha_inicio || '');
-const endDate = formatDateToDDMMAAAA(metadata.order_fecha_termino || orderData.order_fecha_termino || '');
-const numJornadas = parseInt(metadata.num_jornadas || orderData.num_jornadas || '1');
-const companyRut = metadata.company_rut || orderData.company_rut || '';
+const projectName =
+  metadata.order_proyecto || orderData.order_proyecto || "Proyecto de Arriendo";
+const startDate = formatDateToDDMMAAAA(
+  metadata.order_fecha_inicio || orderData.order_fecha_inicio || "",
+);
+const endDate = formatDateToDDMMAAAA(
+  metadata.order_fecha_termino || orderData.order_fecha_termino || "",
+);
+const numJornadas = parseInt(
+  metadata.num_jornadas || orderData.num_jornadas || "1",
+);
 
 // Additional order information (for future use)
-const retireName = metadata.order_retire_name || orderData.order_retire_name || '';
-const retirePhone = metadata.order_retire_phone || orderData.order_retire_phone || '';
-const retireRut = metadata.order_retire_rut || orderData.order_retire_rut || '';
-const comments = metadata.order_comments || orderData.order_comments || '';
+const retireName =
+  metadata.order_retire_name || orderData.order_retire_name || "";
+
+const comments = metadata.order_comments || orderData.order_comments || "";
 
 // Calculate totals with fallbacks (original values from order)
-const originalSubtotal = parseFloat(metadata.calculated_subtotal || orderData.calculated_subtotal || '0');
-const discount = parseFloat(metadata.calculated_discount || orderData.calculated_discount || '0');
-const originalIva = parseFloat(metadata.calculated_iva || orderData.calculated_iva || '0');
-const originalTotal = parseFloat(metadata.calculated_total || orderData.calculated_total || '0');
+const originalSubtotal = parseFloat(
+  metadata.calculated_subtotal || orderData.calculated_subtotal || "0",
+);
+const discount = parseFloat(
+  metadata.calculated_discount || orderData.calculated_discount || "0",
+);
+const originalIva = parseFloat(
+  metadata.calculated_iva || orderData.calculated_iva || "0",
+);
+const originalTotal = parseFloat(
+  metadata.calculated_total || orderData.calculated_total || "0",
+);
 
 // Calculate products-only totals (excluding shipping and discounts)
-const productsSubtotal = lineItems.reduce((sum, item) => {
-  return sum + (item.price * item.quantity * numJornadas);
+const productsSubtotal = lineItems.reduce((sum: number, item: any) => {
+  return sum + item.price * item.quantity * numJornadas;
 }, 0);
 const productsIva = productsSubtotal * 0.19;
 const productsTotal = productsSubtotal * 1.19;
 
 // Use products-only totals for the subtotal row
-const subtotal = productsSubtotal;
-const iva = productsIva;
-const total = productsTotal;
-const reserve = originalTotal * 0.25;
 
-// Function to translate order status to Spanish
-const getOrderStatusInSpanish = (status: string) => {
-  const statusMap: { [key: string]: string } = {
-    'pending': 'Pendiente',
-    'processing': 'En Proceso',
-    'on-hold': 'En Espera',
-    'completed': 'Completado',
-    'cancelled': 'Cancelado',
-    'refunded': 'Reembolsado',
-    'failed': 'Fallido',
-    'draft': 'Borrador',
-    'trash': 'Eliminado',
-  };
-  
-  return statusMap[status] || status.charAt(0).toUpperCase() + status.slice(1);
-};
+const reserve = originalTotal * 0.25;
 
 // Additional order information
 const orderIdNum = orderData.id || orderData.order_id;
-const orderStatus = getOrderStatusInSpanish(orderData.status || 'on-hold');
-const paymentMethod = orderData.payment_method || orderData.payment_method_title || 'Por definir';
 
 // Process shipping information
 let shippingInfo = null;
 if (shippingLines && shippingLines.length > 0) {
   const shippingLine = shippingLines[0]; // Get first shipping method
   const shippingMetadata = shippingLine.meta_data || {};
-  
+
   shippingInfo = {
-    method_title: shippingLine.method_title || 'Método de envío',
-    method_type: shippingLine.method_type || '',
-    total: parseFloat(shippingLine.total || '0'),
-    delivery_method: shippingMetadata.delivery_method || '',
-    estimated_delivery: shippingMetadata.estimated_delivery || '',
-    tracking_number: shippingMetadata.tracking_number || null
+    method_title: shippingLine.method_title || "Método de envío",
+    method_type: shippingLine.method_type || "",
+    total: parseFloat(shippingLine.total || "0"),
+    delivery_method: shippingMetadata.delivery_method || "",
+    estimated_delivery: shippingMetadata.estimated_delivery || "",
+    tracking_number: shippingMetadata.tracking_number || null,
   };
 }
 
 // Format currency
 const formatCLP = (amount: number) => {
-  return new Intl.NumberFormat('es-CL', { 
-    style: 'currency', 
-    currency: 'CLP',
+  return new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency: "CLP",
     minimumFractionDigits: 0,
-    maximumFractionDigits: 0
+    maximumFractionDigits: 0,
   }).format(amount);
 };
 
 // Generate budget number
-const budgetNumber = `PRES-${orderIdNum}-${Date.now().toString().slice(-6)}`;
 
 // Calculate dynamic height for Page 1 (order details + items table + payment info)
 const page1BaseHeight = 1500; // Height until line at y=1471.5
@@ -331,7 +334,7 @@ const hasShipping = shippingLines && shippingLines.length > 0;
 
 // If no coupon, reduce height by 42px (line height + spacing)
 if (!hasCoupon) optionalSectionsHeight -= 42;
-// If no shipping, reduce height by 42px (line height + spacing)  
+// If no shipping, reduce height by 42px (line height + spacing)
 if (!hasShipping) optionalSectionsHeight -= 42;
 
 const page1Height = page1BaseHeight + itemsHeight + optionalSectionsHeight;
@@ -352,304 +355,1031 @@ const page2ViewBox = `0 0 1400 ${page2Height}`;
 const page2Offset = -1553;
 ---
 
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Anexo Contrato Rental Mario Hans - Pedido #{orderIdNum}</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background: #fff;
-    }
-    .container {
-      width: 100%;
-      background: #fff;
-    }
-    svg {
-      width: 100%;
-      height: auto;
-      display: block;
-      background: #fff;
-    }
-    .page-break {
-      page-break-before: always;
-      break-before: page;
-    }
-    @media print {
-      html, body {
+  <head>
+    <meta charset="UTF-8" />
+    <title>Anexo Contrato Rental Mario Hans - Pedido #{orderIdNum}</title>
+    <style>
+      * {
         margin: 0;
         padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
         background: #fff;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
       }
       .container {
-        max-width: none;
-        margin: 0;
-        padding: 0;
+        width: 100%;
         background: #fff;
       }
       svg {
-        page-break-inside: avoid;
-        break-inside: avoid;
+        width: 100%;
+        height: auto;
+        display: block;
         background: #fff;
       }
       .page-break {
         page-break-before: always;
         break-before: page;
       }
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <!-- Page 1: Order Details -->
-    <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1400" height={page1Height} viewBox={page1ViewBox}>
-  <defs>
-    <clipPath id="clip-Web_1920_1">
-      <rect width="1400" height={page1Height}/>
-    </clipPath>
-  </defs>
-  <g id="Web_1920_1" data-name="Web 1920 – 1" clip-path="url(#clip-Web_1920_1)">
-    <rect width="1400" height={page1Height} fill="#fff"/>
-    <rect id="Rectángulo_2" data-name="Rectángulo 2" width="352" height="28" transform="translate(824 1175)" fill="#e8e7e7"/>
-    <image id="Recurso_16_2x" data-name="Recurso 16@2x" width="376" height="65" transform="translate(138 113)" xlink:href="https://media.mariohans.cl/logos/Recurso%2016%403x.png"/>
-    <text id="Pedido" data-name="Pedido" transform="translate(898 151)" font-size="51" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">Pedido #{orderIdNum}</tspan></text>
-    <text id="Fecha:_" data-name="Fecha: " transform="translate(898 178)" font-size="22" font-family="Calibri"><tspan x="0" y="0">Fecha: </tspan></text>
-    <text id="DI-ME-AÑ" transform="translate(1096 178)" font-size="22" font-family="Calibri"><tspan x="0" y="0">{new Date().toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' })}</tspan></text>
-    <text id="Nombre:" transform="translate(138 262)" font-size="22" font-family="Calibri"><tspan x="0" y="0">Nombre: </tspan>{customerFirstName} {customerLastName}</text>
-    <text id="Proyecto:" transform="translate(581 262)" font-size="22" font-family="Calibri"><tspan x="0" y="0">Proyecto: </tspan>{projectName}</text>
-    <text id="Comertarios:" transform="translate(898 262)" font-size="22" font-family="Calibri"><tspan x="0" y="0">Comertarios: </tspan>{comments}</text>
-    <text id="Email:" transform="translate(138 298)" font-size="22" font-family="Calibri"><tspan x="0" y="0">Email: </tspan>{customerEmail}</text>
-    <text id="N_Jornadas:" data-name="N° Jornadas:" transform="translate(581 298)" font-size="22" font-family="Calibri"><tspan x="0" y="0">N° Jornadas: </tspan>{numJornadas}</text>
-    <text id="Rut:" transform="translate(138 334)" font-size="22" font-family="Calibri"><tspan x="0" y="0">Rut: </tspan>{customerRut}</text>
-    <text id="Fecha_incicio:" data-name="Fecha incicio:" transform="translate(581 334)" font-size="22" font-family="Calibri"><tspan x="0" y="0">Fecha incicio: </tspan>{startDate}</text>
-    <text id="Retiro:" transform="translate(898 334)" font-size="22" font-family="Calibri"><tspan x="0" y="0">Retiro: </tspan>{retireName}</text>
-    <text id="Empresa:" transform="translate(138 370)" font-size="22" font-family="Calibri"><tspan x="0" y="0">Empresa: </tspan>{customerCompany}</text>
-    <text id="Fecha_termino:" data-name="Fecha termino:" transform="translate(581 370)" font-size="22" font-family="Calibri"><tspan x="0" y="0">Fecha termino: </tspan>{endDate}</text>
-    <text id="Entrega:" transform="translate(898 370)" font-size="22" font-family="Calibri"><tspan x="0" y="0">Entrega: </tspan>{retireName}</text>
-    <text id="Rut_Empresa:" data-name="Rut Empresa:" transform="translate(138 406)" font-size="22" font-family="Calibri"><tspan x="0" y="0">Rut Empresa: </tspan>{customerCompanyRut}</text>
-    <text id="Teléfono:" transform="translate(138 442)" font-size="22" font-family="Calibri"><tspan x="0" y="0">Teléfono: </tspan>{customerPhone}</text>
-    <!-- Dynamic Line Items -->
-    {lineItems.map((item, index) => {
-      const yPosition = 559 + (index * 33); // 33px spacing between items
-      return (
-        <text id={`item-name-${index}`} transform={`translate(138 ${yPosition})`} font-size="19" font-family="Calibri">
-          <tspan x="0" y="0">{item.name || 'Producto no disponible'}</tspan>
-        </text>
-      );
-    })}
-    <!-- Dynamic SUB TOTAL position -->
-    <text id="SUB_TOTAL" data-name="SUB TOTAL" transform={`translate(431 ${Math.max(903, 559 + (lineItems.length * 33) + 79)})`} font-size="19" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">SUB TOTAL</tspan></text>
-    <text id="SUB_TOTAL-2" data-name="SUB TOTAL" transform="translate(964 1062)" font-size="19" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">SUB TOTAL</tspan></text>
-    
-    <!-- Conditional DESCUENTO section -->
-    {hasCoupon && (
-      <text id="DESCUENTO_-15_" data-name="DESCUENTO -15%" transform={`translate(376 ${Math.max(945, 559 + (lineItems.length * 33) + 121)})`} font-size="19" font-family="Calibri-Bold, Calibri" font-weight="700">
-        <tspan x="0" y="0">{`DESCUENTO ${couponLines[0].code || couponLines[0].discount_type || '-15%'}`}</tspan>
-      </text>
-    )}
-    
-    <text id="IVA" transform="translate(1022 1093)" font-size="19" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">IVA</tspan></text>
-    
-    <!-- Conditional ENVÍO section -->
-    {hasShipping && (
-      <text id="Envio_RM" data-name="Envio RM" transform={`translate(441 ${Math.max(982, 559 + (lineItems.length * 33) + (hasCoupon ? 158 : 116))})`} font-size="19" font-family="Calibri-Bold, Calibri" font-weight="700">
-        <tspan x="0" y="0">{shippingLines[0].method_title || 'Envío'}</tspan>
-      </text>
-    )}
-    
-    <text id="TOTAL" transform="translate(993 1127)" font-size="22" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">TOTAL</tspan></text>
-    <!-- Dynamic Line Items - Daily Value -->
-    {lineItems.map((item, index) => {
-      const yPosition = 559 + (index * 33);
-      return (
-        <text id={`item-price-${index}`} transform={`translate(542 ${yPosition})`} font-size="19" font-family="Calibri">
-          <tspan x="0" y="0">{formatCLP(item.price || 0)}</tspan>
-        </text>
-      );
-    })}
-    <!-- Conditional discount and shipping values -->
-    {hasCoupon && (
-      <text id="_00.000-4" data-name="$00.000" transform={`translate(542 ${Math.max(945, 559 + (lineItems.length * 33) + 121)})`} font-size="19" font-family="Calibri">
-        <tspan x="0" y="0"></tspan>
-      </text>
-    )}
-    {hasShipping && (
-      <text id="_00.000-5" data-name="$00.000" transform={`translate(542 ${Math.max(982, 559 + (lineItems.length * 33) + (hasCoupon ? 158 : 116))})`} font-size="19" font-family="Calibri">
-        <tspan x="0" y="0"></tspan>
-      </text>
-    )}
-    <!-- Dynamic Line Items - Net Value -->
-    {lineItems.map((item, index) => {
-      const yPosition = 559 + (index * 33);
-      const netValue = (item.price || 0) * (item.quantity || 0) * numJornadas;
-      return (
-        <text id={`item-net-${index}`} transform={`translate(857 ${yPosition})`} font-size="19" font-family="Calibri">
-          <tspan x="0" y="0">{formatCLP(netValue)}</tspan>
-        </text>
-      );
-    })}
-    <!-- Dynamic SUB TOTAL values -->
-    <text id="_00.000-9" data-name="$00.000" transform={`translate(857 ${Math.max(903, 559 + (lineItems.length * 33) + 79)})`} font-size="19" font-family="Calibri"><tspan x="0" y="0">{formatCLP(productsSubtotal)}</tspan></text>
-    
-    <!-- Conditional discount value -->
-    {hasCoupon && (
-      <text id="_00.000-10" data-name="$00.000" transform={`translate(857 ${Math.max(945, 559 + (lineItems.length * 33) + 121)})`} font-size="19" font-family="Calibri">
-        <tspan x="0" y="0">{formatCLP(discount)}</tspan>
-      </text>
-    )}
-    
-    <!-- Conditional shipping value -->
-    {hasShipping && (
-      <text id="_00.000-11" data-name="$00.000" transform={`translate(857 ${Math.max(982, 559 + (lineItems.length * 33) + (hasCoupon ? 158 : 116))})`} font-size="19" font-family="Calibri">
-        <tspan x="0" y="0">{shippingInfo ? formatCLP(shippingInfo.total) : '$0'}</tspan>
-      </text>
-    )}
-    <!-- Dynamic Line Items - IVA Value -->
-    {lineItems.map((item, index) => {
-      const yPosition = 559 + (index * 33);
-      const ivaValue = (item.price || 0) * (item.quantity || 0) * numJornadas * 0.19;
-      return (
-        <text id={`item-iva-${index}`} transform={`translate(964 ${yPosition})`} font-size="19" font-family="Calibri">
-          <tspan x="0" y="0">{formatCLP(ivaValue)}</tspan>
-        </text>
-      );
-    })}
-    <text id="_00.000-15" data-name="$00.000" transform={`translate(964 ${Math.max(903, 559 + (lineItems.length * 33) + 79)})`} font-size="19" font-family="Calibri"><tspan x="0" y="0">{formatCLP(productsIva)}</tspan></text>
-    
-    <!-- Conditional discount IVA -->
-    {hasCoupon && (
-      <text id="_00.000-16" data-name="$00.000" transform={`translate(964 ${Math.max(945, 559 + (lineItems.length * 33) + 121)})`} font-size="19" font-family="Calibri">
-        <tspan x="0" y="0">{formatCLP(discount * 0.19)}</tspan>
-      </text>
-    )}
-    
-    <!-- Conditional shipping IVA -->
-    {hasShipping && (
-      <text id="_00.000-17" data-name="$00.000" transform={`translate(964 ${Math.max(982, 559 + (lineItems.length * 33) + (hasCoupon ? 158 : 116))})`} font-size="19" font-family="Calibri">
-        <tspan x="0" y="0">{shippingInfo ? formatCLP(shippingInfo.total * 0.19) : '$0'}</tspan>
-      </text>
-    )}
-    <!-- Dynamic Line Items - Total Gross Value -->
-    {lineItems.map((item, index) => {
-      const yPosition = 559 + (index * 33);
-      const totalValue = (item.price || 0) * (item.quantity || 0) * numJornadas * 1.19;
-      return (
-        <text id={`item-total-${index}`} transform={`translate(1071 ${yPosition})`} font-size="19" font-family="Calibri">
-          <tspan x="0" y="0">{formatCLP(totalValue)}</tspan>
-        </text>
-      );
-    })}
-    <text id="_00.000-20" data-name="$00.000" transform="translate(1071 1195)" font-size="20" font-family="Calibri"><tspan x="0" y="0">{formatCLP(reserve)}</tspan></text>
-    <text id="_00.000-21" data-name="$00.000" transform={`translate(1071 ${Math.max(903, 559 + (lineItems.length * 33) + 79)})`} font-size="19" font-family="Calibri"><tspan x="0" y="0">{formatCLP(productsTotal)}</tspan></text>
-    <text id="_00.000-22" data-name="$00.000" transform="translate(1071 1062)" font-size="19" font-family="Calibri"><tspan x="0" y="0">{formatCLP(originalSubtotal)}</tspan></text>
-    
-    <!-- Conditional discount total -->
-    {hasCoupon && (
-      <text id="_00.000-23" data-name="$00.000" transform={`translate(1071 ${Math.max(945, 559 + (lineItems.length * 33) + 121)})`} font-size="19" font-family="Calibri">
-        <tspan x="0" y="0">{formatCLP(discount * 1.19)}</tspan>
-      </text>
-    )}
-    
-    <text id="_00.000-24" data-name="$00.000" transform="translate(1071 1093)" font-size="19" font-family="Calibri"><tspan x="0" y="0">{formatCLP(originalIva)}</tspan></text>
-    
-    <!-- Conditional shipping total -->
-    {hasShipping && (
-      <text id="_00.000-25" data-name="$00.000" transform={`translate(1071 ${Math.max(982, 559 + (lineItems.length * 33) + (hasCoupon ? 158 : 116))})`} font-size="19" font-family="Calibri">
-        <tspan x="0" y="0">{shippingInfo ? formatCLP(shippingInfo.total * 1.19) : '$0'}</tspan>
-      </text>
-    )}
-    
-    <text id="_00.000-26" data-name="$00.000" transform="translate(1071 1127)" font-size="22" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">{formatCLP(originalTotal)}</tspan></text>
-    <!-- Dynamic Line Items - Quantity -->
-    {lineItems.map((item, index) => {
-      const yPosition = 559 + (index * 33);
-      return (
-        <text id={`item-quantity-${index}`} transform={`translate(695 ${yPosition})`} font-size="19" font-family="Calibri">
-          <tspan x="0" y="0">{item.quantity || 0}</tspan>
-        </text>
-      );
-    })}
-    <!-- Dynamic Line Items - Jornadas -->
-    {lineItems.map((item, index) => {
-      const yPosition = 559 + (index * 33);
-      return (
-        <text id={`item-jornadas-${index}`} transform={`translate(792 ${yPosition})`} font-size="19" font-family="Calibri">
-          <tspan x="0" y="0">{numJornadas}</tspan>
-        </text>
-      );
-    })}
-    <text id="_1-7" data-name="1" transform={`translate(792 ${Math.max(903, 559 + (lineItems.length * 33) + 79)})`} font-size="19" font-family="Calibri"><tspan x="0" y="0">{numJornadas}</tspan></text>
-    
-    <!-- Conditional shipping jornadas -->
-    {hasShipping && (
-      <text id="_1-8" data-name="1" transform={`translate(792 ${Math.max(982, 559 + (lineItems.length * 33) + (hasCoupon ? 158 : 116))})`} font-size="19" font-family="Calibri">
-        <tspan x="0" y="0">1</tspan>
-      </text>
-    )}
-    <line id="Línea_1" data-name="Línea 1" x2="1047" transform="translate(138.5 220.5)" fill="none" stroke="#000" stroke-width="1"/>
-    <!-- Dynamic separator line after items -->
-    <line id="Línea_2" data-name="Línea 2" x2="1047" transform={`translate(138.5 ${Math.max(864.5, 559 + (lineItems.length * 33) + 40)})`} fill="none" stroke="#000" stroke-width="1"/>
-    <line id="Línea_3" data-name="Línea 3" x2="1047" transform="translate(138.5 1031.5)" fill="none" stroke="#000" stroke-width="1"/>
-    <line id="Línea_4" data-name="Línea 4" x2="1047" transform="translate(138.5 1471.5)" fill="none" stroke="#000" stroke-width="1"/>
-    <rect id="Rectángulo_1" data-name="Rectángulo 1" width="1038" height="25" transform="translate(138 507)" fill="#e8e7e7"/>
-    <text id="ITEM" transform="translate(143 525)" font-size="17" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">ITEM</tspan></text>
-    <text id="RESERVA_25_" data-name="RESERVA 25%" transform="translate(832 1196)" font-size="20" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">RESERVA 25%</tspan></text>
-    <text id="Valor_Diario" data-name="Valor Diario" transform="translate(542 525)" font-size="17" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">Valor Diario</tspan></text>
-    <text id="Cantidad" transform="translate(664 525)" font-size="17" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">Cantidad</tspan></text>
-    <text id="Jornadas" transform="translate(761 525)" font-size="17" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">Jornadas</tspan></text>
-    <text id="NETO" transform="translate(857 525)" font-size="17" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">NETO</tspan></text>
-    <text id="IVA_19_" data-name="IVA 19%" transform="translate(964 525)" font-size="17" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">IVA 19%</tspan></text>
-    <text id="TOTAL_BRUTO" data-name="TOTAL BRUTO" transform="translate(1068 525)" font-size="17" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">TOTAL BRUTO</tspan></text>
-    <image id="Recurso_10_2x" data-name="Recurso 10@2x" width="159" height="159" transform="translate(143 1263)" xlink:href="https://media.mariohans.cl/logos/Recurso%2010%403x.png"/>
-    <text id="HANS_SALINAS_SpA_77892569-9_Banco_de_Chile_FAN_Emprende_Cuenta_vista_8140915407_pagos_mariohans.cl" data-name="HANS SALINAS SpA
+      @media print {
+        html,
+        body {
+          margin: 0;
+          padding: 0;
+          background: #fff;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .container {
+          max-width: none;
+          margin: 0;
+          padding: 0;
+          background: #fff;
+        }
+        svg {
+          page-break-inside: avoid;
+          break-inside: avoid;
+          background: #fff;
+        }
+        .page-break {
+          page-break-before: always;
+          break-before: page;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Page 1: Order Details -->
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        xmlns:xlink="http://www.w3.org/1999/xlink"
+        width="1400"
+        height={page1Height}
+        viewBox={page1ViewBox}
+      >
+        <defs>
+          <clipPath id="clip-Web_1920_1">
+            <rect width="1400" height={page1Height}></rect>
+          </clipPath>
+        </defs>
+        <g
+          id="Web_1920_1"
+          data-name="Web 1920 – 1"
+          clip-path="url(#clip-Web_1920_1)"
+        >
+          <rect width="1400" height={page1Height} fill="#fff"></rect>
+          <rect
+            id="Rectángulo_2"
+            data-name="Rectángulo 2"
+            width="352"
+            height="28"
+            transform="translate(824 1175)"
+            fill="#e8e7e7"></rect>
+          <image
+            id="Recurso_16_2x"
+            data-name="Recurso 16@2x"
+            width="376"
+            height="65"
+            transform="translate(138 113)"
+            xlink:href="https://media.mariohans.cl/logos/Recurso%2016%403x.png"
+          />
+          <text
+            id="Pedido"
+            data-name="Pedido"
+            transform="translate(898 151)"
+            font-size="51"
+            font-family="Calibri-Bold, Calibri"
+            font-weight="700"
+            ><tspan x="0" y="0">Pedido #{orderIdNum}</tspan></text
+          >
+          <text
+            id="Fecha:_"
+            data-name="Fecha: "
+            transform="translate(898 178)"
+            font-size="22"
+            font-family="Calibri"><tspan x="0" y="0">Fecha:</tspan></text
+          >
+          >{
+            new Date().toLocaleDateString("es-CL", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            })
+          }</g
+        ></svg
+      >
+      <text
+        id="Nombre:"
+        transform="translate(138 262)"
+        font-size="22"
+        font-family="Calibri"
+        ><tspan x="0" y="0">Nombre:</tspan>{customerFirstName}
+        {customerLastName}</text
+      >
+      <text
+        id="Proyecto:"
+        transform="translate(581 262)"
+        font-size="22"
+        font-family="Calibri"
+        ><tspan x="0" y="0">Proyecto:</tspan>{projectName}</text
+      >
+      <text
+        id="Comertarios:"
+        transform="translate(898 262)"
+        font-size="22"
+        font-family="Calibri"
+        ><tspan x="0" y="0">Comertarios:</tspan>{comments}</text
+      >
+      <text
+        id="Email:"
+        transform="translate(138 298)"
+        font-size="22"
+        font-family="Calibri"
+        ><tspan x="0" y="0">Email:</tspan>{customerEmail}</text
+      >
+      <text
+        id="N_Jornadas:"
+        data-name="N° Jornadas:"
+        transform="translate(581 298)"
+        font-size="22"
+        font-family="Calibri"
+        ><tspan x="0" y="0">N° Jornadas:</tspan>{numJornadas}</text
+      >
+      <text
+        id="Rut:"
+        transform="translate(138 334)"
+        font-size="22"
+        font-family="Calibri"><tspan x="0" y="0">Rut:</tspan>{customerRut}</text
+      >
+      <text
+        id="Fecha_incicio:"
+        data-name="Fecha incicio:"
+        transform="translate(581 334)"
+        font-size="22"
+        font-family="Calibri"
+        ><tspan x="0" y="0">Fecha incicio:</tspan>{startDate}</text
+      >
+      <text
+        id="Retiro:"
+        transform="translate(898 334)"
+        font-size="22"
+        font-family="Calibri"
+        ><tspan x="0" y="0">Retiro:</tspan>{retireName}</text
+      >
+      <text
+        id="Empresa:"
+        transform="translate(138 370)"
+        font-size="22"
+        font-family="Calibri"
+        ><tspan x="0" y="0">Empresa:</tspan>{customerCompany}</text
+      >
+      <text
+        id="Fecha_termino:"
+        data-name="Fecha termino:"
+        transform="translate(581 370)"
+        font-size="22"
+        font-family="Calibri"
+        ><tspan x="0" y="0">Fecha termino:</tspan>{endDate}</text
+      >
+      <text
+        id="Entrega:"
+        transform="translate(898 370)"
+        font-size="22"
+        font-family="Calibri"
+        ><tspan x="0" y="0">Entrega:</tspan>{retireName}</text
+      >
+      <text
+        id="Rut_Empresa:"
+        data-name="Rut Empresa:"
+        transform="translate(138 406)"
+        font-size="22"
+        font-family="Calibri"
+        ><tspan x="0" y="0">Rut Empresa:</tspan>{customerCompanyRut}</text
+      >
+      <text
+        id="Teléfono:"
+        transform="translate(138 442)"
+        font-size="22"
+        font-family="Calibri"
+        ><tspan x="0" y="0">Teléfono:</tspan>{customerPhone}</text
+      >
+      <!-- Dynamic Line Items -->
+      {
+        lineItems.map((item: any, index: number) => {
+          const yPosition = 559 + index * 33; // 33px spacing between items
+          return (
+            <text
+              id={`item-name-${index}`}
+              transform={`translate(138 ${yPosition})`}
+              font-size="19"
+              font-family="Calibri"
+            >
+              <tspan x="0" y="0">
+                {item.name || "Producto no disponible"}
+              </tspan>
+            </text>
+          );
+        })
+      }
+      <!-- Dynamic SUB TOTAL position -->
+      <text
+        id="SUB_TOTAL"
+        data-name="SUB TOTAL"
+        transform={`translate(431 ${Math.max(903, 559 + lineItems.length * 33 + 79)})`}
+        font-size="19"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"><tspan x="0" y="0">SUB TOTAL</tspan></text
+      >
+      <text
+        id="SUB_TOTAL-2"
+        data-name="SUB TOTAL"
+        transform="translate(964 1062)"
+        font-size="19"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"><tspan x="0" y="0">SUB TOTAL</tspan></text
+      >
+
+      <!-- Conditional DESCUENTO section -->
+      {
+        hasCoupon && (
+          <text
+            id="DESCUENTO_-15_"
+            data-name="DESCUENTO -15%"
+            transform={`translate(376 ${Math.max(945, 559 + lineItems.length * 33 + 121)})`}
+            font-size="19"
+            font-family="Calibri-Bold, Calibri"
+            font-weight="700"
+          >
+            <tspan
+              x="0"
+              y="0"
+            >{`DESCUENTO ${couponLines[0].code || couponLines[0].discount_type || "-15%"}`}</tspan>
+          </text>
+        )
+      }
+
+      <text
+        id="IVA"
+        transform="translate(1022 1093)"
+        font-size="19"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"><tspan x="0" y="0">IVA</tspan></text
+      >
+
+      <!-- Conditional ENVÍO section -->
+      {
+        hasShipping && (
+          <text
+            id="Envio_RM"
+            data-name="Envio RM"
+            transform={`translate(441 ${Math.max(982, 559 + lineItems.length * 33 + (hasCoupon ? 158 : 116))})`}
+            font-size="19"
+            font-family="Calibri-Bold, Calibri"
+            font-weight="700"
+          >
+            <tspan x="0" y="0">
+              {shippingLines[0].method_title || "Envío"}
+            </tspan>
+          </text>
+        )
+      }
+
+      <text
+        id="TOTAL"
+        transform="translate(993 1127)"
+        font-size="22"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"><tspan x="0" y="0">TOTAL</tspan></text
+      >
+      <!-- Dynamic Line Items - Daily Value -->
+      {
+        lineItems.map((item: any, index: number) => {
+          const yPosition = 559 + index * 33;
+          return (
+            <text
+              id={`item-price-${index}`}
+              transform={`translate(542 ${yPosition})`}
+              font-size="19"
+              font-family="Calibri"
+            >
+              <tspan x="0" y="0">
+                {formatCLP(item.price || 0)}
+              </tspan>
+            </text>
+          );
+        })
+      }
+      <!-- Conditional discount and shipping values -->
+      {
+        hasCoupon && (
+          <text
+            id="_00.000-4"
+            data-name="$00.000"
+            transform={`translate(542 ${Math.max(945, 559 + lineItems.length * 33 + 121)})`}
+            font-size="19"
+            font-family="Calibri"
+          >
+            <tspan x="0" y="0" />
+          </text>
+        )
+      }
+      {
+        hasShipping && (
+          <text
+            id="_00.000-5"
+            data-name="$00.000"
+            transform={`translate(542 ${Math.max(982, 559 + lineItems.length * 33 + (hasCoupon ? 158 : 116))})`}
+            font-size="19"
+            font-family="Calibri"
+          >
+            <tspan x="0" y="0" />
+          </text>
+        )
+      }
+      <!-- Dynamic Line Items - Net Value -->
+      {
+        lineItems.map((item: any, index: number) => {
+          const yPosition = 559 + index * 33;
+          const netValue =
+            (item.price || 0) * (item.quantity || 0) * numJornadas;
+          return (
+            <text
+              id={`item-net-${index}`}
+              transform={`translate(857 ${yPosition})`}
+              font-size="19"
+              font-family="Calibri"
+            >
+              <tspan x="0" y="0">
+                {formatCLP(netValue)}
+              </tspan>
+            </text>
+          );
+        })
+      }
+      <!-- Dynamic SUB TOTAL values -->
+      <text
+        id="_00.000-9"
+        data-name="$00.000"
+        transform={`translate(857 ${Math.max(903, 559 + lineItems.length * 33 + 79)})`}
+        font-size="19"
+        font-family="Calibri"
+        ><tspan x="0" y="0">{formatCLP(productsSubtotal)}</tspan></text
+      >
+
+      <!-- Conditional discount value -->
+      {
+        hasCoupon && (
+          <text
+            id="_00.000-10"
+            data-name="$00.000"
+            transform={`translate(857 ${Math.max(945, 559 + lineItems.length * 33 + 121)})`}
+            font-size="19"
+            font-family="Calibri"
+          >
+            <tspan x="0" y="0">
+              {formatCLP(discount)}
+            </tspan>
+          </text>
+        )
+      }
+
+      <!-- Conditional shipping value -->
+      {
+        hasShipping && (
+          <text
+            id="_00.000-11"
+            data-name="$00.000"
+            transform={`translate(857 ${Math.max(982, 559 + lineItems.length * 33 + (hasCoupon ? 158 : 116))})`}
+            font-size="19"
+            font-family="Calibri"
+          >
+            <tspan x="0" y="0">
+              {shippingInfo ? formatCLP(shippingInfo.total) : "$0"}
+            </tspan>
+          </text>
+        )
+      }
+      <!-- Dynamic Line Items - IVA Value -->
+      {
+        lineItems.map((item: any, index: number) => {
+          const yPosition = 559 + index * 33;
+          const ivaValue =
+            (item.price || 0) * (item.quantity || 0) * numJornadas * 0.19;
+          return (
+            <text
+              id={`item-iva-${index}`}
+              transform={`translate(964 ${yPosition})`}
+              font-size="19"
+              font-family="Calibri"
+            >
+              <tspan x="0" y="0">
+                {formatCLP(ivaValue)}
+              </tspan>
+            </text>
+          );
+        })
+      }
+      <text
+        id="_00.000-15"
+        data-name="$00.000"
+        transform={`translate(964 ${Math.max(903, 559 + lineItems.length * 33 + 79)})`}
+        font-size="19"
+        font-family="Calibri"
+        ><tspan x="0" y="0">{formatCLP(productsIva)}</tspan></text
+      >
+
+      <!-- Conditional discount IVA -->
+      {
+        hasCoupon && (
+          <text
+            id="_00.000-16"
+            data-name="$00.000"
+            transform={`translate(964 ${Math.max(945, 559 + lineItems.length * 33 + 121)})`}
+            font-size="19"
+            font-family="Calibri"
+          >
+            <tspan x="0" y="0">
+              {formatCLP(discount * 0.19)}
+            </tspan>
+          </text>
+        )
+      }
+
+      <!-- Conditional shipping IVA -->
+      {
+        hasShipping && (
+          <text
+            id="_00.000-17"
+            data-name="$00.000"
+            transform={`translate(964 ${Math.max(982, 559 + lineItems.length * 33 + (hasCoupon ? 158 : 116))})`}
+            font-size="19"
+            font-family="Calibri"
+          >
+            <tspan x="0" y="0">
+              {shippingInfo ? formatCLP(shippingInfo.total * 0.19) : "$0"}
+            </tspan>
+          </text>
+        )
+      }
+      <!-- Dynamic Line Items - Total Gross Value -->
+      {
+        lineItems.map((item: any, index: number) => {
+          const yPosition = 559 + index * 33;
+          const totalValue =
+            (item.price || 0) * (item.quantity || 0) * numJornadas * 1.19;
+          return (
+            <text
+              id={`item-total-${index}`}
+              transform={`translate(1071 ${yPosition})`}
+              font-size="19"
+              font-family="Calibri"
+            >
+              <tspan x="0" y="0">
+                {formatCLP(totalValue)}
+              </tspan>
+            </text>
+          );
+        })
+      }
+      <text
+        id="_00.000-20"
+        data-name="$00.000"
+        transform="translate(1071 1195)"
+        font-size="20"
+        font-family="Calibri"
+        ><tspan x="0" y="0">{formatCLP(reserve)}</tspan></text
+      >
+      <text
+        id="_00.000-21"
+        data-name="$00.000"
+        transform={`translate(1071 ${Math.max(903, 559 + lineItems.length * 33 + 79)})`}
+        font-size="19"
+        font-family="Calibri"
+        ><tspan x="0" y="0">{formatCLP(productsTotal)}</tspan></text
+      >
+      <text
+        id="_00.000-22"
+        data-name="$00.000"
+        transform="translate(1071 1062)"
+        font-size="19"
+        font-family="Calibri"
+        ><tspan x="0" y="0">{formatCLP(originalSubtotal)}</tspan></text
+      >
+
+      <!-- Conditional discount total -->
+      {
+        hasCoupon && (
+          <text
+            id="_00.000-23"
+            data-name="$00.000"
+            transform={`translate(1071 ${Math.max(945, 559 + lineItems.length * 33 + 121)})`}
+            font-size="19"
+            font-family="Calibri"
+          >
+            <tspan x="0" y="0">
+              {formatCLP(discount * 1.19)}
+            </tspan>
+          </text>
+        )
+      }
+
+      <text
+        id="_00.000-24"
+        data-name="$00.000"
+        transform="translate(1071 1093)"
+        font-size="19"
+        font-family="Calibri"
+        ><tspan x="0" y="0">{formatCLP(originalIva)}</tspan></text
+      >
+
+      <!-- Conditional shipping total -->
+      {
+        hasShipping && (
+          <text
+            id="_00.000-25"
+            data-name="$00.000"
+            transform={`translate(1071 ${Math.max(982, 559 + lineItems.length * 33 + (hasCoupon ? 158 : 116))})`}
+            font-size="19"
+            font-family="Calibri"
+          >
+            <tspan x="0" y="0">
+              {shippingInfo ? formatCLP(shippingInfo.total * 1.19) : "$0"}
+            </tspan>
+          </text>
+        )
+      }
+
+      <text
+        id="_00.000-26"
+        data-name="$00.000"
+        transform="translate(1071 1127)"
+        font-size="22"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"
+        ><tspan x="0" y="0">{formatCLP(originalTotal)}</tspan></text
+      >
+      <!-- Dynamic Line Items - Quantity -->
+      {
+        lineItems.map((item: any, index: number) => {
+          const yPosition = 559 + index * 33;
+          return (
+            <text
+              id={`item-quantity-${index}`}
+              transform={`translate(695 ${yPosition})`}
+              font-size="19"
+              font-family="Calibri"
+            >
+              <tspan x="0" y="0">
+                {item.quantity || 0}
+              </tspan>
+            </text>
+          );
+        })
+      }
+      <!-- Dynamic Line Items - Jornadas -->
+      {
+        lineItems.map((_: any, index: number) => {
+          const yPosition = 559 + index * 33;
+          return (
+            <text
+              id={`item-jornadas-${index}`}
+              transform={`translate(792 ${yPosition})`}
+              font-size="19"
+              font-family="Calibri"
+            >
+              <tspan x="0" y="0">
+                {numJornadas}
+              </tspan>
+            </text>
+          );
+        })
+      }
+      <text
+        id="_1-7"
+        data-name="1"
+        transform={`translate(792 ${Math.max(903, 559 + lineItems.length * 33 + 79)})`}
+        font-size="19"
+        font-family="Calibri"><tspan x="0" y="0">{numJornadas}</tspan></text
+      >
+
+      <!-- Conditional shipping jornadas -->
+      {
+        hasShipping && (
+          <text
+            id="_1-8"
+            data-name="1"
+            transform={`translate(792 ${Math.max(982, 559 + lineItems.length * 33 + (hasCoupon ? 158 : 116))})`}
+            font-size="19"
+            font-family="Calibri"
+          >
+            <tspan x="0" y="0">
+              1
+            </tspan>
+          </text>
+        )
+      }
+      <line
+        id="Línea_1"
+        data-name="Línea 1"
+        x2="1047"
+        transform="translate(138.5 220.5)"
+        fill="none"
+        stroke="#000"
+        stroke-width="1"></line>
+      <!-- Dynamic separator line after items -->
+      <line
+        id="Línea_2"
+        data-name="Línea 2"
+        x2="1047"
+        transform={`translate(138.5 ${Math.max(864.5, 559 + lineItems.length * 33 + 40)})`}
+        fill="none"
+        stroke="#000"
+        stroke-width="1"></line>
+      <line
+        id="Línea_3"
+        data-name="Línea 3"
+        x2="1047"
+        transform="translate(138.5 1031.5)"
+        fill="none"
+        stroke="#000"
+        stroke-width="1"></line>
+      <line
+        id="Línea_4"
+        data-name="Línea 4"
+        x2="1047"
+        transform="translate(138.5 1471.5)"
+        fill="none"
+        stroke="#000"
+        stroke-width="1"></line>
+      <rect
+        id="Rectángulo_1"
+        data-name="Rectángulo 1"
+        width="1038"
+        height="25"
+        transform="translate(138 507)"
+        fill="#e8e7e7"></rect>
+      <text
+        id="ITEM"
+        transform="translate(143 525)"
+        font-size="17"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"><tspan x="0" y="0">ITEM</tspan></text
+      >
+      <text
+        id="RESERVA_25_"
+        data-name="RESERVA 25%"
+        transform="translate(832 1196)"
+        font-size="20"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"><tspan x="0" y="0">RESERVA 25%</tspan></text
+      >
+      <text
+        id="Valor_Diario"
+        data-name="Valor Diario"
+        transform="translate(542 525)"
+        font-size="17"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"><tspan x="0" y="0">Valor Diario</tspan></text
+      >
+      <text
+        id="Cantidad"
+        transform="translate(664 525)"
+        font-size="17"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"><tspan x="0" y="0">Cantidad</tspan></text
+      >
+      <text
+        id="Jornadas"
+        transform="translate(761 525)"
+        font-size="17"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"><tspan x="0" y="0">Jornadas</tspan></text
+      >
+      <text
+        id="NETO"
+        transform="translate(857 525)"
+        font-size="17"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"><tspan x="0" y="0">NETO</tspan></text
+      >
+      <text
+        id="IVA_19_"
+        data-name="IVA 19%"
+        transform="translate(964 525)"
+        font-size="17"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"><tspan x="0" y="0">IVA 19%</tspan></text
+      >
+      <text
+        id="TOTAL_BRUTO"
+        data-name="TOTAL BRUTO"
+        transform="translate(1068 525)"
+        font-size="17"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"><tspan x="0" y="0">TOTAL BRUTO</tspan></text
+      >
+      <image
+        id="Recurso_10_2x"
+        data-name="Recurso 10@2x"
+        width="159"
+        height="159"
+        transform="translate(143 1263)"
+        xlink:href="https://media.mariohans.cl/logos/Recurso%2010%403x.png"
+      />
+      <text
+        id="HANS_SALINAS_SpA_77892569-9_Banco_de_Chile_FAN_Emprende_Cuenta_vista_8140915407_pagos_mariohans.cl"
+        data-name="HANS SALINAS SpA
 77892569-9
 Banco de Chile
 Cuenta Corriente
 8140915407
-pagos@mariohans.cl" transform="translate(314 1278)" font-size="20" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">HANS SALINAS SpA</tspan><tspan x="0" y="28">77892569-9</tspan><tspan x="0" y="56">Banco de Chile</tspan><tspan x="0" y="84">Cuenta Corriente</tspan><tspan x="0" y="112">8140915407</tspan><tspan x="0" y="140">pagos@mariohans.cl</tspan></text>
-    <text id="_ACEPTACIÓN_DE_CONDICIONES_Al_aceptar_el_valor_del_presupuesto_y_realizar_el_abono_de_reserva_el_arrendatario_acepta_plenamente_todas_las_condiciones_de_arriendo_y_la_política_por_daño." data-name="**ACEPTACIÓN DE CONDICIONES**
+pagos@mariohans.cl"
+        transform="translate(314 1278)"
+        font-size="20"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"
+        ><tspan x="0" y="0">HANS SALINAS SpA</tspan><tspan x="0" y="28"
+          >77892569-9</tspan
+        ><tspan x="0" y="56">Banco de Chile</tspan><tspan x="0" y="84"
+          >Cuenta Corriente</tspan
+        ><tspan x="0" y="112">8140915407</tspan><tspan x="0" y="140"
+          >pagos@mariohans.cl</tspan
+        ></text
+      >
+      <text
+        id="_ACEPTACIÓN_DE_CONDICIONES_Al_aceptar_el_valor_del_presupuesto_y_realizar_el_abono_de_reserva_el_arrendatario_acepta_plenamente_todas_las_condiciones_de_arriendo_y_la_política_por_daño."
+        data-name="**ACEPTACIÓN DE CONDICIONES**
 Al aceptar el valor del presupuesto y realizar el
-abono de reserva, el arrendatario acepta plenamente todas las condiciones de arriendo y la política por daño." transform="translate(814 1263)" font-size="18" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="14">**ACEPTACIÓN DE CONDICIONES**</tspan><tspan x="0" y="41">Al aceptar el valor del presupuesto y realizar el</tspan><tspan x="0" y="68">abono de reserva, el arrendatario acepta </tspan><tspan x="0" y="95">plenamente todas las condiciones de arriendo </tspan><tspan x="0" y="122">y la política por daño.</tspan></text>
-    </g>
-    </svg>
+abono de reserva, el arrendatario acepta plenamente todas las condiciones de arriendo y la política por daño."
+        transform="translate(814 1263)"
+        font-size="18"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"
+        ><tspan x="0" y="14">**ACEPTACIÓN DE CONDICIONES**</tspan><tspan
+          x="0"
+          y="41">Al aceptar el valor del presupuesto y realizar el</tspan
+        ><tspan x="0" y="68"
+          >abono de reserva, el arrendatario acepta
+        </tspan><tspan x="0" y="95"
+          >plenamente todas las condiciones de arriendo
+        </tspan><tspan x="0" y="122">y la política por daño.</tspan></text
+      >
+    </div>
+  </body>
 
-    <!-- Page 2: Contract Text and Signatures -->
-    <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1400" height={page2Height} viewBox={page2ViewBox} class="page-break" style="page-break-before: always;">
+  <!-- Page 2: Contract Text and Signatures -->
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
+    width="1400"
+    height={page2Height}
+    viewBox={page2ViewBox}
+    class="page-break"
+    style="page-break-before: always;"
+  >
     <defs>
       <clipPath id="clip-Web_1920_2">
-        <rect width="1400" height={page2Height}/>
+        <rect width="1400" height={page2Height}></rect>
       </clipPath>
     </defs>
-    <g id="Web_1920_2" data-name="Web 1920 – 2" clip-path="url(#clip-Web_1920_2)">
-      <rect width="1400" height={page2Height} fill="#fff"/>
-      <text id="ANEXO_Pedido_001" data-name="ANEXO, Pedido #001" transform="translate(136 22)" font-size="28" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="0">ANEXO, Pedido #{orderIdNum}</tspan></text>
-      <text id="El_presente_Contrato_comenzará_a_regir_con_fecha_XX-XX-XX_y_finalizará_el_XX-XX-XX_salvo_las_partes_acuerden_su_extensión_lo_que_debe_constar_en_Anexo_del_presente_Contrato._Salvo_las_partes_expresamente_acuerden_otra_cosa:_Los_bienes_muebles_objeto_" data-name="El presente Contrato comenzará a regir con fecha XX-XX-XX y finalizará el XX-XX-XX, salvo las partes acuerden su extensión, lo que debe constar en Anexo del presente Contrato.
+    <g
+      id="Web_1920_2"
+      data-name="Web 1920 – 2"
+      clip-path="url(#clip-Web_1920_2)"
+    >
+      <rect width="1400" height={page2Height} fill="#fff"></rect>
+      <text
+        id="ANEXO_Pedido_001"
+        data-name="ANEXO, Pedido #001"
+        transform="translate(136 22)"
+        font-size="28"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"
+        ><tspan x="0" y="0">ANEXO, Pedido #{orderIdNum}</tspan></text
+      >
+      <text
+        id="El_presente_Contrato_comenzará_a_regir_con_fecha_XX-XX-XX_y_finalizará_el_XX-XX-XX_salvo_las_partes_acuerden_su_extensión_lo_que_debe_constar_en_Anexo_del_presente_Contrato._Salvo_las_partes_expresamente_acuerden_otra_cosa:_Los_bienes_muebles_objeto_"
+        data-name="El presente Contrato comenzará a regir con fecha XX-XX-XX y finalizará el XX-XX-XX, salvo las partes acuerden su extensión, lo que debe constar en Anexo del presente Contrato.
 
 Salvo las partes expresamente acuerden otra cosa:
-Los bienes muebles objeto " transform="translate(139 44)" font-size="17" font-family="Calibri"><tspan x="0" y="13">El presente Contrato comenzará a regir con fecha {startDate} y finalizará el {endDate}, salvo las partes acuerden su extensión, lo que debe constar en </tspan><tspan x="0" y="37">Anexo del presente Contrato.</tspan><tspan x="0" y="61"></tspan><tspan font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="85">Salvo las partes expresamente acuerden otra cosa:</tspan></tspan><tspan x="0" y="109">Los bienes muebles objeto del presente contrato serán entregados por el ARRENDADOR a partir de las 15:00 horas del día anterior al inicio del período </tspan><tspan x="0" y="133">de arriendo, en Purísima 25, Recoleta.</tspan><tspan x="0" y="157"></tspan><tspan font-size="21" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="184">El ARRENDATARIO deberá devolver los equipos y sus accesorios a más tardar a la 1:00 PM del día siguiente a la </tspan><tspan x="0" y="214">finalizada su jornada de arriendo, en el mismo lugar de entrega.</tspan></tspan><tspan x="0" y="241"></tspan><tspan x="0" y="265">La devolución deberá realizarse con previo aviso para coordinar el día y la hora de revisión de los equipos arrendados.</tspan><tspan x="0" y="289">Valor total del arriendo {formatCLP(originalSubtotal)} + {formatCLP(originalIva)} IVA.</tspan><tspan x="0" y="313"></tspan><tspan x="0" y="337">{formatCLP(originalTotal)} es la reserva por el arriendo de los bienes, lo cual corresponde al 25% del valor total del arriendo.</tspan><tspan x="0" y="361"></tspan><tspan font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="385">Uso del Equipo:</tspan></tspan><tspan x="0" y="409">No se permite subarrendar, modificar ni ceder los equipos sin autorización del arrendador. El incumplimiento de estas condiciones puede dar lugar a la </tspan><tspan x="0" y="433">terminación del contrato.</tspan><tspan x="0" y="457"></tspan><tspan font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="481">Entrega y Devolución de Equipos:</tspan></tspan><tspan x="0" y="505">La devolución se realiza en la dirección del arrendador, según lo estipulado en el Anexo.</tspan><tspan x="0" y="529">Los equipos deben ser devueltos en el mismo estado en que fueron entregados, limpios y secos.</tspan><tspan x="0" y="553">El horario atención a publico es a partir de las 8:00 a 20:00 los 7 dias de la semana, en purísima 25, Recoleta.</tspan><tspan x="0" y="577"></tspan><tspan font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="601">Multa por retraso:</tspan></tspan><tspan x="0" y="625">En caso de incumplimiento de devolución en fecha acordada, se aplicará una multa equivalente al valor de un día de arriendo por cada día de retraso en </tspan><tspan x="0" y="649">la devolución de los bienes.</tspan><tspan x="0" y="673"></tspan><tspan font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="697">Pago y Reserva:</tspan></tspan><tspan x="0" y="721">Se debe pagar una reserva del 25% al confirmar el arriendo.</tspan><tspan x="0" y="745">El saldo restante, correspondiente al 75% del valor total del arriendo, deberá ser pagado en su totalidad antes o en el momento de la devolución por </tspan><tspan x="0" y="769">parte de la ARRENDATARIA de los bienes arrendados.</tspan><tspan x="0" y="793">Si el arrendatario cancela con menos de 48 horas de anticipación, no se reembolsa la reserva.</tspan><tspan x="0" y="817">Pagos mediante transferencia bancaria u otros métodos en la plataforma.</tspan><tspan x="0" y="841"></tspan><tspan font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="865">Responsabilidad por Daños y Reparaciones:</tspan></tspan><tspan x="0" y="889">El arrendatario es responsable de los equipos desde su retiro hasta su devolución.</tspan><tspan x="0" y="913">En caso de daños, debe pagar la reparación en un servicio técnico autorizado o reponer el equipo.</tspan><tspan x="0" y="937">Si hay destrucción total o pérdida del equipo, el arrendatario debe pagar su valor total.</tspan><tspan x="0" y="961">Si los equipos se devuelven sucios o húmedos, el arrendador puede cobrar costos de limpieza y reparación.</tspan><tspan x="0" y="985">Plazo para reparación o reposición: Máximo 10 días hábiles.</tspan><tspan x="0" y="1009"></tspan><tspan x="0" y="1033">Obligaciones de las Partes</tspan><tspan x="0" y="1057"></tspan><tspan font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="1081">Arrendador:</tspan></tspan><tspan x="0" y="1105">Entregar los equipos en óptimas condiciones.</tspan><tspan x="0" y="1129">Mantener los equipos en estado operativo antes del arriendo.</tspan><tspan x="0" y="1153"></tspan><tspan font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="1177">Arrendatario:</tspan></tspan><tspan x="0" y="1201">Revisar los equipos al momento de la entrega.</tspan><tspan x="0" y="1225">Usarlos exclusivamente para los fines declarados.</tspan><tspan x="0" y="1249">No modificar ni realizar mejoras sin autorización.</tspan><tspan x="0" y="1273">Asumir responsabilidad por daños o pérdidas.</tspan><tspan x="0" y="1297">Notificar de inmediato cualquier daño o pérdida.</tspan><tspan x="0" y="1321"></tspan><tspan font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="1345">Resolución del Contrato:</tspan></tspan><tspan x="0" y="1369">Puede terminarse por mutuo acuerdo o por incumplimiento de alguna de las partes.</tspan><tspan x="0" y="1393">Si el arrendador detecta una infracción grave, puede cancelar el contrato y eliminar la cuenta del usuario en la plataforma.</tspan><tspan x="0" y="1417">La resolución no exime al arrendatario de sus obligaciones pendientes.</tspan><tspan x="0" y="1441"></tspan><tspan font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="0" y="1465">Legislación Aplicable y Notificaciones:</tspan></tspan><tspan x="0" y="1489">El contrato se rige por la legislación chilena y los tribunales de Santiago.</tspan></text>
-      <text id="Mario_Alberto_Hans_Salinas_16.135.586-0_EN_REPRESENTACIÓN_DE_Hans_Salinas_SpA_77.892.569-9" data-name="Mario Alberto Hans Salinas 
+Los bienes muebles objeto "
+        transform="translate(139 44)"
+        font-size="17"
+        font-family="Calibri"
+        ><tspan x="0" y="13"
+          >El presente Contrato comenzará a regir con fecha {startDate} y finalizará
+          el {endDate}, salvo las partes acuerden su extensión, lo que debe
+          constar en
+        </tspan><tspan x="0" y="37">Anexo del presente Contrato.</tspan><tspan
+          x="0"
+          y="61"></tspan><tspan
+          font-family="Calibri-Bold, Calibri"
+          font-weight="700"
+          ><tspan x="0" y="85"
+            >Salvo las partes expresamente acuerden otra cosa:</tspan
+          ></tspan
+        ><tspan x="0" y="109"
+          >Los bienes muebles objeto del presente contrato serán entregados por
+          el ARRENDADOR a partir de las 15:00 horas del día anterior al inicio
+          del período
+        </tspan><tspan x="0" y="133"
+          >de arriendo, en Purísima 25, Recoleta.</tspan
+        ><tspan x="0" y="157"></tspan><tspan
+          font-size="21"
+          font-family="Calibri-Bold, Calibri"
+          font-weight="700"
+          ><tspan x="0" y="184"
+            >El ARRENDATARIO deberá devolver los equipos y sus accesorios a más
+            tardar a la 1:00 PM del día siguiente a la
+          </tspan><tspan x="0" y="214"
+            >finalizada su jornada de arriendo, en el mismo lugar de entrega.</tspan
+          ></tspan
+        ><tspan x="0" y="241"></tspan><tspan x="0" y="265"
+          >La devolución deberá realizarse con previo aviso para coordinar el
+          día y la hora de revisión de los equipos arrendados.</tspan
+        ><tspan x="0" y="289"
+          >Valor total del arriendo {formatCLP(originalSubtotal)} + {
+            formatCLP(originalIva)
+          } IVA.</tspan
+        ><tspan x="0" y="313"></tspan><tspan x="0" y="337"
+          >{formatCLP(originalTotal)} es la reserva por el arriendo de los bienes,
+          lo cual corresponde al 25% del valor total del arriendo.</tspan
+        ><tspan x="0" y="361"></tspan><tspan
+          font-family="Calibri-Bold, Calibri"
+          font-weight="700"><tspan x="0" y="385">Uso del Equipo:</tspan></tspan
+        ><tspan x="0" y="409"
+          >No se permite subarrendar, modificar ni ceder los equipos sin
+          autorización del arrendador. El incumplimiento de estas condiciones
+          puede dar lugar a la
+        </tspan><tspan x="0" y="433">terminación del contrato.</tspan><tspan
+          x="0"
+          y="457"></tspan><tspan
+          font-family="Calibri-Bold, Calibri"
+          font-weight="700"
+          ><tspan x="0" y="481">Entrega y Devolución de Equipos:</tspan></tspan
+        ><tspan x="0" y="505"
+          >La devolución se realiza en la dirección del arrendador, según lo
+          estipulado en el Anexo.</tspan
+        ><tspan x="0" y="529"
+          >Los equipos deben ser devueltos en el mismo estado en que fueron
+          entregados, limpios y secos.</tspan
+        ><tspan x="0" y="553"
+          >El horario atención a publico es a partir de las 8:00 a 20:00 los 7
+          dias de la semana, en purísima 25, Recoleta.</tspan
+        ><tspan x="0" y="577"></tspan><tspan
+          font-family="Calibri-Bold, Calibri"
+          font-weight="700"
+          ><tspan x="0" y="601">Multa por retraso:</tspan></tspan
+        ><tspan x="0" y="625"
+          >En caso de incumplimiento de devolución en fecha acordada, se
+          aplicará una multa equivalente al valor de un día de arriendo por cada
+          día de retraso en
+        </tspan><tspan x="0" y="649">la devolución de los bienes.</tspan><tspan
+          x="0"
+          y="673"></tspan><tspan
+          font-family="Calibri-Bold, Calibri"
+          font-weight="700"><tspan x="0" y="697">Pago y Reserva:</tspan></tspan
+        ><tspan x="0" y="721"
+          >Se debe pagar una reserva del 25% al confirmar el arriendo.</tspan
+        ><tspan x="0" y="745"
+          >El saldo restante, correspondiente al 75% del valor total del
+          arriendo, deberá ser pagado en su totalidad antes o en el momento de
+          la devolución por
+        </tspan><tspan x="0" y="769"
+          >parte de la ARRENDATARIA de los bienes arrendados.</tspan
+        ><tspan x="0" y="793"
+          >Si el arrendatario cancela con menos de 48 horas de anticipación, no
+          se reembolsa la reserva.</tspan
+        ><tspan x="0" y="817"
+          >Pagos mediante transferencia bancaria u otros métodos en la
+          plataforma.</tspan
+        ><tspan x="0" y="841"></tspan><tspan
+          font-family="Calibri-Bold, Calibri"
+          font-weight="700"
+          ><tspan x="0" y="865">Responsabilidad por Daños y Reparaciones:</tspan
+          ></tspan
+        ><tspan x="0" y="889"
+          >El arrendatario es responsable de los equipos desde su retiro hasta
+          su devolución.</tspan
+        ><tspan x="0" y="913"
+          >En caso de daños, debe pagar la reparación en un servicio técnico
+          autorizado o reponer el equipo.</tspan
+        ><tspan x="0" y="937"
+          >Si hay destrucción total o pérdida del equipo, el arrendatario debe
+          pagar su valor total.</tspan
+        ><tspan x="0" y="961"
+          >Si los equipos se devuelven sucios o húmedos, el arrendador puede
+          cobrar costos de limpieza y reparación.</tspan
+        ><tspan x="0" y="985"
+          >Plazo para reparación o reposición: Máximo 10 días hábiles.</tspan
+        ><tspan x="0" y="1009"></tspan><tspan x="0" y="1033"
+          >Obligaciones de las Partes</tspan
+        ><tspan x="0" y="1057"></tspan><tspan
+          font-family="Calibri-Bold, Calibri"
+          font-weight="700"><tspan x="0" y="1081">Arrendador:</tspan></tspan
+        ><tspan x="0" y="1105"
+          >Entregar los equipos en óptimas condiciones.</tspan
+        ><tspan x="0" y="1129"
+          >Mantener los equipos en estado operativo antes del arriendo.</tspan
+        ><tspan x="0" y="1153"></tspan><tspan
+          font-family="Calibri-Bold, Calibri"
+          font-weight="700"><tspan x="0" y="1177">Arrendatario:</tspan></tspan
+        ><tspan x="0" y="1201"
+          >Revisar los equipos al momento de la entrega.</tspan
+        ><tspan x="0" y="1225"
+          >Usarlos exclusivamente para los fines declarados.</tspan
+        ><tspan x="0" y="1249"
+          >No modificar ni realizar mejoras sin autorización.</tspan
+        ><tspan x="0" y="1273"
+          >Asumir responsabilidad por daños o pérdidas.</tspan
+        ><tspan x="0" y="1297"
+          >Notificar de inmediato cualquier daño o pérdida.</tspan
+        ><tspan x="0" y="1321"></tspan><tspan
+          font-family="Calibri-Bold, Calibri"
+          font-weight="700"
+          ><tspan x="0" y="1345">Resolución del Contrato:</tspan></tspan
+        ><tspan x="0" y="1369"
+          >Puede terminarse por mutuo acuerdo o por incumplimiento de alguna de
+          las partes.</tspan
+        ><tspan x="0" y="1393"
+          >Si el arrendador detecta una infracción grave, puede cancelar el
+          contrato y eliminar la cuenta del usuario en la plataforma.</tspan
+        ><tspan x="0" y="1417"
+          >La resolución no exime al arrendatario de sus obligaciones
+          pendientes.</tspan
+        ><tspan x="0" y="1441"></tspan><tspan
+          font-family="Calibri-Bold, Calibri"
+          font-weight="700"
+          ><tspan x="0" y="1465">Legislación Aplicable y Notificaciones:</tspan
+          ></tspan
+        ><tspan x="0" y="1489"
+          >El contrato se rige por la legislación chilena y los tribunales de
+          Santiago.</tspan
+        ></text
+      >
+      <text
+        id="Mario_Alberto_Hans_Salinas_16.135.586-0_EN_REPRESENTACIÓN_DE_Hans_Salinas_SpA_77.892.569-9"
+        data-name="Mario Alberto Hans Salinas 
 16.135.586-0EN REPRESENTACIÓN DE 
 Hans Salinas SpA 
-77.892.569-9" transform={`translate(392.5 ${3420 + page2Offset})`} font-size="18" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="-103.311" y="0">Mario Alberto Hans Salinas </tspan><tspan x="-48.617" y="27">16.135.586-0</tspan><tspan x="-92.949" y="54">EN REPRESENTACIÓN DE </tspan><tspan x="-65.162" y="81">Hans Salinas SpA </tspan><tspan x="-48.617" y="108">77.892.569-9</tspan></text>
-      <text id="NOMBRE_RUT" data-name="NOMBRE
-RUT" transform={`translate(1007.5 ${3420 + page2Offset})`} font-size="18" font-family="Calibri-Bold, Calibri" font-weight="700"><tspan x="-34.383" y="0">{customerName}</tspan><tspan x="-15.398" y="27">{customerRut}</tspan></text>
-      <line id="Línea_5" data-name="Línea 5" x2="295" transform={`translate(245 ${3384.5 + page2Offset})`} fill="none" stroke="#707070" stroke-width="1"/>
-      <line id="Línea_6" data-name="Línea 6" x2="295" transform={`translate(860 ${3384.5 + page2Offset})`} fill="none" stroke="#707070" stroke-width="1"/>
-      <rect id="firma_mario_hans" data-name="firma mario hans" width="314" height="161" transform={`translate(236 ${3215 + page2Offset})`} fill="#fff"/>
+77.892.569-9"
+        transform={`translate(392.5 ${3420 + page2Offset})`}
+        font-size="18"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"
+        ><tspan x="-103.311" y="0">Mario Alberto Hans Salinas</tspan><tspan
+          x="-48.617"
+          y="27">16.135.586-0</tspan
+        ><tspan x="-92.949" y="54">EN REPRESENTACIÓN DE</tspan><tspan
+          x="-65.162"
+          y="81"
+          >Hans Salinas SpA
+        </tspan><tspan x="-48.617" y="108">77.892.569-9</tspan></text
+      >
+      <text
+        id="NOMBRE_RUT"
+        data-name="NOMBRE
+RUT"
+        transform={`translate(1007.5 ${3420 + page2Offset})`}
+        font-size="18"
+        font-family="Calibri-Bold, Calibri"
+        font-weight="700"
+        ><tspan x="-34.383" y="0">{customerName}</tspan><tspan
+          x="-15.398"
+          y="27">{customerRut}</tspan
+        ></text
+      >
+      <line
+        id="Línea_5"
+        data-name="Línea 5"
+        x2="295"
+        transform={`translate(245 ${3384.5 + page2Offset})`}
+        fill="none"
+        stroke="#707070"
+        stroke-width="1"></line>
+      <line
+        id="Línea_6"
+        data-name="Línea 6"
+        x2="295"
+        transform={`translate(860 ${3384.5 + page2Offset})`}
+        fill="none"
+        stroke="#707070"
+        stroke-width="1"></line>
+      <rect
+        id="firma_mario_hans"
+        data-name="firma mario hans"
+        width="314"
+        height="161"
+        transform={`translate(236 ${3215 + page2Offset})`}
+        fill="#fff"></rect>
     </g>
-    </svg>
-
-  </div>
-</body>
+  </svg>
 </html>

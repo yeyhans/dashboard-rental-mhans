@@ -64,27 +64,27 @@ interface WPOrderResponse {
 }
 
 
-function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: { 
-  order: WPOrderResponse, 
-  sessionData?: any, 
-  allProducts?: DatabaseProduct[], 
-  allShippingMethods?: ShippingMethod[] 
+function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
+  order: WPOrderResponse,
+  sessionData?: any,
+  allProducts?: DatabaseProduct[],
+  allShippingMethods?: ShippingMethod[]
 }) {
 
   const orderData = order?.orders?.orders?.[0];
-  
+
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [productsData, setProductsData] = useState<DatabaseProduct[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
-  
+
   // Financial editing states
   const [isEditingFinancials, setIsEditingFinancials] = useState(false);
   const [editedShipping, setEditedShipping] = useState(orderData?.shipping_total?.toString() || '0');
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [couponDiscountAmount, setCouponDiscountAmount] = useState(0);
   const [savingFinancials, setSavingFinancials] = useState(false);
-  
+
   // Shipping method states (siguiendo patrón de CreateOrderForm)
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
   const [selectedShippingMethod, setSelectedShippingMethod] = useState<ShippingMethod | null>(null);
@@ -94,10 +94,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   const [deliveryMethod, setDeliveryMethod] = useState<'pickup' | 'shipping'>(() => {
     // Determinar método de entrega inicial basado en shipping_lines existentes
     try {
-      const shippingLines = typeof orderData?.shipping_lines === 'string' 
-        ? JSON.parse(orderData.shipping_lines) 
+      const shippingLines = typeof orderData?.shipping_lines === 'string'
+        ? JSON.parse(orderData.shipping_lines)
         : orderData?.shipping_lines;
-      
+
       if (Array.isArray(shippingLines) && shippingLines.length > 0) {
         const firstShippingLine = shippingLines[0];
         const metaData = firstShippingLine.meta_data || {};
@@ -105,14 +105,14 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         const methodTitle = firstShippingLine.method_title || '';
         const methodId = firstShippingLine.method_id || '';
         const shippingType = metaData.shipping_type || '';
-        
+
         // Detectar pickup por múltiples criterios
-        const isPickupMethod = deliveryMethodFromMeta === 'pickup' || 
-                             shippingType === 'pickup' ||
-                             methodId === 'pickup' ||
-                             methodTitle.toLowerCase().includes('retiro') ||
-                             methodTitle.toLowerCase().includes('pickup');
-        
+        const isPickupMethod = deliveryMethodFromMeta === 'pickup' ||
+          shippingType === 'pickup' ||
+          methodId === 'pickup' ||
+          methodTitle.toLowerCase().includes('retiro') ||
+          methodTitle.toLowerCase().includes('pickup');
+
         if (isPickupMethod) {
           console.log('🚀 Initial delivery method: PICKUP (detected from shipping_lines)');
           return 'pickup';
@@ -124,7 +124,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     } catch (error) {
       console.error('Error parsing initial shipping_lines:', error);
     }
-    
+
     // Fallback a la lógica original basada en shipping_total
     const fallbackMethod = orderData?.shipping_total && parseFloat(orderData.shipping_total.toString()) > 0 ? 'shipping' : 'pickup';
     console.log('🚀 Initial delivery method: ' + fallbackMethod.toUpperCase() + ' (fallback based on shipping_total)');
@@ -132,7 +132,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   });
   const [shippingAddress, setShippingAddress] = useState('');
   const [shippingPhone, setShippingPhone] = useState('');
-  
+
   // IVA toggle state
   const [applyIva, setApplyIva] = useState<boolean>(() => {
     // Initialize based on whether calculated_iva > 0 in existing order
@@ -141,7 +141,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     }
     return false;
   });
-  
+
   // Custom shipping states
   const [showCustomShippingForm, setShowCustomShippingForm] = useState(false);
   const [customShippingData, setCustomShippingData] = useState({
@@ -151,19 +151,19 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     estimated_days_min: '1',
     estimated_days_max: '3'
   });
-  
+
   // Product editing states
   const [editedProducts, setEditedProducts] = useState<EnhancedLineItem[]>([]);
   const [showProductSelector, setShowProductSelector] = useState(false);
   // editedManualDiscount removed - no longer using manual discounts
-  
+
   // Warranty photos states
   const [warrantyPhotos, setWarrantyPhotos] = useState<string[]>([]);
-  
+
   // Order PDF generation states
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [generatingBudget, setGeneratingBudget] = useState(false);
-  
+
   // Manual email states
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -206,7 +206,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       calculated_discount: orderData?.calculated_discount,
       shipping_lines: orderData?.shipping_lines
     });
-    
+
     console.log('🚚 [ProcessOrder] Detailed shipping_lines analysis:', {
       shipping_lines_exists: !!orderData?.shipping_lines,
       shipping_lines_type: typeof orderData?.shipping_lines,
@@ -220,15 +220,15 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         return undefined;
       })()
     });
-    
+
     if (orderData?.coupon_lines) {
       try {
-        const couponLines = typeof orderData.coupon_lines === 'string' 
-          ? JSON.parse(orderData.coupon_lines) 
+        const couponLines = typeof orderData.coupon_lines === 'string'
+          ? JSON.parse(orderData.coupon_lines)
           : orderData.coupon_lines;
-        
+
         console.log('🎫 Parsed coupon_lines:', couponLines);
-        
+
         if (Array.isArray(couponLines) && couponLines.length > 0) {
           const firstCoupon = couponLines[0];
           // Reconstruct coupon object from stored data
@@ -261,13 +261,13 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         console.error('❌ Error parsing coupon_lines:', error);
       }
     }
-    
+
     // Initialize shipping total
     if (orderData?.shipping_total) {
       console.log('🚚 Setting shipping total from order data:', orderData.shipping_total);
       setEditedShipping(orderData.shipping_total.toString());
     }
-    
+
     // Initialize calculated_discount if it exists (for display purposes)
     // Note: Manual discount editing was removed, but we still need to show existing values
     if (orderData?.calculated_discount) {
@@ -275,7 +275,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       // The calculated_discount is now handled automatically through coupon calculations
       // but we log it for reference
     }
-    
+
     // Initialize applyIva state based on calculated_iva
     if (orderData?.calculated_iva) {
       const ivaValue = parseFloat(orderData.calculated_iva.toString());
@@ -283,7 +283,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       console.log('💵 Initializing applyIva:', shouldApplyIva, 'from calculated_iva:', ivaValue);
       setApplyIva(shouldApplyIva);
     }
-    
+
     console.log('ℹ️ Order data initialization completed');
   }, [orderData]);
 
@@ -306,7 +306,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   }
 
   // orderData is now defined above in useEffect
-  
+
   if (!orderData) {
     console.log('No order found in array');
     return (
@@ -320,7 +320,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   useEffect(() => {
     const loadProductDetails = async () => {
       if (!orderData?.line_items || orderData.line_items.length === 0) return;
-      
+
       setLoadingProducts(true);
       try {
         const productIds = orderData.line_items
@@ -338,24 +338,24 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             }
             return isValid;
           });
-        
+
         if (productIds.length > 0) {
           console.log('🔄 Loading product details for IDs:', productIds);
           const response = await apiClient.post('/api/products/batch', { ids: productIds });
-          const result = await apiClient.handleJsonResponse<{success: boolean, data: DatabaseProduct[]}>(response);
-          
+          const result = await apiClient.handleJsonResponse<{ success: boolean, data: DatabaseProduct[] }>(response);
+
           if (result.success) {
             console.log('✅ Products loaded successfully:', result.data?.length || 0, 'products');
             console.log('📦 Loaded product IDs:', result.data?.map(p => p.id) || []);
             console.log('📊 Product stock status:', result.data?.map(p => ({ id: p.id, name: p.name, stock_status: p.stock_status })) || []);
-            
+
             // Check for missing products
             const loadedIds = (result.data || []).map(p => p.id).filter((id): id is number => id !== undefined);
             const missingIds = productIds.filter(id => !loadedIds.includes(id));
             if (missingIds.length > 0) {
               console.warn('⚠️ Products not found in database:', missingIds);
             }
-            
+
             setProductsData(result.data || []);
           } else {
             console.error('❌ Failed to load products:', result);
@@ -371,7 +371,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     loadProductDetails();
   }, [orderData?.line_items]);
 
-  
+
   // Enhanced order data display with all available information
   const getCustomerName = () => {
     if (orderData.customer) {
@@ -379,7 +379,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     }
     return `${orderData.billing_first_name || ''} ${orderData.billing_last_name || ''}`;
   };
-  
+
   const getCustomerEmail = () => {
     return orderData.customer?.email || orderData.billing_email || 'No disponible';
   };
@@ -391,7 +391,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
   const parseProductImages = useCallback((images: any): string[] => {
     if (!images) return [];
-    
+
     try {
       if (typeof images === 'string') {
         const parsed = JSON.parse(images);
@@ -402,18 +402,18 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           return [parsed.src || parsed.url];
         }
       }
-      
+
       if (Array.isArray(images)) {
         return images.map(img => typeof img === 'string' ? img : img.src || img.url || '').filter(Boolean);
       }
-      
+
       if (images.src || images.url) {
         return [images.src || images.url];
       }
     } catch (error) {
       console.warn('Error parsing product images:', error);
     }
-    
+
     return [];
   }, []);
 
@@ -421,10 +421,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   // Fix payment status comparison
   const isPaymentComplete = useMemo(() => {
     const paymentStatus = orderData.pago_completo;
-    return paymentStatus === true || 
-           paymentStatus === 'true' || 
-           paymentStatus === 'completo' ||
-           paymentStatus === 'completed';
+    return paymentStatus === true ||
+      paymentStatus === 'true' ||
+      paymentStatus === 'completo' ||
+      paymentStatus === 'completed';
   }, [orderData.pago_completo]);
 
   // Status translations and colors
@@ -451,7 +451,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   const handleSaveOrder = async (updatedOrder: any) => {
     try {
       setLoading(true);
-      
+
       const response = await fetch(`/api/orders/update/${orderData.id}`, {
         method: 'PUT',
         headers: {
@@ -461,7 +461,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       });
 
       const result = await response.json();
-      
+
       if (result.success) {
         alert('Pedido actualizado correctamente');
         setIsEditing(false);
@@ -509,8 +509,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   };
 
   const calculateCalculatedSubtotal = (
-    productsSubtotal: number, 
-    shippingTotal: number, 
+    productsSubtotal: number,
+    shippingTotal: number,
     couponDiscount: number
   ) => {
     // 2. CALCULATED_SUBTOTAL = subtotal productos + envío - descuento cupón
@@ -529,7 +529,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
   // Función para actualizar todos los cálculos siguiendo la fórmula correcta
   const updateAllCalculations = (
-    lineItems: any[], 
+    lineItems: any[],
     numDays: number,
     shipping: number = 0,
     couponDiscount: number = 0,
@@ -537,13 +537,13 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   ) => {
     // 1. Subtotal de productos
     const productsSubtotal = calculateProductsSubtotal(lineItems, numDays);
-    
+
     // 2. CALCULATED_SUBTOTAL = productos + envío - descuento cupón
     const calculatedSubtotal = calculateCalculatedSubtotal(productsSubtotal, shipping, couponDiscount);
-    
+
     // 3. CALCULATED_IVA = calculated_subtotal × 0.19 (solo si applyIva es true)
     const calculatedIva = calculateCalculatedIVA(calculatedSubtotal, applyIva);
-    
+
     // 4. CALCULATED_TOTAL = calculated_subtotal + calculated_iva
     const calculatedTotal = calculateCalculatedTotal(calculatedSubtotal, calculatedIva);
 
@@ -583,14 +583,14 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       setSavingFinancials(true);
       console.log('🔄 Iniciando handleSaveFinancials...');
       console.log('📦 Order ID:', orderData.id);
-      
+
       // Usar las nuevas funciones de cálculo siguiendo CreateOrderForm.tsx
       console.log('🔢 Calculando valores...');
       const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
       const shipping = parseFloat(editedShipping || '0');
       console.log('📊 numDays:', numDays, 'shipping:', shipping, 'couponDiscountAmount:', couponDiscountAmount, 'applyIva:', applyIva);
       console.log('📦 editedProducts length:', editedProducts.length);
-      
+
       const calculations = updateAllCalculations(
         editedProducts,
         numDays,
@@ -599,12 +599,12 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         applyIva
       );
       console.log('✅ Cálculos completados:', calculations);
-      
+
       // Validar campos requeridos para métodos de envío (más flexible)
       console.log('🚚 Validando método de envío:', deliveryMethod);
       if (deliveryMethod === 'shipping' && selectedShippingMethod) {
         console.log('📋 Validando campos de envío...');
-        
+
         // Solo validar si el método específicamente requiere estos campos Y están marcados como obligatorios
         if (selectedShippingMethod.requires_address && selectedShippingMethod.requires_address === true && !shippingAddress.trim()) {
           console.log('⚠️ Advertencia: Dirección recomendada pero no obligatoria');
@@ -614,7 +614,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             duration: 3000
           });
         }
-        
+
         if (selectedShippingMethod.requires_phone && selectedShippingMethod.requires_phone === true && !shippingPhone.trim()) {
           console.log('⚠️ Advertencia: Teléfono recomendado pero no obligatorio');
           // Solo mostrar advertencia, no bloquear
@@ -625,7 +625,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         }
       }
       console.log('✅ Validaciones de envío completadas');
-      
+
       // Prepare updated order data
       console.log('📦 Preparando datos de la orden...');
       const updatedOrderData = {
@@ -676,50 +676,50 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           "method_type": "pickup",
           "method_title": "Retiro en tienda"
         }] : deliveryMethod === 'shipping' && selectedShippingMethod ? [{
-          ...(selectedShippingMethod.metadata?.custom 
+          ...(selectedShippingMethod.metadata?.custom
             ? {
-                // Método customizado - crear shipping line manualmente
-                id: selectedShippingMethod.id,
-                method_id: selectedShippingMethod.id,
-                method_title: selectedShippingMethod.name,
-                method_type: selectedShippingMethod.shipping_type,
-                total: selectedShippingMethod.cost,
-                taxes: [],
-                meta_data: {
-                  estimated_delivery: formatDeliveryTime(selectedShippingMethod.estimated_days_min, selectedShippingMethod.estimated_days_max),
-                  delivery_method: deliveryMethod,
-                  shipping_address: shippingAddress.trim() || 'No especificada',
-                  shipping_phone: shippingPhone.trim() || 'No especificado',
-                  custom_shipping: true,
-                  tracking_number: null
-                }
+              // Método customizado - crear shipping line manualmente
+              id: selectedShippingMethod.id,
+              method_id: selectedShippingMethod.id,
+              method_title: selectedShippingMethod.name,
+              method_type: selectedShippingMethod.shipping_type,
+              total: selectedShippingMethod.cost,
+              taxes: [],
+              meta_data: {
+                estimated_delivery: formatDeliveryTime(selectedShippingMethod.estimated_days_min, selectedShippingMethod.estimated_days_max),
+                delivery_method: deliveryMethod,
+                shipping_address: shippingAddress.trim() || 'No especificada',
+                shipping_phone: shippingPhone.trim() || 'No especificado',
+                custom_shipping: true,
+                tracking_number: null
               }
+            }
             : {
-                // Método estándar - usar ShippingService
-                ...ShippingService.createShippingLine(
-                  selectedShippingMethod,
-                  {
-                    first_name: orderData.billing_first_name || '',
-                    last_name: orderData.billing_last_name || '',
-                    address_1: orderData.billing_address_1 || '',
-                    city: orderData.billing_city || '',
-                    phone: orderData.billing_phone || ''
-                  }
-                ),
-                meta_data: {
-                  ...ShippingService.createShippingLine(selectedShippingMethod).meta_data,
-                  delivery_method: deliveryMethod,
-                  shipping_address: shippingAddress.trim() || 'No especificada',
-                  shipping_phone: shippingPhone.trim() || 'No especificado'
+              // Método estándar - usar ShippingService
+              ...ShippingService.createShippingLine(
+                selectedShippingMethod,
+                {
+                  first_name: orderData.billing_first_name || '',
+                  last_name: orderData.billing_last_name || '',
+                  address_1: orderData.billing_address_1 || '',
+                  city: orderData.billing_city || '',
+                  phone: orderData.billing_phone || ''
                 }
+              ),
+              meta_data: {
+                ...ShippingService.createShippingLine(selectedShippingMethod).meta_data,
+                delivery_method: deliveryMethod,
+                shipping_address: shippingAddress.trim() || 'No especificada',
+                shipping_phone: shippingPhone.trim() || 'No especificado'
               }
+            }
           )
         }] : [],
         calculated_total: calculations.calculated_total
       };
 
       console.log('📤 Datos a enviar:', updatedOrderData);
-      
+
       // Con el nuevo sistema de autenticación, usamos cookies en lugar de Bearer token
       const response = await fetch(`/api/orders/${orderData.id}`, {
         method: 'PUT',
@@ -729,13 +729,13 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         credentials: 'include', // Esto envía las cookies de sesión automáticamente
         body: JSON.stringify(updatedOrderData)
       });
-      
+
       console.log('📡 Response status:', response.status);
       console.log('📡 Response ok:', response.ok);
 
       const result = await response.json();
       console.log('📋 Response result:', result);
-      
+
       if (result.success) {
         console.log('✅ Pedido actualizado exitosamente');
         toast.success('Pedido actualizado correctamente');
@@ -763,14 +763,14 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     console.log('🔄 Resetting editedProducts from enhancedLineItems');
     console.log('📦 Available enhanced items:', enhancedLineItems.length);
     setEditedProducts([...enhancedLineItems]);
-    
+
     // Reset coupon to original state
     if (orderData?.coupon_lines) {
       try {
-        const couponLines = typeof orderData.coupon_lines === 'string' 
-          ? JSON.parse(orderData.coupon_lines) 
+        const couponLines = typeof orderData.coupon_lines === 'string'
+          ? JSON.parse(orderData.coupon_lines)
           : orderData.coupon_lines;
-        
+
         if (Array.isArray(couponLines) && couponLines.length > 0) {
           const firstCoupon = couponLines[0];
           if (firstCoupon.id && firstCoupon.code) {
@@ -809,14 +809,14 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       setAppliedCoupon(null);
       setCouponDiscountAmount(0);
     }
-    
+
     // Reset shipping states
     setDeliveryMethod(
       orderData?.shipping_total && parseFloat(orderData.shipping_total.toString()) > 0 ? 'shipping' : 'pickup'
     );
     setSelectedShippingMethod(null);
     setShippingMethods([]);
-    
+
     // Reset applyIva to original value from order
     if (orderData?.calculated_iva) {
       const ivaValue = parseFloat(orderData.calculated_iva.toString());
@@ -824,7 +824,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     } else {
       setApplyIva(false);
     }
-    
+
     setIsEditingFinancials(false);
     setShowProductSelector(false);
     toast.info('Cambios cancelados');
@@ -839,7 +839,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         console.log('✅ Using shipping methods from server-side props:', allShippingMethods.length);
         setShippingMethods(allShippingMethods);
         setShippingMethodsSource('database');
-        
+
         // Si estamos en modo shipping y no hay método seleccionado, seleccionar el primero
         if (deliveryMethod === 'shipping' && !selectedShippingMethod) {
           const defaultMethod = allShippingMethods[0];
@@ -857,7 +857,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         console.log('✅ Loaded shipping methods from API:', shippingResult.shippingMethods.length);
         setShippingMethods(shippingResult.shippingMethods);
         setShippingMethodsSource('database');
-        
+
         // Si estamos en modo shipping y no hay método seleccionado, seleccionar el primero
         if (deliveryMethod === 'shipping' && !selectedShippingMethod) {
           const defaultMethod = shippingResult.shippingMethods[0];
@@ -955,11 +955,11 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     console.log('🔄 handleDeliveryMethodChange called with:', method);
     console.log('🔄 Current deliveryMethod:', deliveryMethod);
     console.log('🔄 Current selectedShippingMethod:', selectedShippingMethod);
-    
+
     // Marcar que el usuario ha hecho un cambio manual
     setUserHasChangedDeliveryMethod(true);
     setDeliveryMethod(method);
-    
+
     if (method === 'pickup') {
       console.log('✅ Switching to PICKUP method (user manual change)');
       setSelectedShippingMethod(null);
@@ -1014,11 +1014,11 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
     // Agregar el método customizado a la lista
     setShippingMethods(prev => [...prev, customMethod]);
-    
+
     // Seleccionar automáticamente el método customizado
     setSelectedShippingMethod(customMethod);
     setEditedShipping(customMethod.cost);
-    
+
     // Limpiar el formulario y cerrarlo
     setCustomShippingData({
       name: '',
@@ -1051,20 +1051,20 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   // Enhanced line items with product details
   const enhancedLineItems = useMemo(() => {
     if (!orderData.line_items) return [];
-    
+
     return orderData.line_items.map((item) => {
       const numericProductId = typeof item.product_id === 'string' ? parseInt(item.product_id, 10) : item.product_id;
       const productDetails = getProductDetails(numericProductId || 0);
       const images = productDetails ? parseProductImages(productDetails.images) : [];
-      
+
       // Calculate proper total and subtotal
       const unitPrice = parseFloat(item.price?.toString() || '0');
       const quantity = parseInt(item.quantity?.toString() || '1');
       const calculatedTotal = unitPrice * quantity;
-      
 
 
-      
+
+
       return {
         ...item,
         product_id: numericProductId || 0, // Ensure product_id is always a number
@@ -1104,14 +1104,14 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   useEffect(() => {
     if (isEditingFinancials && orderData?.shipping_lines && !selectedShippingMethod && !userHasChangedDeliveryMethod) {
       try {
-        const shippingLines = typeof orderData.shipping_lines === 'string' 
-          ? JSON.parse(orderData.shipping_lines) 
+        const shippingLines = typeof orderData.shipping_lines === 'string'
+          ? JSON.parse(orderData.shipping_lines)
           : orderData.shipping_lines;
-        
+
         if (Array.isArray(shippingLines) && shippingLines.length > 0) {
           const firstShippingLine = shippingLines[0];
           console.log('🚚 Initializing shipping method from existing shipping_lines:', firstShippingLine);
-          
+
           // Crear un método de envío temporal basado en los datos existentes
           const existingMethod: ShippingMethod = {
             id: firstShippingLine.method_id || 0,
@@ -1132,17 +1132,17 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
-          
+
           setSelectedShippingMethod(existingMethod);
           setEditedShipping(existingMethod.cost.toString());
-          
+
           // Determinar el método de entrega basado en metadata y características del shipping line
           const metaData = firstShippingLine.meta_data || {};
           const deliveryMethodFromMeta = metaData.delivery_method || metaData['delivery_method'];
           const methodTitle = firstShippingLine.method_title || '';
           const methodId = firstShippingLine.method_id || '';
           const shippingType = metaData.shipping_type || '';
-          
+
           console.log('🔍 Determining delivery method:', {
             metaData,
             deliveryMethodFromMeta,
@@ -1152,26 +1152,26 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             shipping_type: shippingType,
             shipping_address: metaData.shipping_address
           });
-          
+
           // Cargar dirección de envío si existe
           if (metaData.shipping_address) {
             console.log('📍 Loading shipping address:', metaData.shipping_address);
             setShippingAddress(metaData.shipping_address);
           }
-          
+
           // Cargar teléfono de envío si existe
           if (metaData.shipping_phone) {
             console.log('📞 Loading shipping phone:', metaData.shipping_phone);
             setShippingPhone(metaData.shipping_phone);
           }
-          
+
           // Detectar pickup por múltiples criterios
-          const isPickupMethod = deliveryMethodFromMeta === 'pickup' || 
-                               shippingType === 'pickup' ||
-                               methodId === 'pickup' ||
-                               methodTitle.toLowerCase().includes('retiro') ||
-                               methodTitle.toLowerCase().includes('pickup');
-          
+          const isPickupMethod = deliveryMethodFromMeta === 'pickup' ||
+            shippingType === 'pickup' ||
+            methodId === 'pickup' ||
+            methodTitle.toLowerCase().includes('retiro') ||
+            methodTitle.toLowerCase().includes('pickup');
+
           if (isPickupMethod) {
             console.log('✅ Setting delivery method to PICKUP - detected pickup method');
             setDeliveryMethod('pickup');
@@ -1213,7 +1213,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       short_description: product.short_description || '',
       stock_status: product.stock_status || 'instock'
     };
-    
+
     setEditedProducts(prev => [...prev, newItem]);
     toast.success(`Producto agregado: ${product.name || 'Producto'} (x${quantity})`);
   };
@@ -1221,7 +1221,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   const handleRemoveProductFromSelector = (index: number) => {
     const item = editedProducts[index];
     if (!item) return;
-    
+
     const productName = item.name;
     setEditedProducts(prev => prev.filter((_, i) => i !== index));
     toast.info(`Producto removido: ${productName}`);
@@ -1229,21 +1229,21 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
   const handleQuantityChange = (index: number, newQuantity: number) => {
     if (newQuantity < 1) return;
-    
+
     setEditedProducts(prev => {
       const updated = [...prev];
       const item = updated[index];
       if (!item) return prev;
-      
+
       const unitPrice = parseFloat(item.price?.toString() || '0');
-      
+
       updated[index] = {
         ...item,
         quantity: newQuantity,
         total: unitPrice * newQuantity,
         subtotal: unitPrice * newQuantity
       };
-      
+
       return updated;
     });
   };
@@ -1251,7 +1251,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   const handleRemoveProduct = (index: number) => {
     const item = editedProducts[index];
     if (!item) return;
-    
+
     const productName = item.name;
     setEditedProducts(prev => prev.filter((_, i) => i !== index));
     toast.info(`Producto removido: ${productName}`);
@@ -1260,8 +1260,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   // Initialize warranty photos from order data
   useEffect(() => {
     if (orderData?.fotos_garantia) {
-      const photos = Array.isArray(orderData.fotos_garantia) 
-        ? orderData.fotos_garantia 
+      const photos = Array.isArray(orderData.fotos_garantia)
+        ? orderData.fotos_garantia
         : Object.values(orderData.fotos_garantia);
       setWarrantyPhotos(photos.filter(Boolean));
     }
@@ -1286,7 +1286,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     setGeneratingPdf(true);
     try {
       console.log('🚀 Generating order processing PDF for order:', orderData.id);
-      
+
       const result = await generateOrderProcessingPdfFromId(
         orderData.id,
         true, // uploadToR2
@@ -1296,32 +1296,32 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       if (result.success) {
         toast.success('Contrato de procesamiento generado exitosamente');
         console.log('✅ PDF generated successfully:', result.pdfUrl);
-        
+
         // Notificar al cliente sobre la generación del contrato
         await notifyPdfGenerated(
           'processing',
           result.pdfUrl || '',
           true
         );
-        
+
         // Crear recordatorio en Google Calendar (solución simple)
         try {
           console.log('📅 Creating calendar reminder for order:', orderData.id);
           const eventData = createEventFromOrder(orderData);
-          
+
           // Abrir Google Calendar automáticamente para agregar el evento
           openGoogleCalendar(eventData);
-          
+
           toast.success('Recordatorio de calendario creado', {
             description: `Se abrió Google Calendar para agregar el evento de la orden #${orderData.id}`
           });
-          
+
           console.log('✅ Calendar reminder opened successfully');
         } catch (calendarError) {
           console.error('💥 Error creating calendar reminder:', calendarError);
           toast.warning('No se pudo abrir el recordatorio de calendario');
         }
-        
+
         // Reload the page to show the new PDF URL
         setTimeout(() => {
           window.location.reload();
@@ -1333,7 +1333,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       console.error('💥 Error generating order PDF:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al generar el contrato';
       toast.error(errorMessage);
-      
+
       // Notificar al cliente sobre el error en la generación
       await notifyPdfGenerated(
         'processing',
@@ -1351,14 +1351,14 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     try {
       console.log('📅 Creating calendar event for order:', orderData.id);
       const eventData = createEventFromOrder(orderData);
-      
+
       // Open Google Calendar
       openGoogleCalendar(eventData);
-      
+
       toast.success('Calendario abierto', {
-        description: `Agregando evento para orden #${orderData.id}` 
+        description: `Agregando evento para orden #${orderData.id}`
       });
-      
+
       console.log('✅ Calendar event opened successfully');
     } catch (error) {
       console.error('💥 Error opening calendar:', error);
@@ -1376,7 +1376,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     setGeneratingBudget(true);
     try {
       console.log('🚀 Generating budget PDF for order:', orderData.id);
-      
+
       // Usar el endpoint dedicado /api/orders/:id/generate-budget
       // sendEmail: false porque la notificación se envía manualmente desde el admin
       const response = await fetch(`/api/orders/${orderData.id}/generate-budget`, {
@@ -1397,14 +1397,14 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       if (result.success) {
         toast.success('Presupuesto generado exitosamente');
         console.log('✅ Budget PDF generated successfully:', result.pdfUrl);
-        
+
         // Notificar al cliente sobre la generación del presupuesto
         await notifyPdfGenerated(
           'budget',
           result.pdfUrl || '',
           true
         );
-        
+
         // Reload the page to show the new PDF URL
         setTimeout(() => {
           window.location.reload();
@@ -1416,7 +1416,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       console.error('💥 Error generating budget PDF:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al generar el presupuesto';
       toast.error(errorMessage);
-      
+
       // Notificar al cliente sobre el error en la generación
       await notifyPdfGenerated(
         'budget',
@@ -1439,7 +1439,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     setGeneratingBudget(true);
     try {
       console.log('🔄 Updating budget PDF for order:', orderData.id);
-      
+
       // Usar el endpoint dedicado /api/orders/:id/generate-budget
       // sendEmail: false porque la notificación se envía manualmente desde el admin
       const response = await fetch(`/api/orders/${orderData.id}/generate-budget`, {
@@ -1460,14 +1460,14 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       if (result.success) {
         toast.success('Presupuesto actualizado exitosamente');
         console.log('✅ Budget PDF updated successfully:', result.pdfUrl);
-        
+
         // Notificar al cliente sobre la actualización del presupuesto
         await notifyPdfGenerated(
           'budget',
           result.pdfUrl || '',
           true
         );
-        
+
         // Reload the page to show the updated PDF URL history
         setTimeout(() => {
           window.location.reload();
@@ -1479,7 +1479,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       console.error('💥 Error updating budget PDF:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al actualizar el presupuesto';
       toast.error(errorMessage);
-      
+
       // Notificar al cliente sobre el error en la actualización
       await notifyPdfGenerated(
         'budget',
@@ -1506,15 +1506,15 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     setDeletingPdf(true);
     try {
       console.log('🗑️ Deleting budget PDF:', budgetUrl);
-      
+
       const response = await fetch(`/api/orders/${orderData.id}/delete-pdf`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           pdfType: 'budget',
-          pdfUrl: budgetUrl 
+          pdfUrl: budgetUrl
         }),
       });
 
@@ -1528,7 +1528,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       if (result.success) {
         toast.success('Presupuesto eliminado exitosamente');
         console.log('✅ Budget PDF deleted successfully');
-        
+
         // Reload the page to reflect changes
         setTimeout(() => {
           window.location.reload();
@@ -1559,13 +1559,13 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     setDeletingPdf(true);
     try {
       console.log('🗑️ Deleting contract PDF');
-      
+
       const response = await fetch(`/api/orders/${orderData.id}/delete-pdf`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           pdfType: 'contract'
         }),
       });
@@ -1580,7 +1580,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       if (result.success) {
         toast.success('Contrato eliminado exitosamente');
         console.log('✅ Contract PDF deleted successfully');
-        
+
         // Reload the page to reflect changes
         setTimeout(() => {
           window.location.reload();
@@ -1614,25 +1614,25 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     }
 
     const oldStatus = orderData.status || 'unknown';
-    
+
     try {
       // Aquí iría la lógica para actualizar el estado en la base de datos
       // Por ahora solo notificamos el cambio
-      
+
       await notifyStatusChange(
         oldStatus,
         newStatus,
         reason,
         `Cambio realizado desde el panel administrativo por ${sessionData?.user?.name || 'Administrador'}`
       );
-      
+
       toast.success(`Estado cambiado de ${oldStatus} a ${newStatus}`);
-      
+
       // Recargar la página para mostrar el nuevo estado
       setTimeout(() => {
         window.location.reload();
       }, 1500);
-      
+
     } catch (error) {
       console.error('Error changing order status:', error);
       toast.error('Error al cambiar el estado de la orden');
@@ -1663,14 +1663,14 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
     const customerEmail = getCustomerEmail();
     const customerName = getCustomerName();
-    
+
     if (customerEmail === 'No disponible') {
       toast.error('Email del cliente no disponible');
       return;
     }
 
     // Get warranty photos if email type is warranty_photos
-    const warrantyPhotos = emailData.emailType === 'warranty_photos' && orderData.fotos_garantia 
+    const warrantyPhotos = emailData.emailType === 'warranty_photos' && orderData.fotos_garantia
       ? (Array.isArray(orderData.fotos_garantia) ? orderData.fotos_garantia.filter((url): url is string => typeof url === 'string') : [])
       : [];
 
@@ -1700,12 +1700,12 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     setSendingEmail(true);
     try {
       console.log('📧 Sending manual email:', manualEmailData);
-      
+
       const result = await sendManualEmail(manualEmailData);
 
       if (result.success) {
         toast.success('Correo enviado exitosamente');
-        
+
         // Notificar al cliente a través del sistema de comunicaciones
         await notifyEmailSent(
           emailData.emailType,
@@ -1718,7 +1718,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             ...warrantyPhotos
           ].filter(Boolean)
         );
-        
+
         setShowEmailModal(false);
         // Reset form
         setEmailData({
@@ -1736,7 +1736,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       console.error('💥 Error sending manual email:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al enviar el correo';
       toast.error(errorMessage);
-      
+
       // Notificar al cliente sobre el error en el envío
       await notifyEmailFailed(
         emailData.emailType,
@@ -1765,7 +1765,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   const generateEmailSubject = () => {
     const orderId = orderData?.id;
     const projectName = orderData?.order_proyecto || 'Proyecto';
-    
+
     switch (emailData.emailType) {
       case 'availability_confirmation':
         return `✅ Confirmación de Disponibilidad - ${projectName} (Orden #${orderId})`;
@@ -1782,7 +1782,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     const customerName = getCustomerName();
     const projectName = orderData?.order_proyecto || 'su proyecto';
     const orderId = orderData?.id;
-    
+
     switch (emailData.emailType) {
       case 'availability_confirmation':
         return `Nos complace confirmar la disponibilidad de los equipos para ${projectName} (Orden #${orderId}).\n\nTodos los productos solicitados están disponibles para las fechas indicadas. Procederemos con la preparación de los equipos según lo acordado.`;
@@ -1800,13 +1800,13 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     // Temporarily update emailData for generation functions
     const originalType = emailData.emailType;
     emailData.emailType = newType;
-    
+
     const newSubject = generateEmailSubject();
     const newMessage = generateEmailMessage();
-    
+
     // Restore original type
     emailData.emailType = originalType;
-    
+
     setEmailData(prev => ({
       ...prev,
       emailType: newType,
@@ -1866,16 +1866,15 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             </Badge>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader>
             <CardTitle>Estado de Pago</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${
-                isPaymentComplete ? 'bg-green-500' : 'bg-yellow-500'
-              }`} />
+              <div className={`w-3 h-3 rounded-full ${isPaymentComplete ? 'bg-green-500' : 'bg-yellow-500'
+                }`} />
               <span className="text-sm font-medium">
                 {isPaymentComplete ? 'Pagado' : 'Pendiente'}
               </span>
@@ -1897,7 +1896,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             </div>
             <div className="flex justify-between">
               <span className="font-medium">Fecha Creación:</span>
-              <span>{new Date(orderData.date_created).toLocaleDateString('es-ES')}</span>
+              <span>{(() => {
+                const d = new Date(orderData.date_created);
+                return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+              })()}</span>
             </div>
             <div className="flex justify-between">
               <span className="font-medium">Total:</span>
@@ -1963,18 +1965,18 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
         {/* Shipping Information */}
         {(() => {
-          const shippingLines = typeof orderData?.shipping_lines === 'string' 
-            ? JSON.parse(orderData.shipping_lines) 
+          const shippingLines = typeof orderData?.shipping_lines === 'string'
+            ? JSON.parse(orderData.shipping_lines)
             : orderData?.shipping_lines;
-          
+
           const hasShippingInfo = Array.isArray(shippingLines) && shippingLines.length > 0;
           const firstShippingLine = hasShippingInfo ? shippingLines[0] : null;
           const deliveryMethodFromData = firstShippingLine?.meta_data?.delivery_method;
           const shippingAddressFromData = firstShippingLine?.meta_data?.shipping_address;
           const shippingPhoneFromData = firstShippingLine?.meta_data?.shipping_phone;
-          
+
           if (!hasShippingInfo) return null;
-          
+
           return (
             <Card>
               <CardHeader>
@@ -1989,11 +1991,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
               <CardContent className="space-y-3">
                 <div className="flex justify-between">
                   <span className="font-medium">Método de entrega:</span>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    deliveryMethodFromData === 'shipping' 
-                      ? 'bg-blue-100 text-blue-800' 
-                      : 'bg-green-100 text-green-800'
-                  }`}>
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${deliveryMethodFromData === 'shipping'
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-green-100 text-green-800'
+                    }`}>
                     {deliveryMethodFromData === 'shipping' ? 'Envío a domicilio' : 'Retiro en tienda'}
                   </span>
                 </div>
@@ -2016,8 +2017,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                 <div className="flex justify-between">
                   <span className="font-medium">Costo:</span>
                   <span className={deliveryMethodFromData === 'pickup' ? 'text-green-600 font-medium' : ''}>
-                    {deliveryMethodFromData === 'pickup' 
-                      ? 'Gratis' 
+                    {deliveryMethodFromData === 'pickup'
+                      ? 'Gratis'
                       : `$${parseFloat(firstShippingLine.total || '0').toLocaleString('es-CL')}`
                     }
                   </span>
@@ -2067,168 +2068,168 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
       {/*PDF View */}
       <Card>
-          <CardHeader>
-            <CardTitle>Documentación</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-3 flex-wrap">
-              {orderData.new_pdf_on_hold_url && (() => {
-                const budgetUrls = orderData.new_pdf_on_hold_url.split(',').filter(url => url.trim());
-                const latestUrl = budgetUrls[budgetUrls.length - 1]?.trim();
-                
-                return (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        className="bg-blue-200 text-blue-900 hover:bg-blue-300"
-                        onClick={() => window.open(latestUrl, '_blank')}
-                        title={`Ver presupuesto más reciente (${budgetUrls.length > 1 ? `Versión ${budgetUrls.length} de ${budgetUrls.length}` : 'Versión única'})`}
-                      >
-                        <FileText className="h-4 w-4 mr-2" />
-                        Presupuesto {budgetUrls.length > 1 && `(v${budgetUrls.length})`}
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        className="h-6 w-6 p-0 text-red-600 hover:bg-red-100"
-                        onClick={() => handleDeleteBudgetPdf(latestUrl)}
-                        disabled={deletingPdf}
-                        title="Eliminar presupuesto"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    
-                    {budgetUrls.length > 1 && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-muted-foreground">Historial:</span>
-                        {budgetUrls.slice(0, -1).map((url, index) => (
-                          <div key={index} className="flex items-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-6 px-2 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
-                              onClick={() => window.open(url.trim(), '_blank')}
-                              title={`Ver versión ${index + 1} del presupuesto`}
-                            >
-                              v{index + 1}
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              className="h-5 w-5 p-0 text-red-600 hover:bg-red-100"
-                              onClick={() => handleDeleteBudgetPdf(url.trim())}
-                              disabled={deletingPdf}
-                              title="Eliminar versión"
-                            >
-                              <Trash2 className="h-2.5 w-2.5" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-              
-              {orderData.new_pdf_processing_url && (
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    className="bg-green-200 text-green-900 hover:bg-green-300"
-                    onClick={() => window.open(orderData.new_pdf_processing_url, '_blank')}
-                    title="Ver contrato de procesamiento"
-                  >
-                    <FileCheck className="h-4 w-4 mr-2" />
-                    Contrato
-                  </Button>
-                  <Button 
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 text-red-600 hover:bg-red-100"
-                    onClick={handleDeleteContractPdf}
-                    disabled={deletingPdf}
-                    title="Eliminar contrato"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              )}
-              
-              {!orderData.new_pdf_processing_url && (
-                <Button 
-                  variant="default" 
-                  size="sm"
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 shadow-lg"
-                  onClick={handleGenerateOrderPdf}
-                  disabled={generatingPdf}
-                  title="Generar contrato de procesamiento"
-                >
-                  {generatingPdf ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Generando...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Generar Contrato
-                    </>
-                  )}
-                </Button>
-              )}
-              
-              {!orderData.new_pdf_on_hold_url && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="bg-gradient-to-r from-green-600 to-teal-600 text-white hover:from-green-700 hover:to-teal-700 shadow-lg border-0"
-                  onClick={handleGenerateBudgetPdf}
-                  disabled={generatingBudget}
-                  title="Generar presupuesto"
-                >
-                  {generatingBudget ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Generando...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Generar Presupuesto
-                    </>
-                  )}
-                </Button>
-              )}
+        <CardHeader>
+          <CardTitle>Documentación</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-3 flex-wrap">
+            {orderData.new_pdf_on_hold_url && (() => {
+              const budgetUrls = orderData.new_pdf_on_hold_url.split(',').filter(url => url.trim());
+              const latestUrl = budgetUrls[budgetUrls.length - 1]?.trim();
 
-              {orderData.new_pdf_on_hold_url && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="bg-gradient-to-r from-orange-600 to-amber-600 text-white hover:from-orange-700 hover:to-amber-700 shadow-lg border-0"
-                  onClick={handleUpdateBudgetPdf}
-                  disabled={generatingBudget}
-                  title="Actualizar presupuesto - Genera una nueva versión y mantiene el historial"
-                >
-                  {generatingBudget ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Actualizando...
-                    </>
-                  ) : (
-                    <>
+              return (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="bg-blue-200 text-blue-900 hover:bg-blue-300"
+                      onClick={() => window.open(latestUrl, '_blank')}
+                      title={`Ver presupuesto más reciente (${budgetUrls.length > 1 ? `Versión ${budgetUrls.length} de ${budgetUrls.length}` : 'Versión única'})`}
+                    >
                       <FileText className="h-4 w-4 mr-2" />
-                      Actualizar Presupuesto
-                    </>
+                      Presupuesto {budgetUrls.length > 1 && `(v${budgetUrls.length})`}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-red-600 hover:bg-red-100"
+                      onClick={() => handleDeleteBudgetPdf(latestUrl)}
+                      disabled={deletingPdf}
+                      title="Eliminar presupuesto"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+
+                  {budgetUrls.length > 1 && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground">Historial:</span>
+                      {budgetUrls.slice(0, -1).map((url, index) => (
+                        <div key={index} className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-2 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
+                            onClick={() => window.open(url.trim(), '_blank')}
+                            title={`Ver versión ${index + 1} del presupuesto`}
+                          >
+                            v{index + 1}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 w-5 p-0 text-red-600 hover:bg-red-100"
+                            onClick={() => handleDeleteBudgetPdf(url.trim())}
+                            disabled={deletingPdf}
+                            title="Eliminar versión"
+                          >
+                            <Trash2 className="h-2.5 w-2.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   )}
+                </div>
+              );
+            })()}
+
+            {orderData.new_pdf_processing_url && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="bg-green-200 text-green-900 hover:bg-green-300"
+                  onClick={() => window.open(orderData.new_pdf_processing_url, '_blank')}
+                  title="Ver contrato de procesamiento"
+                >
+                  <FileCheck className="h-4 w-4 mr-2" />
+                  Contrato
                 </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-red-600 hover:bg-red-100"
+                  onClick={handleDeleteContractPdf}
+                  disabled={deletingPdf}
+                  title="Eliminar contrato"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+
+            {!orderData.new_pdf_processing_url && (
+              <Button
+                variant="default"
+                size="sm"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 shadow-lg"
+                onClick={handleGenerateOrderPdf}
+                disabled={generatingPdf}
+                title="Generar contrato de procesamiento"
+              >
+                {generatingPdf ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Generando...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Generar Contrato
+                  </>
+                )}
+              </Button>
+            )}
+
+            {!orderData.new_pdf_on_hold_url && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-gradient-to-r from-green-600 to-teal-600 text-white hover:from-green-700 hover:to-teal-700 shadow-lg border-0"
+                onClick={handleGenerateBudgetPdf}
+                disabled={generatingBudget}
+                title="Generar presupuesto"
+              >
+                {generatingBudget ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Generando...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Generar Presupuesto
+                  </>
+                )}
+              </Button>
+            )}
+
+            {orderData.new_pdf_on_hold_url && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-gradient-to-r from-orange-600 to-amber-600 text-white hover:from-orange-700 hover:to-amber-700 shadow-lg border-0"
+                onClick={handleUpdateBudgetPdf}
+                disabled={generatingBudget}
+                title="Actualizar presupuesto - Genera una nueva versión y mantiene el historial"
+              >
+                {generatingBudget ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Actualizando...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Actualizar Presupuesto
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
 
       {/* Manual Email Communication Section */}
@@ -2266,10 +2267,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h4 className="font-medium text-blue-900 mb-2">📧 Envío de Correos al Cliente</h4>
               <p className="text-sm text-blue-700 mb-3">
-                Envíe correos personalizados al cliente para confirmar disponibilidad, 
+                Envíe correos personalizados al cliente para confirmar disponibilidad,
                 actualizar el estado del pedido o comunicar información importante.
               </p>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white p-3 rounded border">
                   <div className="flex items-center gap-2 mb-2">
@@ -2279,7 +2280,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   <p className="text-sm text-gray-700">{getCustomerName()}</p>
                   <p className="text-xs text-gray-500">{getCustomerEmail()}</p>
                 </div>
-                
+
                 <div className="bg-white p-3 rounded border">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
@@ -2304,7 +2305,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   </div>
                 </div>
               </div>
-              
+
               <div className="mt-3 flex items-center gap-2 text-xs text-blue-600">
                 <Paperclip className="w-3 h-3" />
                 <span>Los documentos disponibles pueden adjuntarse automáticamente al correo</span>
@@ -2332,7 +2333,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                 <X className="w-4 h-4" />
               </Button>
             </div>
-            
+
             <div className="space-y-4">
               {/* Recipient Info */}
               <div className="bg-gray-50 p-3 rounded-lg border">
@@ -2351,7 +2352,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   </div>
                 </div>
               </div>
-              
+
               {/* Email Type Selection */}
               <div>
                 <Label className="text-sm font-medium mb-2 block">Tipo de Correo</Label>
@@ -2406,7 +2407,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   </Button>
                 </div>
               </div>
-              
+
               {/* Subject */}
               <div>
                 <Label htmlFor="email-subject" className="text-sm font-medium mb-2 block">
@@ -2430,7 +2431,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   Usar asunto sugerido
                 </Button>
               </div>
-              
+
               {/* Message */}
               <div>
                 <Label htmlFor="email-message" className="text-sm font-medium mb-2 block">
@@ -2456,7 +2457,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                 </Button>
                 <span className="text-xs text-gray-500">Ya está incluida la bienvenida y despedida personalizada en el correo.</span>
               </div>
-              
+
               {/* Attachments */}
               <div>
                 <Label className="text-sm font-medium mb-2 block">Documentos a Adjuntar</Label>
@@ -2476,8 +2477,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                           {availableBudgets.map((budgetUrl, index) => {
                             const isSelected = emailData.selectedBudgetUrls.includes(budgetUrl);
                             return (
-                              <label 
-                                key={index} 
+                              <label
+                                key={index}
                                 className="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-white transition-colors"
                               >
                                 <input
@@ -2542,8 +2543,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
                   {/* Warranty Photos Section - Only show for warranty_photos email type */}
                   {emailData.emailType === 'warranty_photos' && orderData.fotos_garantia && (() => {
-                    const warrantyPhotos = Array.isArray(orderData.fotos_garantia) 
-                      ? orderData.fotos_garantia.filter((url): url is string => typeof url === 'string') 
+                    const warrantyPhotos = Array.isArray(orderData.fotos_garantia)
+                      ? orderData.fotos_garantia.filter((url): url is string => typeof url === 'string')
                       : [];
                     return warrantyPhotos.length > 0 ? (
                       <div className="border rounded-lg p-3 bg-purple-50">
@@ -2590,7 +2591,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   )}
                 </div>
               </div>
-              
+
               {/* Action buttons */}
               <div className="flex items-center justify-end gap-2 pt-4 border-t">
                 <Button
@@ -2711,35 +2712,35 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                           </p>
                         </div>
                       </div>
-                      
+
                       {/* Additional Details - Always Shown */}
                       <div className="mt-3 space-y-2">
-                          
-                          <div className="flex flex-wrap gap-2 text-xs">
-                            <Badge variant={
-                              item.stock_status === 'instock' ? 'default' : 
-                              item.stock_status === 'not_found' ? 'destructive' : 
-                              'secondary'
-                            }>
-                              Stock: {
-                                item.stock_status === 'instock' ? 'Disponible' :
-                                item.stock_status === 'not_found' ? 'Producto no encontrado' :
-                                item.stock_status === 'outofstock' ? 'Sin stock' :
-                                item.stock_status === 'onbackorder' ? 'En pedido' :
-                                'Estado desconocido'
-                              }
-                            </Badge>
-                            <Badge variant="outline">
-                              Cantidad: {item.quantity}
-                            </Badge>
-                            {item.product_id > 0 && (
-                              <Badge variant="outline">
-                                ID: {item.product_id}
-                              </Badge>
-                            )}
-                          </div>
 
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <Badge variant={
+                            item.stock_status === 'instock' ? 'default' :
+                              item.stock_status === 'not_found' ? 'destructive' :
+                                'secondary'
+                          }>
+                            Stock: {
+                              item.stock_status === 'instock' ? 'Disponible' :
+                                item.stock_status === 'not_found' ? 'Producto no encontrado' :
+                                  item.stock_status === 'outofstock' ? 'Sin stock' :
+                                    item.stock_status === 'onbackorder' ? 'En pedido' :
+                                      'Estado desconocido'
+                            }
+                          </Badge>
+                          <Badge variant="outline">
+                            Cantidad: {item.quantity}
+                          </Badge>
+                          {item.product_id > 0 && (
+                            <Badge variant="outline">
+                              ID: {item.product_id}
+                            </Badge>
+                          )}
                         </div>
+
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2756,7 +2757,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           )}
         </CardContent>
       </Card>
-      
+
       {/* Enhanced Financial Summary with Editable Coupons and Shipping */}
       {(orderData.calculated_subtotal || orderData.calculated_discount || orderData.calculated_iva || orderData.shipping_total || orderData.coupon_lines) && (
         <Card>
@@ -2823,7 +2824,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                       Agregar Producto
                     </Button>
                   </div>
-                  
+
                   {/* Product Selector Modal */}
                   {showProductSelector && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -2863,7 +2864,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Edited Products List */}
                   <div className="space-y-3">
                     {editedProducts.map((item, index) => {
@@ -2872,15 +2873,15 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                       console.log(`   - Images array:`, item.images);
                       console.log(`   - Images length:`, item.images?.length || 0);
                       console.log(`   - First image:`, item.images?.[0]);
-                      
-                      const imageUrl = item.images && item.images.length > 0 
-                        ? (typeof item.images[0] === 'string' 
-                            ? item.images[0] 
-                            : item.images[0]?.src || item.images[0]?.url || item.images[0])
+
+                      const imageUrl = item.images && item.images.length > 0
+                        ? (typeof item.images[0] === 'string'
+                          ? item.images[0]
+                          : item.images[0]?.src || item.images[0]?.url || item.images[0])
                         : null;
-                      
+
                       console.log(`   - Final image URL:`, imageUrl);
-                      
+
                       return (
                         <div key={`${item.product_id}-${index}`} className="flex items-center gap-3 p-3 bg-white rounded-lg border">
                           {/* Product Image */}
@@ -2904,62 +2905,62 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                               <ImageIcon className="w-6 h-6 text-gray-400" />
                             </div>
                           </div>
-                        
-                        {/* Product Info */}
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium truncate">{item.name}</h4>
-                          {item.sku && (
-                            <p className="text-sm text-muted-foreground">SKU: {item.sku}</p>
-                          )}
-                          <p className="text-sm text-muted-foreground">
-                            ${parseFloat(item.price?.toString() || '0').toLocaleString('es-CL')} c/u
-                          </p>
-                        </div>
-                        
-                        {/* Quantity Controls */}
-                        <div className="flex items-center gap-2">
+
+                          {/* Product Info */}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium truncate">{item.name}</h4>
+                            {item.sku && (
+                              <p className="text-sm text-muted-foreground">SKU: {item.sku}</p>
+                            )}
+                            <p className="text-sm text-muted-foreground">
+                              ${parseFloat(item.price?.toString() || '0').toLocaleString('es-CL')} c/u
+                            </p>
+                          </div>
+
+                          {/* Quantity Controls */}
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleQuantityChange(index, item.quantity - 1)}
+                              disabled={item.quantity <= 1 || savingFinancials}
+                              className="w-8 h-8 p-0"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </Button>
+                            <span className="w-8 text-center font-medium">{item.quantity}</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleQuantityChange(index, item.quantity + 1)}
+                              disabled={savingFinancials}
+                              className="w-8 h-8 p-0"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                          </div>
+
+                          {/* Total */}
+                          <div className="text-right">
+                            <p className="font-medium">
+                              ${parseFloat(item.total?.toString() || '0').toLocaleString('es-CL')}
+                            </p>
+                          </div>
+
+                          {/* Remove Button */}
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleQuantityChange(index, item.quantity - 1)}
-                            disabled={item.quantity <= 1 || savingFinancials}
-                            className="w-8 h-8 p-0"
-                          >
-                            <Minus className="w-4 h-4" />
-                          </Button>
-                          <span className="w-8 text-center font-medium">{item.quantity}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleQuantityChange(index, item.quantity + 1)}
+                            onClick={() => handleRemoveProduct(index)}
                             disabled={savingFinancials}
-                            className="w-8 h-8 p-0"
+                            className="w-8 h-8 p-0 text-red-600 border-red-300 hover:bg-red-50"
                           >
-                            <Plus className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
-                        
-                        {/* Total */}
-                        <div className="text-right">
-                          <p className="font-medium">
-                            ${parseFloat(item.total?.toString() || '0').toLocaleString('es-CL')}
-                          </p>
-                        </div>
-                        
-                        {/* Remove Button */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRemoveProduct(index)}
-                          disabled={savingFinancials}
-                          className="w-8 h-8 p-0 text-red-600 border-red-300 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    );
+                      );
                     })}
-                    
+
                     {editedProducts.length === 0 && (
                       <div className="text-center py-6 text-muted-foreground">
                         <Package className="w-8 h-8 mx-auto mb-2 text-gray-400" />
@@ -2968,7 +2969,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                       </div>
                     )}
                   </div>
-                  
+
                   {/* Subtotal Display */}
                   <div className="mt-4 pt-3 border-t border-purple-200">
                     <div className="flex justify-between items-center font-medium">
@@ -2980,7 +2981,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   </div>
                 </div>
               )}
-              
+
               {/* Subtotal de Productos (solo mostrar en modo lectura) */}
               {!isEditingFinancials && orderData.calculated_subtotal && (
                 <div className="flex justify-between items-center">
@@ -2992,8 +2993,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   })()}</span>
                 </div>
               )}
-              
-              
+
+
               {/* Editable Coupon Section */}
               {isEditingFinancials ? (
                 <div className="bg-green-50 p-4 rounded-lg border border-green-200">
@@ -3020,10 +3021,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                 // Display applied coupons (read-only)
                 orderData.coupon_lines && (() => {
                   try {
-                    const couponLines = typeof orderData.coupon_lines === 'string' 
-                      ? JSON.parse(orderData.coupon_lines) 
+                    const couponLines = typeof orderData.coupon_lines === 'string'
+                      ? JSON.parse(orderData.coupon_lines)
                       : orderData.coupon_lines;
-                    
+
                     if (Array.isArray(couponLines) && couponLines.length > 0) {
                       return couponLines.map((coupon: any, index: number) => (
                         <div key={index} className="flex justify-between items-center bg-green-50 p-3 rounded-lg border border-green-200">
@@ -3033,8 +3034,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                               {coupon.code}
                             </Badge>
                             <span className="text-xs text-green-600">
-                              ({coupon.discount_type === 'percent' 
-                                ? `${coupon.amount}%` 
+                              ({coupon.discount_type === 'percent'
+                                ? `${coupon.amount}%`
                                 : `$${coupon.amount.toLocaleString('es-CL')}`
                               })
                             </span>
@@ -3051,12 +3052,12 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   return null;
                 })()
               )}
-              
+
               {/* Calculated Discount Display */}
               {(() => {
                 const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
                 const shipping = parseFloat(editedShipping || '0');
-                
+
                 if (isEditingFinancials) {
                   const calculations = updateAllCalculations(
                     editedProducts,
@@ -3085,7 +3086,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   ) : null;
                 }
               })()}
-              
+
               {/* Delivery Method & Shipping Section */}
               {isEditingFinancials ? (
                 <div className="space-y-4">
@@ -3112,7 +3113,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                           </p>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center space-x-3 p-3 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
                         <RadioGroupItem value="shipping" id="shipping-edit" />
                         <div className="flex-1">
@@ -3135,7 +3136,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                         <Truck className="h-4 w-4 text-blue-600" />
                         Información de Envío
                       </h4>
-                      
+
                       {/* Campos de dirección y teléfono según requisitos del método */}
                       {selectedShippingMethod?.requires_address && (
                         <div className="space-y-2">
@@ -3158,7 +3159,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                           )}
                         </div>
                       )}
-                      
+
                       {selectedShippingMethod?.requires_phone && (
                         <div className="space-y-2">
                           <Label htmlFor="shippingPhoneEdit" className="text-sm font-medium text-gray-700">
@@ -3180,7 +3181,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                           )}
                         </div>
                       )}
-                      
+
                       {/* Información sobre campos requeridos */}
                       {selectedShippingMethod && (selectedShippingMethod.requires_address || selectedShippingMethod.requires_phone) && (
                         <div className="text-xs text-gray-600 bg-gray-100 p-2 rounded">
@@ -3203,24 +3204,22 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                             const productsSubtotal = calculateProductsSubtotal(editedProducts, numDays);
                             const validation = ShippingService.validateShippingMethod(method, productsSubtotal);
                             const isSelected = selectedShippingMethod?.id === method.id;
-                            
+
                             return (
                               <div
                                 key={method.id}
-                                className={`border rounded-lg p-3 cursor-pointer transition-colors ${
-                                  isSelected 
-                                    ? 'border-primary bg-primary/5' 
-                                    : validation.isValid 
-                                      ? 'border-border hover:border-primary/50' 
-                                      : 'border-border bg-muted/50 cursor-not-allowed opacity-60'
-                                }`}
+                                className={`border rounded-lg p-3 cursor-pointer transition-colors ${isSelected
+                                  ? 'border-primary bg-primary/5'
+                                  : validation.isValid
+                                    ? 'border-border hover:border-primary/50'
+                                    : 'border-border bg-muted/50 cursor-not-allowed opacity-60'
+                                  }`}
                                 onClick={() => validation.isValid && handleShippingMethodSelect(method)}
                               >
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-3">
-                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                                      isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
-                                    }`}>
+                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
+                                      }`}>
                                       {isSelected && <CheckCircle className="h-3 w-3 text-primary-foreground" />}
                                     </div>
                                     <div>
@@ -3274,14 +3273,13 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                               No hay métodos de envío disponibles
                             </div>
                           )}
-                          
+
                           {/* Indicador de fuente de métodos */}
                           {shippingMethodsSource && (
-                            <div className={`text-xs p-2 rounded mt-2 ${
-                              shippingMethodsSource === 'database' 
-                                ? 'bg-green-50 text-green-700 border border-green-200' 
-                                : 'bg-yellow-50 text-yellow-700 border border-yellow-200'
-                            }`}>
+                            <div className={`text-xs p-2 rounded mt-2 ${shippingMethodsSource === 'database'
+                              ? 'bg-green-50 text-green-700 border border-green-200'
+                              : 'bg-yellow-50 text-yellow-700 border border-yellow-200'
+                              }`}>
                               {shippingMethodsSource === 'database' ? (
                                 <>✅ Métodos cargados desde base de datos ({shippingMethods.length} disponibles)</>
                               ) : (
@@ -3289,7 +3287,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                               )}
                             </div>
                           )}
-                          
+
                           {/* Botón para agregar envío customizado */}
                           <div className="mt-4 pt-3 border-t border-gray-200">
                             <Button
@@ -3303,7 +3301,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                               Crear Envío Personalizado
                             </Button>
                           </div>
-                          
+
                           {/* Formulario de envío customizado */}
                           {showCustomShippingForm && (
                             <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -3311,7 +3309,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                                 <Settings className="h-4 w-4" />
                                 Crear Envío Personalizado
                               </h5>
-                              
+
                               <div className="space-y-3">
                                 <div>
                                   <Label htmlFor="customShippingName" className="text-xs font-medium">
@@ -3326,7 +3324,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                                     className="mt-1"
                                   />
                                 </div>
-                                
+
                                 <div>
                                   <Label htmlFor="customShippingDescription" className="text-xs font-medium">
                                     Descripción
@@ -3340,7 +3338,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                                     className="mt-1"
                                   />
                                 </div>
-                                
+
                                 <div className="grid grid-cols-2 gap-3">
                                   <div>
                                     <Label htmlFor="customShippingCost" className="text-xs font-medium">
@@ -3355,7 +3353,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                                       className="mt-1"
                                     />
                                   </div>
-                                  
+
                                   <div className="grid grid-cols-2 gap-2">
                                     <div>
                                       <Label htmlFor="customShippingMinDays" className="text-xs font-medium">
@@ -3370,7 +3368,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                                         className="mt-1"
                                       />
                                     </div>
-                                    
+
                                     <div>
                                       <Label htmlFor="customShippingMaxDays" className="text-xs font-medium">
                                         Días máx.
@@ -3386,7 +3384,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                                     </div>
                                   </div>
                                 </div>
-                                
+
                                 <div className="flex gap-2 pt-2">
                                   <Button
                                     type="button"
@@ -3427,12 +3425,12 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   </div>
                 )
               )}
-              
+
               {/* Subtotal Calculado (productos + envío - cupón) */}
               {(() => {
                 const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
                 const shipping = parseFloat(editedShipping || '0');
-                
+
                 if (isEditingFinancials) {
                   const calculations = updateAllCalculations(
                     editedProducts,
@@ -3461,7 +3459,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   ) : null;
                 }
               })()}
-              
+
               {/* IVA Toggle Checkbox - Only visible when editing */}
               {isEditingFinancials && (
                 <div className="flex items-center justify-between gap-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
@@ -3471,8 +3469,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                       checked={applyIva}
                       onCheckedChange={(checked) => setApplyIva(checked === true)}
                     />
-                    <Label 
-                      htmlFor="apply-iva-order" 
+                    <Label
+                      htmlFor="apply-iva-order"
                       className="text-sm font-medium cursor-pointer"
                     >
                       Incluir IVA (19%)
@@ -3480,12 +3478,12 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   </div>
                 </div>
               )}
-              
+
               {/* IVA */}
               {(() => {
                 const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
                 const shipping = parseFloat(editedShipping || '0');
-                
+
                 if (isEditingFinancials) {
                   const calculations = updateAllCalculations(
                     editedProducts,
@@ -3499,32 +3497,32 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   return orderData.calculated_iva && parseFloat(orderData.calculated_iva.toString()) > 0;
                 }
               })() && (
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">IVA (19%):</span>
-                  <span className="font-medium">
-                    ${(() => {
-                      if (isEditingFinancials) {
-                        const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
-                        const shipping = parseFloat(editedShipping || '0');
-                        const calculations = updateAllCalculations(
-                          editedProducts,
-                          numDays,
-                          shipping,
-                          couponDiscountAmount,
-                          applyIva
-                        );
-                        return calculations.calculated_iva.toLocaleString('es-CL');
-                      } else {
-                        return parseFloat(orderData.calculated_iva?.toString() || '0').toLocaleString('es-CL');
-                      }
-                    })()}
-                  </span>
-                </div>
-              )}
-              
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">IVA (19%):</span>
+                    <span className="font-medium">
+                      ${(() => {
+                        if (isEditingFinancials) {
+                          const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
+                          const shipping = parseFloat(editedShipping || '0');
+                          const calculations = updateAllCalculations(
+                            editedProducts,
+                            numDays,
+                            shipping,
+                            couponDiscountAmount,
+                            applyIva
+                          );
+                          return calculations.calculated_iva.toLocaleString('es-CL');
+                        } else {
+                          return parseFloat(orderData.calculated_iva?.toString() || '0').toLocaleString('es-CL');
+                        }
+                      })()}
+                    </span>
+                  </div>
+                )}
+
               {/* Separator */}
               <div className="border-t border-gray-200 my-3"></div>
-              
+
               {/* Final Total */}
               <div className="flex justify-between items-center font-bold text-lg bg-gray-50 p-3 rounded-lg">
                 <span className="text-gray-900">💵 Total Final:</span>
@@ -3532,20 +3530,16 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   ${calculateUpdatedTotal().toLocaleString('es-CL')}
                 </span>
               </div>
-              
 
-              
+
+
               {/* Currency Information */}
               <div className="text-xs text-muted-foreground text-center pt-2 border-t">
-                💱 Moneda: {orderData.currency || 'CLP'} | 
-                📅 Última actualización: {new Date(orderData.date_modified).toLocaleDateString('es-ES', {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </div>
+                💱 Moneda: {orderData.currency || 'CLP'} |
+                📅 Última actualización: {(() => {
+                  const d = new Date(orderData.date_modified);
+                  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+                })()}</div>
             </div>
           </CardContent>
         </Card>

@@ -37,14 +37,14 @@ export const calculateCompletionPercentage = (user: UserProfile): number => {
 
   // Combine all required fields
   const allRequiredFields = [...requiredFields, ...optionalFields, ...empresaFields];
-  
+
   // Count filled fields (excluding instagram since it's optional)
   const filledRequiredFields = requiredFields.filter(field => {
     if (typeof field === 'boolean') return field === true;
     return field && field.toString().trim() !== '';
   }).length;
 
-  const filledEmpresaFields = empresaFields.filter(field => 
+  const filledEmpresaFields = empresaFields.filter(field =>
     field && field.toString().trim() !== ''
   ).length;
 
@@ -63,15 +63,15 @@ export const enhanceUser = (user: UserProfile) => ({
   displayName: user.nombre || user.email || 'Usuario sin nombre',
   hasContract: Boolean(user.url_user_contrato),
   hasAcceptedTerms: Boolean(user.terminos_aceptados),
-  registrationStatus: user.terminos_aceptados && user.url_user_contrato ? 'complete' : 
-                     user.terminos_aceptados ? 'incomplete' : 'pending',
+  registrationStatus: user.terminos_aceptados && user.url_user_contrato ? 'complete' :
+    user.terminos_aceptados ? 'incomplete' : 'pending',
   completionPercentage: calculateCompletionPercentage(user)
 });
 
 // Helper function to get missing fields for completion
 export const getMissingFields = (user: UserProfile): string[] => {
   const missing: string[] = [];
-  
+
   // Required fields for all users
   const requiredFieldsMap = {
     'Email': user.email,
@@ -122,11 +122,7 @@ export const getMissingFields = (user: UserProfile): string[] => {
 export const formatDate = (dateString: string | null) => {
   if (!dateString) return '-';
   const date = new Date(dateString);
-  return date.toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  });
+  return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
 };
 
 // Status colors mapping

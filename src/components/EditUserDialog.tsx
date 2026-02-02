@@ -36,19 +36,19 @@ interface FormData {
   fecha_nacimiento: string;
   instagram: string;
   usuario: string;
-  
+
   // Address Information
   direccion: string;
   ciudad: string;
   pais: string;
   tipo_cliente: string;
-  
+
   // Company Information
   empresa_nombre: string;
   empresa_rut: string;
   empresa_ciudad: string;
   empresa_direccion: string;
-  
+
   // Status
   terminos_aceptados: boolean;
 }
@@ -115,21 +115,32 @@ const EditUserDialog = ({ user, onUserUpdated, sessionToken, trigger }: EditUser
     try {
       // Prepare update data - only include changed fields
       const updateData: Partial<UserProfile> = {};
-      
+
       // Compare with original user data and only include changed fields
       Object.keys(formData).forEach((key) => {
         const formKey = key as keyof FormData;
         const originalValue = user[formKey as keyof UserProfile];
-        const newValue = formData[formKey];
-        
+        let newValue: any = formData[formKey];
+
+        // Convert empty strings to null for nullable fields
+        // This prevents constraint violations for fields that should be null instead of empty string
+        if (typeof newValue === 'string' && newValue.trim() === '') {
+          newValue = null;
+        }
+
         // Handle boolean conversion for terminos_aceptados
         if (formKey === 'terminos_aceptados') {
           const originalBool = Boolean(originalValue);
           if (originalBool !== newValue) {
             (updateData as any)[formKey] = newValue;
           }
-        } else if (originalValue !== newValue) {
-          (updateData as any)[formKey] = newValue;
+        } else {
+          // Standard comparison, handling nulls
+          // If original is null and new is null (converted from empty string), equal.
+          // If original is 'value' and new is null, unequal.
+          if (originalValue !== newValue) {
+            (updateData as any)[formKey] = newValue;
+          }
         }
       });
 
@@ -160,7 +171,7 @@ const EditUserDialog = ({ user, onUserUpdated, sessionToken, trigger }: EditUser
       }
 
       const updatedUser = await response.json();
-      
+
       toast.success('Usuario actualizado correctamente');
       onUserUpdated(updatedUser);
       setOpen(false);
@@ -319,7 +330,7 @@ const EditUserDialog = ({ user, onUserUpdated, sessionToken, trigger }: EditUser
                     <SelectValue placeholder="Seleccionar tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="persona">Persona Natural</SelectItem>
+                    <SelectItem value="natural">Persona Natural</SelectItem>
                     <SelectItem value="empresa">Empresa</SelectItem>
                   </SelectContent>
                 </Select>

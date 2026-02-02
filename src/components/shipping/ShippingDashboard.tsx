@@ -1,18 +1,18 @@
 import { useState } from 'react';
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
 } from '../ui/card';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '../ui/table';
 import {
   Dialog,
@@ -31,12 +31,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../ui/textarea';
 import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
-import { 
-  RefreshCw, 
-  Search, 
-  Truck, 
-  Package, 
-  CheckCircle, 
+import {
+  RefreshCw,
+  Search,
+  Truck,
+  Package,
+  CheckCircle,
   Clock,
   Edit,
   Plus,
@@ -78,9 +78,9 @@ interface ShippingDashboardProps {
   initialStats: ShippingStats;
 }
 
-export default function ShippingDashboard({ 
-  initialShippingMethods, 
-  initialStats 
+export default function ShippingDashboard({
+  initialShippingMethods,
+  initialStats
 }: ShippingDashboardProps) {
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>(initialShippingMethods);
   const [stats, setStats] = useState<ShippingStats>(initialStats);
@@ -135,18 +135,7 @@ export default function ShippingDashboard({
   const handleCreateMethod = async () => {
     setLoading(true);
     try {
-      // Validar que los días sean válidos
-      if (formData.estimated_days_min < 1) {
-        toast.error('Los días mínimos deben ser al menos 1');
-        setLoading(false);
-        return;
-      }
-      
-      if (formData.estimated_days_max < formData.estimated_days_min) {
-        toast.error('Los días máximos deben ser mayor o igual a los días mínimos');
-        setLoading(false);
-        return;
-      }
+
 
       const response = await fetch('/api/shipping/methods', {
         method: 'POST',
@@ -164,7 +153,7 @@ export default function ShippingDashboard({
       setIsCreateDialogOpen(false);
       resetForm();
       toast.success('Método de envío creado exitosamente');
-      
+
       // Refresh stats
       await loadStats();
     } catch (error) {
@@ -177,7 +166,7 @@ export default function ShippingDashboard({
 
   const handleUpdateMethod = async () => {
     if (!editingMethod) return;
-    
+
     setLoading(true);
     try {
       const response = await fetch(`/api/shipping/methods/${editingMethod.id}`, {
@@ -189,13 +178,13 @@ export default function ShippingDashboard({
       if (!response.ok) throw new Error('Error updating shipping method');
 
       const updatedMethod = await response.json();
-      setShippingMethods(prev => 
+      setShippingMethods(prev =>
         prev.map(method => method.id === editingMethod.id ? updatedMethod : method)
       );
       setEditingMethod(null);
       resetForm();
       toast.success('Método de envío actualizado exitosamente');
-      
+
       // Refresh stats
       await loadStats();
     } catch (error) {
@@ -208,7 +197,7 @@ export default function ShippingDashboard({
 
   const handleDeleteMethod = async (methodId: number) => {
     if (!confirm('¿Estás seguro de que quieres eliminar este método de envío?')) return;
-    
+
     setLoading(true);
     try {
       const response = await fetch(`/api/shipping/methods/${methodId}`, {
@@ -219,7 +208,7 @@ export default function ShippingDashboard({
 
       setShippingMethods(prev => prev.filter(method => method.id !== methodId));
       toast.success('Método de envío eliminado exitosamente');
-      
+
       // Refresh stats
       await loadStats();
     } catch (error) {
@@ -304,7 +293,7 @@ export default function ShippingDashboard({
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="name">Nombre</Label>
                   <Input
@@ -316,8 +305,8 @@ export default function ShippingDashboard({
                 </div>
                 <div>
                   <Label htmlFor="shipping_type">Tipo</Label>
-                  <Select 
-                    value={formData.shipping_type} 
+                  <Select
+                    value={formData.shipping_type}
                     onValueChange={(value: any) => setFormData(prev => ({ ...prev, shipping_type: value }))}
                   >
                     <SelectTrigger>
@@ -332,8 +321,17 @@ export default function ShippingDashboard({
                     </SelectContent>
                   </Select>
                 </div>
+                <div>
+                  <Label htmlFor="cost">Costo</Label>
+                  <Input
+                    id="cost"
+                    type="number"
+                    value={formData.cost}
+                    onChange={(e) => setFormData(prev => ({ ...prev, cost: Number(e.target.value) }))}
+                  />
+                </div>
               </div>
-              
+
               <div>
                 <Label htmlFor="description">Descripción</Label>
                 <Textarea
@@ -344,39 +342,7 @@ export default function ShippingDashboard({
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="cost">Costo</Label>
-                  <Input
-                    id="cost"
-                    type="number"
-                    value={formData.cost}
-                    onChange={(e) => setFormData(prev => ({ ...prev, cost: Number(e.target.value) }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="min_days">Días mínimos</Label>
-                  <Input
-                    id="min_days"
-                    type="number"
-                    min="1"
-                    value={formData.estimated_days_min}
-                    onChange={(e) => setFormData(prev => ({ ...prev, estimated_days_min: Math.max(1, Number(e.target.value)) }))}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Mínimo 1 día</p>
-                </div>
-                <div>
-                  <Label htmlFor="max_days">Días máximos</Label>
-                  <Input
-                    id="max_days"
-                    type="number"
-                    min={formData.estimated_days_min}
-                    value={formData.estimated_days_max}
-                    onChange={(e) => setFormData(prev => ({ ...prev, estimated_days_max: Math.max(formData.estimated_days_min, Number(e.target.value)) }))}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Debe ser mayor o igual a días mínimos</p>
-                </div>
-              </div>
+
 
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
@@ -431,7 +397,7 @@ export default function ShippingDashboard({
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Envíos</CardTitle>
@@ -444,7 +410,7 @@ export default function ShippingDashboard({
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Ingresos por Envío</CardTitle>
@@ -457,7 +423,7 @@ export default function ShippingDashboard({
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Tasa de Entrega</CardTitle>
@@ -552,7 +518,7 @@ export default function ShippingDashboard({
                         {formatCost(method.cost)}
                       </TableCell>
                       <TableCell>
-                        {method.estimated_days_min === method.estimated_days_max 
+                        {method.estimated_days_min === method.estimated_days_max
                           ? `${method.estimated_days_min} día${method.estimated_days_min > 1 ? 's' : ''}`
                           : `${method.estimated_days_min}-${method.estimated_days_max} días`
                         }
@@ -599,7 +565,7 @@ export default function ShippingDashboard({
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="edit-name">Nombre</Label>
                 <Input
@@ -611,8 +577,8 @@ export default function ShippingDashboard({
               </div>
               <div>
                 <Label htmlFor="edit-shipping_type">Tipo</Label>
-                <Select 
-                  value={formData.shipping_type} 
+                <Select
+                  value={formData.shipping_type}
                   onValueChange={(value: any) => setFormData(prev => ({ ...prev, shipping_type: value }))}
                 >
                   <SelectTrigger>
@@ -627,8 +593,17 @@ export default function ShippingDashboard({
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label htmlFor="edit-cost">Costo</Label>
+                <Input
+                  id="edit-cost"
+                  type="number"
+                  value={formData.cost}
+                  onChange={(e) => setFormData(prev => ({ ...prev, cost: Number(e.target.value) }))}
+                />
+              </div>
             </div>
-            
+
             <div>
               <Label htmlFor="edit-description">Descripción</Label>
               <Textarea
@@ -639,39 +614,7 @@ export default function ShippingDashboard({
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="edit-cost">Costo</Label>
-                <Input
-                  id="edit-cost"
-                  type="number"
-                  value={formData.cost}
-                  onChange={(e) => setFormData(prev => ({ ...prev, cost: Number(e.target.value) }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-min_days">Días mínimos</Label>
-                <Input
-                  id="edit-min_days"
-                  type="number"
-                  min="1"
-                  value={formData.estimated_days_min}
-                  onChange={(e) => setFormData(prev => ({ ...prev, estimated_days_min: Math.max(1, Number(e.target.value)) }))}
-                />
-                <p className="text-xs text-gray-500 mt-1">Mínimo 1 día</p>
-              </div>
-              <div>
-                <Label htmlFor="edit-max_days">Días máximos</Label>
-                <Input
-                  id="edit-max_days"
-                  type="number"
-                  min={formData.estimated_days_min}
-                  value={formData.estimated_days_max}
-                  onChange={(e) => setFormData(prev => ({ ...prev, estimated_days_max: Math.max(formData.estimated_days_min, Number(e.target.value)) }))}
-                />
-                <p className="text-xs text-gray-500 mt-1">Debe ser mayor o igual a días mínimos</p>
-              </div>
-            </div>
+
 
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">

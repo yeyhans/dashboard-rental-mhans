@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle
 } from '../ui/card';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '../ui/table';
 import {
   Dialog,
@@ -24,13 +24,13 @@ import {
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
-import { 
-  RefreshCw, 
-  Search, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Tag, 
+import {
+  RefreshCw,
+  Search,
+  Plus,
+  Edit,
+  Trash2,
+  Tag,
   TrendingUp,
   Users,
   Calendar,
@@ -46,12 +46,12 @@ function getAuthHeaders(): HeadersInit {
   const headers: HeadersInit = {
     'Content-Type': 'application/json'
   };
-  
+
   try {
     // Get access token from cookie (this is how the system stores auth)
     const cookies = document.cookie.split('; ');
     const accessTokenCookie = cookies.find(row => row.startsWith('sb-access-token='));
-    
+
     if (accessTokenCookie) {
       const token = accessTokenCookie.split('=')[1];
       if (token) {
@@ -61,7 +61,7 @@ function getAuthHeaders(): HeadersInit {
   } catch (error) {
     console.error('Error in getAuthHeaders:', error);
   }
-  
+
   return headers;
 }
 
@@ -91,7 +91,7 @@ interface CouponsDashboardProps {
   initialTotal?: number;
 }
 
-const CouponsDashboard = ({ 
+const CouponsDashboard = ({
   initialCoupons = [],
   initialStats = null,
   initialTotal = 0
@@ -115,7 +115,7 @@ const CouponsDashboard = ({
         page: page.toString(),
         limit: '10'
       });
-      
+
       if (search) params.append('search', search);
       if (status) params.append('status', status);
 
@@ -210,7 +210,11 @@ const CouponsDashboard = ({
 
   // Format date
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-CL');
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
   };
 
   // Get status badge variant
@@ -281,7 +285,7 @@ const CouponsDashboard = ({
                 Complete los campos para crear un nuevo cupón de descuento
               </DialogDescription>
             </DialogHeader>
-            <CreateCouponForm 
+            <CreateCouponForm
               onSuccess={() => {
                 setIsCreateDialogOpen(false);
                 fetchCoupons(currentPage, searchTerm, selectedStatus);
@@ -439,8 +443,8 @@ const CouponsDashboard = ({
                         {getDiscountTypeLabel(coupon.discount_type)}
                       </TableCell>
                       <TableCell>
-                        {coupon.discount_type === 'percent' 
-                          ? `${coupon.amount}%` 
+                        {coupon.discount_type === 'percent'
+                          ? `${coupon.amount}%`
                           : formatCurrency(coupon.amount)
                         }
                       </TableCell>
@@ -509,11 +513,11 @@ const CouponsDashboard = ({
                   >
                     Anterior
                   </Button>
-                  
+
                   <span className="text-sm text-muted-foreground">
                     Página {currentPage} de {totalPages}
                   </span>
-                  
+
                   <Button
                     variant="outline"
                     size="sm"
@@ -543,7 +547,7 @@ const CouponsDashboard = ({
             </DialogDescription>
           </DialogHeader>
           {editingCoupon && (
-            <EditCouponForm 
+            <EditCouponForm
               coupon={editingCoupon}
               onSuccess={() => {
                 setIsEditDialogOpen(false);
