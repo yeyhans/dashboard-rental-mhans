@@ -6,7 +6,7 @@ import { withAuth } from '../../../middleware/auth';
 export const GET: APIRoute = withAuth(async (context) => {
   try {
     console.log('=== DEBUG: Starting users API call ===');
-    
+
     const url = new URL(context.request.url);
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = parseInt(url.searchParams.get('limit') || '10');
@@ -37,13 +37,13 @@ export const GET: APIRoute = withAuth(async (context) => {
     console.error('=== ERROR in users API ===');
     console.error('Error details:', error);
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-    
+
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Error interno del servidor' 
+        error: error instanceof Error ? error.message : 'Error interno del servidor'
       }),
-      { 
+      {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       }
@@ -54,19 +54,29 @@ export const GET: APIRoute = withAuth(async (context) => {
 export const POST: APIRoute = withAuth(async (context) => {
   try {
     const userData = await context.request.json();
-    
+
     const newUser = await UserService.createUser(userData);
 
     return new Response(JSON.stringify(newUser), {
       status: 201,
       headers: { 'Content-Type': 'application/json' }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating user:', error);
+
+    // Extraer mensaje de error de la base de datos
+    const errorMessage = error?.message || 'Error al crear usuario';
+
+    // Determinar status code basado en el tipo de error
+    let statusCode = 500;
+    if (error?.code === 'P0001' || errorMessage.includes('Ya existe')) {
+      statusCode = 409; // Conflict - usuario ya existe
+    }
+
     return new Response(
-      JSON.stringify({ error: 'Error al crear usuario' }),
-      { 
-        status: 500,
+      JSON.stringify({ error: errorMessage }),
+      {
+        status: statusCode,
         headers: { 'Content-Type': 'application/json' }
       }
     );

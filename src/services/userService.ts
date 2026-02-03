@@ -21,7 +21,7 @@ export class UserService {
     try {
       const admin = getSupabaseAdmin();
       const offset = (page - 1) * limit;
-      
+
       const { data, error, count } = await admin
         .from('user_profiles')
         .select('*', { count: 'exact' })
@@ -51,7 +51,7 @@ export class UserService {
   static async getUserById(userId: number): Promise<UserProfile | null> {
     try {
       const admin = getSupabaseAdmin();
-    const { data, error } = await admin
+      const { data, error } = await admin
         .from('user_profiles')
         .select('*')
         .eq('user_id', userId)
@@ -77,7 +77,7 @@ export class UserService {
   static async getUserByAuthUid(authUid: string): Promise<UserProfile | null> {
     try {
       const admin = getSupabaseAdmin();
-    const { data, error } = await admin
+      const { data, error } = await admin
         .from('user_profiles')
         .select('*')
         .eq('auth_uid', authUid)
@@ -98,22 +98,50 @@ export class UserService {
   }
 
   /**
-   * Crear nuevo usuario
+   * Crear nuevo usuario usando función RPC que bypasa RLS
    */
   static async createUser(userData: UserProfileInsert): Promise<UserProfile> {
     try {
       const admin = getSupabaseAdmin();
-    const { data, error } = await admin
-        .from('user_profiles')
-        .insert([userData])
-        .select()
-        .single();
+
+      console.log('📝 Creating user with data:', { email: userData.email, nombre: userData.nombre });
+
+      // Usar función RPC que bypasa RLS (SECURITY DEFINER)
+      const { data, error } = await admin
+        .rpc('admin_create_user_profile' as any, {
+          p_email: userData.email,
+          p_nombre: userData.nombre || null,
+          p_apellido: userData.apellido || null,
+          p_rut: userData.rut || null,
+          p_telefono: userData.telefono || null,
+          p_direccion: userData.direccion || null,
+          p_ciudad: userData.ciudad || null,
+          p_pais: userData.pais || null,
+          p_tipo_cliente: userData.tipo_cliente || null,
+          p_instagram: userData.instagram || null,
+          p_fecha_nacimiento: userData.fecha_nacimiento || null,
+          p_usuario: userData.usuario || null,
+          p_empresa_nombre: userData.empresa_nombre || null,
+          p_empresa_rut: userData.empresa_rut || null,
+          p_empresa_ciudad: userData.empresa_ciudad || null,
+          p_empresa_direccion: userData.empresa_direccion || null,
+          p_terminos_aceptados: userData.terminos_aceptados || false
+        });
 
       if (error) {
+        console.error('❌ Error in admin_create_user_profile RPC:', error);
         throw error;
       }
 
-      return data;
+      // La función RPC retorna un array, tomamos el primer elemento
+      const newUser = Array.isArray(data) ? data[0] : data;
+
+      if (!newUser) {
+        throw new Error('No se pudo crear el usuario');
+      }
+
+      console.log('✅ User created successfully:', { user_id: newUser.user_id, email: newUser.email });
+      return newUser as UserProfile;
     } catch (error) {
       console.error('Error creating user:', error);
       throw error;
@@ -126,20 +154,20 @@ export class UserService {
   static async updateUser(userId: number, updates: UserProfileUpdate): Promise<UserProfile> {
     try {
       const admin = getSupabaseAdmin();
-      
+
       console.log('🔄 UserService.updateUser - Starting update:', { userId, updates });
-      
+
       // First, verify the user exists
       const existingUser = await this.getUserById(userId);
       if (!existingUser) {
         console.error('❌ User not found in updateUser:', userId);
         throw new Error(`Usuario con ID ${userId} no encontrado`);
       }
-      
-      console.log('✅ User exists, current data:', { 
-        user_id: existingUser.user_id, 
+
+      console.log('✅ User exists, current data:', {
+        user_id: existingUser.user_id,
         email: existingUser.email,
-        current_url_rut_anverso: existingUser.url_rut_anverso 
+        current_url_rut_anverso: existingUser.url_rut_anverso
       });
 
       // Try direct update first (this should work with proper RLS policies)
@@ -160,32 +188,32 @@ export class UserService {
       // If direct update fails or affects 0 rows, use the admin function
       if (error || !data || data.length === 0) {
         console.log('🔍 Direct update failed, using admin function...');
-        
+
         // Use the comprehensive admin function with all updates as JSONB
         const updatesJson = JSON.stringify(updates);
-        
+
         console.log('📝 Calling update_user_profile_admin_full with updates:', updatesJson);
-        
+
         const { data: sqlFunctionResult, error: sqlFunctionError } = await admin
           .rpc('update_user_profile_admin_full' as any, {
             p_user_id: userId,
             p_updates: updatesJson
           });
-        
+
         console.log('📊 SQL function result:', { sqlFunctionResult, sqlFunctionError });
-        
+
         if (sqlFunctionError) {
           console.error('❌ SQL function failed:', sqlFunctionError);
           throw new Error(`Error en función SQL: ${sqlFunctionError.message}`);
         }
-        
+
         if (!sqlFunctionResult || (Array.isArray(sqlFunctionResult) && sqlFunctionResult.length === 0)) {
           throw new Error('La función SQL no retornó datos del usuario actualizado');
         }
-        
+
         const updatedUser = Array.isArray(sqlFunctionResult) ? sqlFunctionResult[0] : sqlFunctionResult;
-        console.log('✅ User updated via SQL function:', { 
-          user_id: (updatedUser as any).user_id, 
+        console.log('✅ User updated via SQL function:', {
+          user_id: (updatedUser as any).user_id,
           updated_fields: Object.keys(updates)
         });
         return updatedUser as UserProfile;
@@ -193,14 +221,14 @@ export class UserService {
 
       // Direct update succeeded
       const updatedUser = data[0];
-      
+
       if (!updatedUser) {
         console.error('❌ No user data in update result');
         throw new Error('No se pudo obtener los datos actualizados del usuario');
       }
 
-      console.log('✅ User updated successfully via direct update:', { 
-        user_id: updatedUser.user_id, 
+      console.log('✅ User updated successfully via direct update:', {
+        user_id: updatedUser.user_id,
         updated_fields: Object.keys(updates)
       });
 
@@ -219,7 +247,7 @@ export class UserService {
       // En lugar de eliminar, podríamos marcar como inactivo
       // Por ahora, eliminamos completamente
       const admin = getSupabaseAdmin();
-    const { error } = await admin
+      const { error } = await admin
         .from('user_profiles')
         .delete()
         .eq('user_id', userId);
@@ -241,7 +269,7 @@ export class UserService {
   static async searchUsers(searchTerm: string, page: number = 1, limit: number = 10) {
     try {
       const offset = (page - 1) * limit;
-      
+
       const admin = getSupabaseAdmin();
       const { data, error, count } = await admin
         .from('user_profiles')
@@ -274,7 +302,7 @@ export class UserService {
   static async getUserStats() {
     try {
       const admin = getSupabaseAdmin();
-      
+
       // Total de usuarios
       const { count: totalUsers, error: totalError } = await admin
         .from('user_profiles')
