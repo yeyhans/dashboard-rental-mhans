@@ -118,8 +118,25 @@ export default function RentedEquipmentTable({
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
+    if (!dateString) return 'N/A';
+    try {
+      // Extraemos la porción de fecha ("2024-10-15" de "2024-10-15T00:00:00Z")
+      // Esto evita el típico problema de JS donde `new Date('2024-10-15')` 
+      // se parsea en UTC y al mostrarlo en local (ej. UTC-3) resta 1 día.
+      const datePart = dateString.split('T')[0] || '';
+      const parts = datePart.split('-');
+
+      if (parts.length === 3) {
+        const [year, month, day] = parts;
+        return `${day}-${month}-${year}`;
+      }
+
+      // Failsafe
+      const date = new Date(dateString);
+      return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
+    } catch (e) {
+      return dateString;
+    }
   };
 
   const statusOptions = [

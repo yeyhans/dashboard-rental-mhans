@@ -49,19 +49,19 @@ export class DashboardService {
       const currentMonth = new Date();
       currentMonth.setDate(1);
       currentMonth.setHours(0, 0, 0, 0);
-      
+
       const nextMonth = new Date(currentMonth);
       nextMonth.setMonth(nextMonth.getMonth() + 1);
 
       // Obtener estadísticas mensuales
       const monthlyStats = await this.getMonthlyOrderStats(currentMonth, nextMonth);
-      
+
       // Obtener órdenes por estado
       const ordersByStatus = await this.getOrdersByStatus();
-      
+
       // Obtener equipos rentados
       const rentedEquipment = await this.getRentedEquipment();
-      
+
       // Obtener resumen financiero
       const financialSummary = await this.getFinancialSummary();
 
@@ -144,7 +144,8 @@ export class DashboardService {
             nombre,
             apellido,
             email
-          )
+          ),
+          line_items
         `)
         .in('status', ['on-hold', 'pending', 'processing', 'completed'])
         .order('order_fecha_inicio', { ascending: false, nullsFirst: false })
@@ -204,7 +205,7 @@ export class DashboardService {
       }
 
       const currentDate = new Date();
-      
+
       const { data: activeOrders, error } = await supabaseAdmin
         .from('orders')
         .select(`
@@ -234,7 +235,7 @@ export class DashboardService {
       activeOrders?.forEach(order => {
         if (order.line_items) {
           let lineItems: any[] = [];
-          
+
           try {
             if (typeof order.line_items === 'string') {
               lineItems = JSON.parse(order.line_items);
@@ -258,7 +259,7 @@ export class DashboardService {
               endDate: order.order_fecha_termino!,
               status: order.status,
               daysRemaining
-            }); 
+            });
           });
         }
       });

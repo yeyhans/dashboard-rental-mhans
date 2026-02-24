@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye, Settings, Calendar } from 'lucide-react';
+import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye, Settings, Calendar, AlertTriangle } from 'lucide-react';
 import EditOrderForm from './EditOrderForm';
 import { CouponSelector } from './CouponSelector';
 import { ProductSelector } from './ProductSelector';
@@ -178,6 +178,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
   // PDF deletion states
   const [deletingPdf, setDeletingPdf] = useState(false);
+
+  // Product availability conflicts states
+  const [productConflicts, setProductConflicts] = useState<any[]>([]);
+  const [checkingConflicts, setCheckingConflicts] = useState(false);
 
   // Order notifications hook
   const {
@@ -1089,6 +1093,47 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       setEditedProducts([...enhancedLineItems]);
     }
   }, [enhancedLineItems, editedProducts.length]);
+
+  // Check for product availability conflicts when order data changes
+  useEffect(() => {
+    const checkConflicts = async () => {
+      if (!orderData?.id || !orderData?.order_fecha_inicio || !orderData?.order_fecha_termino || !enhancedLineItems || enhancedLineItems.length === 0) return;
+
+      setCheckingConflicts(true);
+      try {
+        const productIds = enhancedLineItems.map(item => Number(item.product_id)).filter(id => !isNaN(id) && id > 0);
+
+        if (productIds.length === 0) {
+          setCheckingConflicts(false);
+          return;
+        }
+
+        const response = await fetch('/api/orders/check-conflicts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            currentOrderId: orderData.id,
+            productIds,
+            startDate: orderData.order_fecha_inicio,
+            endDate: orderData.order_fecha_termino
+          })
+        });
+
+        const result = await response.json();
+        if (result.success && result.data) {
+          setProductConflicts(result.data);
+        }
+      } catch (error) {
+        console.error('Error checking product conflicts:', error);
+      } finally {
+        setCheckingConflicts(false);
+      }
+    };
+
+    checkConflicts();
+  }, [orderData?.id, orderData?.order_fecha_inicio, orderData?.order_fecha_termino, enhancedLineItems]);
 
   // Force refresh editedProducts when entering edit mode
   useEffect(() => {
@@ -2715,6 +2760,46 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
                       {/* Additional Details - Always Shown */}
                       <div className="mt-3 space-y-2">
+
+                        {/* Product conflict alert */}
+                        {(() => {
+                          const conflictsForProduct = productConflicts.filter(conflict =>
+                            conflict.conflictingProducts.some((p: any) => p.productId === Number(item.product_id))
+                          );
+
+                          if (conflictsForProduct.length > 0) {
+                            return (
+                              <div className="flex flex-col gap-2 mt-2 mb-3 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                                {conflictsForProduct.map((conflict, cIdx) => {
+                                  // Local helper function to format dates correctly (avoiding UTC timezone shifting -1 day)
+                                  const formatConflictDate = (ds: string) => {
+                                    if (!ds) return '';
+                                    const d = new Date(ds);
+                                    return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
+                                  };
+
+                                  return (
+                                    <div key={cIdx} className="flex items-start gap-2 text-sm text-amber-800">
+                                      <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" />
+                                      <div>
+                                        <span className="font-semibold block mb-0.5 text-amber-900">¡Alerta de coincidencia en fechas!</span>
+                                        Este equipo ya se encuentra procesado u ocupado para el proyecto <span className="font-medium">"{conflict.orderProject}"</span> (
+                                        <a href={`/orders/${conflict.orderId}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-700 font-medium font-bold mr-1">
+                                          Orden #{conflict.orderId}
+                                        </a>
+                                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 leading-none uppercase align-middle ${statusColors[conflict.status] || ''}`}>
+                                          {statusTranslations[conflict.status] || conflict.status}
+                                        </Badge>
+                                        ) entre las fechas {formatConflictDate(conflict.startDate)} y {formatConflictDate(conflict.endDate)}.
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
 
                         <div className="flex flex-wrap gap-2 text-xs">
                           <Badge variant={
