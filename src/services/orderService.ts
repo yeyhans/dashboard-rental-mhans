@@ -62,6 +62,7 @@ export class OrderService {
           created_via,
           customer_note,
           correo_enviado,
+          pago_reserva,
           pago_completo,
           is_editable,
           needs_payment,
@@ -172,6 +173,7 @@ export class OrderService {
           created_via,
           customer_note,
           correo_enviado,
+          pago_reserva,
           pago_completo,
           is_editable,
           needs_payment,
@@ -283,6 +285,7 @@ export class OrderService {
           created_via,
           customer_note,
           correo_enviado,
+          pago_reserva,
           pago_completo,
           is_editable,
           needs_payment,
@@ -442,7 +445,8 @@ export class OrderService {
   static async searchOrders(searchTerm: string, page: number = 1, limit: number = 10) {
     try {
       const offset = (page - 1) * limit;
-      
+      const sanitizedTerm = searchTerm.replace(/[%_\\]/g, '\\$&').trim().slice(0, 200);
+
       const { data, error, count } = await supabaseAdmin
         .from('orders')
         .select(`
@@ -488,6 +492,7 @@ export class OrderService {
           created_via,
           customer_note,
           correo_enviado,
+          pago_reserva,
           pago_completo,
           is_editable,
           needs_payment,
@@ -510,7 +515,7 @@ export class OrderService {
             rut
           )
         `, { count: 'exact' })
-        .or(`billing_email.ilike.%${searchTerm}%,billing_first_name.ilike.%${searchTerm}%,billing_last_name.ilike.%${searchTerm}%,order_proyecto.ilike.%${searchTerm}%,company_rut.ilike.%${searchTerm}%`)
+        .or(`billing_email.ilike.%${sanitizedTerm}%,billing_first_name.ilike.%${sanitizedTerm}%,billing_last_name.ilike.%${sanitizedTerm}%,order_proyecto.ilike.%${sanitizedTerm}%,company_rut.ilike.%${sanitizedTerm}%`)
         .order('date_created', { ascending: false })
         .range(offset, offset + limit - 1);
 
@@ -597,6 +602,7 @@ export class OrderService {
           created_via,
           customer_note,
           correo_enviado,
+          pago_reserva,
           pago_completo,
           is_editable,
           needs_payment,
@@ -706,6 +712,7 @@ export class OrderService {
           created_via,
           customer_note,
           correo_enviado,
+          pago_reserva,
           pago_completo,
           is_editable,
           needs_payment,

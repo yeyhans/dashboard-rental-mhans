@@ -1,65 +1,40 @@
 import type { APIRoute } from 'astro';
-import { supabase } from '../../../lib/supabase';
+import { getServerAdmin } from '../../../lib/supabase';
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async (context) => {
   try {
-    // Check if supabase is available
-    if (!supabase) {
-      return new Response(
-        JSON.stringify({ error: 'Supabase no está configurado' }),
-        { 
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
+    const adminSession = await getServerAdmin(context);
 
-    // Get session from cookies
-    const { data: { session }, error } = await supabase.auth.getSession();
-    
-    if (error) {
-      console.error('Error getting session:', error);
+    if (!adminSession) {
       return new Response(
-        JSON.stringify({ error: 'Error al obtener sesión' }),
-        { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    if (!session) {
-      return new Response(
-        JSON.stringify({ error: 'No hay sesión activa' }),
-        { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
+        JSON.stringify({ success: false, error: 'No hay sesión activa' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
     return new Response(
-      JSON.stringify({ 
-        session: {
-          access_token: session.access_token,
-          refresh_token: session.refresh_token,
-          expires_at: session.expires_at,
-          user: session.user
+      JSON.stringify({
+        success: true,
+        data: {
+          user: {
+            id: adminSession.user.id,
+            email: adminSession.user.email,
+          },
+          admin: {
+            role: adminSession.admin.role,
+            email: adminSession.admin.email,
+          },
+          expiresAt: adminSession.expiresAt.toISOString(),
+          isExtended: adminSession.isExtended,
         }
       }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error in session endpoint:', error);
+    console.error('[Session] Error:', error);
     return new Response(
-      JSON.stringify({ error: 'Error interno del servidor' }),
-      { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
+      JSON.stringify({ success: false, error: 'Error interno del servidor' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 };

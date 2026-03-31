@@ -1,4 +1,6 @@
 import type { APIRoute } from 'astro';
+import { withAuth } from '@/middleware/auth';
+import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '@/lib/rateLimit';
 
 interface ManualEmailRequest {
   to: string;
@@ -23,7 +25,12 @@ interface ManualEmailRequest {
 }
 
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = withAuth(async ({ request }) => {
+  // Rate limit: 10 emails por minuto
+  const ip = getClientIp(request);
+  const limit = checkRateLimit(ip, RATE_LIMITS.email);
+  if (!limit.allowed) return rateLimitResponse(limit.retryAfterMs);
+
   try {
     const { to, subject, html, attachments, metadata }: ManualEmailRequest = await request.json();
     
@@ -60,6 +67,29 @@ export const POST: APIRoute = async ({ request }) => {
         success: false,
         message: 'Invalid email format',
         error: 'Invalid email address format'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Prevent email header injection attacks
+    if (/[\r\n]/.test(to) || /[\r\n]/.test(subject)) {
+      console.error('[Email] Header injection attempt detected:', { to: to.substring(0, 50), subject: subject.substring(0, 50) });
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Caracteres no válidos en campos de email'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Validate HTML content size
+    if (html && html.length > 500000) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'El contenido del email es demasiado grande'
       }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
@@ -122,14 +152,13 @@ export const POST: APIRoute = async ({ request }) => {
     
     return new Response(JSON.stringify({
       success: false,
-      message: 'Internal error sending manual email',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Error interno al enviar email'
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
+});
 
 /**
  * Fallback method using Cloudflare Worker

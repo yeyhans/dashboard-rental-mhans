@@ -8,10 +8,36 @@ class ApiClient {
   private baseUrl: string;
   private tokenCache: { token: string | null; expiry: number } | null = null;
   private readonly CACHE_TTL = 2 * 60 * 1000; // 2 minutos
+  private refreshPromise: Promise<boolean> | null = null;
 
   constructor() {
     this.baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
     console.log('🔧 ApiClient inicializado para:', this.baseUrl);
+  }
+
+  /**
+   * Renueva la sesión via el endpoint de refresh del servidor.
+   * Usa un mutex (refreshPromise) para evitar llamadas concurrentes.
+   */
+  private async refreshSession(): Promise<boolean> {
+    if (this.refreshPromise) return this.refreshPromise;
+
+    this.refreshPromise = (async () => {
+      try {
+        const response = await fetch(`${this.baseUrl}/api/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        return response.ok;
+      } catch {
+        return false;
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
   }
 
   /**
@@ -68,33 +94,51 @@ class ApiClient {
   }
 
   /**
-   * Realiza una petición HTTP con autenticación automática
+   * Realiza una petición HTTP con autenticación automática.
+   * En caso de 401, intenta renovar la sesión y reintentar una vez.
    */
   private async request(
-    endpoint: string, 
-    options: RequestInit = {}
+    endpoint: string,
+    options: RequestInit = {},
+    isRetry = false
   ): Promise<Response> {
     const token = await this.getAuthToken();
-    
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string>),
     };
 
-    // Agregar token de autorización si está disponible
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
-    } else if (typeof window !== 'undefined') {
-      // Solo mostrar este mensaje en el cliente
-      console.log('🔧 Making request without auth token');
     }
 
     const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
 
-    return fetch(url, {
+    const response = await fetch(url, {
       ...options,
       headers,
+      credentials: 'include',
     });
+
+    // En 401 intentar refresh una vez y reintentar
+    if (response.status === 401 && !isRetry) {
+      console.log('[ApiClient] 401 received, attempting token refresh...');
+      this.clearTokenCache();
+
+      const refreshed = await this.refreshSession();
+      if (refreshed) {
+        console.log('[ApiClient] Refresh succeeded, retrying request');
+        return this.request(endpoint, options, true);
+      }
+
+      console.warn('[ApiClient] Refresh failed, session expired');
+      if (typeof window !== 'undefined') {
+        window.location.href = '/';
+      }
+    }
+
+    return response;
   }
 
   /**

@@ -1,9 +1,18 @@
 import React, { useState } from 'react';
+import * as DOMPurifyModule from 'dompurify';
+
+const purify = (DOMPurifyModule.default || DOMPurifyModule) as typeof DOMPurifyModule.default;
+
+function sanitizeHtml(html: string): string {
+  if (typeof window === 'undefined') return html;
+  return purify.sanitize(html);
+}
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
+import { RichTextEditor } from '../ui/rich-text-editor';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -353,23 +362,21 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
 
                   <div className="space-y-2">
                     <Label htmlFor="short_description">Descripción corta</Label>
-                    <Textarea
-                      id="short_description"
-                      rows={3}
+                    <RichTextEditor
                       value={updatedProduct.short_description || ''}
-                      onChange={(e) => handleInputChange('short_description', e.target.value)}
+                      onChange={(html) => handleInputChange('short_description', html)}
                       placeholder="Descripción breve del producto"
+                      minHeight="80px"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="description">Descripción completa</Label>
-                    <Textarea
-                      id="description"
-                      rows={6}
+                    <RichTextEditor
                       value={updatedProduct.description || ''}
-                      onChange={(e) => handleInputChange('description', e.target.value)}
+                      onChange={(html) => handleInputChange('description', html)}
                       placeholder="Descripción detallada del producto"
+                      minHeight="160px"
                     />
                   </div>
 
@@ -682,8 +689,21 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
 
                   {product.short_description && (
                     <div>
-                      <Label className="text-sm font-medium text-muted-foreground">Descripción</Label>
-                      <p className="text-sm mt-1">{product.short_description}</p>
+                      <Label className="text-sm font-medium text-muted-foreground">Descripción corta</Label>
+                      <div
+                        className="prose prose-sm max-w-none mt-1 text-foreground dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground [&_p]:my-1 [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_a]:text-primary [&_a]:underline"
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(product.short_description) }}
+                      />
+                    </div>
+                  )}
+
+                  {product.description && (
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Descripción completa</Label>
+                      <div
+                        className="prose prose-sm max-w-none mt-1 text-foreground dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground [&_p]:my-1 [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_a]:text-primary [&_a]:underline"
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(product.description) }}
+                      />
                     </div>
                   )}
                 </CardContent>

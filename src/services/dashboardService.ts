@@ -285,6 +285,7 @@ export class DashboardService {
         .select(`
           status,
           calculated_total,
+          pago_reserva,
           pago_completo
         `)
         .in('status', ['completed', 'processing', 'on-hold', 'pending']);
@@ -307,14 +308,17 @@ export class DashboardService {
           if (order.pago_completo) {
             // Pago completo (25% + 75%)
             summary.totalPaid += total;
-            summary.finalPayments += total * 0.75; // 75% del total
-            summary.reservationPayments += total * 0.25; // 25% del total
-          } else {
+            summary.finalPayments += total * 0.75;
+            summary.reservationPayments += total * 0.25;
+          } else if (order.pago_reserva) {
             // Solo reserva pagada (25%)
             const reservationAmount = total * 0.25;
             summary.totalPaid += reservationAmount;
             summary.reservationPayments += reservationAmount;
-            summary.totalPending += total * 0.75; // 75% pendiente
+            summary.totalPending += total * 0.75;
+          } else {
+            // Nada pagado — todo pendiente
+            summary.totalPending += total;
           }
         } else {
           // Órdenes no completadas - todo pendiente

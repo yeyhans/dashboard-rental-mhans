@@ -356,35 +356,6 @@ const EditCouponForm = ({ coupon, onSuccess }: EditCouponFormProps) => {
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="minimum_amount">Monto Mínimo</Label>
-              <Input
-                id="minimum_amount"
-                type="number"
-                min="0"
-                step="1"
-                {...register('minimum_amount', { valueAsNumber: true })}
-                placeholder="Ej: 10000"
-              />
-              <p className="text-sm text-muted-foreground">
-                Monto mínimo del carrito para usar el cupón
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="maximum_amount">Descuento Máximo</Label>
-              <Input
-                id="maximum_amount"
-                type="number"
-                min="0"
-                step="1"
-                {...register('maximum_amount', { valueAsNumber: true })}
-                placeholder="Ej: 50000"
-              />
-              <p className="text-sm text-muted-foreground">
-                Monto máximo de descuento (solo para porcentajes)
-              </p>
-            </div>
           </CardContent>
         </Card>
 

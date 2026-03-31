@@ -98,17 +98,112 @@ export class UserService {
   }
 
   /**
-   * Crear nuevo usuario usando función RPC que bypasa RLS
+   * Generar contraseña temporal segura
+   */
+  private static generateTemporaryPassword(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    const special = '!@#$%&*';
+    let password = '';
+    for (let i = 0; i < 10; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    password += special.charAt(Math.floor(Math.random() * special.length));
+    return password;
+  }
+
+  /**
+   * Enviar email de bienvenida con credenciales temporales
+   */
+  private static async sendWelcomeEmail(
+    email: string,
+    nombre: string,
+    temporaryPassword: string
+  ): Promise<void> {
+    try {
+      const { Resend } = await import('resend');
+      const resend = new Resend(import.meta.env.RESEND_API_KEY);
+
+      const frontendUrl = import.meta.env.PUBLIC_FRONTEND_URL || 'https://rental.mariohans.cl';
+      const emailDomain = import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl';
+
+      const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #1a1a1a;">Bienvenido/a a Mario Hans Rental</h2>
+          <p>Hola <strong>${nombre || 'Cliente'}</strong>,</p>
+          <p>Tu cuenta ha sido creada exitosamente. A continuación te dejamos tus credenciales de acceso:</p>
+          <div style="background-color: #f4f4f5; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <p style="margin: 0 0 8px;"><strong>Email:</strong> ${email}</p>
+            <p style="margin: 0;"><strong>Contraseña temporal:</strong> ${temporaryPassword}</p>
+          </div>
+          <p style="color: #dc2626; font-weight: bold;">Te recomendamos cambiar tu contraseña después de iniciar sesión.</p>
+          <a href="${frontendUrl}/login" style="display: inline-block; background-color: #000; color: #fff; padding: 12px 24px; border-radius: 6px; text-decoration: none; margin-top: 10px;">
+            Iniciar sesión
+          </a>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #e4e4e7;" />
+          <p style="color: #71717a; font-size: 14px;">
+            Si tenés alguna consulta, escribinos a rental.mariohans@gmail.com<br/>
+            Equipo Mario Hans Rental Fotográfico
+          </p>
+        </div>
+      `;
+
+      const { error } = await resend.emails.send({
+        from: `Rental Mario Hans <admin@${emailDomain}>`,
+        to: [email],
+        cc: ['rental.mariohans@gmail.com'],
+        subject: 'Bienvenido/a a Mario Hans Rental — Tus credenciales de acceso',
+        html,
+      });
+
+      if (error) {
+        console.error('[UserService] Error enviando email de bienvenida:', { email, error });
+      } else {
+        console.log('[UserService] Email de bienvenida enviado a:', email);
+      }
+    } catch (error) {
+      // No lanzar error — el usuario ya fue creado, el email es best-effort
+      console.error('[UserService] Error en sendWelcomeEmail:', error);
+    }
+  }
+
+  /**
+   * Crear nuevo usuario: primero en Supabase Auth, luego perfil via RPC
    */
   static async createUser(userData: UserProfileInsert): Promise<UserProfile> {
     try {
       const admin = getSupabaseAdmin();
 
-      console.log('📝 Creating user with data:', { email: userData.email, nombre: userData.nombre });
+      if (!userData.email) {
+        throw new Error('El email es requerido');
+      }
 
-      // Usar función RPC que bypasa RLS (SECURITY DEFINER)
+      console.log('[UserService] Creando usuario:', { email: userData.email, nombre: userData.nombre });
+
+      // 1. Generar contraseña temporal
+      const temporaryPassword = UserService.generateTemporaryPassword();
+
+      // 2. Crear usuario en Supabase Auth
+      const { data: authData, error: authError } = await admin.auth.admin.createUser({
+        email: userData.email,
+        password: temporaryPassword,
+        email_confirm: true,
+      });
+
+      if (authError) {
+        console.error('[UserService] Error creando auth user:', authError);
+        if (authError.message?.includes('already been registered')) {
+          throw new Error('Ya existe una cuenta con este email');
+        }
+        throw new Error(`Error al crear cuenta: ${authError.message}`);
+      }
+
+      const authUid = authData.user.id;
+      console.log('[UserService] Auth user creado:', { authUid, email: userData.email });
+
+      // 3. Crear perfil via RPC con auth_uid
       const { data, error } = await admin
         .rpc('admin_create_user_profile' as any, {
+          p_auth_uid: authUid,
           p_email: userData.email,
           p_nombre: userData.nombre || null,
           p_apellido: userData.apellido || null,
@@ -129,21 +224,28 @@ export class UserService {
         });
 
       if (error) {
-        console.error('❌ Error in admin_create_user_profile RPC:', error);
+        // Rollback: eliminar auth user si falla el perfil
+        console.error('[UserService] Error en RPC, haciendo rollback del auth user:', error);
+        await admin.auth.admin.deleteUser(authUid);
         throw error;
       }
 
-      // La función RPC retorna un array, tomamos el primer elemento
       const newUser = Array.isArray(data) ? data[0] : data;
 
       if (!newUser) {
-        throw new Error('No se pudo crear el usuario');
+        await admin.auth.admin.deleteUser(authUid);
+        throw new Error('No se pudo crear el perfil del usuario');
       }
 
-      console.log('✅ User created successfully:', { user_id: newUser.user_id, email: newUser.email });
+      console.log('[UserService] Perfil creado:', { user_id: newUser.user_id, email: newUser.email });
+
+      // 4. Enviar email de bienvenida con credenciales (best-effort, no bloquea)
+      const nombre = userData.nombre || '';
+      UserService.sendWelcomeEmail(userData.email, nombre, temporaryPassword);
+
       return newUser as UserProfile;
     } catch (error) {
-      console.error('Error creating user:', error);
+      console.error('[UserService] Error creating user:', error);
       throw error;
     }
   }
@@ -271,12 +373,20 @@ export class UserService {
       const offset = (page - 1) * limit;
 
       const admin = getSupabaseAdmin();
-      const { data, error, count } = await admin
+
+      let query = admin
         .from('user_profiles')
         .select('*', { count: 'exact' })
-        .or(`nombre.ilike.%${searchTerm}%,apellido.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`)
         .order('user_id', { ascending: false })
         .range(offset, offset + limit - 1);
+
+      if (searchTerm.trim()) {
+        query = query.or(
+          `nombre.ilike.%${searchTerm}%,apellido.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`
+        );
+      }
+
+      const { data, error, count } = await query;
 
       if (error) {
         throw error;
@@ -322,7 +432,7 @@ export class UserService {
       const { count: usersWithTerms, error: termsError } = await admin
         .from('user_profiles')
         .select('*', { count: 'exact', head: true })
-        .eq('terms_accepted', '1');
+        .eq('terminos_aceptados', true);
 
       if (termsError) throw termsError;
 
@@ -333,7 +443,7 @@ export class UserService {
       const { count: recentUsers, error: recentError } = await admin
         .from('user_profiles')
         .select('*', { count: 'exact', head: true })
-        .gte('fecha_creacion', thirtyDaysAgo.toISOString());
+        .gte('created_at', thirtyDaysAgo.toISOString());
 
       if (recentError) throw recentError;
 

@@ -18,6 +18,12 @@ import { Separator } from './ui/separator';
 import { toast } from 'sonner';
 import type { UserProfile } from '../types/user';
 import { UserPlus, Save, X, Loader2 } from 'lucide-react';
+import DocumentUploadSection from './users/DocumentUploadSection';
+import {
+  uploadDocumentWithUpdate,
+  getDocumentTypeName,
+  type DocumentType,
+} from '../lib/documentUploadService';
 
 interface CreateUserDialogProps {
     onUserCreated: (newUser: UserProfile) => void;
@@ -76,6 +82,7 @@ const CreateUserDialog = ({ onUserCreated, sessionToken, trigger }: CreateUserDi
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState<FormData>(initialFormData);
+    const [pendingFiles, setPendingFiles] = useState<Map<DocumentType, File>>(new Map());
 
     const handleInputChange = (field: keyof FormData, value: string | boolean) => {
         setFormData(prev => ({
@@ -113,17 +120,43 @@ const CreateUserDialog = ({ onUserCreated, sessionToken, trigger }: CreateUserDi
                 body: JSON.stringify(userData),
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Error al crear usuario');
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Error al crear usuario');
             }
 
-            const newUser = await response.json();
+            const newUser = result.data;
+
+            // Subir documentos pendientes después de crear el usuario
+            if (pendingFiles.size > 0) {
+                const userId = newUser.user_id?.toString() || newUser.auth_uid || '';
+                toast.info(`Subiendo ${pendingFiles.size} documento(s)...`);
+
+                for (const [docType, file] of pendingFiles) {
+                    try {
+                        const uploadResult = await uploadDocumentWithUpdate(file, docType, userId, sessionToken);
+                        if (uploadResult.success && uploadResult.url) {
+                            switch (docType) {
+                                case 'rut_anverso': newUser.url_rut_anverso = uploadResult.url; break;
+                                case 'rut_reverso': newUser.url_rut_reverso = uploadResult.url; break;
+                                case 'e_rut_empresa': newUser.new_url_e_rut_empresa = uploadResult.url; break;
+                            }
+                        } else {
+                            toast.warning(`No se pudo subir ${getDocumentTypeName(docType)}`);
+                        }
+                    } catch (uploadErr) {
+                        console.error(`[CreateUserDialog] Error uploading ${docType}:`, uploadErr);
+                        toast.warning(`Error subiendo ${getDocumentTypeName(docType)}`);
+                    }
+                }
+            }
 
             toast.success('Usuario creado correctamente');
             onUserCreated(newUser);
             setOpen(false);
-            setFormData(initialFormData); // Reset form
+            setFormData(initialFormData);
+            setPendingFiles(new Map());
         } catch (error) {
             console.error('Error creating user:', error);
             toast.error(error instanceof Error ? error.message : 'Error al crear usuario');
@@ -335,6 +368,18 @@ const CreateUserDialog = ({ onUserCreated, sessionToken, trigger }: CreateUserDi
                             />
                             <Label htmlFor="create-terminos_aceptados">Términos y condiciones aceptados</Label>
                         </div>
+                    </div>
+
+                    <Separator />
+
+                    {/* Documents Section */}
+                    <div>
+                        <h4 className="text-sm font-medium mb-3 text-foreground">Documentos (opcional)</h4>
+                        <DocumentUploadSection
+                            sessionToken={sessionToken}
+                            tipoCliente={formData.tipo_cliente}
+                            onPendingFilesChange={setPendingFiles}
+                        />
                     </div>
 
                     <DialogFooter className="gap-2">

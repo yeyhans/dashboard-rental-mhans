@@ -1,8 +1,16 @@
 import type { APIRoute } from 'astro';
 import { CouponService } from '../../../../services/couponService';
-// withAuth and withCors removed - global middleware handles CORS, endpoint is public
+import { checkRateLimit, getClientIp, rateLimitResponse } from '../../../../lib/rateLimit';
+
+// Rate limit config: 10 requests per 60 seconds per IP
+const COUPON_VALIDATE_RATE_LIMIT = { name: 'coupon-validate', maxRequests: 10, windowMs: 60 * 1000 };
 
 export const GET: APIRoute = async (context) => {
+  // Apply rate limiting before processing
+  const ip = getClientIp(context.request);
+  const rl = checkRateLimit(ip, COUPON_VALIDATE_RATE_LIMIT);
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfterMs);
+
   try {
     const couponCode = context.params.code as string;
     const url = new URL(context.request.url);
@@ -47,6 +55,11 @@ export const GET: APIRoute = async (context) => {
 };
 
 export const POST: APIRoute = async (context) => {
+  // Apply rate limiting before processing
+  const ip = getClientIp(context.request);
+  const rl = checkRateLimit(ip, COUPON_VALIDATE_RATE_LIMIT);
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfterMs);
+
   try {
     const couponCode = context.params.code as string;
     const { userId, cartTotal } = await context.request.json();

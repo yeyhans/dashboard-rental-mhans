@@ -13,17 +13,11 @@ let supabaseAdmin: ReturnType<typeof createClient<Database>> | null = null;
 
 // Solo crear el cliente admin en el servidor
 if (typeof window === 'undefined') {
-  console.log('🔧 Configurando Supabase Admin Client...');
-  console.log('📍 URL:', supabaseUrl ? 'Configurada' : 'FALTANTE');
-  console.log('🔑 Service Key:', supabaseServiceKey ? 'Configurada' : 'FALTANTE');
-  
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('❌ Variables de entorno faltantes:');
-    console.error('PUBLIC_SUPABASE_URL:', supabaseUrl);
-    console.error('SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey ? '[CONFIGURADA]' : '[FALTANTE]');
+    console.error('❌ Variables de entorno faltantes para Supabase Admin Client');
     throw new Error('Missing Supabase environment variables for service role');
   }
-  
+
   try {
     supabaseAdmin = createClient<Database>(supabaseUrl, supabaseServiceKey, {
       auth: {
@@ -34,7 +28,6 @@ if (typeof window === 'undefined') {
         schema: 'public'
       }
     });
-    console.log('✅ Supabase Admin Client creado exitosamente');
   } catch (error) {
     console.error('❌ Error creando Supabase Admin Client:', error);
     throw error;
@@ -102,35 +95,66 @@ export const testConnection = async () => {
   }
 };
 
+// Cookie config reutilizable para tokens de auth
+export const getAuthCookieConfig = () => ({
+  path: '/',
+  maxAge: 60 * 60 * 24 * 30, // 30 días
+  httpOnly: true,
+  secure: import.meta.env.PROD,
+  sameSite: 'strict' as const,
+});
+
 // Authentication functions for backend
 export const getServerUser = async (context: APIContext | AstroGlobal) => {
   try {
     if (!supabase) {
-      console.error('❌ Supabase client not available');
+      console.error('[Auth] Supabase client not available');
       return null;
     }
 
-    // Get session from cookies
     const accessToken = context.cookies.get('sb-access-token')?.value;
-    // const refreshToken = context.cookies.get('sb-refresh-token')?.value; // For future use
+    const refreshToken = context.cookies.get('sb-refresh-token')?.value;
 
     if (!accessToken) {
-      console.log('🔍 No access token found in cookies');
+      console.log('[Auth] No access token found in cookies');
       return null;
     }
 
-    // Set session
+    // 1. Intentar con el access token actual
     const { data: { user }, error } = await supabase.auth.getUser(accessToken);
-    
-    if (error || !user) {
-      console.error('❌ Error getting user:', error);
+
+    if (!error && user) {
+      return user;
+    }
+
+    // 2. Access token expirado — intentar refresh
+    console.log('[Auth] Access token expired, attempting refresh...');
+
+    if (!refreshToken) {
+      console.log('[Auth] No refresh token available');
       return null;
     }
 
-    console.log('✅ User authenticated:', user.id);
-    return user;
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession({
+      refresh_token: refreshToken,
+    });
+
+    if (refreshError || !refreshData.session || !refreshData.user) {
+      console.error('[Auth] Token refresh failed:', refreshError?.message);
+      return null;
+    }
+
+    // 3. Refresh exitoso — actualizar cookies con nuevos tokens
+    if (typeof context.cookies.set === 'function') {
+      const cookieConfig = getAuthCookieConfig();
+      context.cookies.set('sb-access-token', refreshData.session.access_token, cookieConfig);
+      context.cookies.set('sb-refresh-token', refreshData.session.refresh_token, cookieConfig);
+      console.log('[Auth] Tokens refreshed and cookies updated');
+    }
+
+    return refreshData.user;
   } catch (error) {
-    console.error('❌ Error in getServerUser:', error);
+    console.error('[Auth] Error in getServerUser:', error);
     return null;
   }
 };

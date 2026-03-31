@@ -170,6 +170,46 @@ export interface OrderAnalytics {
   cancelationRate: number;
 }
 
+export interface FinancialAnalytics {
+  kpis: {
+    totalRevenue: number;
+    averageOrderValue: number;
+    collectionRate: number;
+    outstandingBalance: number;
+  };
+  monthlyRevenue: Array<{
+    month: string;
+    revenue: number;
+    orderCount: number;
+  }>;
+  monthlyCollection: Array<{
+    month: string;
+    collected: number;
+    pending: number;
+  }>;
+  monthlyReserves: Array<{
+    month: string;
+    reservesPaid: number;
+    finalPaymentsPending: number;
+    fullyPaid: number;
+  }>;
+  growthMetrics: Array<{
+    month: string;
+    revenueGrowth: number;
+    orderGrowth: number;
+  }>;
+  revenueByStatus: Array<{
+    status: string;
+    revenue: number;
+    orderCount: number;
+  }>;
+  topRevenueMonths: Array<{
+    month: string;
+    revenue: number;
+    orderCount: number;
+  }>;
+}
+
 export interface AdvancedAnalytics {
   users: UserAnalytics;
   products: ProductAnalytics;
@@ -177,6 +217,7 @@ export interface AdvancedAnalytics {
   coupons: CouponAnalytics;
   shipping: ShippingAnalytics;
   kpis: KPIAnalytics;
+  financial: FinancialAnalytics;
   dateRange: {
     start: string;
     end: string;
@@ -197,13 +238,14 @@ export class AdvancedAnalyticsService {
       const end = endDate ? new Date(endDate) : new Date();
       const start = startDate ? new Date(startDate) : new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-      const [users, products, orders, coupons, shipping, kpis] = await Promise.all([
+      const [users, products, orders, coupons, shipping, kpis, financial] = await Promise.all([
         this.getUserAnalytics(start, end),
         this.getProductAnalytics(start, end),
         this.getOrderAnalytics(start, end),
         this.getCouponAnalytics(start, end),
         this.getShippingAnalytics(start, end),
-        this.getKPIAnalytics(start, end)
+        this.getKPIAnalytics(start, end),
+        this.getFinancialAnalytics(start, end)
       ]);
 
       return {
@@ -213,6 +255,7 @@ export class AdvancedAnalyticsService {
         coupons,
         shipping,
         kpis,
+        financial,
         dateRange: {
           start: start.toISOString().split('T')[0],
           end: end.toISOString().split('T')[0]
@@ -1054,6 +1097,172 @@ export class AdvancedAnalyticsService {
       });
     } catch (error) {
       console.error('Error fetching product rentals:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Análisis financiero completo
+   */
+  private static async getFinancialAnalytics(startDate: Date, endDate: Date): Promise<FinancialAnalytics> {
+    try {
+      const { data: orders, error } = await supabaseAdmin!
+        .from('orders')
+        .select('id, status, calculated_total, pago_reserva, pago_completo, date_created')
+        .gte('date_created', startDate.toISOString())
+        .lte('date_created', endDate.toISOString());
+
+      if (error) throw error;
+
+      const allOrders = (orders || []) as Array<{
+        id: number;
+        status: string;
+        calculated_total: number;
+        pago_reserva: boolean;
+        pago_completo: boolean;
+        date_created: string;
+      }>;
+
+      const completedStatuses = ['completed', 'paid'];
+      const completedOrders = allOrders.filter(o => completedStatuses.includes(o.status));
+
+      // --- KPIs ---
+      const totalRevenue = completedOrders.reduce((sum, o) => sum + (o.calculated_total || 0), 0);
+      const orderCount = completedOrders.length;
+      const averageOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0;
+
+      let totalCollected = 0;
+      allOrders.forEach(o => {
+        const total = o.calculated_total || 0;
+        if (completedStatuses.includes(o.status)) {
+          if (o.pago_completo) {
+            totalCollected += total;
+          } else if (o.pago_reserva) {
+            totalCollected += total * 0.25;
+          }
+        }
+      });
+
+      const collectionRate = totalRevenue > 0 ? (totalCollected / totalRevenue) * 100 : 0;
+      const outstandingBalance = totalRevenue - totalCollected;
+
+      // --- Helper: agrupar por mes ---
+      const groupByMonth = <T,>(items: Array<{ date_created: string } & T>) => {
+        const map = new Map<string, Array<{ date_created: string } & T>>();
+        items.forEach(item => {
+          const month = item.date_created.substring(0, 7); // 'YYYY-MM'
+          if (!map.has(month)) map.set(month, []);
+          map.get(month)!.push(item);
+        });
+        return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+      };
+
+      // --- Monthly Revenue ---
+      const monthlyGroups = groupByMonth(allOrders);
+      const monthlyRevenue = monthlyGroups.map(([month, monthOrders]) => {
+        const completed = monthOrders.filter(o => completedStatuses.includes(o.status));
+        return {
+          month,
+          revenue: completed.reduce((sum, o) => sum + (o.calculated_total || 0), 0),
+          orderCount: completed.length
+        };
+      });
+
+      // --- Monthly Collection ---
+      const monthlyCollection = monthlyGroups.map(([month, monthOrders]) => {
+        let collected = 0;
+        let pending = 0;
+        monthOrders.forEach(o => {
+          const total = o.calculated_total || 0;
+          if (completedStatuses.includes(o.status)) {
+            if (o.pago_completo) {
+              collected += total;
+            } else if (o.pago_reserva) {
+              collected += total * 0.25;
+              pending += total * 0.75;
+            } else {
+              pending += total;
+            }
+          } else {
+            pending += total;
+          }
+        });
+        return { month, collected: Math.round(collected), pending: Math.round(pending) };
+      });
+
+      // --- Monthly Reserves ---
+      const monthlyReserves = monthlyGroups.map(([month, monthOrders]) => {
+        let reservesPaid = 0;
+        let finalPaymentsPending = 0;
+        let fullyPaid = 0;
+        monthOrders.filter(o => completedStatuses.includes(o.status)).forEach(o => {
+          const total = o.calculated_total || 0;
+          if (o.pago_completo) {
+            fullyPaid += total;
+          } else if (o.pago_reserva) {
+            reservesPaid += total * 0.25;
+            finalPaymentsPending += total * 0.75;
+          }
+        });
+        return {
+          month,
+          reservesPaid: Math.round(reservesPaid),
+          finalPaymentsPending: Math.round(finalPaymentsPending),
+          fullyPaid: Math.round(fullyPaid)
+        };
+      });
+
+      // --- Growth Metrics ---
+      const growthMetrics = monthlyRevenue.map((item, i) => {
+        if (i === 0) return { month: item.month, revenueGrowth: 0, orderGrowth: 0 };
+        const prev = monthlyRevenue[i - 1];
+        const revenueGrowth = prev.revenue > 0
+          ? ((item.revenue - prev.revenue) / prev.revenue) * 100
+          : 0;
+        const orderGrowth = prev.orderCount > 0
+          ? ((item.orderCount - prev.orderCount) / prev.orderCount) * 100
+          : 0;
+        return { month: item.month, revenueGrowth: Math.round(revenueGrowth * 10) / 10, orderGrowth: Math.round(orderGrowth * 10) / 10 };
+      });
+
+      // --- Revenue by Status ---
+      const statusMap = new Map<string, { revenue: number; orderCount: number }>();
+      allOrders.forEach(o => {
+        const status = o.status || 'unknown';
+        if (!statusMap.has(status)) statusMap.set(status, { revenue: 0, orderCount: 0 });
+        const entry = statusMap.get(status)!;
+        entry.revenue += o.calculated_total || 0;
+        entry.orderCount++;
+      });
+      const revenueByStatus = Array.from(statusMap.entries())
+        .map(([status, data]) => ({
+          status,
+          revenue: Math.round(data.revenue),
+          orderCount: data.orderCount
+        }))
+        .sort((a, b) => b.revenue - a.revenue);
+
+      // --- Top Revenue Months ---
+      const topRevenueMonths = [...monthlyRevenue]
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 6);
+
+      return {
+        kpis: {
+          totalRevenue: Math.round(totalRevenue),
+          averageOrderValue: Math.round(averageOrderValue),
+          collectionRate: Math.round(collectionRate * 10) / 10,
+          outstandingBalance: Math.round(outstandingBalance)
+        },
+        monthlyRevenue,
+        monthlyCollection,
+        monthlyReserves,
+        growthMetrics,
+        revenueByStatus,
+        topRevenueMonths
+      };
+    } catch (error) {
+      console.error('Error fetching financial analytics:', error);
       throw error;
     }
   }

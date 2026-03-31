@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import DOMPurify from 'dompurify';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -346,10 +347,15 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
     // Añadir espaciado para emojis de notificación
     content = content.replace(/(📧|📄|✅|❌|🎉|📊|📋|💬|📎|ℹ️)/g, '<span class="inline-block mr-1">$1</span>');
 
+    const sanitizedContent = DOMPurify.sanitize(content, {
+      ALLOWED_TAGS: ['h3', 'h4', 'strong', 'br', 'span'],
+      ALLOWED_ATTR: ['class'],
+    });
+
     return (
       <div
         className="text-sm break-words leading-relaxed"
-        dangerouslySetInnerHTML={{ __html: content }}
+        dangerouslySetInnerHTML={{ __html: sanitizedContent }}
       />
     );
   };

@@ -61,11 +61,12 @@ interface GenerateBudgetPDFRequest {
   orderData: BudgetData;
   uploadToR2?: boolean;
   sendEmail?: boolean;
+  returnBuffer?: boolean;
 }
 
 export const POST: APIRoute = async ({ request }) => {
   try {
-    const { orderData, uploadToR2 = true, sendEmail = true }: GenerateBudgetPDFRequest = await request.json();
+    const { orderData, uploadToR2 = true, sendEmail = true, returnBuffer = false }: GenerateBudgetPDFRequest = await request.json();
     
     console.log('🚀 Starting backend budget PDF generation for order:', orderData?.order_id);
     console.log('📋 Order data received by backend API:', {
@@ -127,8 +128,19 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
+    // Return PDF binary directly for browser download (no R2, no email, no DB)
+    if (returnBuffer && !uploadToR2 && pdfResult.pdfBuffer) {
+      return new Response(pdfResult.pdfBuffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="presupuesto-preview-${orderData.order_id}.pdf"`,
+        }
+      });
+    }
+
     let pdfUrl = '';
-    
+
     if (uploadToR2 && pdfResult.pdfBuffer) {
       // Upload to R2 via Cloudflare Worker
       console.log('☁️ Uploading budget PDF to R2 via worker...');
@@ -730,7 +742,7 @@ async function generateBudgetPDFWithReactPDF(orderData: BudgetData): Promise<{
 
     return {
       success: true,
-      pdfBuffer: pdfBuffer.buffer as ArrayBuffer
+      pdfBuffer: new Uint8Array(pdfBuffer).buffer as ArrayBuffer
     };
   } catch (error) {
     console.error('❌ Error generating budget PDF with React-PDF:', error);

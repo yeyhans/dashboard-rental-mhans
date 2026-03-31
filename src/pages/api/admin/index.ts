@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { AdminService } from '../../../services/adminService';
-import { withMiddleware, withCors, withAuth } from '../../../middleware/auth';
+import { withMiddleware, withCors, withAuth, requireRole } from '../../../middleware/auth';
 
-export const GET: APIRoute = withMiddleware(withCors, withAuth)(async (context) => {
+export const GET: APIRoute = withMiddleware(withCors, requireRole('super_admin'))(async (context) => {
   try {
     const admins = await AdminService.getAllAdmins();
 

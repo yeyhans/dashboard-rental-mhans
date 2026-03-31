@@ -66,6 +66,18 @@ const paymentStatusText: { [key: string]: string } = {
   'false': 'Pendiente'
 };
 
+// Reserve status colors
+const reserveStatusColors: { [key: string]: string } = {
+  'true': 'bg-purple-100 text-purple-800',
+  'false': 'bg-red-100 text-red-800'
+};
+
+// Reserve status text
+const reserveStatusText: { [key: string]: string } = {
+  'true': 'Pagada',
+  'false': 'Sin Pagar'
+};
+
 // Helper function to get payment status key from boolean
 const getPaymentStatusKey = (status: boolean | string): string => {
   if (typeof status === 'boolean') {
@@ -339,6 +351,42 @@ const PaymentsTable = ({
     }
   };
 
+  // Actualizar el estado de reserva de una orden
+  const handleUpdateReserveStatus = async (orderId: number, currentStatus: boolean | string) => {
+    try {
+      setUpdatingOrderId(orderId);
+      const currentBool = typeof currentStatus === 'boolean' ? currentStatus : currentStatus === 'true';
+      const newStatus = !currentBool;
+
+      const headers = getAuthHeaders();
+      const response = await fetch(`/api/orders/update/${orderId}`, {
+        method: 'PUT',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ pago_reserva: newStatus })
+      });
+
+      if (response.ok) {
+        setAllOrders(prevOrders =>
+          prevOrders.map(order =>
+            order.id === orderId
+              ? { ...order, pago_reserva: newStatus }
+              : order
+          )
+        );
+        setError(null);
+      } else {
+        const errorData = await response.json();
+        setError(`Error al actualizar estado de reserva: ${errorData.message || 'Error desconocido'}`);
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      setError('Error al actualizar estado de reserva');
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
   // Guardar cambios en los campos OC y Factura
   const saveFieldChanges = async (orderId: number) => {
     try {
@@ -499,6 +547,9 @@ const PaymentsTable = ({
                   </TableHead>
                   <TableHead>Proyecto</TableHead>
                   <TableHead>Total</TableHead>
+                  <TableHead>Reserva 25%</TableHead>
+                  <TableHead>Pendiente</TableHead>
+                  <TableHead>Reserva</TableHead>
                   <TableHead>OC</TableHead>
                   <TableHead>N° Factura</TableHead>
                   <TableHead 
@@ -514,7 +565,7 @@ const PaymentsTable = ({
               <TableBody>
                 {paginatedOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-4">
+                    <TableCell colSpan={11} className="text-center py-4">
                       {loading ? 'Cargando...' : searchTerm ? 'No se encontraron órdenes que coincidan con la búsqueda' : 'No se encontraron órdenes'}
                     </TableCell>
                   </TableRow>
@@ -548,6 +599,25 @@ const PaymentsTable = ({
                             <p>Subtotal: ${formatCurrency(order.calculated_subtotal || '0')}</p>
                           </TooltipContent>
                         </Tooltip>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        ${formatCurrency(Math.round((parseFloat(String(order.calculated_total || 0))) * 0.25))}
+                      </TableCell>
+                      <TableCell>
+                        {order.pago_completo
+                          ? <span className="text-green-600 font-medium">$0</span>
+                          : <span className="text-orange-600 font-medium">
+                              ${formatCurrency(Math.round((parseFloat(String(order.calculated_total || 0))) * 0.75))}
+                            </span>
+                        }
+                      </TableCell>
+                      <TableCell>
+                        <div
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer ${reserveStatusColors[String(order.pago_reserva || false)]}`}
+                          onClick={() => handleUpdateReserveStatus(order.id, order.pago_reserva)}
+                        >
+                          {reserveStatusText[String(order.pago_reserva || false)]}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Input

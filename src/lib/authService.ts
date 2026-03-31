@@ -110,27 +110,20 @@ export const makeAuthenticatedRequest = async (
 };
 
 /**
- * Verifica si la sesión extendida es válida
+ * Verifica si la sesión extendida es válida.
+ * Las cookies sb-admin-session y sb-session-expiry son httpOnly — no accesibles desde JS.
+ * La verificación real de sesión ocurre servidor-side via withAuth/getServerAdmin.
+ * Esta función verifica la sesión de Supabase client-side como indicador de sesión activa.
  */
 export const isExtendedSessionValid = (): boolean => {
   if (typeof window === 'undefined') return false;
-  
+
   try {
-    const adminSession = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('sb-admin-session='))
-      ?.split('=')[1];
-    
-    const sessionExpiry = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('sb-session-expiry='))
-      ?.split('=')[1];
-    
-    if (!adminSession || adminSession !== 'true') return false;
-    if (!sessionExpiry) return false;
-    
-    const expiryDate = new Date(decodeURIComponent(sessionExpiry));
-    return expiryDate > new Date();
+    // sessionCache tiene token si la sesión Supabase está activa y no expiró
+    if (sessionCache && sessionCache.token && Date.now() < sessionCache.expiry) {
+      return sessionCache.isAdmin;
+    }
+    return false;
   } catch (error) {
     console.error('Error verificando sesión extendida:', error);
     return false;

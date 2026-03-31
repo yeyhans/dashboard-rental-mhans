@@ -1,59 +1,37 @@
 import type { APIRoute } from 'astro';
+import { withAuth } from '@/middleware/auth';
 import { AdvancedAnalyticsService } from '../../../services/advancedAnalyticsService';
 
-export const GET: APIRoute = async ({ request, url }) => {
+export const GET: APIRoute = withAuth(async ({ request }) => {
   try {
-    // Obtener parámetros de consulta
     const searchParams = new URL(request.url).searchParams;
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    console.log('🔍 Advanced Analytics API called with:', { startDate, endDate });
+    console.log('[Analytics] Advanced analytics requested:', { startDate, endDate });
 
-    // Obtener estadísticas avanzadas
     const analytics = await AdvancedAnalyticsService.getAdvancedAnalytics(
       startDate || undefined,
       endDate || undefined
     );
-
-    console.log('✅ Advanced analytics fetched successfully');
 
     return new Response(JSON.stringify({
       success: true,
       data: analytics
     }), {
       status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-      }
+      headers: { 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
-    console.error('❌ Error in advanced analytics API:', error);
-    
+    console.error('[Analytics] Error fetching advanced analytics:', error);
+
     return new Response(JSON.stringify({
       success: false,
-      error: error instanceof Error ? error.message : 'Error desconocido al obtener analytics'
+      error: 'Error al obtener analytics avanzados'
     }), {
       status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
+      headers: { 'Content-Type': 'application/json' }
     });
   }
-};
-
-export const OPTIONS: APIRoute = async () => {
-  return new Response(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-    }
-  });
-};
+});

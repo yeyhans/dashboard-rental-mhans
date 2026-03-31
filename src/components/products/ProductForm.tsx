@@ -3,6 +3,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
+import { RichTextEditor } from '../ui/rich-text-editor';
 import { Switch } from '../ui/switch';
 import {
   Select,
@@ -455,23 +456,21 @@ const ProductForm = ({
 
           <div>
             <Label htmlFor="short_description">Descripción Corta</Label>
-            <Textarea
-              id="short_description"
+            <RichTextEditor
               value={formData.short_description}
-              onChange={(e) => handleInputChange('short_description', e.target.value)}
+              onChange={(html) => handleInputChange('short_description', html)}
               placeholder="Descripción breve del producto..."
-              rows={2}
+              minHeight="80px"
             />
           </div>
 
           <div>
             <Label htmlFor="description">Descripción Completa</Label>
-            <Textarea
-              id="description"
+            <RichTextEditor
               value={formData.description}
-              onChange={(e) => handleInputChange('description', e.target.value)}
+              onChange={(html) => handleInputChange('description', html)}
               placeholder="Descripción detallada del producto..."
-              rows={4}
+              minHeight="160px"
             />
           </div>
         </CardContent>

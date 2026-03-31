@@ -67,6 +67,7 @@ export type Order = {
   
   // Status flags
   correo_enviado: boolean;
+  pago_reserva: boolean;
   pago_completo: boolean;
   is_editable: boolean;
   needs_payment: boolean;

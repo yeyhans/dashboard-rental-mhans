@@ -60,6 +60,13 @@ export const PUT: APIRoute = async ({ params, request }) => {
     
     // Status flags
     if (updateData.correo_enviado !== undefined) sanitizedData.correo_enviado = Boolean(updateData.correo_enviado);
+    if (updateData.pago_reserva !== undefined) {
+      if (typeof updateData.pago_reserva === 'string') {
+        sanitizedData.pago_reserva = updateData.pago_reserva === 'true';
+      } else {
+        sanitizedData.pago_reserva = Boolean(updateData.pago_reserva);
+      }
+    }
     if (updateData.pago_completo !== undefined) {
       // Handle both boolean and string values
       if (typeof updateData.pago_completo === 'string') {
@@ -67,6 +74,10 @@ export const PUT: APIRoute = async ({ params, request }) => {
       } else {
         sanitizedData.pago_completo = Boolean(updateData.pago_completo);
       }
+    }
+    // Invariante de negocio: pago completo implica reserva pagada
+    if (sanitizedData.pago_completo === true) {
+      sanitizedData.pago_reserva = true;
     }
     
     // Line items (JSON field)

@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { CouponService } from '../../../../services/couponService';
-// withAuth and withCors removed - global middleware handles CORS, endpoint is public
+import { withAuth } from '../../../../middleware/auth';
 
-export const POST: APIRoute = async (context) => {
+export const POST: APIRoute = withAuth(async (context) => {
   try {
     const couponCode = context.params.code as string;
     const { userId, discountAmount, orderId } = await context.request.json();
@@ -43,7 +43,7 @@ export const POST: APIRoute = async (context) => {
       }
     });
   } catch (error) {
-    console.error('Error in POST /api/coupons/apply/[code]:', error);
+    console.error('[POST /api/coupons/apply/[code]] Error:', error);
     return new Response(JSON.stringify({
       success: false,
       error: 'Error al aplicar el cupón'
@@ -54,6 +54,6 @@ export const POST: APIRoute = async (context) => {
       }
     });
   }
-};
+});
 
 // OPTIONS handler removed - handled by global middleware

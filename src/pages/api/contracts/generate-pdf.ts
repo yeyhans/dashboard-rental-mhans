@@ -1,14 +1,51 @@
 import type { APIRoute } from 'astro';
 import React from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { UserContractDocument } from '../../../lib/pdf/components/contract/UserContractDocument';
 import type { UserContractData } from '../../../lib/pdf/components/contract/UserContractDocument';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
+import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
 
 /**
  * Internal User Contract PDF Generation API using React-PDF
  * This API generates user contract PDFs using @react-pdf/renderer (replaces Puppeteer)
- * Called by external API and internal services
+ * Called by external API and internal services.
+ *
+ * Auth: requires either a valid Supabase JWT (Authorization: Bearer <token>),
+ * an inter-service API key (X-API-Key matching FRONTEND_API_SECRET),
+ * or an internal request flag (X-Internal-Request: true with matching X-External-Source).
  */
+
+async function validateContractRequest(request: Request): Promise<boolean> {
+  // Allow trusted internal calls from the external API proxy
+  const isInternal = request.headers.get('X-Internal-Request') === 'true';
+  const externalSource = request.headers.get('X-External-Source');
+  if (isInternal && externalSource === 'frontend') return true;
+
+  // Check inter-service API key
+  const apiKeySecret = import.meta.env.FRONTEND_API_SECRET;
+  const apiKey = request.headers.get('X-API-Key');
+  if (apiKeySecret && apiKey && apiKey === apiKeySecret) return true;
+
+  // Validate a Supabase JWT
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    try {
+      const supabase = createClient(
+        import.meta.env.SUPABASE_URL!,
+        import.meta.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { persistSession: false, autoRefreshToken: false } }
+      );
+      const { data, error } = await supabase.auth.getUser(token);
+      if (!error && data?.user) return true;
+    } catch {
+      // invalid token — fall through
+    }
+  }
+
+  return false;
+}
 
 // Email template generation function
 interface ContractEmailData {
@@ -125,7 +162,25 @@ body{width:100%!important;min-width:100%!important;}
 
 export const POST: APIRoute = async ({ request }) => {
   try {
-    console.log('📄 Internal user contract PDF generation API called (React-PDF)');
+    // Rate limiting: 5 requests per minute
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(ip, RATE_LIMITS.pdfGeneration);
+    if (!rl.allowed) return rateLimitResponse(rl.retryAfterMs);
+
+    // Auth validation
+    const authorized = await validateContractRequest(request);
+    if (!authorized) {
+      console.error('[POST /api/contracts/generate-pdf] Solicitud no autorizada');
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'No autorizado'
+      }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.log('[POST /api/contracts/generate-pdf] Solicitud autorizada');
 
     // Parse request body
     const requestData = await request.json();

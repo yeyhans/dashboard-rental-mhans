@@ -55,30 +55,32 @@ export const POST: APIRoute = withAuth(async (context) => {
   try {
     const userData = await context.request.json();
 
+    if (!userData.email) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'El email es requerido' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     const newUser = await UserService.createUser(userData);
 
-    return new Response(JSON.stringify(newUser), {
-      status: 201,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return new Response(
+      JSON.stringify({ success: true, data: newUser }),
+      { status: 201, headers: { 'Content-Type': 'application/json' } }
+    );
   } catch (error: any) {
-    console.error('Error creating user:', error);
+    console.error('[POST /api/users] Error creating user:', error);
 
-    // Extraer mensaje de error de la base de datos
     const errorMessage = error?.message || 'Error al crear usuario';
 
-    // Determinar status code basado en el tipo de error
     let statusCode = 500;
-    if (error?.code === 'P0001' || errorMessage.includes('Ya existe')) {
-      statusCode = 409; // Conflict - usuario ya existe
+    if (error?.code === 'P0001' || errorMessage.includes('Ya existe') || errorMessage.includes('already been registered')) {
+      statusCode = 409;
     }
 
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      {
-        status: statusCode,
-        headers: { 'Content-Type': 'application/json' }
-      }
+      JSON.stringify({ success: false, error: errorMessage }),
+      { status: statusCode, headers: { 'Content-Type': 'application/json' } }
     );
   }
 });

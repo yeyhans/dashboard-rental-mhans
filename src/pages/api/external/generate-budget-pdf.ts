@@ -1,10 +1,44 @@
 import type { APIRoute } from 'astro';
+import { createClient } from '@supabase/supabase-js';
+import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
 
 /**
  * External API endpoint for generating budget PDFs from frontend applications
  * This endpoint is specifically designed to be called from external frontend applications
  * running on different domains (like VPS Hostinger) to generate PDFs using the backend infrastructure
+ *
+ * Auth: requires either a valid Supabase JWT (Authorization: Bearer <token>)
+ * or an inter-service API key (X-API-Key matching FRONTEND_API_SECRET env var).
  */
+
+async function validateExternalRequest(request: Request): Promise<boolean> {
+  // Check inter-service API key first (lightweight, no network call)
+  const apiKeySecret = import.meta.env.FRONTEND_API_SECRET;
+  const apiKey = request.headers.get('X-API-Key');
+  if (apiKeySecret && apiKey && apiKey === apiKeySecret) {
+    return true;
+  }
+
+  // Fall back to validating a Supabase JWT
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    try {
+      const supabase = createClient(
+        import.meta.env.SUPABASE_URL!,
+        import.meta.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { persistSession: false, autoRefreshToken: false } }
+      );
+      const { data, error } = await supabase.auth.getUser(token);
+      if (!error && data?.user) return true;
+    } catch {
+      // invalid token — fall through to 401
+    }
+  }
+
+  return false;
+}
+
 export const POST: APIRoute = async ({ request }) => {
   try {
     // Enable CORS for cross-origin requests from frontend
@@ -13,7 +47,7 @@ export const POST: APIRoute = async ({ request }) => {
       'http://localhost:3000', // Alternative frontend port
       import.meta.env.PUBLIC_FRONTEND_URL || 'http://localhost:4321'
     ].filter(Boolean);
-    
+
     const origin = request.headers.get('Origin');
     const corsHeaders = {
       'Access-Control-Allow-Origin': allowedOrigins.includes(origin || '') ? origin : allowedOrigins[0],
@@ -31,7 +65,25 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    console.log('🌍 External budget PDF generation API called from frontend');
+    // Rate limiting: 5 requests per minute per IP
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(ip, RATE_LIMITS.pdfGeneration);
+    if (!rl.allowed) return rateLimitResponse(rl.retryAfterMs);
+
+    // Validate inter-service auth
+    const authorized = await validateExternalRequest(request);
+    if (!authorized) {
+      console.error('[POST /api/external/generate-budget-pdf] Solicitud no autorizada');
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'No autorizado'
+      }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    console.log('[POST /api/external/generate-budget-pdf] Solicitud externa autorizada');
     
     const requestData = await request.json();
     console.log('📋 Received external request data:', {

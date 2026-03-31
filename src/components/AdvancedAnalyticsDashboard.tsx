@@ -8,7 +8,8 @@ import OrderAnalyticsCard from './analytics/OrderAnalyticsCard';
 import CouponAnalyticsCard from './analytics/CouponAnalyticsCard';
 import ShippingAnalyticsCard from './analytics/ShippingAnalyticsCard';
 import KPIAnalyticsCard from './analytics/KPIAnalyticsCard';
-import { Users, Package, ShoppingCart, Percent, Truck, BarChart3, Calendar, RefreshCw } from 'lucide-react';
+import FinancialAnalyticsCard from './analytics/FinancialAnalyticsCard';
+import { Users, Package, ShoppingCart, Percent, Truck, BarChart3, DollarSign, Calendar, RefreshCw } from 'lucide-react';
 import type { AdvancedAnalytics } from '../services/advancedAnalyticsService';
 
 interface AdvancedAnalyticsDashboardProps {
@@ -18,7 +19,7 @@ interface AdvancedAnalyticsDashboardProps {
 type DateRangePreset = '7d' | '30d' | '90d' | '6m' | '1y' | 'custom';
 
 export default function AdvancedAnalyticsDashboard({ analyticsData }: AdvancedAnalyticsDashboardProps) {
-  const [activeTab, setActiveTab] = useState('users');
+  const [activeTab, setActiveTab] = useState('finanzas');
   
   // Detectar el rango actual basado en las fechas
   const detectCurrentRange = (): DateRangePreset => {
@@ -177,7 +178,11 @@ export default function AdvancedAnalyticsDashboard({ analyticsData }: AdvancedAn
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
+          <TabsTrigger value="finanzas" className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4" />
+            <span className="hidden sm:inline">Finanzas</span>
+          </TabsTrigger>
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             <span className="hidden sm:inline">Usuarios</span>
@@ -203,6 +208,10 @@ export default function AdvancedAnalyticsDashboard({ analyticsData }: AdvancedAn
             <span className="hidden sm:inline">KPIs</span>
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="finanzas" className="mt-6">
+          <FinancialAnalyticsCard data={analyticsData.financial} />
+        </TabsContent>
 
         <TabsContent value="users" className="mt-6">
           <UserAnalyticsCard data={analyticsData.users} />

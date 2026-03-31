@@ -18,6 +18,8 @@ import { Separator } from './ui/separator';
 import { toast } from 'sonner';
 import type { UserProfile } from '../types/user';
 import { Edit, Save, X, Loader2 } from 'lucide-react';
+import DocumentUploadSection from './users/DocumentUploadSection';
+import type { DocumentType } from '../lib/documentUploadService';
 
 interface EditUserDialogProps {
   user: UserProfile;
@@ -392,6 +394,32 @@ const EditUserDialog = ({ user, onUserUpdated, sessionToken, trigger }: EditUser
               />
               <Label htmlFor="terminos_aceptados">Términos y condiciones aceptados</Label>
             </div>
+          </div>
+
+          <Separator />
+
+          {/* Documents Section */}
+          <div>
+            <h4 className="text-sm font-medium mb-3 text-foreground">Documentos</h4>
+            <DocumentUploadSection
+              userId={user.user_id?.toString() || user.auth_uid || ''}
+              sessionToken={sessionToken}
+              tipoCliente={formData.tipo_cliente}
+              documentUrls={{
+                url_rut_anverso: user.url_rut_anverso,
+                url_rut_reverso: user.url_rut_reverso,
+                new_url_e_rut_empresa: user.new_url_e_rut_empresa,
+              }}
+              onDocumentUploaded={(docType: DocumentType, url: string) => {
+                const updatedUser = { ...user };
+                switch (docType) {
+                  case 'rut_anverso': updatedUser.url_rut_anverso = url; break;
+                  case 'rut_reverso': updatedUser.url_rut_reverso = url; break;
+                  case 'e_rut_empresa': updatedUser.new_url_e_rut_empresa = url; break;
+                }
+                onUserUpdated(updatedUser);
+              }}
+            />
           </div>
 
           <DialogFooter className="gap-2">

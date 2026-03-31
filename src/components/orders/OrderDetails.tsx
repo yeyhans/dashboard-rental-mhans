@@ -209,6 +209,14 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
     return 'false'; // Valor por defecto
   });
 
+  // Estado para manejar pago_reserva
+  const [reserveStatus, setReserveStatus] = useState<string>(() => {
+    if (typeof rawOrder.pago_reserva === 'boolean') {
+      return rawOrder.pago_reserva ? 'true' : 'false';
+    }
+    return 'false';
+  });
+
   // Nuevos estados para OC y número de factura
   const [ordenCompra, setOrdenCompra] = useState<string>(rawOrder.orden_compra || '');
   const [numeroFactura, setNumeroFactura] = useState<string>(rawOrder.numero_factura || '');
@@ -228,10 +236,15 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       setPaymentStatus(rawOrder.pago_completo === 'true' ? 'true' : 'false');
     }
 
+    // Actualizar estado de reserva
+    if (typeof rawOrder.pago_reserva === 'boolean') {
+      setReserveStatus(rawOrder.pago_reserva ? 'true' : 'false');
+    }
+
     // Actualizar OC y factura
     if (rawOrder.orden_compra) setOrdenCompra(rawOrder.orden_compra);
     if (rawOrder.numero_factura) setNumeroFactura(rawOrder.numero_factura);
-  }, [rawOrder.pago_completo, rawOrder.orden_compra, rawOrder.numero_factura]);
+  }, [rawOrder.pago_completo, rawOrder.pago_reserva, rawOrder.orden_compra, rawOrder.numero_factura]);
 
   const handlePaymentUpdate = async (isPaymentComplete: boolean) => {
     console.log('Actualizando estado de pago:', {
@@ -336,6 +349,39 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
       alert('Error al actualizar el estado de pago: ' + (err instanceof Error ? err.message : 'Error desconocido'));
     }
   };
+  // Actualizar estado de reserva (solo Supabase, sin WooCommerce)
+  const handleReserveUpdate = async (isReservePaid: boolean) => {
+    try {
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      try {
+        const cookies = document.cookie.split('; ');
+        const accessTokenCookie = cookies.find(row => row.startsWith('sb-access-token='));
+        if (accessTokenCookie) {
+          const token = accessTokenCookie.split('=')[1];
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+        }
+      } catch (e) { /* ignore */ }
+
+      const response = await fetch(`/api/orders/update/${rawOrder.id}`, {
+        method: 'PUT',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ pago_reserva: isReservePaid })
+      });
+
+      if (response.ok) {
+        setReserveStatus(isReservePaid ? 'true' : 'false');
+        window.location.reload();
+      } else {
+        const errorData = await response.json();
+        alert(`Error al actualizar reserva: ${errorData.message || 'Error desconocido'}`);
+      }
+    } catch (err) {
+      console.error('Error al actualizar estado de reserva:', err);
+      alert('Error al actualizar estado de reserva');
+    }
+  };
+
   const [loading, setLoading] = useState(false);
   const [transformedOrder, setTransformedOrder] = useState<Order | null>(null);
   const [isEditingOrder, setIsEditingOrder] = useState(false);
@@ -1326,6 +1372,44 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
             <span>Total</span>
             <span className="text-green-600">${formatCurrency(transformedOrder.calculated_total)}</span>
           </div>
+
+          {/* Desglose de pagos (reserva / saldo) */}
+          <div className="border-t pt-3 mt-3 space-y-2">
+            <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Desglose de Pagos</h5>
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span>Reserva (25%)</span>
+                <div className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                  reserveStatus === 'true' ? 'bg-purple-100 text-purple-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  {reserveStatus === 'true' ? '✓ Pagada' : '✗ Pendiente'}
+                </div>
+              </div>
+              <span className="font-medium">${formatCurrency(Math.round(parseFloat(String(transformedOrder.calculated_total)) * 0.25))}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span>Saldo (75%)</span>
+                <div className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                  paymentStatus === 'true' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                }`}>
+                  {paymentStatus === 'true' ? '✓ Pagado' : '✗ Pendiente'}
+                </div>
+              </div>
+              <span className={`font-medium ${paymentStatus === 'true' ? 'text-green-600' : 'text-orange-600'}`}>
+                ${formatCurrency(Math.round(parseFloat(String(transformedOrder.calculated_total)) * 0.75))}
+              </span>
+            </div>
+            {reserveStatus !== 'true' && (
+              <Button
+                size="sm"
+                className="w-full mt-2 bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={() => handleReserveUpdate(true)}
+              >
+                Marcar Reserva como Pagada
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -1549,6 +1633,16 @@ const OrderDetails = ({ order: rawOrder }: OrderDetailsProps) => {
                         <>
                           <div className="flex flex-col space-y-1">
                             <div className="flex items-center gap-2">
+                              <div
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  reserveStatus === 'true' ? 'bg-purple-100 text-purple-800' : 'bg-red-100 text-red-800'
+                                }`}
+                                style={{ cursor: 'pointer' }}
+                                title="Reserva 25%"
+                                onClick={() => handleReserveUpdate(reserveStatus !== 'true')}
+                              >
+                                {reserveStatus === 'true' ? 'Reserva ✓' : 'Sin Reserva'}
+                              </div>
                               <div
                                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${paymentStatusColors[paymentStatus]}`}
                                 style={{ cursor: 'pointer' }}

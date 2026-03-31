@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createClient } from '@supabase/supabase-js';
+import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
 
 /**
  * External API for Contract PDF Generation
@@ -64,9 +65,14 @@ interface ContractGenerationRequest {
 export const POST: APIRoute = async ({ request }) => {
   const origin = request.headers.get('Origin');
   const corsHeaders = getCorsHeaders(origin);
-  
+
+  // Rate limiting: 5 requests per minute per IP
+  const ip = getClientIp(request);
+  const rl = checkRateLimit(ip, RATE_LIMITS.pdfGeneration);
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfterMs);
+
   try {
-    console.log('🌍 External contract PDF generation API called');
+    console.log('[POST /api/external/generate-contract-pdf] Solicitud recibida');
     console.log('📋 Request origin:', origin);
     
     // Parse request body

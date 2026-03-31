@@ -15,7 +15,8 @@ export default defineConfig({
     ssr: {
       external: ["micromatch"],
     },
-    server: {
+    // CORS config solo aplica al dev server de Vite (no producción)
+    server: process.env.NODE_ENV !== 'production' ? {
       cors: {
         origin: ['http://localhost:4321', 'http://localhost:3000'],
         credentials: true,
@@ -24,7 +25,7 @@ export default defineConfig({
         exposedHeaders: ['Set-Cookie'],
         maxAge: 86400,
       },
-    },
+    } : {},
   },
 
   env: {

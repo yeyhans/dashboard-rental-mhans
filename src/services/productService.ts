@@ -212,7 +212,8 @@ export class ProductService {
 
       // Add search filter if searchTerm is provided
       if (searchTerm && searchTerm.trim()) {
-        query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,short_description.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`);
+        const sanitizedTerm = searchTerm.replace(/[%_\\]/g, '\\$&').trim().slice(0, 200);
+        query = query.or(`name.ilike.%${sanitizedTerm}%,description.ilike.%${sanitizedTerm}%,short_description.ilike.%${sanitizedTerm}%,sku.ilike.%${sanitizedTerm}%`);
       }
 
       // Add category filter if categoryId is provided

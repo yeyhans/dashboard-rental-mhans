@@ -1,5 +1,6 @@
 import { defineMiddleware } from "astro:middleware";
 import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
+import { getAllowedOrigin } from "../middleware/auth";
 import micromatch from "micromatch";
 
 const { isMatch } = micromatch;
@@ -16,9 +17,10 @@ const protectedRoutes = [
 
 // Rutas de autenticación que no requieren verificación
 const authRoutes = [
-  "/api/auth/login", 
-  "/api/auth/logout", 
-  "/api/auth/session"
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/auth/session",
+  "/api/auth/refresh"
 ];
 
 const homeRoute = "/";
@@ -27,20 +29,21 @@ const dashboardRoute = "/dashboard";
 export const onRequest = defineMiddleware(async (context, next) => {
   const { url, redirect, locals, request } = context;
 
-  console.log('🔍 Middleware called:', request.method, url.pathname);
-
   // ===== CORS HANDLING - DEBE SER LO PRIMERO =====
-  // Manejar CORS para todas las rutas API
+  // Manejar CORS para todas las rutas API usando whitelist de orígenes permitidos
   if (url.pathname.startsWith('/api/')) {
-    const origin = request.headers.get('origin') || 'http://localhost:4321';
-    
+    const allowedOrigin = getAllowedOrigin(request.headers.get('origin'));
+
     // Manejar preflight OPTIONS requests ANTES de cualquier autenticación
     if (request.method === 'OPTIONS') {
-      console.log('🔵 Global Middleware: OPTIONS request for', url.pathname, 'from', origin);
+      // Si el origen no está en la whitelist, responder sin headers CORS (browser bloqueará)
+      if (!allowedOrigin) {
+        return new Response(null, { status: 204 });
+      }
       return new Response(null, {
         status: 204,
         headers: {
-          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Origin': allowedOrigin,
           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie, Accept',
           'Access-Control-Allow-Credentials': 'true',
@@ -48,13 +51,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
         },
       });
     }
-    
-    // Para requests normales, continuar y agregar headers CORS a la respuesta
+
+    // Para requests normales, continuar y agregar headers CORS solo a orígenes permitidos
     const response = await next();
-    response.headers.set('Access-Control-Allow-Origin', origin);
-    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie, Accept');
-    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    if (allowedOrigin) {
+      response.headers.set('Access-Control-Allow-Origin', allowedOrigin);
+      response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+      response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie, Accept');
+      response.headers.set('Access-Control-Allow-Credentials', 'true');
+    }
     return response;
   }
 
@@ -83,8 +88,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
   locals.user = adminSession.user;
   locals.email = adminSession.admin.email;
   // Nota: adminRole e isExtendedSession se pueden acceder via adminSession si se necesita
-
-  console.log('✅ Admin verificado:', adminSession.admin.email, '- Sesión hasta:', adminSession.expiresAt);
 
   // Si está en home y autenticado, redirigir a dashboard
   if (url.pathname === homeRoute) {

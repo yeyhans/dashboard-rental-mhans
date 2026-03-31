@@ -1,7 +1,8 @@
 import type { APIRoute } from 'astro';
 import { DashboardService } from '../../../services/dashboardService';
+import { withAuth } from '../../../middleware/auth';
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = withAuth(async ({ request }) => {
   try {
     const body = await request.json();
     const { 
@@ -82,7 +83,9 @@ export const POST: APIRoute = async ({ request }) => {
           case 'paid':
             return order.status === 'completed' && order.pago_completo;
           case 'partial':
-            return order.status === 'completed' && !order.pago_completo;
+            return order.status === 'completed' && order.pago_reserva && !order.pago_completo;
+          case 'no_payment':
+            return order.status === 'completed' && !order.pago_reserva && !order.pago_completo;
           case 'pending':
             return order.status !== 'completed';
           default:
@@ -105,16 +108,19 @@ export const POST: APIRoute = async ({ request }) => {
           .filter(order => order.status === 'completed')
           .reduce((sum, order) => {
             const total = order.calculated_total || 0;
-            return sum + (order.pago_completo ? total : total * 0.25);
+            if (order.pago_completo) return sum + total;
+            if (order.pago_reserva) return sum + total * 0.25;
+            return sum;
           }, 0),
         totalPending: processedOrders
           .reduce((sum, order) => {
+            const total = order.calculated_total || 0;
             if (order.status !== 'completed') {
-              return sum + (order.calculated_total || 0);
-            } else if (!order.pago_completo) {
-              return sum + (order.calculated_total || 0) * 0.75;
+              return sum + total;
             }
-            return sum;
+            if (order.pago_completo) return sum;
+            if (order.pago_reserva) return sum + total * 0.75;
+            return sum + total;
           }, 0)
       }
     };
@@ -138,18 +144,17 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
   } catch (error) {
-    console.error('Error in dashboard filtered API:', error);
-    
+    console.error('[POST /api/dashboard/filtered] Error:', error);
+
     return new Response(JSON.stringify({
       success: false,
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Error interno del servidor'
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
+});
 
 export const GET: APIRoute = async () => {
   return new Response(JSON.stringify({

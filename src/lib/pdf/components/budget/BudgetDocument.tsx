@@ -64,20 +64,20 @@ export const BudgetDocument: React.FC<{ data: BudgetDocumentData }> = ({
               <Text style={{ fontSize: 9, color: '#000000' }}>{data.billing.email}</Text>
             </View>
 
-            {data.billing.rut && (
+            {!!data.billing.rut && (
               <View style={{ marginBottom: 4 }}>
                 <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#000000' }}>RUT:</Text>
                 <Text style={{ fontSize: 9, color: '#000000' }}>{data.billing.rut}</Text>
               </View>
             )}
 
-            {data.billing.company && (
+            {!!data.billing.company && (
               <>
                 <View style={{ marginBottom: 4 }}>
                   <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#000000' }}>Empresa:</Text>
                   <Text style={{ fontSize: 9, color: '#000000' }}>{data.billing.company}</Text>
                 </View>
-                {data.project.companyRut && (
+                {!!data.project.companyRut && (
                   <View style={{ marginBottom: 4 }}>
                     <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#000000' }}>RUT Empresa:</Text>
                     <Text style={{ fontSize: 9, color: '#000000' }}>{data.project.companyRut}</Text>
@@ -86,7 +86,7 @@ export const BudgetDocument: React.FC<{ data: BudgetDocumentData }> = ({
               </>
             )}
 
-            {data.billing.phone && (
+            {!!data.billing.phone && (
               <View style={{ marginBottom: 4 }}>
                 <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#000000' }}>Teléfono:</Text>
                 <Text style={{ fontSize: 9, color: '#000000' }}>{data.billing.phone}</Text>
@@ -127,7 +127,7 @@ export const BudgetDocument: React.FC<{ data: BudgetDocumentData }> = ({
               INFORMACIÓN ADICIONAL
             </Text>
 
-            {data.project.comments && (
+            {!!data.project.comments && (
               <View style={{ marginBottom: 4 }}>
                 <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#000000' }}>Comentarios:</Text>
                 <Text style={{ fontSize: 8, color: '#000000' }}>{data.project.comments}</Text>
@@ -135,21 +135,21 @@ export const BudgetDocument: React.FC<{ data: BudgetDocumentData }> = ({
             )}
 
             {/* Información de Retiro */}
-            {data.project.retireName && (
+            {!!data.project.retireName && (
               <View style={{ marginBottom: 4 }}>
                 <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#000000' }}>Retira:</Text>
                 <Text style={{ fontSize: 9, color: '#000000' }}>{data.project.retireName}</Text>
               </View>
             )}
 
-            {data.project.retirePhone && (
+            {!!data.project.retirePhone && (
               <View style={{ marginBottom: 4 }}>
                 <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#000000' }}>Tel. Retiro:</Text>
                 <Text style={{ fontSize: 9, color: '#000000' }}>{data.project.retirePhone}</Text>
               </View>
             )}
 
-            {data.project.retireRut && (
+            {!!data.project.retireRut && (
               <View style={{ marginBottom: 4 }}>
                 <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#000000' }}>RUT Retiro:</Text>
                 <Text style={{ fontSize: 9, color: '#000000' }}>{data.project.retireRut}</Text>
@@ -283,7 +283,7 @@ export const BudgetDocument: React.FC<{ data: BudgetDocumentData }> = ({
           </View>
 
           {/* Discount (Cupón) */}
-          {data.couponCode && data.totals.discount > 0 && (
+          {!!data.couponCode && data.totals.discount > 0 && (
             <View style={{
               flexDirection: 'row',
               justifyContent: 'space-between',

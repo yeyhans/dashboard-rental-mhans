@@ -263,14 +263,20 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           setError('Error al cargar productos: ' + (productsData.error || 'Error desconocido'));
         }
 
-        // Cargar métodos de envío disponibles
+        // Cargar métodos de envío disponibles via API (no directo al servicio)
         setShippingLoading(true);
         try {
-          const shippingResult = await ShippingService.getAllShippingMethods(1, 100, true); // Solo métodos habilitados
+          const shippingResponse = await fetch('/api/shipping/methods?enabled=true&limit=100', {
+            headers,
+            credentials: 'include',
+          });
+          if (!shippingResponse.ok) {
+            throw new Error(`Error loading shipping methods: ${shippingResponse.status}`);
+          }
+          const shippingResult = await shippingResponse.json();
           if (shippingResult.shippingMethods && shippingResult.shippingMethods.length > 0) {
             console.log('📦 Loaded shipping methods:', shippingResult.shippingMethods.length, shippingResult.shippingMethods);
             setShippingMethods(shippingResult.shippingMethods);
-            // No auto-seleccionar - el usuario debe elegir manualmente
           }
         } catch (shippingError) {
           console.error('Error loading shipping methods:', shippingError);
@@ -609,7 +615,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
 
       // Prepare budget data in the same format as order creation
       const budgetData = {
-        order_id: Math.floor(Math.random() * 1000000), // Temporary ID for budget (smaller range)
+        order_id: Date.now(), // ID temporal solo para el PDF de vista previa
         customer_id: formData.customer_id,
         status: 'on-hold',
         billing: {
@@ -648,36 +654,41 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
         }] : []
       };
 
-      console.log('🚀 Generating budget with data:', budgetData);
+      console.log('🚀 Generating preview budget PDF (no order creation)');
 
-      // Crear orden temporal para generar presupuesto
-      // Nota: Este presupuesto es solo una vista previa, no se guarda en la base de datos
-      console.warn('⚠️ Generating preview budget with temporary order ID');
-      console.warn('⚠️ For production budgets, create the order first');
-      
-      // Usar el endpoint dedicado /api/orders/:id/generate-budget
-      // Nota: Como es un ID temporal, puede fallar si el ID no existe en DB
-      const response = await fetch(`/api/orders/${budgetData.order_id}/generate-budget`, {
+      // Generar PDF de presupuesto sin crear orden en la DB
+      const response = await fetch('/api/budget/generate-pdf', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderData: budgetData,
+          uploadToR2: false,
+          sendEmail: false,
+          returnBuffer: true,
+        }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Error al generar presupuesto');
+        let errorMsg = 'Error al generar presupuesto';
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch { /* response is not JSON */ }
+        throw new Error(errorMsg);
       }
 
-      const result = await response.json();
+      // Descargar el PDF en el navegador
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `presupuesto-preview-${Date.now()}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-      if (result.success) {
-        console.log('✅ Budget generated and email sent successfully:', result.pdfUrl);
-        setBudgetSuccess(`Presupuesto generado exitosamente y enviado por correo.`);
-      } else {
-        setBudgetError(result.message || 'Error al generar el presupuesto');
-        console.error('❌ Budget generation failed:', result.error);
-      }
+      setBudgetSuccess('Presupuesto generado y descargado exitosamente.');
 
     } catch (err) {
       setBudgetError(err instanceof Error ? err.message : 'Error al generar el presupuesto');
