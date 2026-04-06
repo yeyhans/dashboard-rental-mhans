@@ -69,6 +69,8 @@ export type Order = {
   correo_enviado: boolean;
   pago_reserva: boolean;
   pago_completo: boolean;
+  reserve_type: string;
+  reserve_value: number;
   is_editable: boolean;
   needs_payment: boolean;
   needs_processing: boolean;

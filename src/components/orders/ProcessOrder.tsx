@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye, Settings, Calendar, AlertTriangle } from 'lucide-react';
+import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye, Settings, Calendar, AlertTriangle, Percent, DollarSign } from 'lucide-react';
 import EditOrderForm from './EditOrderForm';
 import { CouponSelector } from './CouponSelector';
 import { ProductSelector } from './ProductSelector';
@@ -77,6 +77,11 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   const [loading, setLoading] = useState(false);
   const [productsData, setProductsData] = useState<DatabaseProduct[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
+
+  // Reserve configuration states
+  const [reserveType, setReserveType] = useState<string>((orderData as any)?.reserve_type || 'percent');
+  const [reserveValue, setReserveValue] = useState<string>(String((orderData as any)?.reserve_value ?? 25));
+  const [savingReserve, setSavingReserve] = useState(false);
 
   // Financial editing states
   const [isEditingFinancials, setIsEditingFinancials] = useState(false);
@@ -580,6 +585,40 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       applyIva
     );
     return calculations.calculated_total;
+  };
+
+  const handleSaveReserveConfig = async () => {
+    const numValue = parseFloat(reserveValue);
+    if (isNaN(numValue) || numValue < 0) {
+      toast.error('El valor de reserva debe ser un número positivo');
+      return;
+    }
+    if (reserveType === 'percent' && numValue > 100) {
+      toast.error('El porcentaje no puede ser mayor a 100%');
+      return;
+    }
+
+    try {
+      setSavingReserve(true);
+      const response = await fetch(`/api/orders/update/${orderData.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reserve_type: reserveType, reserve_value: numValue })
+      });
+
+      if (response.ok) {
+        toast.success('Configuración de reserva actualizada');
+      } else {
+        const errorData = await response.json();
+        toast.error(`Error: ${errorData.message || 'Error desconocido'}`);
+      }
+    } catch (err) {
+      console.error('[ProcessOrder] Error al guardar reserva:', err);
+      toast.error('Error al guardar configuración de reserva');
+    } finally {
+      setSavingReserve(false);
+    }
   };
 
   const handleSaveFinancials = async () => {
@@ -2073,6 +2112,82 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           );
         })()}
       </div>
+
+      {/* Reserve Configuration Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            Configuración de Reserva
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant={reserveType === 'percent' ? 'default' : 'outline'}
+              onClick={() => setReserveType('percent')}
+              className="flex-1"
+            >
+              <Percent className="h-3 w-3 mr-1" /> Porcentaje
+            </Button>
+            <Button
+              size="sm"
+              variant={reserveType === 'fixed' ? 'default' : 'outline'}
+              onClick={() => setReserveType('fixed')}
+              className="flex-1"
+            >
+              <DollarSign className="h-3 w-3 mr-1" /> Monto Fijo
+            </Button>
+          </div>
+          <div>
+            <Label className="text-sm font-medium">
+              {reserveType === 'fixed' ? 'Monto en CLP' : 'Porcentaje (%)'}
+            </Label>
+            <Input
+              type="number"
+              min="0"
+              max={reserveType === 'percent' ? '100' : undefined}
+              value={reserveValue}
+              onChange={(e) => setReserveValue(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          {(() => {
+            const total = parseFloat(String(orderData.calculated_total || 0));
+            const numValue = parseFloat(reserveValue) || 0;
+            const reserveAmount = reserveType === 'fixed'
+              ? Math.round(numValue)
+              : Math.round(total * (numValue / 100));
+            const pending = Math.max(0, Math.round(total - reserveAmount));
+            return (
+              <div className="rounded-md bg-muted p-3 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span>Total de la orden:</span>
+                  <span className="font-medium">${total.toLocaleString('es-CL')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Reserva ({reserveType === 'percent' ? `${numValue}%` : 'fijo'}):</span>
+                  <span className="font-medium text-blue-600">${reserveAmount.toLocaleString('es-CL')}</span>
+                </div>
+                <div className="flex justify-between border-t pt-1">
+                  <span>Saldo pendiente:</span>
+                  <span className="font-medium text-orange-600">${pending.toLocaleString('es-CL')}</span>
+                </div>
+              </div>
+            );
+          })()}
+          <Button
+            size="sm"
+            onClick={handleSaveReserveConfig}
+            disabled={savingReserve}
+            className="w-full"
+          >
+            <Save className="h-3 w-3 mr-1" />
+            {savingReserve ? 'Guardando...' : 'Guardar Reserva'}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Project Information */}
       {(orderData.order_proyecto || orderData.order_fecha_inicio || orderData.order_fecha_termino) && (

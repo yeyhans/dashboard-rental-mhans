@@ -215,6 +215,8 @@ export interface Database {
           numero_factura: string | null
           new_pdf_on_hold_url: string | null
           new_pdf_processing_url: string | null
+          reserve_type: string
+          reserve_value: number
           tax_lines: Json
           shipping_lines: Json
           fee_lines: Json
@@ -273,6 +275,8 @@ export interface Database {
           numero_factura?: string | null
           new_pdf_on_hold_url?: string | null
           new_pdf_processing_url?: string | null
+          reserve_type?: string
+          reserve_value?: number
           tax_lines?: Json
           shipping_lines?: Json
           fee_lines?: Json
@@ -331,6 +335,8 @@ export interface Database {
           numero_factura?: string | null
           new_pdf_on_hold_url?: string | null
           new_pdf_processing_url?: string | null
+          reserve_type?: string
+          reserve_value?: number
           tax_lines?: Json
           shipping_lines?: Json
           fee_lines?: Json

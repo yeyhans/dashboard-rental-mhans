@@ -87,6 +87,20 @@ export const PUT: APIRoute = async ({ params, request }) => {
         : JSON.parse(updateData.line_items);
     }
     
+    // Reserve configuration
+    if (updateData.reserve_type !== undefined) {
+      const validTypes = ['percent', 'fixed'];
+      if (validTypes.includes(updateData.reserve_type)) {
+        sanitizedData.reserve_type = updateData.reserve_type;
+      }
+    }
+    if (updateData.reserve_value !== undefined) {
+      const numValue = Number(updateData.reserve_value);
+      if (!isNaN(numValue) && numValue >= 0) {
+        sanitizedData.reserve_value = numValue;
+      }
+    }
+
     // Document URLs
     if (updateData.orden_compra !== undefined) sanitizedData.orden_compra = updateData.orden_compra;
     if (updateData.numero_factura !== undefined) sanitizedData.numero_factura = updateData.numero_factura;

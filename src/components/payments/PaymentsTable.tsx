@@ -22,7 +22,13 @@ import {
   TooltipTrigger,
 } from '../ui/tooltip';
 import type { Order } from '../../types/order';
-import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../ui/popover';
+import { Label } from '../ui/label';
+import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Pencil, Percent, DollarSign } from 'lucide-react';
 
 // Helper function to get authentication headers
 function getAuthHeaders(): HeadersInit {
@@ -86,6 +92,12 @@ const getPaymentStatusKey = (status: boolean | string): string => {
   return status === 'true' ? 'true' : 'false';
 };
 
+// Calculate reserve amount based on type and value
+const calculateReserveAmount = (total: number, reserveType: string, reserveValue: number): number => {
+  if (reserveType === 'fixed') return Math.round(reserveValue);
+  return Math.round(total * (reserveValue / 100));
+};
+
 interface PaymentsTableProps {
   initialOrders: Order[];
   initialTotal: string;
@@ -112,6 +124,7 @@ const PaymentsTable = ({
     return initialEditableFields;
   }); 
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
+  const [reserveEditing, setReserveEditing] = useState<{[key: number]: {type: string, value: string}}>({});
   const [sortBy, setSortBy] = useState<'date' | 'client' | 'status' | 'id'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
@@ -387,6 +400,71 @@ const PaymentsTable = ({
     }
   };
 
+  // Abrir editor de reserva para una orden
+  const openReserveEditor = (order: Order) => {
+    setReserveEditing(prev => ({
+      ...prev,
+      [order.id]: {
+        type: (order as any).reserve_type || 'percent',
+        value: String((order as any).reserve_value ?? 25)
+      }
+    }));
+  };
+
+  // Guardar configuración de reserva
+  const saveReserveConfig = async (orderId: number) => {
+    const config = reserveEditing[orderId];
+    if (!config) return;
+
+    const numValue = parseFloat(config.value);
+    if (isNaN(numValue) || numValue < 0) {
+      setError('El valor de reserva debe ser un número positivo');
+      return;
+    }
+    if (config.type === 'percent' && numValue > 100) {
+      setError('El porcentaje no puede ser mayor a 100%');
+      return;
+    }
+
+    try {
+      setUpdatingOrderId(orderId);
+      const headers = getAuthHeaders();
+      const response = await fetch(`/api/orders/update/${orderId}`, {
+        method: 'PUT',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          reserve_type: config.type,
+          reserve_value: numValue
+        })
+      });
+
+      if (response.ok) {
+        setAllOrders(prevOrders =>
+          prevOrders.map(order =>
+            order.id === orderId
+              ? { ...order, reserve_type: config.type, reserve_value: numValue } as any
+              : order
+          )
+        );
+        setReserveEditing(prev => {
+          const next = { ...prev };
+          delete next[orderId];
+          return next;
+        });
+        setError(null);
+      } else {
+        const errorData = await response.json();
+        setError(`Error al actualizar reserva: ${errorData.message || 'Error desconocido'}`);
+      }
+    } catch (err) {
+      console.error('Error:', err);
+      setError('Error al actualizar configuración de reserva');
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
   // Guardar cambios en los campos OC y Factura
   const saveFieldChanges = async (orderId: number) => {
     try {
@@ -547,7 +625,7 @@ const PaymentsTable = ({
                   </TableHead>
                   <TableHead>Proyecto</TableHead>
                   <TableHead>Total</TableHead>
-                  <TableHead>Reserva 25%</TableHead>
+                  <TableHead>Reserva</TableHead>
                   <TableHead>Pendiente</TableHead>
                   <TableHead>Reserva</TableHead>
                   <TableHead>OC</TableHead>
@@ -601,15 +679,110 @@ const PaymentsTable = ({
                         </Tooltip>
                       </TableCell>
                       <TableCell className="font-medium">
-                        ${formatCurrency(Math.round((parseFloat(String(order.calculated_total || 0))) * 0.25))}
+                        {(() => {
+                          const total = parseFloat(String(order.calculated_total || 0));
+                          const rType = (order as any).reserve_type || 'percent';
+                          const rValue = (order as any).reserve_value ?? 25;
+                          const reserveAmount = calculateReserveAmount(total, rType, rValue);
+                          return (
+                            <div className="flex items-center gap-1">
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button
+                                    className="flex items-center gap-1 hover:bg-muted/50 rounded px-1 py-0.5 transition-colors"
+                                    onClick={() => openReserveEditor(order)}
+                                  >
+                                    <span>${formatCurrency(reserveAmount)}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      ({rType === 'percent' ? `${rValue}%` : 'fijo'})
+                                    </span>
+                                    <Pencil className="h-3 w-3 text-muted-foreground" />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-72" align="start">
+                                  <div className="space-y-3">
+                                    <h4 className="font-medium text-sm">Configurar Reserva</h4>
+                                    <div className="flex gap-1">
+                                      <Button
+                                        size="sm"
+                                        variant={reserveEditing[order.id]?.type === 'percent' ? 'default' : 'outline'}
+                                        onClick={() => setReserveEditing(prev => ({
+                                          ...prev,
+                                          [order.id]: { type: 'percent', value: prev[order.id]?.value || '25' }
+                                        }))}
+                                        className="flex-1"
+                                      >
+                                        <Percent className="h-3 w-3 mr-1" /> Porcentaje
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant={reserveEditing[order.id]?.type === 'fixed' ? 'default' : 'outline'}
+                                        onClick={() => setReserveEditing(prev => ({
+                                          ...prev,
+                                          [order.id]: { type: 'fixed', value: prev[order.id]?.value || String(reserveAmount) }
+                                        }))}
+                                        className="flex-1"
+                                      >
+                                        <DollarSign className="h-3 w-3 mr-1" /> Monto Fijo
+                                      </Button>
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs">
+                                        {reserveEditing[order.id]?.type === 'fixed' ? 'Monto en CLP' : 'Porcentaje (%)'}
+                                      </Label>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        max={reserveEditing[order.id]?.type === 'percent' ? '100' : undefined}
+                                        value={reserveEditing[order.id]?.value || ''}
+                                        onChange={(e) => setReserveEditing(prev => {
+                                          const current = prev[order.id] || { type: 'percent', value: '25' };
+                                          return { ...prev, [order.id]: { ...current, value: e.target.value } };
+                                        })}
+                                        className="mt-1"
+                                      />
+                                    </div>
+                                    {(() => {
+                                      const editing = reserveEditing[order.id];
+                                      if (!editing) return null;
+                                      return (
+                                        <div className="text-xs text-muted-foreground">
+                                          Reserva calculada: ${formatCurrency(calculateReserveAmount(
+                                            total,
+                                            editing.type,
+                                            parseFloat(editing.value) || 0
+                                          ))}
+                                        </div>
+                                      );
+                                    })()}
+                                    <Button
+                                      size="sm"
+                                      className="w-full"
+                                      onClick={() => saveReserveConfig(order.id)}
+                                      disabled={updatingOrderId === order.id}
+                                    >
+                                      {updatingOrderId === order.id ? 'Guardando...' : 'Guardar'}
+                                    </Button>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
-                        {order.pago_completo
-                          ? <span className="text-green-600 font-medium">$0</span>
-                          : <span className="text-orange-600 font-medium">
-                              ${formatCurrency(Math.round((parseFloat(String(order.calculated_total || 0))) * 0.75))}
-                            </span>
-                        }
+                        {(() => {
+                          const total = parseFloat(String(order.calculated_total || 0));
+                          const rType = (order as any).reserve_type || 'percent';
+                          const rValue = (order as any).reserve_value ?? 25;
+                          const reserveAmount = calculateReserveAmount(total, rType, rValue);
+                          const pending = total - reserveAmount;
+                          return order.pago_completo
+                            ? <span className="text-green-600 font-medium">$0</span>
+                            : <span className="text-orange-600 font-medium">
+                                ${formatCurrency(Math.max(0, Math.round(pending)))}
+                              </span>;
+                        })()}
                       </TableCell>
                       <TableCell>
                         <div
