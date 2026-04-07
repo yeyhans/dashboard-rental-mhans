@@ -407,6 +407,73 @@ export class UserService {
   }
 
   /**
+   * Obtener usuarios de auth.users que no tienen perfil en user_profiles
+   */
+  static async getOrphanedAuthUsers() {
+    try {
+      const admin = getSupabaseAdmin();
+
+      // Get all auth users
+      const { data: { users: authUsers }, error: authError } = await admin.auth.admin.listUsers();
+      if (authError) throw authError;
+
+      // Get all auth_uids from user_profiles
+      const { data: profiles, error: profileError } = await admin
+        .from('user_profiles')
+        .select('auth_uid');
+      if (profileError) throw profileError;
+
+      const profileAuthUids = new Set(profiles?.map(p => p.auth_uid) || []);
+
+      // Filter auth users without profiles
+      const orphaned = authUsers
+        .filter(u => !profileAuthUids.has(u.id))
+        .map(u => ({
+          auth_uid: u.id,
+          email: u.email || '',
+          created_at: u.created_at
+        }));
+
+      return orphaned;
+    } catch (error) {
+      console.error('[UserService] Error obteniendo usuarios huérfanos:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Crear perfil básico para un usuario de auth huérfano
+   */
+  static async createProfileForOrphan(authUid: string, email: string): Promise<UserProfile> {
+    try {
+      const admin = getSupabaseAdmin();
+
+      const username = email.split('@')[0] || '';
+
+      const { data, error } = await admin
+        .from('user_profiles')
+        .insert({
+          auth_uid: authUid,
+          email: email,
+          nombre: username,
+          apellido: '',
+          usuario: username,
+          pais: 'Chile',
+          tipo_cliente: 'natural',
+          terminos_aceptados: false
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('[UserService] Error creando perfil para huérfano:', { authUid, email, error });
+      throw error;
+    }
+  }
+
+  /**
    * Obtener estadísticas de usuarios
    */
   static async getUserStats() {
