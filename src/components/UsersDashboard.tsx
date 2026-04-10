@@ -70,8 +70,8 @@ const UsersDashboard = ({
   // State management
   const [allUsers, setAllUsers] = useState<UserProfile[]>(initialUsers);
   const [totalUsers, setTotalUsers] = useState(initialTotal);
-  const [loading] = useState(false);
-  const [error] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -85,10 +85,31 @@ const UsersDashboard = ({
   const [showOrphanedDialog, setShowOrphanedDialog] = useState(false);
   const [creatingProfileFor, setCreatingProfileFor] = useState<string | null>(null);
 
+  // Cargar todos los usuarios desde la API al montar el componente
+  useEffect(() => {
+    const fetchAllUsers = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await apiClient.get('/api/users?page=1&limit=500');
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Error al cargar usuarios');
+        setAllUsers(result.data.users || []);
+        setTotalUsers(result.data.total || 0);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error al cargar usuarios';
+        console.error('[UsersDashboard] Error al cargar usuarios:', msg);
+        setError(msg);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAllUsers();
+  }, []);
+
   // Initialize mobile view detection
   useEffect(() => {
-    console.log('🔑 Session token available for UsersDashboard');
-
     const checkIfMobile = () => {
       setIsMobileView(window.innerWidth < 768);
     };
@@ -99,7 +120,7 @@ const UsersDashboard = ({
     return () => {
       window.removeEventListener('resize', checkIfMobile);
     };
-  }, [sessionToken]);
+  }, []);
 
   // Fetch orphaned users on mount
   useEffect(() => {
@@ -227,10 +248,21 @@ const UsersDashboard = ({
     setSelectedUser(null);
   };
 
-  // Refresh data - reload the page to get fresh server-side data
-  const refreshData = () => {
-    if (typeof window !== 'undefined') {
-      window.location.reload();
+  // Refresh data - refetch desde la API
+  const refreshData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await apiClient.get('/api/users?page=1&limit=500');
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Error al actualizar usuarios');
+      setAllUsers(result.data.users || []);
+      setTotalUsers(result.data.total || 0);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error al actualizar usuarios';
+      setError(msg);
+    } finally {
+      setLoading(false);
     }
   };
 

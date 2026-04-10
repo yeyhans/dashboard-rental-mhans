@@ -413,9 +413,20 @@ export class UserService {
     try {
       const admin = getSupabaseAdmin();
 
-      // Get all auth users
-      const { data: { users: authUsers }, error: authError } = await admin.auth.admin.listUsers();
-      if (authError) throw authError;
+      // Get all auth users with pagination (default perPage en Supabase SDK es 50)
+      const allAuthUsers: any[] = [];
+      let page = 1;
+      const perPage = 100;
+
+      while (true) {
+        const { data, error: pageError } = await admin.auth.admin.listUsers({ page, perPage });
+        if (pageError) throw pageError;
+        allAuthUsers.push(...(data.users || []));
+        if ((data.users || []).length < perPage) break;
+        page++;
+      }
+
+      const authUsers = allAuthUsers;
 
       // Get all auth_uids from user_profiles
       const { data: profiles, error: profileError } = await admin

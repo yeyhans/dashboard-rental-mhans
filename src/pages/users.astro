@@ -2,7 +2,6 @@
 import Base from "../layout/Base.astro";
 import UsersDashboardWithToaster from "../components/UsersDashboardWithToaster";
 import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
-import { UserService } from "../services/userService";
 
 export const prerender = false;
 
@@ -24,12 +23,11 @@ if (!sessionToken) {
   console.warn('⚠️ No se encontró token de sesión en cookies');
 }
 
-// Cargar usuarios para paginación y filtrado del lado del cliente
-const { users, total } = await UserService.searchUsers('', 1, 1000); // Cargar hasta 1000 usuarios
-
+// Los usuarios se cargan client-side desde /api/users para evitar problemas
+// de serialización de props grandes con Astro Islands (client:load)
 const usersData = {
-  users: users || [],
-  total: total || 0,
+  users: [],
+  total: 0,
   adminInfo: {
     email: adminSession.admin.email,
     role: adminSession.admin.role,
