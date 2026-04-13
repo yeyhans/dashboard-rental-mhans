@@ -128,7 +128,7 @@ export const POST: APIRoute = withCors(async (context) => {
       .from('admin_users')
       .select('*')
       .eq('user_id', authData.user.id)
-      .in('role', ['admin', 'super_admin'])
+      .eq('role', 'admin')
       .single();
 
     if (adminError || !adminUser) {

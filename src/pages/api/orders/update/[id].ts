@@ -49,13 +49,15 @@ export const PUT: APIRoute = async ({ params, request }) => {
     if (updateData.order_retire_rut !== undefined) sanitizedData.order_retire_rut = updateData.order_retire_rut;
     if (updateData.order_comments !== undefined) sanitizedData.order_comments = updateData.order_comments;
     
-    // Financial calculations
+    // Financial calculations — fuente de verdad: campos calculated_*
+    // Los campos total, total_tax y cart_tax son legacy de WooCommerce (deprecados).
+    // total se mantiene sincronizado con calculated_total por backward compatibility.
     if (updateData.calculated_subtotal !== undefined) sanitizedData.calculated_subtotal = Number(updateData.calculated_subtotal);
     if (updateData.calculated_discount !== undefined) sanitizedData.calculated_discount = Number(updateData.calculated_discount);
     if (updateData.calculated_iva !== undefined) sanitizedData.calculated_iva = Number(updateData.calculated_iva);
     if (updateData.calculated_total !== undefined) {
       sanitizedData.calculated_total = Number(updateData.calculated_total);
-      sanitizedData.total = Number(updateData.calculated_total); // Keep both fields in sync
+      sanitizedData.total = Number(updateData.calculated_total); // legacy sync — no usar total como fuente de verdad
     }
     
     // Status flags

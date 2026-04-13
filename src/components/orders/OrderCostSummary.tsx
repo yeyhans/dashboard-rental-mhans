@@ -4,6 +4,7 @@ import { Checkbox } from '../ui/checkbox';
 import { useState, useEffect } from 'react';
 import { CouponSelector } from './CouponSelector';
 import type { Database } from '../../types/database';
+import { IVA_RATE } from '../../lib/pdf/utils/calculations';
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
 
@@ -71,105 +72,123 @@ export const OrderCostSummary = ({
     setApplyIva(parseFloat(iva) > 0);
   }, [iva]);
   
-  const taxRate = 0.19;
-  
+  const taxRate = IVA_RATE;
+
   const formatCurrencyWithSymbol = (value: string | number) => {
     const symbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '$';
     return `${symbol}${formatCurrency(value)}`;
   };
 
   const handleIvaChange = (checked: boolean) => {
-    console.log(`Cambiando aplicación de IVA a: ${checked}`);
+    console.log(`[OrderCostSummary] Cambiando IVA a: ${checked}`);
     setApplyIva(checked);
-    
+
     if (onTotalChange) {
-      // Convertir valores a números con precisión de 2 decimales
       const subtotalNum = Math.round((parseFloat(subtotal) || 0) * 100) / 100;
       const discountNum = Math.round((parseFloat(discount) || 0) * 100) / 100;
       const shippingNum = Math.round((parseFloat(shipping) || 0) * 100) / 100;
       const couponDiscountNum = Math.round((couponDiscountAmount || 0) * 100) / 100;
-      
-      // Calcular nuevo IVA
-      const newIva = checked ? Math.round(subtotalNum * taxRate * 100) / 100 : 0;
-      
-      // Calcular nuevo total (subtotal - descuento manual - descuento cupón + shipping + IVA)
       const manualDiscountNum = showManualDiscount ? discountNum : 0;
-      const newTotal = Math.round((subtotalNum - manualDiscountNum - couponDiscountNum + shippingNum + newIva) * 100) / 100;
-      
-      console.log('Recalculando con IVA:', {
+
+      // Base imponible = subtotal - descuentos + shipping (shipping es afecto a IVA)
+      const baseImponible = Math.round((subtotalNum - manualDiscountNum - couponDiscountNum + shippingNum) * 100) / 100;
+      const newIva = checked ? Math.round(baseImponible * taxRate * 100) / 100 : 0;
+      const newTotal = Math.round((baseImponible + newIva) * 100) / 100;
+
+      console.log('[OrderCostSummary] Recálculo IVA:', {
         subtotal: subtotalNum,
-        discount: discountNum,
+        manualDiscount: manualDiscountNum,
         couponDiscount: couponDiscountNum,
         shipping: shippingNum,
-        newIva: newIva,
-        newTotal: newTotal,
-        checked: checked
+        baseImponible,
+        newIva,
+        newTotal,
+        checked,
       });
-      
-      // Enviar valores como strings
+
       onTotalChange(newTotal.toString(), newIva.toString());
     }
   };
 
-  // Handle shipping change
+  // Handle manual discount change — recalculate total with current IVA
+  const handleManualDiscountChange = (value: string) => {
+    if (onDiscountChange) {
+      onDiscountChange(value);
+    }
+
+    if (onTotalChange) {
+      const subtotalNum = Math.round((parseFloat(subtotal) || 0) * 100) / 100;
+      const discountNum = Math.round((parseFloat(value) || 0) * 100) / 100;
+      const shippingNum = Math.round((parseFloat(shipping) || 0) * 100) / 100;
+      const couponDiscountNum = Math.round((couponDiscountAmount || 0) * 100) / 100;
+
+      const baseImponible = Math.round((subtotalNum - discountNum - couponDiscountNum + shippingNum) * 100) / 100;
+      const newIva = applyIva ? Math.round(baseImponible * taxRate * 100) / 100 : 0;
+      const newTotal = Math.round((baseImponible + newIva) * 100) / 100;
+
+      onTotalChange(newTotal.toString(), newIva.toString());
+    }
+  };
+
+  // Handle shipping change — recalculate IVA because shipping is afecto (taxed)
   const handleShippingChange = (value: string) => {
     if (onShippingChange) {
       onShippingChange(value);
     }
-    
-    // Recalculate total when shipping changes
+
     if (onTotalChange) {
       const subtotalNum = Math.round((parseFloat(subtotal) || 0) * 100) / 100;
       const discountNum = Math.round((parseFloat(discount) || 0) * 100) / 100;
       const shippingNum = Math.round((parseFloat(value) || 0) * 100) / 100;
       const couponDiscountNum = Math.round((couponDiscountAmount || 0) * 100) / 100;
-      const ivaNum = Math.round((parseFloat(iva) || 0) * 100) / 100;
-      
       const manualDiscountNum = showManualDiscount ? discountNum : 0;
-      const newTotal = Math.round((subtotalNum - manualDiscountNum - couponDiscountNum + shippingNum + ivaNum) * 100) / 100;
-      
-      onTotalChange(newTotal.toString(), iva);
+
+      const baseImponible = Math.round((subtotalNum - manualDiscountNum - couponDiscountNum + shippingNum) * 100) / 100;
+      const newIva = applyIva ? Math.round(baseImponible * taxRate * 100) / 100 : 0;
+      const newTotal = Math.round((baseImponible + newIva) * 100) / 100;
+
+      onTotalChange(newTotal.toString(), newIva.toString());
     }
   };
 
-  // Handle coupon applied
+  // Handle coupon applied — recalculate IVA on new base imponible
   const handleCouponApplied = (coupon: Coupon, discountAmount: number) => {
     if (onCouponApplied) {
       onCouponApplied(coupon, discountAmount);
     }
-    
-    // Recalculate total when coupon is applied
+
     if (onTotalChange) {
       const subtotalNum = Math.round((parseFloat(subtotal) || 0) * 100) / 100;
       const discountNum = Math.round((parseFloat(discount) || 0) * 100) / 100;
       const shippingNum = Math.round((parseFloat(shipping) || 0) * 100) / 100;
       const couponDiscountNum = Math.round(discountAmount * 100) / 100;
-      const ivaNum = Math.round((parseFloat(iva) || 0) * 100) / 100;
-      
       const manualDiscountNum = showManualDiscount ? discountNum : 0;
-      const newTotal = Math.round((subtotalNum - manualDiscountNum - couponDiscountNum + shippingNum + ivaNum) * 100) / 100;
-      
-      onTotalChange(newTotal.toString(), iva);
+
+      const baseImponible = Math.round((subtotalNum - manualDiscountNum - couponDiscountNum + shippingNum) * 100) / 100;
+      const newIva = applyIva ? Math.round(baseImponible * taxRate * 100) / 100 : 0;
+      const newTotal = Math.round((baseImponible + newIva) * 100) / 100;
+
+      onTotalChange(newTotal.toString(), newIva.toString());
     }
   };
 
-  // Handle coupon removed
+  // Handle coupon removed — recalculate IVA on new base imponible
   const handleCouponRemoved = () => {
     if (onCouponRemoved) {
       onCouponRemoved();
     }
-    
-    // Recalculate total when coupon is removed
+
     if (onTotalChange) {
       const subtotalNum = Math.round((parseFloat(subtotal) || 0) * 100) / 100;
       const discountNum = Math.round((parseFloat(discount) || 0) * 100) / 100;
       const shippingNum = Math.round((parseFloat(shipping) || 0) * 100) / 100;
-      const ivaNum = Math.round((parseFloat(iva) || 0) * 100) / 100;
-      
       const manualDiscountNum = showManualDiscount ? discountNum : 0;
-      const newTotal = Math.round((subtotalNum - manualDiscountNum + shippingNum + ivaNum) * 100) / 100;
-      
-      onTotalChange(newTotal.toString(), iva);
+
+      const baseImponible = Math.round((subtotalNum - manualDiscountNum + shippingNum) * 100) / 100;
+      const newIva = applyIva ? Math.round(baseImponible * taxRate * 100) / 100 : 0;
+      const newTotal = Math.round((baseImponible + newIva) * 100) / 100;
+
+      onTotalChange(newTotal.toString(), newIva.toString());
     }
   };
 
@@ -204,7 +223,7 @@ export const OrderCostSummary = ({
                   type="number"
                   className="w-20 md:w-24 text-right h-8"
                   value={discount}
-                  onChange={(e) => onDiscountChange(e.target.value)}
+                  onChange={(e) => handleManualDiscountChange(e.target.value)}
                   disabled={loading}
                   min="0"
                   step="1000"

@@ -1,5 +1,8 @@
 import type { LineItem } from '../core/types';
 
+export const IVA_RATE = 0.19;
+export const RESERVE_RATE = 0.25;
+
 export interface PriceCalculation {
   subtotal: number;
   iva: number;
@@ -9,20 +12,22 @@ export interface PriceCalculation {
 
 /**
  * Calculate order totals with IVA (19%)
+ * Base imponible = subtotal - discount + shippingTotal (shipping es afecto a IVA)
  */
 export function calculateOrderTotals(
   lineItems: LineItem[],
   numJornadas: number,
-  discount: number = 0
+  discount: number = 0,
+  shippingTotal: number = 0
 ): PriceCalculation {
   const subtotal = lineItems.reduce((sum, item) => {
     return sum + parseFloat(String(item.price)) * item.quantity * numJornadas;
   }, 0);
 
-  const discountedSubtotal = subtotal - discount;
-  const iva = discountedSubtotal * 0.19;
-  const total = discountedSubtotal + iva;
-  const reserve = total * 0.25;
+  const baseImponible = subtotal - discount + shippingTotal;
+  const iva = baseImponible * IVA_RATE;
+  const total = baseImponible + iva;
+  const reserve = total * RESERVE_RATE;
 
   return { subtotal, iva, total, reserve };
 }
@@ -46,7 +51,7 @@ export function calculateItemIVA(
   quantity: number,
   jornadas: number
 ): number {
-  return calculateItemSubtotal(price, quantity, jornadas) * 0.19;
+  return calculateItemSubtotal(price, quantity, jornadas) * IVA_RATE;
 }
 
 /**
@@ -57,11 +62,12 @@ export function calculateItemTotal(
   quantity: number,
   jornadas: number
 ): number {
-  return calculateItemSubtotal(price, quantity, jornadas) * 1.19;
+  return calculateItemSubtotal(price, quantity, jornadas) * (1 + IVA_RATE);
 }
 
 /**
- * Calculate products-only totals (excluding shipping and discounts)
+ * Calculate products-only totals (excluding shipping and discounts).
+ * Used for per-item breakdown in documents.
  */
 export function calculateProductsOnlyTotals(
   lineItems: LineItem[],
@@ -71,9 +77,9 @@ export function calculateProductsOnlyTotals(
     return sum + item.price * item.quantity * numJornadas;
   }, 0);
 
-  const iva = subtotal * 0.19;
-  const total = subtotal * 1.19;
-  const reserve = total * 0.25;
+  const iva = subtotal * IVA_RATE;
+  const total = subtotal * (1 + IVA_RATE);
+  const reserve = total * RESERVE_RATE;
 
   return { subtotal, iva, total, reserve };
 }

@@ -224,18 +224,6 @@ export const getServerAdmin = async (context: APIContext | AstroGlobal): Promise
   }
 };
 
-// Función para verificar si una sesión extendida es válida
-export const isExtendedSessionValid = (context: APIContext | AstroGlobal): boolean => {
-  const adminSession = context.cookies.get('sb-admin-session')?.value;
-  const sessionExpiry = context.cookies.get('sb-session-expiry')?.value;
-  
-  if (!adminSession || adminSession !== 'true') return false;
-  if (!sessionExpiry) return false;
-  
-  const expiryDate = new Date(sessionExpiry);
-  return expiryDate > new Date();
-};
-
 // Función para limpiar cookies de sesión
 export const clearAuthCookies = (context: APIContext | AstroGlobal) => {
   const cookiesToClear = [

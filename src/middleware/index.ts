@@ -68,6 +68,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return next();
   }
 
+  // Si está en home, verificar si ya está autenticado para redirigir
+  if (url.pathname === homeRoute) {
+    const adminSession = await getServerAdmin(context);
+    if (adminSession) {
+      return redirect(dashboardRoute);
+    }
+    return next();
+  }
+
   // Si no es una ruta protegida, continuar sin verificación
   if (!isMatch(url.pathname, protectedRoutes)) {
     return next();
@@ -87,12 +96,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Configurar datos del usuario en locals para uso en páginas
   locals.user = adminSession.user;
   locals.email = adminSession.admin.email;
-  // Nota: adminRole e isExtendedSession se pueden acceder via adminSession si se necesita
-
-  // Si está en home y autenticado, redirigir a dashboard
-  if (url.pathname === homeRoute) {
-    return redirect(dashboardRoute);
-  }
 
   return next();
 }); 
