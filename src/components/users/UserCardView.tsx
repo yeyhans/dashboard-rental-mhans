@@ -1,11 +1,12 @@
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { ChevronRight, Edit } from 'lucide-react';
+import { ChevronRight, Edit, RefreshCw } from 'lucide-react';
 import type { UserProfile } from '../../types/user';
 import { enhanceUser, formatDate, statusColors } from './utils/userUtils';
 import EditUserDialog from '../EditUserDialog';
 import UserDocumentUpload from './UserDocumentUpload';
+import RegenerateContractDialog from './RegenerateContractDialog';
 
 interface UserCardViewProps {
   users: UserProfile[];
@@ -82,13 +83,23 @@ const UserCardView = ({
                   onUserUpdated={onUserUpdated}
                   sessionToken={sessionToken}
                 />
-                <EditUserDialog 
-                  user={user} 
+                <EditUserDialog
+                  user={user}
                   onUserUpdated={onUserUpdated}
                   sessionToken={sessionToken}
                   trigger={
                     <Button variant="outline" size="sm">
                       <Edit className="h-4 w-4" />
+                    </Button>
+                  }
+                />
+                <RegenerateContractDialog
+                  user={user}
+                  onUserUpdated={onUserUpdated}
+                  sessionToken={sessionToken}
+                  trigger={
+                    <Button variant="outline" size="sm">
+                      <RefreshCw className="h-4 w-4" />
                     </Button>
                   }
                 />
