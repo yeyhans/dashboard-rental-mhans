@@ -5,6 +5,7 @@ import { UserContractDocument } from '../../../lib/pdf/components/contract/UserC
 import type { UserContractData } from '../../../lib/pdf/components/contract/UserContractDocument';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
 import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
+import { getServerAdmin } from '../../../lib/supabase';
 
 /**
  * Internal User Contract PDF Generation API using React-PDF
@@ -160,15 +161,20 @@ body{width:100%!important;min-width:100%!important;}
   `;
 };
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async (context) => {
+  const { request } = context;
   try {
     // Rate limiting: 5 requests per minute
     const ip = getClientIp(request);
     const rl = checkRateLimit(ip, RATE_LIMITS.pdfGeneration);
     if (!rl.allowed) return rateLimitResponse(rl.retryAfterMs);
 
-    // Auth validation
-    const authorized = await validateContractRequest(request);
+    // Auth validation — inter-service/API key first, then admin cookie session
+    let authorized = await validateContractRequest(request);
+    if (!authorized) {
+      const adminSession = await getServerAdmin(context as any);
+      authorized = !!adminSession;
+    }
     if (!authorized) {
       console.error('[POST /api/contracts/generate-pdf] Solicitud no autorizada');
       return new Response(JSON.stringify({
