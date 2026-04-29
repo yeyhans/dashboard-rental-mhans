@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../lib/supabase';
 import type { Database } from '../types/database';
+import { sendEmailViaWorker } from '../lib/emailWorkerService';
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 type UserProfileInsert = Database['public']['Tables']['user_profiles']['Insert'];
@@ -120,9 +121,6 @@ export class UserService {
     temporaryPassword: string
   ): Promise<void> {
     try {
-      const { Resend } = await import('resend');
-      const resend = new Resend(import.meta.env.RESEND_API_KEY);
-
       const frontendUrl = import.meta.env.PUBLIC_FRONTEND_URL || 'https://rental.mariohans.cl';
       const emailDomain = import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl';
 
@@ -147,16 +145,15 @@ export class UserService {
         </div>
       `;
 
-      const { error } = await resend.emails.send({
-        from: `Rental Mario Hans <admin@${emailDomain}>`,
-        to: [email],
-        cc: ['rental.mariohans@gmail.com'],
-        subject: 'Bienvenido/a a Mario Hans Rental — Tus credenciales de acceso',
-        html,
-      });
+      // Send via Cloudflare Worker using send_email binding
+      const result = await sendEmailViaWorker(
+        email,
+        'Bienvenido/a a Mario Hans Rental — Tus credenciales de acceso',
+        html
+      );
 
-      if (error) {
-        console.error('[UserService] Error enviando email de bienvenida:', { email, error });
+      if (!result.success) {
+        console.error('[UserService] Error enviando email de bienvenida:', { email, error: result.error });
       } else {
         console.log('[UserService] Email de bienvenida enviado a:', email);
       }

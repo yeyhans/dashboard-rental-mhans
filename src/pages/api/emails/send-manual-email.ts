@@ -6,15 +6,13 @@ interface ManualEmailRequest {
   to: string;
   subject: string;
   html: string;
-  attachments?: {
-    budgetUrl?: string;
-    contractUrl?: string;
-    customDocuments?: Array<{
-      name: string;
-      url: string;
-      type: 'budget' | 'contract' | 'warranty' | 'other';
-    }>;
-  };
+  attachments?: Array<{
+    url?: string;
+    filename?: string;
+    type?: string;
+    base64?: string;
+    contentType?: string;
+  }>;
   metadata?: {
     type: string;
     order_id: number;
@@ -96,56 +94,36 @@ export const POST: APIRoute = withAuth(async ({ request }) => {
       });
     }
 
-    // Send email using Resend directly
-    console.log('📤 [Backend] Sending manual email via Resend...');
-    
-    try {
-      const { Resend } = await import('resend');
-      const resend = new Resend(import.meta.env.RESEND_API_KEY);
-      
-      // Prepare email data
-      const emailData = {
-        from: `Rental Mario Hans <noreply@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
-        to: [to],
-        subject,
-        html,
-      };
+    // Send email using Cloudflare Worker
+    console.log('📤 [Backend] Sending email via Cloudflare Worker...');
 
-      console.log('📤 Sending email to:', to);
-      console.log('📧 Subject:', subject);
-      
-      const { data, error } = await resend.emails.send(emailData);
+    const workerResponse = await sendViaWorker(to, subject, html, metadata);
+    const workerData = await workerResponse.json();
 
-      if (error) {
-        console.error('❌ [Backend] Resend error:', error);
-        return new Response(JSON.stringify({
-          success: false,
-          message: 'Failed to send email via Resend',
-          error: error.message
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      console.log('✅ [Backend] Manual email sent successfully via Resend:', data?.id);
+    if (workerResponse.ok && workerData.success) {
+      console.log('✅ [Backend] Manual email sent successfully via Cloudflare Worker');
 
       return new Response(JSON.stringify({
         success: true,
-        message: 'Manual email sent successfully',
-        emailId: data?.id || `manual_${metadata?.order_id}_${Date.now()}`
+        message: 'Manual email sent successfully (via Cloudflare Worker)',
+        emailId: workerData.emailId || workerData.messageId || `worker_manual_${metadata?.order_id}_${Date.now()}`
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
-
-    } catch (resendError) {
-      console.error('💥 [Backend] Error with Resend service:', resendError);
-      
-      // Fallback: Try via Cloudflare Worker
-      console.log('🔄 [Backend] Attempting fallback via Cloudflare Worker...');
-      return await sendViaWorkerFallback(to, subject, html, metadata);
     }
+
+    // Worker failed - return error
+    console.error('❌ [Backend] Cloudflare Worker failed, returning error (no Resend fallback)');
+    
+    return new Response(JSON.stringify({
+      success: false,
+      message: 'Failed to send email via Cloudflare Worker',
+      error: 'Email delivery failed. Please try again or contact support.'
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
 
   } catch (error) {
     console.error('💥 [Backend] Error sending manual email:', error);
@@ -161,9 +139,9 @@ export const POST: APIRoute = withAuth(async ({ request }) => {
 });
 
 /**
- * Fallback method using Cloudflare Worker
+ * Primary method using Cloudflare Worker
  */
-async function sendViaWorkerFallback(
+async function sendViaWorker(
   to: string,
   subject: string,
   html: string,
@@ -171,8 +149,8 @@ async function sendViaWorkerFallback(
 ): Promise<Response> {
   try {
     const workerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || 'https://workers.mariohans.cl';
-    
-    const emailPayload = {
+
+    const emailPayload: any = {
       to,
       subject,
       html,
@@ -184,7 +162,43 @@ async function sendViaWorkerFallback(
       }
     };
 
-    console.log('📤 [Backend] Sending via worker fallback to:', to);
+    // Process attachments if provided
+    if (metadata?.attachments && metadata.attachments.length > 0) {
+      const processedAttachments = await Promise.all(
+        metadata.attachments.map(async (att: any) => {
+          if (att.url) {
+            // Fetch content from URL
+            const response = await fetch(att.url);
+            if (!response.ok) {
+              console.warn(`⚠️ Failed to fetch attachment: ${att.url}`);
+              return null;
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            const base64 = Buffer.from(arrayBuffer).toString('base64');
+            return {
+              filename: att.filename || att.url.split('/').pop() || 'attachment',
+              content: base64,
+              contentType: att.contentType || getContentType(att.url)
+            };
+          } else if (att.base64) {
+            return {
+              filename: att.filename || 'attachment',
+              content: att.base64,
+              contentType: att.contentType || 'application/pdf'
+            };
+          }
+          return null;
+        })
+      );
+
+      // Filter out null attachments and add to payload
+      const validAttachments = processedAttachments.filter(Boolean);
+      if (validAttachments.length > 0) {
+        emailPayload.attachments = validAttachments;
+      }
+    }
+
+    console.log('📤 [Backend] Sending via Cloudflare Worker to:', to);
 
     const response = await fetch(`${workerUrl}/send-email`, {
       method: 'POST',
@@ -196,11 +210,11 @@ async function sendViaWorkerFallback(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ [Backend] Worker fallback error:', errorText);
-      
+      console.error('❌ [Backend] Cloudflare Worker error:', errorText);
+
       return new Response(JSON.stringify({
         success: false,
-        message: 'Failed to send email via worker fallback',
+        message: 'Failed to send email via Cloudflare Worker',
         error: `Worker error: ${response.statusText}`
       }), {
         status: 500,
@@ -213,7 +227,7 @@ async function sendViaWorkerFallback(
     if (!result.success) {
       return new Response(JSON.stringify({
         success: false,
-        message: 'Worker fallback failed',
+        message: 'Cloudflare Worker failed',
         error: result.message || 'Failed to send email via worker'
       }), {
         status: 500,
@@ -221,11 +235,11 @@ async function sendViaWorkerFallback(
       });
     }
 
-    console.log('✅ [Backend] Manual email sent successfully via worker fallback');
+    console.log('✅ [Backend] Manual email sent successfully via Cloudflare Worker');
 
     return new Response(JSON.stringify({
       success: true,
-      message: 'Manual email sent successfully (via worker)',
+      message: 'Manual email sent successfully (via Cloudflare Worker)',
       emailId: result.emailId || result.messageId || `worker_manual_${metadata?.order_id}_${Date.now()}`
     }), {
       status: 200,
@@ -233,16 +247,25 @@ async function sendViaWorkerFallback(
     });
 
   } catch (error) {
-    console.error('💥 [Backend] Error in worker fallback:', error);
-    
+    console.error('💥 [Backend] Error in Cloudflare Worker:', error);
+
+    // Return failure so we can try Resend fallback
     return new Response(JSON.stringify({
       success: false,
-      message: 'All email methods failed',
+      message: 'Worker failed',
       error: error instanceof Error ? error.message : 'Unknown worker error'
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
   }
+}
+
+function getContentType(url: string): string {
+  if (url.includes('.pdf')) return 'application/pdf';
+  if (url.includes('.jpg') || url.includes('.jpeg')) return 'image/jpeg';
+  if (url.includes('.png')) return 'image/png';
+  if (url.includes('.gif')) return 'image/gif';
+  return 'application/octet-stream';
 }
 

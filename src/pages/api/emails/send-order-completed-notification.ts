@@ -111,74 +111,36 @@ export const POST: APIRoute = async ({ request }) => {
       ...(customMessage && { customMessage })
     });
 
-    // Send email using Resend
-    console.log('📤 [Backend] Sending order completed email via Resend...');
-    
-    try {
-      const { Resend } = await import('resend');
-      const resend = new Resend(import.meta.env.RESEND_API_KEY);
-      
-      // Send email to customer
-      const { data, error } = await resend.emails.send({
-        from: `Rental Mario Hans <ordenes@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
-        to: [customerEmail],
-        subject: customerSubject,
-        html: htmlContent,
-      });
+    // Send email using Cloudflare Worker
+    console.log('📤 [Backend] Sending order completed email via Cloudflare Worker...');
 
-      if (error) {
-        console.error('❌ [Backend] Resend error:', error);
-        return new Response(JSON.stringify({
-          success: false,
-          message: 'Failed to send email via Resend',
-          error: error.message
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
+    const workerResponse = await sendViaWorker(customerEmail, customerSubject, htmlContent, orderData, 'order_completed');
+    const workerData = await workerResponse.json();
 
-      console.log('✅ [Backend] Order completed email sent successfully to customer:', data?.id);
-
-      // Send notification to admin (same content, different subject)
-      try {
-        const adminSubject = `🔔 Orden #${orderId} Completada - ${customerName} - ${projectName}`;
-        
-        // Use the same HTML content for admin (just different subject)
-        const adminHtml = htmlContent;
-        
-        const adminResult = await resend.emails.send({
-          from: `Rental Mario Hans Admin <admin@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
-          to: [ADMIN_EMAIL],
-          subject: adminSubject,
-          html: adminHtml,
-        });
-        console.log('✅ [Backend] Admin notification sent successfully to:', ADMIN_EMAIL, 'ID:', adminResult.data?.id);
-      } catch (adminError) {
-        console.warn('⚠️ [Backend] Failed to send admin notification (non-critical):', adminError);
-      }
+    if (workerResponse.ok && workerData.success) {
+      console.log('✅ [Backend] Order completed email sent successfully via Cloudflare Worker');
 
       return new Response(JSON.stringify({
         success: true,
-        message: 'Order completed notification email sent successfully',
-        emailId: data?.id || `backend_${orderId}_${Date.now()}`
+        message: 'Order completed notification email sent successfully (via Cloudflare Worker)',
+        emailId: workerData.emailId || workerData.messageId || `completed_${orderId}_${Date.now()}`
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
-
-    } catch (resendError) {
-      console.error('💥 [Backend] Error with Resend service:', resendError);
-      
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'Failed to send order completed email',
-        error: resendError instanceof Error ? resendError.message : 'Unknown error'
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
     }
+
+    // Worker failed - return error
+    console.error('❌ [Backend] Cloudflare Worker failed, returning error (no Resend fallback)');
+    
+    return new Response(JSON.stringify({
+      success: false,
+      message: 'Failed to send email via Cloudflare Worker',
+      error: 'Email delivery failed. Please try again or contact support.'
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
 
   } catch (error) {
     console.error('💥 [Backend] Error sending order completed notification email:', error);
@@ -193,4 +155,91 @@ export const POST: APIRoute = async ({ request }) => {
     });
   }
 };
+
+/**
+ * Primary method using Cloudflare Worker
+ */
+async function sendViaWorker(
+  to: string,
+  subject: string,
+  html: string,
+  orderData: CompletedOrderData,
+  emailType: string
+): Promise<Response> {
+  try {
+    const workerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || 'https://workers.mariohans.cl';
+    
+    const emailPayload = {
+      to,
+      subject,
+      html,
+      metadata: {
+        type: emailType,
+        order_id: orderData.id,
+        project_name: orderData.order_proyecto || 'Proyecto de Arriendo'
+      }
+    };
+
+    console.log('📤 [Backend] Sending via Cloudflare Worker to:', to);
+
+    const response = await fetch(`${workerUrl}/send-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(emailPayload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ [Backend] Cloudflare Worker error:', errorText);
+      
+      return new Response(JSON.stringify({
+        success: false,
+        message: 'Failed to send email via Cloudflare Worker',
+        error: `Worker error: ${response.statusText}`
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const result = await response.json();
+    
+    if (!result.success) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: 'Cloudflare Worker failed',
+        error: result.message || 'Failed to send email via worker'
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.log('✅ [Backend] Email sent successfully via Cloudflare Worker');
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Order notification email sent successfully (via Cloudflare Worker)',
+      emailId: result.emailId || result.messageId || `worker_${orderData.id}_${Date.now()}`
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+  } catch (error) {
+    console.error('💥 [Backend] Error in Cloudflare Worker:', error);
+    
+    // Return failure so we can try Resend fallback
+    return new Response(JSON.stringify({
+      success: false,
+      message: 'Worker failed',
+      error: error instanceof Error ? error.message : 'Unknown worker error'
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
 

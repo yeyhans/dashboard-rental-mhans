@@ -411,16 +411,7 @@ export const POST: APIRoute = async (context) => {
       console.log('📧 Sending contract notification email...');
 
       try {
-        // Import Resend
-        const { Resend } = await import('resend');
-        const resend = new Resend(import.meta.env.RESEND_API_KEY);
-
-        if (!import.meta.env.RESEND_API_KEY) {
-          console.error('❌ RESEND_API_KEY not configured');
-          throw new Error('RESEND_API_KEY not configured');
-        }
-
-        // Generate HTML email content
+        // Generate HTML email content with download link
         const emailData: ContractEmailData = {
           user_id: parseInt(user_id),
           nombre: userData.nombre,
@@ -435,31 +426,30 @@ export const POST: APIRoute = async (context) => {
 
         const htmlContent = generateContractEmailHTML(emailData);
 
-        // Fetch PDF from R2 to attach it
-        console.log('📎 Fetching PDF from R2 for email attachment...');
-        const pdfResponse = await fetch(contractUrl);
-
-        if (!pdfResponse.ok) {
-          throw new Error(`Failed to fetch PDF from R2: ${pdfResponse.status}`);
-        }
-
-        const pdfArrayBuffer = await pdfResponse.arrayBuffer();
-        console.log('✅ PDF fetched, size:', pdfArrayBuffer.byteLength, 'bytes');
-
-        // Send email with Resend
+        // Send email via Cloudflare Worker with download link
         console.log('📧 Sending email to:', userData.email);
-        const emailResult = await resend.emails.send({
-          from: 'contratos@mail.mariohans.cl',
-          to: [userData.email],
-          subject: '✅ Contrato Generado - Mario Hans Rental',
-          html: htmlContent,
-          attachments: [{
-            filename: `contrato_${user_id}.pdf`,
-            content: Buffer.from(pdfArrayBuffer)
-          }]
+        const workerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || 'https://workers.mariohans.cl';
+
+        const workerResponse = await fetch(`${workerUrl}/send-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: userData.email,
+            subject: '✅ Contrato Generado - Mario Hans Rental',
+            html: htmlContent
+          })
         });
 
-        console.log('✅ Email sent successfully:', emailResult);
+        if (!workerResponse.ok) {
+          throw new Error(`Worker responded with ${workerResponse.status}`);
+        }
+
+        const workerResult = await workerResponse.json();
+        if (!workerResult.success) {
+          throw new Error(workerResult.error || 'Worker failed to send email');
+        }
+
+        console.log('✅ Email sent successfully via Worker');
         emailSent = true;
 
       } catch (emailError) {

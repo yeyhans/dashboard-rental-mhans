@@ -281,10 +281,6 @@ export const POST: APIRoute = async ({ request }) => {
     if (sendEmail && (orderData.billing?.email || orderData.billing_email)) {
       console.log('📧 Sending email notification...');
       try {
-        // Send email directly using Resend (avoid internal fetch calls)
-        const { Resend } = await import('resend');
-        const resend = new Resend(import.meta.env.RESEND_API_KEY);
-        
         // Prepare email data
         const customerEmail = orderData.billing?.email || orderData.billing_email || '';
         const customerFirstName = orderData.billing?.first_name || orderData.billing_first_name || '';
@@ -293,12 +289,12 @@ export const POST: APIRoute = async ({ request }) => {
         const projectName = orderData.metadata?.order_proyecto || orderData.order_proyecto || 'Proyecto de Arriendo';
         const orderId = orderData.id;
         const totalAmount = orderData.metadata?.calculated_total || orderData.calculated_total?.toString() || '0';
-        
+
         // Format currency
         const formatCLP = (amount: string | number) => {
           const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-          return new Intl.NumberFormat('es-CL', { 
-            style: 'currency', 
+          return new Intl.NumberFormat('es-CL', {
+            style: 'currency',
             currency: 'CLP',
             minimumFractionDigits: 0,
             maximumFractionDigits: 0
@@ -464,64 +460,61 @@ Descarga el detalle del pedido aquí
         `;
 
         const subject = `✅ Presupuesto Generado - ${projectName} (Orden #${orderId})`;
-        
+
         console.log('📧 Sending budget email with data:', {
           to: customerEmail,
           order_id: orderId,
           project_name: projectName,
           pdf_url: finalPdfUrl
         });
-        
-        // Fetch PDF from R2 to attach it
-        console.log('📎 Fetching PDF from R2 for email attachment...');
-        const pdfResponse = await fetch(finalPdfUrl);
-        
-        if (!pdfResponse.ok) {
-          throw new Error(`Failed to fetch PDF from R2: ${pdfResponse.status}`);
-        }
-        
-        const pdfArrayBuffer = await pdfResponse.arrayBuffer();
-        const pdfBuffer = Buffer.from(pdfArrayBuffer);
-        console.log('✅ PDF fetched, size:', pdfBuffer.length, 'bytes');
-        
-        // Send customer email with PDF attachment
-        const { data, error } = await resend.emails.send({
-          from: `Rental Mario Hans <presupuestos@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
-          to: [customerEmail],
-          subject,
-          html: emailHtml,
-          attachments: [
-            {
-              filename: `presupuesto_${orderId}_${projectName.replace(/\s+/g, '_')}.pdf`,
-              content: pdfBuffer,
-            },
-          ],
+
+        // Send customer email with download link via Cloudflare Worker
+        const workerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || 'https://workers.mariohans.cl';
+
+        console.log('📧 Sending budget email to customer via Worker...');
+        const workerResponse = await fetch(`${workerUrl}/send-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: customerEmail,
+            subject,
+            html: emailHtml
+          })
         });
 
-        if (error) {
-          console.error('❌ Resend error:', error);
-        } else {
-          console.log('✅ Email notification sent successfully:', data?.id);
-          
-          // Send admin backup (non-blocking) with PDF attachment
-          try {
-            const adminSubject = `[RESPALDO ORDEN] ${subject}`;
-            await resend.emails.send({
-              from: `Rental Mario Hans Admin <admin@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
-              to: ['rental.mariohans@gmail.com'],
+        if (!workerResponse.ok) {
+          throw new Error(`Worker responded with ${workerResponse.status}`);
+        }
+
+        const workerResult = await workerResponse.json();
+        if (!workerResult.success) {
+          throw new Error(workerResult.error || 'Worker failed to send email');
+        }
+
+        console.log('✅ Email notification sent successfully via Worker');
+
+        // Send admin backup (non-blocking) with download link
+        try {
+          const adminSubject = `[RESPALDO ORDEN] ${subject}`;
+          console.log('📧 Sending admin backup via Worker...');
+
+          const adminResponse = await fetch(`${workerUrl}/send-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: 'rental.mariohans@gmail.com',
               subject: adminSubject,
-              html: emailHtml,
-              attachments: [
-                {
-                  filename: `presupuesto_${orderId}_${projectName.replace(/\s+/g, '_')}.pdf`,
-                  content: pdfBuffer,
-                },
-              ],
-            });
+              html: emailHtml
+            })
+          });
+
+          if (adminResponse.ok) {
             console.log('✅ Admin backup sent successfully');
-          } catch (adminError) {
-            console.warn('⚠️ Failed to send admin backup (non-critical):', adminError);
+          } else {
+            console.warn('⚠️ Failed to send admin backup (non-critical)');
           }
+        } catch (adminError) {
+          console.warn('⚠️ Failed to send admin backup (non-critical):', adminError);
         }
         
       } catch (emailError) {

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { OrderService } from '../../../../services/orderService';
+import { supabaseAdmin } from '../../../../lib/supabase';
 
 export const PUT: APIRoute = async ({ params, request }) => {
   try {
@@ -16,6 +17,26 @@ export const PUT: APIRoute = async ({ params, request }) => {
     }
 
     const updateData = await request.json();
+    
+    // Get current order data BEFORE update (needed for email templates)
+    const { data: currentOrder } = await supabaseAdmin
+      .from('orders')
+      .select('*')
+      .eq('id', Number(orderId))
+      .single();
+    
+    if (!currentOrder) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: 'Orden no encontrada'
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const previousStatus = currentOrder.status;
+    const newStatus = updateData.status;
     
     // Validate required fields and sanitize data
     const sanitizedData: any = {};
@@ -119,6 +140,55 @@ export const PUT: APIRoute = async ({ params, request }) => {
 
     // Update the order using the service
     const updatedOrder = await OrderService.updateOrder(Number(orderId), sanitizedData);
+
+    // Send email notifications when status changes to completed or failed
+    if (newStatus === 'completed' && previousStatus !== 'completed') {
+      console.log('📧 [Order Update] Status changed to completed, sending notification email...');
+      // Fire and forget - don't await
+      fetch('/api/emails/send-order-completed-notification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Request': 'true'
+        },
+        body: JSON.stringify({
+          orderData: updatedOrder,
+          emailType: 'order_completed'
+        })
+      }).then(result => {
+        if (result.ok) {
+          console.log('✅ [Order Update] Completed notification email sent successfully');
+        } else {
+          console.error('❌ [Order Update] Completed notification email failed:', result.status);
+        }
+      }).catch(err => {
+        console.error('❌ [Order Update] Failed to send completed notification email:', err);
+      });
+    }
+    
+    if (newStatus === 'failed' && previousStatus !== 'failed') {
+      console.log('📧 [Order Update] Status changed to failed, sending notification email...');
+      // Fire and forget - don't await
+      fetch('/api/emails/send-order-failed-notification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Request': 'true'
+        },
+        body: JSON.stringify({
+          orderData: updatedOrder,
+          emailType: 'order_failed'
+        })
+      }).then(result => {
+        if (result.ok) {
+          console.log('✅ [Order Update] Failed notification email sent successfully');
+        } else {
+          console.error('❌ [Order Update] Failed notification email failed:', result.status);
+        }
+      }).catch(err => {
+        console.error('❌ [Order Update] Failed to send failed notification email:', err);
+      });
+    }
 
     return new Response(JSON.stringify({
       success: true,

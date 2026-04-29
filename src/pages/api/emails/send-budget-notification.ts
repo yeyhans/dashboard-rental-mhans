@@ -325,66 +325,36 @@ export const POST: APIRoute = async ({ request }) => {
     
     const htmlContent = generateBudgetEmailTemplate(budgetData, budgetUrl || '', customMessage);
 
-    // Send email using Resend directly (backend has access to environment variables)
-    console.log('📤 [Backend] Sending email via Resend...');
-    
-    try {
-      const { Resend } = await import('resend');
-      const resend = new Resend(import.meta.env.RESEND_API_KEY);
-      
-      const { data, error } = await resend.emails.send({
-        from: `Rental Mario Hans <noreply@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
-        to: [customerEmail],
-        subject,
-        html: htmlContent,
-      });
+    // Send email using Cloudflare Worker
+    console.log('📤 [Backend] Sending email via Cloudflare Worker...');
 
-      if (error) {
-        console.error('❌ [Backend] Resend error:', error);
-        return new Response(JSON.stringify({
-          success: false,
-          message: 'Failed to send email via Resend',
-          error: error.message
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
+    const workerResponse = await sendViaWorker(customerEmail, subject, htmlContent, budgetData, budgetUrl || '');
+    const workerData = await workerResponse.json();
 
-      console.log('✅ [Backend] Email sent successfully via Resend:', data?.id);
-
-      // Send comprehensive backup to admin (non-blocking)
-      try {
-        const adminSubject = `[RESPALDO ORDEN] ${subject}`;
-        const adminHtml = generateAdminBackupEmail(budgetData, budgetUrl || '', customerName, customerEmail);
-        
-        await resend.emails.send({
-          from: `Rental Mario Hans Admin <admin@${import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl'}>`,
-          to: [ADMIN_EMAIL],
-          subject: adminSubject,
-          html: adminHtml,
-        });
-        console.log('✅ [Backend] Admin backup sent successfully to:', ADMIN_EMAIL);
-      } catch (adminError) {
-        console.warn('⚠️ [Backend] Failed to send admin backup (non-critical):', adminError);
-      }
+    if (workerResponse.ok && workerData.success) {
+      console.log('✅ [Backend] Budget notification email sent successfully via Cloudflare Worker');
 
       return new Response(JSON.stringify({
         success: true,
-        message: 'Budget notification email sent successfully',
-        emailId: data?.id || `backend_${orderId}_${Date.now()}`
+        message: 'Budget notification email sent successfully (via Cloudflare Worker)',
+        emailId: workerData.emailId || workerData.messageId || `budget_${orderId}_${Date.now()}`
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
-
-    } catch (resendError) {
-      console.error('💥 [Backend] Error with Resend service:', resendError);
-      
-      // Fallback: Try via Cloudflare Worker
-      console.log('🔄 [Backend] Attempting fallback via Cloudflare Worker...');
-      return await sendViaWorkerFallback(customerEmail, subject, htmlContent, budgetData, budgetUrl || '');
     }
+
+    // Worker failed - return error
+    console.error('❌ [Backend] Cloudflare Worker failed, returning error (no Resend fallback)');
+    
+    return new Response(JSON.stringify({
+      success: false,
+      message: 'Failed to send email via Cloudflare Worker',
+      error: 'Email delivery failed. Please try again or contact support.'
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
 
   } catch (error) {
     console.error('💥 [Backend] Error sending budget notification email:', error);
@@ -401,9 +371,9 @@ export const POST: APIRoute = async ({ request }) => {
 };
 
 /**
- * Fallback method using Cloudflare Worker
+ * Primary method using Cloudflare Worker
  */
-async function sendViaWorkerFallback(
+async function sendViaWorker(
   to: string,
   subject: string,
   html: string,
@@ -437,11 +407,11 @@ async function sendViaWorkerFallback(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ [Backend] Worker fallback error:', errorText);
+      console.error('❌ [Backend] Cloudflare Worker error:', errorText);
       
       return new Response(JSON.stringify({
         success: false,
-        message: 'Failed to send email via worker fallback',
+        message: 'Failed to send email via Cloudflare Worker',
         error: `Worker error: ${response.statusText}`
       }), {
         status: 500,
@@ -454,7 +424,7 @@ async function sendViaWorkerFallback(
     if (!result.success) {
       return new Response(JSON.stringify({
         success: false,
-        message: 'Worker fallback failed',
+        message: 'Cloudflare Worker failed',
         error: result.message || 'Failed to send email via worker'
       }), {
         status: 500,
@@ -462,11 +432,11 @@ async function sendViaWorkerFallback(
       });
     }
 
-    console.log('✅ [Backend] Email sent successfully via worker fallback');
+    console.log('✅ [Backend] Email sent successfully via Cloudflare Worker');
 
     return new Response(JSON.stringify({
       success: true,
-      message: 'Budget notification email sent successfully (via worker)',
+      message: 'Budget notification email sent successfully (via Cloudflare Worker)',
       emailId: result.emailId || result.messageId || `worker_${budgetData.order_id}_${Date.now()}`
     }), {
       status: 200,
@@ -474,11 +444,12 @@ async function sendViaWorkerFallback(
     });
 
   } catch (error) {
-    console.error('💥 [Backend] Error in worker fallback:', error);
+    console.error('💥 [Backend] Error in Cloudflare Worker:', error);
     
+    // Return failure so we can try Resend fallback
     return new Response(JSON.stringify({
       success: false,
-      message: 'All email methods failed',
+      message: 'Worker failed',
       error: error instanceof Error ? error.message : 'Unknown worker error'
     }), {
       status: 500,
