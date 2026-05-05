@@ -124,6 +124,7 @@ const OrdersDashboard = ({
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [shippingFilter, setShippingFilter] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isMobileView, setIsMobileView] = useState(false);
@@ -160,9 +161,17 @@ const OrdersDashboard = ({
       // Filter by status
       const matchesStatus = !statusFilter || order.status === statusFilter;
 
-      return matchesSearch && matchesStatus;
+      // Filter by shipping
+      let matchesShipping = true;
+      if (shippingFilter === 'con_envios') {
+        matchesShipping = order.shipping_total && parseFloat(order.shipping_total.toString()) > 0;
+      } else if (shippingFilter === 'sin_envios') {
+        matchesShipping = !order.shipping_total || parseFloat(order.shipping_total.toString()) === 0;
+      }
+
+      return matchesSearch && matchesStatus && matchesShipping;
     });
-  }, [allOrders, searchTerm, statusFilter]);
+  }, [allOrders, searchTerm, statusFilter, shippingFilter]);
 
   // Calculate pagination
   const totalFilteredOrders = filteredOrders.length;
@@ -183,6 +192,7 @@ const OrdersDashboard = ({
     const pageParam = urlParams.get('page');
     const statusParam = urlParams.get('status');
     const searchParam = urlParams.get('search');
+    const shippingParam = urlParams.get('shipping');
 
     if (pageParam) {
       const page = parseInt(pageParam);
@@ -190,12 +200,13 @@ const OrdersDashboard = ({
     }
     if (statusParam) setStatusFilter(statusParam);
     if (searchParam) setSearchTerm(searchParam);
+    if (shippingParam) setShippingFilter(shippingParam);
   }, []);
 
   // Reset page when search or status changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter]);
+  }, [searchTerm, statusFilter, shippingFilter]);
 
   // Get unique statuses from filtered orders
   const uniqueStatuses = Array.from(new Set(allOrders.map(order => order.status)));
@@ -295,13 +306,19 @@ const OrdersDashboard = ({
       url.searchParams.delete('search');
     }
 
+    if (shippingFilter) {
+      url.searchParams.set('shipping', shippingFilter);
+    } else {
+      url.searchParams.delete('shipping');
+    }
+
     window.history.pushState({}, '', url.toString());
   };
 
   // Update URL when filters change
   useEffect(() => {
     updateURLWithFilters();
-  }, [currentPage, statusFilter, searchTerm]);
+  }, [currentPage, statusFilter, searchTerm, shippingFilter]);
 
   // Format date using UTC to avoid timezone shift
   const formatDate = (dateString: string) => {
@@ -687,6 +704,19 @@ const OrdersDashboard = ({
                   {uniqueStatuses.map(status => (
                     <option key={status} value={status}>{statusTranslations[status] || status}</option>
                   ))}
+                </select>
+              </div>
+
+              <div className="w-full sm:w-48">
+                <select
+                  id="shipping"
+                  className="flex h-9 w-full border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                  value={shippingFilter}
+                  onChange={(e) => setShippingFilter(e.target.value)}
+                >
+                  <option value="">Todos los envíos</option>
+                  <option value="con_envios">Con envíos</option>
+                  <option value="sin_envios">Sin envíos</option>
                 </select>
               </div>
 
