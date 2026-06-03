@@ -1,0 +1,30 @@
+# Golden tests del rental-mcp (G8 del blueprint): la fórmula de cotización
+# vive replicada en Python (rental-mcp) y TypeScript (dashboard). Estos tests
+# anclan la réplica — si alguien cambia una tasa en el dashboard, DEBE
+# actualizar rental_mcp/domain/pricing.py y estos tests gritan si diverge.
+name: rental-mcp golden tests
+
+on:
+  push:
+    paths:
+      - 'hermes-mhans/rental-mcp/**'
+      - '.github/workflows/rental-mcp-tests.yml'
+  pull_request:
+    paths:
+      - 'hermes-mhans/rental-mcp/**'
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hermes-mhans/rental-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: pip install "mcp>=1.2" "psycopg[binary]>=3.1" "pydantic>=2" "httpx>=0.27" "pytest>=8"
+      - name: Golden tests (pricing + availability)
+        run: python -m pytest tests/ -q

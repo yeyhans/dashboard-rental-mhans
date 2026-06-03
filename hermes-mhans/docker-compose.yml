@@ -1,0 +1,110 @@
+# Hermes de mhans — segunda instancia AISLADA en el VPS.
+# Imagen DERIVADA hermes-mhans:local (FROM hermes-agent:local + postgres-mcp
+# crystaldba + deps del rental-mcp). Rebuildear esto NO toca a farmiemos.
+# Telegram por long-polling: no expone puertos.
+services:
+  hermes-mhans:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hermes-mhans:local
+    container_name: hermes-mhans
+    restart: unless-stopped
+
+    # Secretos (token bot, MiniMax, DB RO/RW, dashboard API). Ver env.example.
+    env_file:
+      - .env
+
+    environment:
+      HERMES_HOME: /data/.hermes
+      PYTHONUNBUFFERED: "1"
+
+    volumes:
+      # Estado persistente PROPIO de esta instancia (config, memoria, sesiones).
+      - hermes_mhans_data:/data/.hermes
+      # Plantillas (config + identidad + skills). El entrypoint las siembra en
+      # el volumen SOLO el primer arranque; después manda el volumen.
+      - ./config.yaml:/opt/hermes/config.yaml.default:ro
+      - ./SOUL.md:/opt/hermes/SOUL.md.default:ro
+      - ./skills:/opt/hermes/skills.default:ro
+      # Entrypoint propio (siembra config + SOUL + skills).
+      - ./entrypoint.sh:/usr/local/bin/entrypoint-mhans.sh:ro
+      # MCP de dominio del rental (código Python, iterable sin rebuild).
+      - ./rental-mcp:/opt/rental-mcp:ro
+      - ./scripts/rental-mcp.sh:/usr/local/bin/rental-mcp.sh:ro
+      # MCP SQL read-only (postgres-mcp crystaldba, modo restricted).
+      - ./scripts/rentaldb-mcp.sh:/usr/local/bin/rentaldb-mcp.sh:ro
+
+    # Red propia + red del stack Supabase del rental (acceso INTERNO a la DB:
+    # supabase-9cd8-db:5434 — no depende de puertos publicados al host).
+    networks:
+      - default
+      - rental_db
+
+    # tini (PID 1) -> entrypoint propio -> gateway en foreground.
+    entrypoint: ["tini", "--", "/usr/local/bin/entrypoint-mhans.sh"]
+    command: ["hermes", "gateway", "run"]
+
+    # Endurecimiento del contenedor.
+    security_opt:
+      - no-new-privileges:true
+
+    # Sin "ports:" -> nada escucha desde afuera. Telegram es saliente.
+    # Sin "/var/run/docker.sock" -> el agente NO controla Docker.
+    # Sin "/var/log" -> agente de NEGOCIO (mhans), no administra el server.
+
+    # Logs acotados para no llenar disco.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # --- Dashboard web (config, sesiones, métricas) ---
+  # Publicado SOLO a 127.0.0.1 del VPS -> acceso por TÚNEL SSH, jamás a internet.
+  # 9119 ya lo usa el Hermes de farmiemos -> esta instancia sale por 9120.
+  hermes-mhans-dashboard:
+    image: hermes-mhans:local
+    container_name: hermes-mhans-dashboard
+    restart: unless-stopped
+    depends_on:
+      - hermes-mhans
+    env_file:
+      - .env
+    environment:
+      HERMES_HOME: /data/.hermes
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - hermes_mhans_data:/data/.hermes
+      # Mismos MCP que el gateway: comparte config.yaml del volumen, necesita
+      # los scripts y la red para no fallar al cargar mcp_servers.
+      - ./rental-mcp:/opt/rental-mcp:ro
+      - ./scripts/rental-mcp.sh:/usr/local/bin/rental-mcp.sh:ro
+      - ./scripts/rentaldb-mcp.sh:/usr/local/bin/rentaldb-mcp.sh:ro
+    networks:
+      - default
+      - rental_db
+    # Bind SOLO a loopback del host, puerto 9120 (interno sigue siendo 9119).
+    ports:
+      - "127.0.0.1:9120:9119"
+    security_opt:
+      - no-new-privileges:true
+    # --insecure: salta el auth-gate OAuth (el acceso lo protege el túnel SSH +
+    # el bind a 127.0.0.1 del host). --skip-build: usa el dist web de la imagen.
+    command: ["hermes", "dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open", "--insecure", "--skip-build"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  hermes_mhans_data:
+    name: hermes_mhans_data
+    driver: local
+
+networks:
+  # Red del stack Supabase del rental (Dokploy) — preexistente, NO la creamos.
+  rental_db:
+    external: true
+    name: rental-pre0225supabase-sssmcr

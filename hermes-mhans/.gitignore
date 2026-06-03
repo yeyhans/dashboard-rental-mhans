@@ -1,0 +1,11 @@
+# Secretos — NUNCA al repo
+.env
+
+# Basura local
+*.log
+.DS_Store
+
+# Python
+__pycache__/
+.pytest_cache/
+*.pyc

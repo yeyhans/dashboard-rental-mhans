@@ -1,0 +1,62 @@
+# Hermes de mhans — configuración base (SIN secretos).
+# Los secretos (MINIMAX_API_KEY, TELEGRAM_*) viven en .env — ver env.example.
+#
+# Esta plantilla se copia a $HERMES_HOME/config.yaml en el primer arranque.
+# Después, "hermes config set <clave> <valor>" la edita y persiste en el volumen.
+
+# --- Terminal -------------------------------------------------------------
+# Los comandos del agente corren DENTRO de este contenedor (sandbox natural).
+# No se expone el socket de Docker: el agente NO puede tocar Swarm/Dokploy ni DBs.
+terminal:
+  backend: local
+
+# --- Aprobaciones ---------------------------------------------------------
+# manual = pide confirmación antes de comandos peligrosos (lo correcto en prod).
+approvals:
+  mode: manual
+
+# --- Modelo / Provider ----------------------------------------------------
+# Mismo provider que el Hermes de farmiemos: MiniMax endpoint global
+# (api.minimax.io) usando MINIMAX_API_KEY del .env.
+# OJO (gotcha conocido): SIEMPRE provider + default por separado.
+# Un string "model: minimax/MiniMax-M3" rutearía a OpenRouter -> 401.
+model:
+  provider: minimax
+  default: MiniMax-M3
+
+# --- MCP servers ------------------------------------------------------------
+# GOTCHA (verificado en tools/mcp_tool.py): Hermes lanza los MCP con entorno
+# FILTRADO (_build_safe_env) — el subprocess NO hereda vars del contenedor.
+# Declararlas en `env:`; el placeholder ${VAR} se resuelve en runtime
+# (_interpolate_env_vars) => acá NO quedan secretos.
+#
+# rental: server de DOMINIO propio (Python/FastMCP, /opt/rental-mcp).
+#   Lectura tipada (cotización con fórmulas testeadas, disponibilidad,
+#   órdenes, clientes, reportes) + escrituras SOLO draft→confirm_write
+#   (token single-use en DB, 15 min TTL). Rol RO para leer, RW acotado
+#   (sin DELETE) solo para confirm_write.
+#
+# rentaldb: SQL ad-hoc de SOLO LECTURA via postgres-mcp (crystaldba) en
+#   --access-mode=restricted (transacción read-only + pglast; reemplaza al
+#   server deprecated con CVE). Doble cerrojo con rol hermes_ro (solo SELECT).
+#   crystaldba lee DATABASE_URI (no DATABASE_URL). tools.include recorta
+#   superficie y token cost (G9).
+mcp_servers:
+  rental:
+    command: /usr/local/bin/rental-mcp.sh
+    args: []
+    env:
+      DATABASE_URL: "${DATABASE_URL}"
+      DATABASE_URL_RW: "${DATABASE_URL_RW}"
+      DASHBOARD_API_URL: "${DASHBOARD_API_URL}"
+      DASHBOARD_API_TOKEN: "${DASHBOARD_API_TOKEN}"
+      TELEGRAM_ALLOWED_USERS: "${TELEGRAM_ALLOWED_USERS}"
+    connect_timeout: 60
+  rentaldb:
+    command: /usr/local/bin/rentaldb-mcp.sh
+    args: []
+    env:
+      DATABASE_URI: "${DATABASE_URL}"
+    connect_timeout: 60
+    tools:
+      include: [execute_sql, list_schemas, list_objects, get_object_details]

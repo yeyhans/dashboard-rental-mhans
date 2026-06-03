@@ -1,0 +1,3 @@
+# hermes-mhans se deploya por rsync a un VPS Linux: TODO con LF, siempre.
+# (Un .sh con CRLF revienta con "bad interpreter" / set -e fantasma.)
+hermes-mhans/** text eol=lf
