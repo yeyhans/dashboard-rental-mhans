@@ -9,7 +9,7 @@ metadata:
 
 # Clientes y contratos
 
-Leé primero `reglas-mhans` (regla 8: confidencialidad).
+Lee primero `reglas-mhans` (regla 8: confidencialidad).
 
 ## Buscar y consultar (solo lectura)
 
@@ -24,14 +24,14 @@ Leé primero `reglas-mhans` (regla 8: confidencialidad).
 
 ## Regla central
 
-**Sin contrato firmado NO hay retiro ni orden.** Antes de crear cualquier orden, `contract_status` del cliente. Si `has_contract=false`, ofrecé el flujo de generación.
+**Sin contrato firmado NO hay retiro ni orden.** Antes de crear cualquier orden, `contract_status` del cliente. Si `has_contract=false`, ofrece el flujo de generación.
 
 ## Generar contrato (escritura — protocolo de confirmación)
 
-1. `draft_generate_contract(user_id)` — valida que el perfil esté completo (nombre, apellido, RUT válido, dirección, términos aceptados, firma). Si hay faltantes, el draft te los lista: pedíselos al admin o indicá que el cliente complete su perfil en la web.
-2. Mostrá el preview al admin y preguntá: **"¿Genero el contrato? (sí/no)"**. ESPERÁ.
+1. `draft_generate_contract(user_id)` — valida que el perfil esté completo (nombre, apellido, RUT válido, dirección, términos aceptados, firma). Si hay faltantes, el draft te los lista: pídeselos al admin o indica que el cliente complete su perfil en la web.
+2. Muestra el preview al admin y pregunta: **"¿Genero el contrato? (sí/no)"**. ESPERA.
 3. Con el "sí": `confirm_write(plan_id, confirmation_token)` — dispara la generación real (PDF → R2 → email desde contratos@mail.mariohans.cl) vía el dashboard.
-4. Reportá: URL del contrato y si el email salió.
+4. Reporta: URL del contrato y si el email salió.
 
 ## Editar cliente (escritura — protocolo de confirmación)
 
@@ -40,7 +40,7 @@ Campos que se PUEDEN editar: `nombre`, `apellido`, `telefono`, `direccion`, `ciu
 Campos PROHIBIDOS (nunca los propongas, el tool los rechaza): `rut`, `email`, `auth_uid`, `url_*` (documentos/contrato), `terminos_aceptados`.
 
 1. `draft_update_client(user_id, fields)` — propone los cambios y valida la allowlist. Muestra preview campo a campo: "de X → a Y".
-2. Mostrá el preview al admin y preguntá: **"¿Confirmo los cambios? (sí/no)"**. ESPERÁ.
+2. Muestra el preview al admin y pregunta: **"¿Confirmo los cambios? (sí/no)"**. ESPERA.
 3. Con el "sí": `confirm_write(plan_id, confirmation_token)`.
 4. Si el dashboard no está disponible, el plan NO queda consumido — se puede reintentar.
 
@@ -51,9 +51,9 @@ Mínimo requerido: `email` + `nombre`. Opcionales: `apellido`, `rut`, `telefono`
 **IMPORTANTE**: crear un cliente NO genera contrato. El contrato se crea por separado con el flujo `draft_generate_contract`.
 
 1. `draft_create_client(email, nombre, ...)` — valida email y RUT (módulo 11 si se provee). Preview con aviso: "al cliente le llega email de bienvenida con clave temporal".
-2. Mostrá el preview al admin y preguntá: **"¿Creo el cliente? (sí/no)"**. ESPERÁ.
+2. Muestra el preview al admin y pregunta: **"¿Creo el cliente? (sí/no)"**. ESPERA.
 3. Con el "sí": `confirm_write(plan_id, confirmation_token)`.
-4. Avisá que el cliente recibirá un email con su clave temporal para entrar al portal.
+4. Avisa que el cliente recibirá un email con su clave temporal para entrar al portal.
 
 ## Nunca
 

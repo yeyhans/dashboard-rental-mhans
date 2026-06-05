@@ -1,6 +1,11 @@
 # Hermes mhans — Guía Completa del Agente
 
 > Versión: post-F8 (2026-06-05). Producción activa en VPS.
+>
+> **Identidad**: el agente se presenta ante el admin como **"Marito"** y habla
+> español chileno (tuteo — el voseo rioplatense está explícitamente prohibido
+> en su SOUL.md). "Hermes" / `hermes-mhans` es el nombre de la infraestructura
+> (imagen, contenedores, roles DB), no de la persona del bot.
 
 ---
 

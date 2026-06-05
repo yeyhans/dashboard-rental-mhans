@@ -9,7 +9,7 @@ metadata:
 
 # Catálogo y análisis del negocio
 
-Leé primero `reglas-mhans` (regla 9: números solo de tools).
+Lee primero `reglas-mhans` (regla 9: números solo de tools).
 
 ## Tools de dominio (preferir SIEMPRE — rápidas y tipadas)
 
@@ -18,13 +18,13 @@ Leé primero `reglas-mhans` (regla 9: números solo de tools).
 - `product_demand(date_from, date_to, limit)` — ranking de equipos más arrendados e ingresos.
 - `low_stock_report()` — equipos fuera de stock o bajo pedido.
 
-## SQL ad-hoc (`rentaldb`, solo lectura — escalá acá cuando el dominio no alcanza)
+## SQL ad-hoc (`rentaldb`, solo lectura — escala aquí cuando el dominio no alcanza)
 
 Para preguntas que las tools de dominio no cubren (cruces raros, cohortes, series temporales):
 - `execute_sql` corre en transacción READ-ONLY con rol de solo SELECT — no puede escribir nada.
-- Explorá el esquema primero con `list_objects` / `get_object_details` si no estás seguro de columnas.
+- Explora el esquema primero con `list_objects` / `get_object_details` si no estás seguro de columnas.
 - Vistas útiles ya hechas: `order_summary`, `products_with_categories`, `order_communications`, `shipping_usage`.
-- snake_case; fechas ISO en DB (mostralas DD/MM/YYYY); montos CLP sin decimales.
+- snake_case; fechas ISO en DB (muéstralas DD/MM/YYYY); montos CLP sin decimales.
 
 ## Presentación
 

@@ -9,7 +9,7 @@ metadata:
 
 # Órdenes: creación y seguimiento
 
-Leé primero `reglas-mhans`.
+Lee primero `reglas-mhans`.
 
 ## Consultar (libre, solo lectura)
 
@@ -21,14 +21,14 @@ Leé primero `reglas-mhans`.
 
 Protocolo obligatorio en DOS pasos. JAMÁS te saltes el paso de confirmación humana:
 
-1. **Draft**: `draft_create_order(...)`. Antes verificá:
+1. **Draft**: `draft_create_order(...)`. Antes verifica:
    - Cliente identificado (`find_client` / `get_client`) y **con contrato** (`contract_status`). Sin contrato → primero el flujo de la skill `cliente`.
    - Disponibilidad ok (el draft la re-chequea y te devuelve advertencias).
-2. **Mostrá el preview COMPLETO al admin por Telegram**: cliente, equipos, fechas, jornadas, desglose de montos, advertencias. Preguntá explícitamente: **"¿Confirmo la creación? (sí/no)"** y ESPERÁ la respuesta.
-3. Solo con un "sí" claro del admin: `confirm_write(plan_id, confirmation_token)`. Si dice no o pide cambios: `cancel_write(plan_id)` y rearmá.
-4. Reportá el resultado: número de orden, estado (on-hold) y si el presupuesto PDF/email se disparó o quedó pendiente.
+2. **Muestra el preview COMPLETO al admin por Telegram**: cliente, equipos, fechas, jornadas, desglose de montos, advertencias. Pregunta explícitamente: **"¿Confirmo la creación? (sí/no)"** y ESPERA la respuesta.
+3. Solo con un "sí" claro del admin: `confirm_write(plan_id, confirmation_token)`. Si dice no o pide cambios: `cancel_write(plan_id)` y rearma.
+4. Reporta el resultado: número de orden, estado (on-hold) y si el presupuesto PDF/email se disparó o quedó pendiente.
 
-El token expira a los 15 minutos — si expiró, generá un draft nuevo (no lo "reintentes").
+El token expira a los 15 minutos — si expiró, genera un draft nuevo (no lo "reintentes").
 
 ## Avanzar estado (escritura — mismo protocolo)
 
@@ -36,7 +36,7 @@ El token expira a los 15 minutos — si expiró, generá un draft nuevo (no lo "
 2. Preview al admin + pregunta explícita + esperar "sí".
 3. `confirm_write(...)`.
 
-Guard crítico: a `processing` SOLO si la reserva está pagada. Si el draft advierte pago no verificado, decíselo al admin y que él confirme bajo su responsabilidad.
+Guard crítico: a `processing` SOLO si la reserva está pagada. Si el draft advierte pago no verificado, díselo al admin y que él confirme bajo su responsabilidad.
 
 ## Nunca
 
