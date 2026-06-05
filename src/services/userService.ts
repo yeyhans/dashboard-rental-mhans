@@ -99,6 +99,38 @@ export class UserService {
   }
 
   /**
+   * Obtener usuario por email
+   *
+   * NOTA: SELECT parcial — solo devuelve los campos consultados. El tipo de
+   * retorno refleja exactamente ese subconjunto (no el Row completo) para no
+   * mentirle al consumidor sobre qué propiedades están presentes.
+   */
+  static async getUserByEmail(
+    email: string
+  ): Promise<Pick<UserProfile, 'user_id' | 'email' | 'nombre' | 'apellido' | 'tipo_cliente'> | null> {
+    try {
+      const admin = getSupabaseAdmin();
+      const { data, error } = await admin
+        .from('user_profiles')
+        .select('user_id, email, nombre, apellido, tipo_cliente')
+        .eq('email', email)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return null; // No encontrado — no es error
+        }
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('[UserService] Error fetching user by email:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Generar contraseña temporal segura
    */
   private static generateTemporaryPassword(): string {

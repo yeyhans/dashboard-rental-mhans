@@ -86,4 +86,6 @@ export const RATE_LIMITS = {
   email: { name: 'email', maxRequests: 10, windowMs: 60 * 1000 },
   /** PDF generation: 5 por minuto */
   pdfGeneration: { name: 'pdf-generation', maxRequests: 5, windowMs: 60 * 1000 },
+  /** User management (create/update): 5 por minuto — operaciones de escritura sensibles */
+  userManagement: { name: 'user-management', maxRequests: 5, windowMs: 60 * 1000 },
 } as const;
