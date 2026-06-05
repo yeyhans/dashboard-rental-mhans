@@ -98,6 +98,40 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # --- Notifier de órdenes nuevas ---
+  # Servicio dedicado: escucha pg_notify hermes_new_order y envía Telegram.
+  # Misma imagen que el gateway (hermes-mhans:local), entrypoint distinto.
+  # Sin puertos: solo tráfico saliente a Telegram + red interna rental_db.
+  # python -m rental_mcp.notifier resuelve porque /opt/rental-mcp está en
+  # PYTHONPATH (lo fija el código de arranque del módulo via rental-mcp.sh
+  # en el gateway; acá lo seteamos explícitamente en environment).
+  hermes-mhans-notifier:
+    image: hermes-mhans:local
+    container_name: hermes-mhans-notifier
+    restart: unless-stopped
+    depends_on:
+      - hermes-mhans
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /opt/rental-mcp
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./rental-mcp:/opt/rental-mcp:ro
+    networks:
+      - default
+      - rental_db
+    # python -m rental_mcp.notifier: el paquete notifier está dentro de rental_mcp
+    command: ["python", "-m", "rental_mcp.notifier"]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   hermes_mhans_data:
     name: hermes_mhans_data

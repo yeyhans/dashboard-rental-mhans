@@ -13,7 +13,7 @@ set -euo pipefail
 DB_CONTAINER=supabase-9cd8-db
 DB_NET=rental-pre0225supabase-sssmcr
 DB_PORT=5434
-ENV_FILE=/opt/hermes-mhans/.env
+ENV_FILE=/opt/agents/mhans/.env
 
 PGPW=$(docker inspect "$DB_CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -oP '^POSTGRES_PASSWORD=\K.*')
 RWPW=$(openssl rand -hex 24)

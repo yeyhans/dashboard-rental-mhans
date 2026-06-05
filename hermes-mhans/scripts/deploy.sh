@@ -9,6 +9,8 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# POST-F8: el CÓDIGO sigue en /opt/hermes-mhans/ (los binds del compose vivo
+# apuntan ahí); el compose + .env viven en /opt/agents/mhans/.
 DEST=hermes-vps:/opt/hermes-mhans/
 
 echo "[deploy] sync $HERE -> $DEST"
@@ -35,17 +37,17 @@ ssh hermes-vps "chmod +x /opt/hermes-mhans/scripts/*.sh /opt/hermes-mhans/entryp
 
 if [[ "${1:-}" == "--reseed" || "${2:-}" == "--reseed" ]]; then
   echo "[deploy] reseed: parar -> borrar config/SOUL del volumen -> arrancar"
-  ssh hermes-vps "cd /opt/hermes-mhans && docker compose stop >/dev/null 2>&1 && docker run --rm -v hermes_mhans_data:/d alpine rm -f /d/config.yaml /d/SOUL.md"
+  ssh hermes-vps "cd /opt/agents/mhans && docker compose stop >/dev/null 2>&1 && docker run --rm -v hermes_mhans_data:/d alpine rm -f /d/config.yaml /d/SOUL.md"
 fi
 
 if [[ "${1:-}" == "--build" ]]; then
   echo "[deploy] rebuild imagen derivada + recreate"
-  ssh hermes-vps "cd /opt/hermes-mhans && docker compose build && docker compose up -d --force-recreate"
+  ssh hermes-vps "cd /opt/agents/mhans && docker compose build && docker compose up -d --force-recreate"
 else
   echo "[deploy] restart gateway (codigo rental-mcp es bind mount: alcanza)"
-  ssh hermes-vps "cd /opt/hermes-mhans && docker compose up -d && docker restart hermes-mhans >/dev/null"
+  ssh hermes-vps "cd /opt/agents/mhans && docker compose up -d && docker restart hermes-mhans-main >/dev/null"
 fi
 
 echo "[deploy] estado:"
-ssh hermes-vps "cd /opt/hermes-mhans && docker compose ps --format '{{.Name}} {{.Status}}' && sleep 12 && docker logs --since 1m hermes-mhans 2>&1 | grep -icE 'mcp.*(fail|error)' | xargs -I{} echo 'errores MCP: {}'"
+ssh hermes-vps "cd /opt/agents/mhans && docker compose ps --format '{{.Name}} {{.Status}}' && sleep 12 && docker logs --since 1m hermes-mhans-main 2>&1 | grep -icE 'mcp.*(fail|error)' | xargs -I{} echo 'errores MCP: {}'"
 echo "[deploy] OK"

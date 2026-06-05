@@ -25,6 +25,12 @@ from pydantic import BaseModel
 
 from rental_mcp import db
 from rental_mcp import dashboard_client
+from rental_mcp.validators import (
+    SAFE_CLIENT_FIELDS,
+    _filter_client_fields,
+    _validate_email,          # used directly in draft_create_client
+    _validate_rut as _validate_rut_impl,
+)
 from rental_mcp.domain import pricing as domain_pricing
 from rental_mcp.domain import availability as domain_avail
 from rental_mcp.models import (
@@ -80,23 +86,11 @@ def _coerce_price(val: Any) -> float:
         return 0.0
 
 
-# Chilean RUT validator (módulo 11)
+# Chilean RUT validator (módulo 11) — delegates to validators module.
+# Kept here so existing call-sites inside server.py don't need to change.
 def _validate_rut(rut: str) -> bool:
     """Validate Chilean RUT (e.g. '12345678-9' or '12345678K')."""
-    rut = rut.upper().replace(".", "").replace("-", "").strip()
-    if len(rut) < 2:
-        return False
-    body, dv = rut[:-1], rut[-1]
-    if not body.isdigit():
-        return False
-    total = 0
-    factor = 2
-    for digit in reversed(body):
-        total += int(digit) * factor
-        factor = (factor % 7) + 2
-    remainder = 11 - (total % 11)
-    expected = {10: "K", 11: "0"}.get(remainder, str(remainder))
-    return dv == expected
+    return _validate_rut_impl(rut)
 
 
 # Workflow transition map
@@ -501,6 +495,98 @@ async def list_orders(
             for r in rows
         ]
         return {"ordenes": orders, "total": len(orders)}
+    except RuntimeError as e:
+        return {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# TOOL 5b — list_client_orders (read-only, B1)
+# ---------------------------------------------------------------------------
+
+@mcp.tool(annotations={"readOnlyHint": True})
+async def list_client_orders(user_id: str, limit: int = 10) -> dict[str, Any]:
+    """
+    Lista el historial de órdenes de un cliente específico (por user_id/customer_id).
+    Devuelve hasta `limit` órdenes, ordenadas por fecha de creación descendente.
+    """
+    try:
+        rows = await db.fetch_all(
+            """
+            SELECT id, status, order_proyecto, order_fecha_inicio, order_fecha_termino,
+                   calculated_total, date_created, num_jornadas
+            FROM orders
+            WHERE customer_id::text = %s
+            ORDER BY date_created DESC
+            LIMIT %s
+            """,
+            (str(user_id), limit),
+        )
+        orders = [
+            {
+                "id": r["id"],
+                "status": r["status"],
+                "proyecto": r.get("order_proyecto", ""),
+                "fecha_inicio": r["order_fecha_inicio"].isoformat() if r.get("order_fecha_inicio") else None,
+                "fecha_termino": r["order_fecha_termino"].isoformat() if r.get("order_fecha_termino") else None,
+                "num_jornadas": r.get("num_jornadas"),
+                "total": r.get("calculated_total"),
+                "date_created": r["date_created"].isoformat() if r.get("date_created") else None,
+            }
+            for r in rows
+        ]
+        return {"user_id": user_id, "ordenes": orders, "total": len(orders)}
+    except RuntimeError as e:
+        return {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# TOOL 5c — client_stats (read-only, B1)
+# ---------------------------------------------------------------------------
+
+@mcp.tool(annotations={"readOnlyHint": True})
+async def client_stats(user_id: str) -> dict[str, Any]:
+    """
+    Estadísticas históricas de un cliente: número de órdenes, total acumulado CLP,
+    última orden, y desglose por estado.
+    """
+    try:
+        row = await db.fetch_one(
+            """
+            SELECT
+                COUNT(*)                        AS num_ordenes,
+                SUM(calculated_total)           AS total_historico,
+                MAX(date_created)               AS ultima_orden,
+                MIN(date_created)               AS primera_orden
+            FROM orders
+            WHERE customer_id::text = %s
+            """,
+            (str(user_id),),
+        )
+        por_estado_rows = await db.fetch_all(
+            """
+            SELECT status, COUNT(*) AS cantidad, SUM(calculated_total) AS total
+            FROM orders
+            WHERE customer_id::text = %s
+            GROUP BY status
+            ORDER BY cantidad DESC
+            """,
+            (str(user_id),),
+        )
+        return {
+            "user_id": user_id,
+            "num_ordenes": int(row["num_ordenes"] or 0),
+            "total_historico_clp": int(row["total_historico"] or 0) if row.get("total_historico") else 0,
+            "ultima_orden": row["ultima_orden"].isoformat() if row.get("ultima_orden") else None,
+            "primera_orden": row["primera_orden"].isoformat() if row.get("primera_orden") else None,
+            "por_estado": [
+                {
+                    "status": r["status"],
+                    "cantidad": int(r["cantidad"]),
+                    "total_clp": int(r["total"] or 0) if r.get("total") else 0,
+                }
+                for r in por_estado_rows
+            ],
+        }
     except RuntimeError as e:
         return {"error": str(e)}
 
@@ -1111,17 +1197,203 @@ async def draft_generate_contract(user_id: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# TOOL 15b — draft_update_client (write, destructive — B3)
+# ---------------------------------------------------------------------------
+
+@mcp.tool(annotations={"destructiveHint": True})
+async def draft_update_client(user_id: str, fields: dict[str, Any]) -> dict[str, Any]:
+    """
+    Prepara la edición de un cliente (requiere confirmación).
+    Solo acepta campos del conjunto SEGURO: nombre, apellido, telefono, direccion,
+    ciudad, empresa_nombre, empresa_rut, instagram, tipo_cliente.
+    RECHAZA explícitamente: rut, email, auth_uid, url_*, terminos_aceptados.
+    Muestra preview campo a campo (de X → a Y) antes de confirmar.
+    Si empresa_rut viene, valida módulo 11.
+    """
+    try:
+        # Defense-in-depth: filter allowlist before anything else
+        filter_result = _filter_client_fields(fields)
+        if not filter_result["ok"]:
+            return {
+                "error": (
+                    f"Campos no permitidos: {filter_result['rejected']}. "
+                    "Campos editables: nombre, apellido, telefono, direccion, ciudad, "
+                    "empresa_nombre, empresa_rut, instagram, tipo_cliente. "
+                    "Prohibidos: rut, email, auth_uid, url_*, terminos_aceptados."
+                ),
+                "rechazados": filter_result["rejected"],
+            }
+
+        safe_fields = filter_result["fields"]
+        if not safe_fields:
+            return {"error": "No se enviaron campos para editar"}
+
+        # Validate empresa_rut if provided
+        if "empresa_rut" in safe_fields and safe_fields["empresa_rut"]:
+            if not _validate_rut(str(safe_fields["empresa_rut"])):
+                return {"error": f"RUT empresa inválido: {safe_fields['empresa_rut']!r} (módulo 11 no pasa)"}
+
+        # Fetch current values for preview
+        row = await db.fetch_one(
+            "SELECT * FROM user_profiles WHERE user_id = %s",
+            (user_id,),
+        )
+        if not row:
+            return {"error": f"Cliente {user_id!r} no encontrado"}
+
+        preview_changes: list[dict[str, Any]] = []
+        for key, new_val in safe_fields.items():
+            old_val = row.get(key)
+            preview_changes.append({"campo": key, "de": old_val, "a": new_val})
+
+        plan_json = {"user_id": user_id, "fields": safe_fields}
+        token = secrets.token_urlsafe(32)
+        expires_at = _now() + timedelta(minutes=15)
+
+        result = await db.fetch_one(
+            """
+            INSERT INTO hermes_pending_writes (action, plan_json, confirmation_token, expires_at)
+            VALUES (%s, %s::jsonb, %s, %s)
+            RETURNING id, expires_at
+            """,
+            ("update_client", json.dumps(plan_json), token, expires_at),
+            pool="rw",
+        )
+        if not result:
+            return {"error": "No se pudo crear el borrador"}
+
+        return {
+            "plan_id": str(result["id"]),
+            "preview": {
+                "user_id": user_id,
+                "cliente": f"{row.get('nombre', '')} {row.get('apellido', '')}".strip(),
+                "cambios": preview_changes,
+            },
+            "confirmation_token": token,
+            "expires_at": expires_at.isoformat(),
+            "advertencias": [],
+        }
+    except RuntimeError as e:
+        return {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# TOOL 15c — draft_create_client (write, destructive — B3)
+# ---------------------------------------------------------------------------
+
+@mcp.tool(annotations={"destructiveHint": True})
+async def draft_create_client(
+    email: str,
+    nombre: str,
+    apellido: str | None = None,
+    rut: str | None = None,
+    telefono: str | None = None,
+    tipo_cliente: str | None = None,
+    empresa_nombre: str | None = None,
+    empresa_rut: str | None = None,
+) -> dict[str, Any]:
+    """
+    Prepara la creación de un nuevo cliente (requiere confirmación).
+    Mínimo requerido: email + nombre.
+    Valida formato de email y, si se proveen, RUT personal y RUT empresa (módulo 11).
+    El preview avisa que al cliente le llega un email de bienvenida con clave temporal.
+    IMPORTANTE: crear un cliente NO genera contrato — el contrato se genera por separado.
+    """
+    try:
+        # Validate required fields
+        if not email or not email.strip():
+            return {"error": "El campo 'email' es obligatorio"}
+        if not nombre or not nombre.strip():
+            return {"error": "El campo 'nombre' es obligatorio"}
+
+        if not _validate_email(email.strip()):
+            return {"error": f"Email inválido: {email!r}"}
+
+        if rut and not _validate_rut(rut):
+            return {"error": f"RUT inválido: {rut!r} (módulo 11 no pasa)"}
+
+        if empresa_rut and not _validate_rut(empresa_rut):
+            return {"error": f"RUT empresa inválido: {empresa_rut!r} (módulo 11 no pasa)"}
+
+        payload: dict[str, Any] = {
+            "email": email.strip(),
+            "nombre": nombre.strip(),
+        }
+        if apellido:
+            payload["apellido"] = apellido.strip()
+        if rut:
+            payload["rut"] = rut
+        if telefono:
+            payload["telefono"] = telefono
+        if tipo_cliente:
+            payload["tipo_cliente"] = tipo_cliente
+        if empresa_nombre:
+            payload["empresa_nombre"] = empresa_nombre
+        if empresa_rut:
+            payload["empresa_rut"] = empresa_rut
+
+        plan_json = {"payload": payload}
+        token = secrets.token_urlsafe(32)
+        expires_at = _now() + timedelta(minutes=15)
+
+        result = await db.fetch_one(
+            """
+            INSERT INTO hermes_pending_writes (action, plan_json, confirmation_token, expires_at)
+            VALUES (%s, %s::jsonb, %s, %s)
+            RETURNING id, expires_at
+            """,
+            ("create_client", json.dumps(plan_json), token, expires_at),
+            pool="rw",
+        )
+        if not result:
+            return {"error": "No se pudo crear el borrador"}
+
+        return {
+            "plan_id": str(result["id"]),
+            "preview": {
+                "accion": "Crear cliente",
+                "email": email.strip(),
+                "nombre": nombre.strip(),
+                "apellido": apellido or "—",
+                "datos_adicionales": {k: v for k, v in payload.items() if k not in ("email", "nombre", "apellido")},
+            },
+            "confirmation_token": token,
+            "expires_at": expires_at.isoformat(),
+            "advertencias": [
+                "Al confirmar, el cliente recibirá un email de bienvenida con su clave temporal.",
+                "Crear un cliente NO genera contrato — el contrato se genera por separado con draft_generate_contract.",
+            ],
+        }
+    except RuntimeError as e:
+        return {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
 # TOOL 16 — confirm_write (write, destructive)
 # ---------------------------------------------------------------------------
 
 @mcp.tool(annotations={"destructiveHint": True})
 async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]:
     """
-    Confirma y ejecuta un plan pendiente (create_order / update_status / generate_contract).
+    Confirma y ejecuta un plan pendiente.
+    Acciones: create_order / update_status / generate_contract / create_client / update_client.
     ÚNICA tool que escribe al negocio. Valida token, expiración, y re-valida reglas de negocio.
+
+    Desduplicación según el tipo de acción:
+    - Acciones DB (create_order, update_status): el consumed_at se marca DENTRO de la
+      misma transacción que ejecuta la acción, con un CAS
+      (UPDATE ... WHERE consumed_at IS NULL RETURNING id). Esto SÍ bloquea dos
+      confirmaciones simultáneas: solo una gana el CAS y la otra es rechazada.
+    - Acciones HTTP (generate_contract, create_client, update_client): el consumed_at
+      se marca DESPUÉS de que el POST al dashboard devuelve ok (para permitir reintento
+      si Vercel está caído). Por eso el CAS NO garantiza exclusión entre dos confirms
+      concurrentes para estas acciones — la desduplicación real la provee la
+      idempotencia server-side del dashboard (409 por email duplicado en create_client;
+      update idempotente en update_client; generación de contrato re-ejecutable). Si
+      Vercel está caído, consumed_at queda NULL y el plan puede reintentarse.
     """
     try:
-        # Fetch plan (FOR UPDATE via explicit transaction)
+        # Fetch plan
         row = await db.fetch_one(
             """
             SELECT id, action, plan_json, confirmation_token, consumed_at, expires_at
@@ -1241,14 +1513,26 @@ async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]
             ]
             line_items_json = json.dumps(line_items_prod)
 
-            # Execute in a single transaction
+            # Execute in a single transaction — CAS marks consumed atomically with the INSERT.
+            # If two confirms race, only one transaction wins the consumed_at CAS; the other
+            # sees consumed_at != NULL on the next fetch and is rejected above.
             async with db.rw_conn() as conn:
                 async with conn.cursor() as cur:
-                    # Mark plan consumed
+                    # CAS: mark consumed only if not yet consumed (race protection)
                     await cur.execute(
-                        "UPDATE hermes_pending_writes SET consumed_at = %s WHERE id = %s::uuid",
+                        """
+                        UPDATE hermes_pending_writes
+                           SET consumed_at = %s
+                         WHERE id = %s::uuid AND consumed_at IS NULL
+                        RETURNING id
+                        """,
                         (_now(), plan_id),
                     )
+                    cas_row = await cur.fetchone()
+                    if not cas_row:
+                        await conn.rollback()
+                        return {"error": "Este plan ya fue ejecutado por otro proceso (race condition evitada)"}
+
                     # Insert order. Sin columna apply_iva (NO existe en esta DB:
                     # el branch apply_iva ya quedo reflejado en calculated_iva).
                     await cur.execute(
@@ -1307,12 +1591,23 @@ async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]
             new_status = plan["new_status"]
             current = plan["current_status"]
 
+            # CAS + status update in one transaction (DB action — mark consumed atomically)
             async with db.rw_conn() as conn:
                 async with conn.cursor() as cur:
                     await cur.execute(
-                        "UPDATE hermes_pending_writes SET consumed_at = %s WHERE id = %s::uuid",
+                        """
+                        UPDATE hermes_pending_writes
+                           SET consumed_at = %s
+                         WHERE id = %s::uuid AND consumed_at IS NULL
+                        RETURNING id
+                        """,
                         (_now(), plan_id),
                     )
+                    cas_row = await cur.fetchone()
+                    if not cas_row:
+                        await conn.rollback()
+                        return {"error": "Este plan ya fue ejecutado por otro proceso (race condition evitada)"}
+
                     await cur.execute(
                         "UPDATE orders SET status = %s, date_modified = %s WHERE id = %s",
                         (new_status, _now(), oid),
@@ -1332,23 +1627,122 @@ async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]
             }
 
         # --- generate_contract ---
+        # HTTP action: mark consumed AFTER the dashboard call succeeds so that
+        # if Vercel is down the plan can be retried without a manual DB fix.
         elif action == "generate_contract":
             uid = plan["user_id"]
 
-            # Mark consumed
-            await db.execute(
-                "UPDATE hermes_pending_writes SET consumed_at = %s WHERE id = %s::uuid",
-                (_now(), plan_id),
-                pool="rw",
-            )
-
             pdf_result = await dashboard_client.generate_contract_pdf(uid)
+            if pdf_result.get("ok"):
+                await db.execute(
+                    """
+                    UPDATE hermes_pending_writes
+                       SET consumed_at = %s
+                     WHERE id = %s::uuid AND consumed_at IS NULL
+                    """,
+                    (_now(), plan_id),
+                    pool="rw",
+                )
             return {
-                "applied": True,
+                "applied": pdf_result.get("ok", False),
                 "user_id": uid,
                 "pdf_result": pdf_result,
-                "mensaje": "Solicitud de contrato enviada al dashboard",
+                "mensaje": (
+                    "Solicitud de contrato enviada al dashboard"
+                    if pdf_result.get("ok")
+                    else "Dashboard no disponible — reintentar confirm_write cuando Vercel esté activo"
+                ),
             }
+
+        # --- create_client ---
+        # HTTP action: mark consumed ONLY on dashboard ok (allows retry if Vercel down).
+        elif action == "create_client":
+            payload = plan["payload"]
+
+            # Re-validate allowlist (defense in depth: payload was built by draft_create_client
+            # but verify again here in case plan_json was tampered)
+            email = payload.get("email", "")
+            if not _validate_email(email):
+                return {"error": f"Email inválido al confirmar: {email!r}"}
+            rut = payload.get("rut")
+            if rut and not _validate_rut(str(rut)):
+                return {"error": f"RUT inválido al confirmar: {rut!r}"}
+            empresa_rut = payload.get("empresa_rut")
+            if empresa_rut and not _validate_rut(str(empresa_rut)):
+                return {"error": f"RUT empresa inválido al confirmar: {empresa_rut!r}"}
+
+            api_result = await dashboard_client.create_user(payload)
+            if api_result.get("ok"):
+                await db.execute(
+                    """
+                    UPDATE hermes_pending_writes
+                       SET consumed_at = %s
+                     WHERE id = %s::uuid AND consumed_at IS NULL
+                    """,
+                    (_now(), plan_id),
+                    pool="rw",
+                )
+                return {
+                    "applied": True,
+                    "api_result": api_result,
+                    "mensaje": (
+                        f"Cliente {email} creado. "
+                        "Le llegará email de bienvenida con clave temporal."
+                    ),
+                }
+            else:
+                # Do NOT mark consumed — allow retry
+                return {
+                    "applied": False,
+                    "api_result": api_result,
+                    "mensaje": (
+                        "Error al crear cliente en el dashboard — reintentar confirm_write "
+                        "cuando Vercel esté activo. Plan NO consumido."
+                    ),
+                }
+
+        # --- update_client ---
+        # HTTP action: same strategy as create_client.
+        elif action == "update_client":
+            uid = plan["user_id"]
+            fields = plan["fields"]
+
+            # Re-validate allowlist (defense in depth)
+            filter_result = _filter_client_fields(fields)
+            if not filter_result["ok"]:
+                return {
+                    "error": f"Campos no permitidos al confirmar: {filter_result['rejected']}",
+                    "rechazados": filter_result["rejected"],
+                }
+
+            api_result = await dashboard_client.update_user(uid, filter_result["fields"])
+            if api_result.get("ok"):
+                await db.execute(
+                    """
+                    UPDATE hermes_pending_writes
+                       SET consumed_at = %s
+                     WHERE id = %s::uuid AND consumed_at IS NULL
+                    """,
+                    (_now(), plan_id),
+                    pool="rw",
+                )
+                return {
+                    "applied": True,
+                    "user_id": uid,
+                    "api_result": api_result,
+                    "mensaje": f"Cliente {uid} actualizado exitosamente",
+                }
+            else:
+                # Do NOT mark consumed — allow retry
+                return {
+                    "applied": False,
+                    "user_id": uid,
+                    "api_result": api_result,
+                    "mensaje": (
+                        "Error al actualizar cliente en el dashboard — reintentar confirm_write "
+                        "cuando Vercel esté activo. Plan NO consumido."
+                    ),
+                }
 
         else:
             return {"error": f"Acción desconocida en plan: {action}"}

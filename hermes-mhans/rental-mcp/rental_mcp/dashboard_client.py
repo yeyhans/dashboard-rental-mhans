@@ -136,3 +136,59 @@ async def generate_contract_pdf(user_id: str) -> dict[str, Any]:
         except Exception as exc:
             logger.error("generate_contract_pdf error: %s", exc, exc_info=True)
             return {"ok": False, "reason": str(exc)}
+
+
+async def create_user(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    POST /api/external/create-user — X-API-Key auth. Best-effort, never raises.
+    Creates a new user in Supabase Auth + user_profiles via the dashboard.
+    409 from dashboard means email already exists (idempotent check done server-side).
+    """
+    async with _client() as client:
+        err = await _health_check(client)
+        if err:
+            return err
+        err = _token_guard()
+        if err:
+            return err
+        try:
+            resp = await client.post(
+                "/api/external/create-user",
+                json=payload,
+            )
+            body_text = resp.text[:500]
+            if resp.status_code == 409:
+                return {
+                    "ok": False,
+                    "status": 409,
+                    "body": body_text,
+                    "reason": "Email ya registrado — cliente existente (409)",
+                }
+            return {"ok": resp.status_code < 400, "status": resp.status_code, "body": body_text}
+        except Exception as exc:
+            logger.error("create_user error: %s", exc, exc_info=True)
+            return {"ok": False, "reason": str(exc)}
+
+
+async def update_user(user_id: str, fields: dict[str, Any]) -> dict[str, Any]:
+    """
+    POST /api/external/update-user — X-API-Key auth. Best-effort, never raises.
+    Updates allowed fields in user_profiles via the dashboard (server-side allowlist enforced).
+    """
+    async with _client() as client:
+        err = await _health_check(client)
+        if err:
+            return err
+        err = _token_guard()
+        if err:
+            return err
+        try:
+            resp = await client.post(
+                "/api/external/update-user",
+                json={"user_id": user_id, "fields": fields},
+            )
+            body_text = resp.text[:500]
+            return {"ok": resp.status_code < 400, "status": resp.status_code, "body": body_text}
+        except Exception as exc:
+            logger.error("update_user error: %s", exc, exc_info=True)
+            return {"ok": False, "reason": str(exc)}
