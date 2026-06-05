@@ -102,6 +102,17 @@ Ver patrones completos: `.claude/rules/01-api-patterns.md`
 
 ---
 
+## Integración con Hermes (Agente Telegram)
+
+El agente hermes-mhans puede crear y editar clientes vía dos endpoints externos del dashboard:
+
+- `POST /api/external/create-user` — crea usuario en Supabase Auth + perfil + email de bienvenida (idempotente por email, devuelve 409 si ya existe). Autenticado con `X-API-Key` (valida contra `HERMES_API_SECRET` si está configurado; fallback a `FRONTEND_API_SECRET`).
+- `POST /api/external/update-user` — actualiza hasta 9 campos del perfil del cliente (allowlist server-side: `nombre`, `apellido`, `telefono`, `direccion`, `ciudad`, `empresa_nombre`, `empresa_rut`, `instagram`, `tipo_cliente`). Mismo auth + rate limit 5 req/min.
+
+El notifier de hermes-mhans recibe notificaciones de órdenes nuevas vía trigger PostgreSQL + LISTEN/NOTIFY — no requiere ningún endpoint del dashboard. Ver detalles en `hermes-mhans/GUIA.md`.
+
+---
+
 ## Sistema de PDFs
 
 **Dos sistemas distintos**:

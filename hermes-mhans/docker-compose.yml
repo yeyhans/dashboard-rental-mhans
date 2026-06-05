@@ -121,6 +121,8 @@ services:
     networks:
       - default
       - rental_db
+    # Bypassea el entrypoint.sh base (siembra HERMES_HOME) — el notifier es stateless. Igual que el compose de producción.
+    entrypoint: ["tini", "--"]
     # python -m rental_mcp.notifier: el paquete notifier está dentro de rental_mcp
     command: ["python", "-m", "rental_mcp.notifier"]
     security_opt:

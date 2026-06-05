@@ -207,5 +207,7 @@ console.error('[WarrantyPhotos] Error subiendo foto:', { orderId, error: error.m
 /api/order/         generate-budget/contract/processing-pdf
 /api/emails/        send-budget/contract/order/welcome-notification
 /api/external/      generate-budget/contract-pdf (acceso desde frontend)
+                    create-user   POST — crea usuario Supabase Auth + perfil + email bienvenida (X-API-Key, rate limit 5/min, 409 si email duplicado)
+                    update-user   POST — actualiza hasta 9 campos del perfil (X-API-Key, allowlist server-side, 404 si user_id inexistente)
 /api/health         Health check
 ```
