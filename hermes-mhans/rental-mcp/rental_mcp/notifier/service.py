@@ -77,7 +77,9 @@ def _fmt_clp(amount: Any) -> str:
     if amount is None:
         return "—"
     try:
-        val = int(amount + 0.5)  # half-up
+        # Postgres `numeric` arrives as decimal.Decimal (Decimal + float raises
+        # TypeError) — coerce to float first so Decimal/str/int/float all work.
+        val = int(float(amount) + 0.5)  # half-up
     except (TypeError, ValueError):
         return "—"
     # Manual es-CL formatting: groups of 3 with dot separator

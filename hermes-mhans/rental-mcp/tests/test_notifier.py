@@ -140,6 +140,32 @@ class TestFormatOrderMessage:
         # Should NOT show .00 or ,00
         assert ".00" not in msg and ",00" not in msg.replace(".", "X")
 
+    def test_decimal_amounts_from_numeric_columns(self):
+        """
+        psycopg returns Postgres `numeric` as decimal.Decimal — the real shape
+        of calculated_subtotal/iva/total in production. They must render as
+        CLP amounts, never as the "—" fallback (Decimal + float raises TypeError).
+        """
+        from decimal import Decimal
+        row = _row(total=Decimal("152320.00"))
+        row["calculated_subtotal"] = Decimal("128000.00")
+        row["calculated_iva"] = Decimal("24320.00")
+        msg = format_order_message(row)
+        assert "Subtotal: $128.000" in msg
+        assert "IVA: $24.320" in msg
+        assert "Total: $152.320 CLP" in msg
+        assert "—" not in msg.split("Subtotal")[1]
+
+    def test_string_amounts_do_not_render_dash(self):
+        """Defensive: amounts arriving as strings must still render."""
+        row = _row(total="77350.00")
+        row["calculated_subtotal"] = "65000.00"
+        row["calculated_iva"] = "12350.00"
+        msg = format_order_message(row)
+        assert "Subtotal: $65.000" in msg
+        assert "IVA: $12.350" in msg
+        assert "Total: $77.350 CLP" in msg
+
 
 # ---------------------------------------------------------------------------
 # filter_pending_rows — pure dedup / filter logic

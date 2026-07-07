@@ -101,8 +101,32 @@ export const getAuthCookieConfig = () => ({
   maxAge: 60 * 60 * 24 * 30, // 30 días
   httpOnly: true,
   secure: import.meta.env.PROD,
-  sameSite: 'strict' as const,
+  // 'lax' en vez de 'strict': con 'strict' el browser NO envía cookies al navegar
+  // desde links externos (email, Telegram), lo que mataba la sesión del admin
+  sameSite: 'lax' as const,
 });
+
+// Dedupe de refresh concurrente: N requests paralelos con el mismo refresh token
+// (carga de página del dashboard dispara varios fetches a la vez) compartían el
+// mismo token rotativo — el primero lo consumía y el resto invalidaba la familia
+// completa de tokens en Supabase, matando la sesión. Este mapa garantiza UN solo
+// refreshSession() en vuelo por refresh token dentro de la misma instancia.
+type RefreshResult = Awaited<ReturnType<NonNullable<typeof supabase>['auth']['refreshSession']>>;
+const inflightRefreshes = new Map<string, Promise<RefreshResult>>();
+
+const refreshSessionDeduped = (refreshToken: string): Promise<RefreshResult> => {
+  const existing = inflightRefreshes.get(refreshToken);
+  if (existing) return existing;
+
+  const promise = supabase!.auth
+    .refreshSession({ refresh_token: refreshToken })
+    .finally(() => {
+      inflightRefreshes.delete(refreshToken);
+    });
+
+  inflightRefreshes.set(refreshToken, promise);
+  return promise;
+};
 
 // Authentication functions for backend
 export const getServerUser = async (context: APIContext | AstroGlobal) => {
@@ -135,11 +159,12 @@ export const getServerUser = async (context: APIContext | AstroGlobal) => {
       return null;
     }
 
-    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession({
-      refresh_token: refreshToken,
-    });
+    const { data: refreshData, error: refreshError } = await refreshSessionDeduped(refreshToken);
 
     if (refreshError || !refreshData.session || !refreshData.user) {
+      // "Already Used" = otro request/lambda ya rotó este token (race entre instancias).
+      // La cookie nueva viene en camino en esa respuesta — NO es una sesión muerta.
+      // Devolver null sin destruir nada; el siguiente request llegará con tokens frescos.
       console.error('[Auth] Token refresh failed:', refreshError?.message);
       return null;
     }
@@ -193,20 +218,29 @@ export const getServerAdmin = async (context: APIContext | AstroGlobal): Promise
     }
 
     // Verify admin user exists in admin_users table
+    // .in() en vez de .eq('role', 'admin'): los super_admin quedaban excluidos
+    // y se cacheaban como "no admin" 5 min → loop de login constante
     const { data: adminUser, error: adminError } = await supabaseAdmin
       .from('admin_users')
       .select('*')
       .eq('user_id', user.id)
-      .eq('role', 'admin')
+      .in('role', ['admin', 'super_admin'])
       .single();
 
-    // Cache the result
+    if (adminError && adminError.code !== 'PGRST116') {
+      // Error transitorio (red, timeout) — NO cachear como "no admin",
+      // de lo contrario el admin queda expulsado 5 minutos por un fallo pasajero
+      console.error('❌ Error verificando admin (transitorio, no cacheado):', adminError.message);
+      return null;
+    }
+
+    // Cache the result (solo resultados definitivos: admin encontrado o PGRST116 = no existe)
     adminCache.set(user.id, {
       admin: adminUser,
       timestamp: Date.now()
     });
 
-    if (adminError || !adminUser) {
+    if (!adminUser) {
       console.log('🔒 User is not admin:', user.email);
       return null;
     }

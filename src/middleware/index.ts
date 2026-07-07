@@ -1,5 +1,5 @@
 import { defineMiddleware } from "astro:middleware";
-import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
+import { getServerAdmin } from "../lib/supabase";
 import { getAllowedOrigin } from "../middleware/auth";
 import micromatch from "micromatch";
 
@@ -88,8 +88,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const adminSession = await getServerAdmin(context);
 
   if (!adminSession) {
+    // NO borrar cookies aquí: un null puede ser fallo transitorio (red, race de
+    // refresh entre lambdas). Borrar el refresh token aquí mataba sesiones válidas.
+    // Las cookies se limpian solo en logout explícito o refresh confirmado inválido.
     console.log('🚫 Acceso denegado al dashboard - Usuario no es administrador');
-    clearAuthCookies(context);
     return redirect(homeRoute);
   }
 
