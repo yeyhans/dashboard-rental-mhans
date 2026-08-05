@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { OrderService } from '../../../services/orderService';
 import { withAuth } from '../../../middleware/auth';
+import { isFrontendApiKeyOrAdmin, unauthorizedResponse } from '../../../lib/serverApiAuth';
 
 export const GET: APIRoute = withAuth(async (context) => {
   try {
@@ -50,7 +51,17 @@ export const GET: APIRoute = withAuth(async (context) => {
 
 export const POST: APIRoute = async (context) => {
   const origin = context.request.headers.get('origin') || 'http://localhost:4321';
-  
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie, X-API-Key, X-Request-ID'
+  };
+
+  if (!(await isFrontendApiKeyOrAdmin(context))) {
+    return unauthorizedResponse(corsHeaders);
+  }
+   
   try {
     console.log('📦 POST /api/orders - Creating order from frontend');
     
@@ -92,10 +103,7 @@ export const POST: APIRoute = async (context) => {
       status: 201,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Credentials': 'true',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie'
+        ...corsHeaders
       }
     });
   } catch (error) {
@@ -107,8 +115,7 @@ export const POST: APIRoute = async (context) => {
       status: 500,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Credentials': 'true'
+        ...corsHeaders
       }
     });
   }
@@ -126,7 +133,7 @@ export const OPTIONS: APIRoute = async ({ request }) => {
     headers: {
       'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie, X-API-Key, X-Request-ID',
       'Access-Control-Allow-Credentials': 'true',
       'Access-Control-Max-Age': '86400',
     },

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { generateBudgetPdfFromId } from '../../../../lib/orderPdfGenerationService';
+import { withAuth } from '../../../../middleware/auth';
 
 /**
  * POST /api/orders/:id/generate-budget
@@ -14,7 +15,7 @@ import { generateBudgetPdfFromId } from '../../../../lib/orderPdfGenerationServi
  * 4. Updates order.new_pdf_on_hold_url in Supabase (handled by underlying API)
  * 5. Returns PDF URL to frontend
  */
-export const POST: APIRoute = async ({ params, request }) => {
+export const POST: APIRoute = withAuth(async ({ params, request }) => {
   try {
     const orderId = parseInt(params.id || '');
     
@@ -116,7 +117,7 @@ export const POST: APIRoute = async ({ params, request }) => {
       }
     );
   }
-};
+});
 
 /**
  * OPTIONS handler for CORS preflight

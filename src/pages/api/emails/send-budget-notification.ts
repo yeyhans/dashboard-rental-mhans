@@ -1,4 +1,6 @@
 import type { APIRoute } from 'astro';
+import { createEmailWorkerHeaders, getEmailWorkerUrl } from '../../../lib/emailWorkerService';
+import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 
 // Complete Order/Budget Data Interface with all required columns
 interface BudgetEmailData {
@@ -282,8 +284,17 @@ const generateBudgetEmailTemplate = (data: BudgetEmailData, budgetUrl: string, c
   `;
 };
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async (context) => {
+  const { request } = context;
   try {
+    if (!(await isFrontendApiKeyOrAdmin(context))) {
+      console.error('[POST /api/emails/send-budget-notification] Solicitud no autorizada');
+      return new Response(JSON.stringify({ success: false, error: 'No autorizado' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const { budgetData, budgetUrl, emailType, customMessage }: BudgetEmailRequest = await request.json();
     
     console.log('📧 [Backend] Processing budget email request:', {
@@ -381,7 +392,8 @@ async function sendViaWorker(
   budgetUrl: string
 ): Promise<Response> {
   try {
-    const workerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || 'https://workers.mariohans.cl';
+    const requestId = crypto.randomUUID();
+    const workerUrl = getEmailWorkerUrl();
     
     const emailPayload = {
       to,
@@ -395,19 +407,22 @@ async function sendViaWorker(
       }
     };
 
-    console.log('📤 [Backend] Sending via worker fallback to:', to);
+    console.log('📤 [Backend] Sending via worker fallback', { requestId, deliveryType: 'budget_notification' });
 
     const response = await fetch(`${workerUrl}/send-email`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        ...createEmailWorkerHeaders(requestId),
       },
       body: JSON.stringify(emailPayload)
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ [Backend] Cloudflare Worker error:', errorText);
+      console.error('❌ [Backend] Cloudflare Worker error:', {
+        requestId,
+        failureClass: 'worker_delivery_failed',
+        status: response.status,
+      });
       
       return new Response(JSON.stringify({
         success: false,

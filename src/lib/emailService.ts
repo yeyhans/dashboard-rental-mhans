@@ -1,5 +1,6 @@
 // Email service for budget notifications
 // This service handles sending budget-related emails using the same infrastructure as the frontend
+import { createInternalApiHeaders } from './serverApiAuth';
 
 export interface BudgetEmailData {
   // Order information
@@ -151,10 +152,7 @@ export const sendBudgetGeneratedEmail = async (
     
     const response = await fetch(backendEmailApiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Internal-Request': 'true', // Identify this as an internal request
-      },
+      headers: createInternalApiHeaders(crypto.randomUUID()),
       body: JSON.stringify({
         budgetData: orderData,
         budgetUrl: pdfUrl,
@@ -171,9 +169,11 @@ export const sendBudgetGeneratedEmail = async (
         error: errorText
       });
       
-      // Fallback: Try to send email directly using a simple email service
-      console.log('🔄 Attempting fallback email sending...');
-      return await sendBudgetEmailFallback(orderData, pdfUrl);
+      return {
+        success: false,
+        message: 'No se pudo enviar el email de presupuesto',
+        error: `backend_email_status_${response.status}`
+      };
     }
 
     const result = await response.json();
@@ -189,88 +189,23 @@ export const sendBudgetGeneratedEmail = async (
     } else {
       console.error('❌ Backend email API returned error:', result.error);
       
-      // Fallback: Try direct email sending
-      console.log('🔄 Attempting fallback email sending...');
-      return await sendBudgetEmailFallback(orderData, pdfUrl);
+      return {
+        success: false,
+        message: result.message || 'No se pudo enviar el email de presupuesto',
+        error: result.error || 'backend_email_failed'
+      };
     }
 
   } catch (error) {
     console.error('💥 Error sending budget email:', error);
     
-    // Fallback: Try direct email sending
-    console.log('🔄 Attempting fallback email sending due to error...');
-    return await sendBudgetEmailFallback(orderData, pdfUrl);
-  }
-};
-
-/**
- * Fallback email sending method
- * This method sends a simple email notification when the main email service fails
- */
-async function sendBudgetEmailFallback(
-  orderData: BudgetEmailData,
-  pdfUrl: string
-): Promise<EmailResult> {
-  try {
-    console.log('📧 Using fallback email method...');
-    
-    const customerEmail = orderData.billing?.email || orderData.billing_email;
-    const customerFirstName = orderData.billing?.first_name || orderData.billing_first_name || '';
-    const customerLastName = orderData.billing?.last_name || orderData.billing_last_name || '';
-    const customerName = `${customerFirstName} ${customerLastName}`.trim();
-    const projectName = orderData.metadata?.order_proyecto || orderData.order_proyecto || 'Proyecto de Arriendo';
-    const orderId = orderData.order_id || orderData.id;
-
-    if (!customerEmail) {
-      return {
-        success: false,
-        message: 'Email del cliente requerido para envío fallback',
-        error: 'Missing customer email'
-      };
-    }
-
-    // Create a simple email body
-    const emailBody = `
-      Estimado/a ${customerName || 'Cliente'},
-      
-      Su presupuesto para el proyecto "${projectName}" (Orden #${orderId}) ha sido generado exitosamente.
-      
-      Puede descargar su presupuesto desde el siguiente enlace:
-      ${pdfUrl}
-      
-      Si tiene alguna consulta, no dude en contactarnos.
-      
-      Saludos cordiales,
-      Equipo Rental Mario Hans
-    `;
-
-    // Log the fallback email (in production, this would use a simple email service)
-    console.log('📧 Fallback email would be sent:', {
-      to: customerEmail,
-      subject: `Presupuesto de Arriendo - Orden #${orderId}`,
-      body: emailBody.substring(0, 200) + '...',
-      pdfUrl: pdfUrl
-    });
-
-    // In a real implementation, you would use a simple email service here
-    // For now, we'll just log and return success
-    console.log('✅ Fallback email logged successfully (would be sent in production)');
-    
-    return {
-      success: true,
-      message: 'Email de presupuesto procesado (método fallback)',
-      emailId: `fallback_${Date.now()}`
-    };
-
-  } catch (error) {
-    console.error('💥 Error in fallback email sending:', error);
     return {
       success: false,
-      message: 'Error en envío de email fallback',
+      message: 'Error al enviar email de presupuesto',
       error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
-}
+};
 
 /**
  * Send budget email using direct service call

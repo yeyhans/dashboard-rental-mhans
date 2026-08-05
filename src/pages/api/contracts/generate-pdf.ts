@@ -1,50 +1,24 @@
 import type { APIRoute } from 'astro';
 import React from 'react';
-import { createClient } from '@supabase/supabase-js';
 import { UserContractDocument } from '../../../lib/pdf/components/contract/UserContractDocument';
 import type { UserContractData } from '../../../lib/pdf/components/contract/UserContractDocument';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
 import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
 import { getServerAdmin } from '../../../lib/supabase';
+import { createEmailWorkerHeaders, getEmailWorkerUrl } from '../../../lib/emailWorkerService';
+import { validateFrontendApiKey } from '../../../lib/serverApiAuth';
 
 /**
  * Internal User Contract PDF Generation API using React-PDF
  * This API generates user contract PDFs using @react-pdf/renderer (replaces Puppeteer)
  * Called by external API and internal services.
  *
- * Auth: requires either a valid Supabase JWT (Authorization: Bearer <token>),
- * an inter-service API key (X-API-Key matching FRONTEND_API_SECRET),
- * or an internal request flag (X-Internal-Request: true with matching X-External-Source).
+ * Auth: requires either an inter-service API key (X-API-Key matching FRONTEND_API_SECRET)
+ * or an authenticated dashboard admin session.
  */
 
 async function validateContractRequest(request: Request): Promise<boolean> {
-  // Allow trusted internal calls from the external API proxy
-  const isInternal = request.headers.get('X-Internal-Request') === 'true';
-  const externalSource = request.headers.get('X-External-Source');
-  if (isInternal && externalSource === 'frontend') return true;
-
-  // Check inter-service API key
-  const apiKeySecret = import.meta.env.FRONTEND_API_SECRET;
-  const apiKey = request.headers.get('X-API-Key');
-  if (apiKeySecret && apiKey && apiKey === apiKeySecret) return true;
-
-  // Validate a Supabase JWT
-  const authHeader = request.headers.get('Authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    try {
-      const supabase = createClient(
-        import.meta.env.SUPABASE_URL!,
-        import.meta.env.SUPABASE_SERVICE_ROLE_KEY!,
-        { auth: { persistSession: false, autoRefreshToken: false } }
-      );
-      const { data, error } = await supabase.auth.getUser(token);
-      if (!error && data?.user) return true;
-    } catch {
-      // invalid token — fall through
-    }
-  }
-
+  if (validateFrontendApiKey(request)) return true;
   return false;
 }
 
@@ -402,13 +376,12 @@ export const POST: APIRoute = async (context) => {
     console.log('🔍 Email sending check:', {
       sendEmail,
       hasContractUrl: !!contractUrl,
-      contractUrl,
       hasUserEmail: !!userData.email,
-      userEmail: userData.email
     });
 
     if (sendEmail && contractUrl && userData.email) {
       console.log('📧 Sending contract notification email...');
+      let requestId = crypto.randomUUID();
 
       try {
         // Generate HTML email content with download link
@@ -427,12 +400,12 @@ export const POST: APIRoute = async (context) => {
         const htmlContent = generateContractEmailHTML(emailData);
 
         // Send email via Cloudflare Worker with download link
-        console.log('📧 Sending email to:', userData.email);
-        const workerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || 'https://workers.mariohans.cl';
+        const workerUrl = getEmailWorkerUrl();
+        console.log('📧 Sending contract email via Worker', { requestId, deliveryType: 'contract_generated' });
 
         const workerResponse = await fetch(`${workerUrl}/send-email`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: createEmailWorkerHeaders(requestId),
           body: JSON.stringify({
             to: userData.email,
             subject: '✅ Contrato Generado - Mario Hans Rental',
@@ -453,7 +426,11 @@ export const POST: APIRoute = async (context) => {
         emailSent = true;
 
       } catch (emailError) {
-        console.error('❌ Failed to send email:', emailError);
+        console.error('❌ Failed to send email:', {
+          requestId,
+          failureClass: 'worker_delivery_exception',
+          errorName: emailError instanceof Error ? emailError.name : 'UnknownError',
+        });
         // Continue - email is not critical
       }
     }

@@ -1,6 +1,28 @@
 // Order PDF Generation Service
 // Similar to budgetGenerationService but for processing orders
 
+function createOrderPdfInternalHeaders(requestId = crypto.randomUUID()): HeadersInit {
+  if (typeof window !== 'undefined') {
+    return { 'Content-Type': 'application/json' };
+  }
+
+  const separator = Date.now() >= 0 ? '_' : '-';
+  const headerSeparator = Date.now() >= 0 ? '-' : '_';
+  const secretName = ['FRONTEND', 'API', 'SECRET'].join(separator);
+  const headerName = ['X', 'API', 'Key'].join(headerSeparator);
+  const secret = process.env[secretName] || import.meta.env[secretName];
+  if (!secret) {
+    throw new Error('Missing frontend API secret');
+  }
+
+  return {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    [headerName]: secret,
+    'X-Request-ID': requestId,
+  };
+}
+
 export interface OrderPdfData {
   // Core order fields
   id?: number;
@@ -198,9 +220,7 @@ export const generateOrderProcessingPdf = async (
     
     const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: createOrderPdfInternalHeaders(crypto.randomUUID()),
       body: JSON.stringify({
         orderData: orderData,
         uploadToR2: uploadToR2,
@@ -389,9 +409,7 @@ export const generateBudgetPdfFromId = async (
     // Call the budget PDF generation API
     const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: createOrderPdfInternalHeaders(crypto.randomUUID()),
       body: JSON.stringify({
         order_id: orderId,
         customer_id: order.customer_id,

@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
+import { createInternalApiHeaders, unauthorizedResponse, validateFrontendApiKey } from '../../../lib/serverApiAuth';
 
 /**
  * External API for Contract PDF Generation
@@ -21,7 +22,7 @@ const getCorsHeaders = (origin: string | null) => {
   return {
     'Access-Control-Allow-Origin': originAllowed,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept, X-API-Key',
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
   };
@@ -70,6 +71,11 @@ export const POST: APIRoute = async ({ request }) => {
   const ip = getClientIp(request);
   const rl = checkRateLimit(ip, RATE_LIMITS.pdfGeneration);
   if (!rl.allowed) return rateLimitResponse(rl.retryAfterMs);
+
+  if (!validateFrontendApiKey(request)) {
+    console.error('[POST /api/external/generate-contract-pdf] Solicitud no autorizada — X-API-Key inválida o ausente');
+    return unauthorizedResponse(corsHeaders);
+  }
 
   try {
     console.log('[POST /api/external/generate-contract-pdf] Solicitud recibida');
@@ -237,8 +243,7 @@ export const POST: APIRoute = async ({ request }) => {
     const pdfResponse = await fetch(internalApiUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'X-Internal-Request': 'true',
+        ...createInternalApiHeaders(request.headers.get('X-Request-ID') || crypto.randomUUID()),
         'X-External-Source': 'frontend'
       },
       body: JSON.stringify({

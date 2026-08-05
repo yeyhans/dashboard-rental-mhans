@@ -24,7 +24,31 @@ interface EmailPayload {
   metadata?: Record<string, string>;
 }
 
-const WORKER_URL = 'https://workers.mariohans.cl';
+const DEFAULT_WORKER_URL = 'https://workers.mariohans.cl';
+
+export function getEmailWorkerUrl(): string {
+  const rawUrl = import.meta.env.EMAIL_WORKER_URL || import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || DEFAULT_WORKER_URL;
+  const parsed = new URL(rawUrl);
+  const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+  if (parsed.protocol !== 'https:' && !(import.meta.env.DEV && isLocalhost)) {
+    throw new Error('Invalid EMAIL_WORKER_URL protocol');
+  }
+  return parsed.origin;
+}
+
+export function createEmailWorkerHeaders(requestId = crypto.randomUUID()): HeadersInit {
+  const secret = import.meta.env.EMAIL_WORKER_SHARED_SECRET;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Request-ID': requestId,
+  };
+
+  if (secret) {
+    headers.Authorization = `Bearer ${secret}`;
+  }
+
+  return headers;
+}
 
 /**
  * Send email via Cloudflare Worker
@@ -34,7 +58,8 @@ export async function sendEmailViaWorker(
   to: string,
   subject: string,
   html?: string,
-  attachments?: EmailPayload['attachments']
+  attachments?: EmailPayload['attachments'],
+  requestId = crypto.randomUUID()
 ): Promise<EmailResult> {
   try {
     const payload: EmailPayload = {
@@ -50,21 +75,22 @@ export async function sendEmailViaWorker(
       payload.attachments = attachments;
     }
 
-    const response = await fetch(`${WORKER_URL}/send-email`, {
+    const response = await fetch(`${getEmailWorkerUrl()}/send-email`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: createEmailWorkerHeaders(requestId),
       body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Worker email error:', errorText);
+      console.error('❌ Worker email error:', {
+        requestId,
+        failureClass: 'worker_delivery_failed',
+        status: response.status,
+      });
       return {
         success: false,
         message: 'Failed to send email via worker',
-        error: errorText
+        error: `worker_status_${response.status}`
       };
     }
 
@@ -75,11 +101,15 @@ export async function sendEmailViaWorker(
       emailId: result.emailId
     };
   } catch (error) {
-    console.error('💥 Error sending email via worker:', error);
+    console.error('💥 Error sending email via worker:', {
+      requestId,
+      failureClass: 'worker_delivery_exception',
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+    });
     return {
       success: false,
       message: 'Error sending email',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: 'worker_delivery_exception'
     };
   }
 }
@@ -89,28 +119,39 @@ export async function sendEmailViaWorker(
  */
 export async function validateEmailConfig(): Promise<{
   isConfigured: boolean;
+  workerReachable: boolean;
+  authenticatedDeliveryReady: boolean;
   message: string;
   details?: unknown;
 }> {
   try {
-    const response = await fetch(`${WORKER_URL}/health`, {
+    const hasSharedSecret = !!import.meta.env.EMAIL_WORKER_SHARED_SECRET;
+    const response = await fetch(`${getEmailWorkerUrl()}/health`, {
       method: 'GET'
     });
 
     if (response.ok) {
       return {
-        isConfigured: true,
-        message: 'Email service is configured and healthy'
+        isConfigured: hasSharedSecret,
+        workerReachable: true,
+        authenticatedDeliveryReady: hasSharedSecret,
+        message: hasSharedSecret
+          ? 'Email worker is reachable and authenticated delivery is configured'
+          : 'Email worker is reachable, but authenticated delivery is waiting for EMAIL_WORKER_SHARED_SECRET'
       };
     }
 
     return {
       isConfigured: false,
+      workerReachable: false,
+      authenticatedDeliveryReady: false,
       message: `Email service returned status ${response.status}`
     };
   } catch (error) {
     return {
       isConfigured: false,
+      workerReachable: false,
+      authenticatedDeliveryReady: false,
       message: 'Email service is not available',
       details: error instanceof Error ? error.message : 'Unknown error'
     };

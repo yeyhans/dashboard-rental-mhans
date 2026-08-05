@@ -227,9 +227,7 @@ export const generateBudgetWithOrderData = async (
     // Use relative URL since we're in the same backend
     const response = await fetch('/api/budget/generate-pdf', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         orderData: orderData,
         uploadToR2: uploadToR2,

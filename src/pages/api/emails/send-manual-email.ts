@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
-import { withAuth } from '@/middleware/auth';
-import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '@/lib/rateLimit';
+import { withAuth } from '../../../middleware/auth';
+import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
+import { createEmailWorkerHeaders, getEmailWorkerUrl } from '../../../lib/emailWorkerService';
 
 interface ManualEmailRequest {
   to: string;
@@ -148,7 +149,8 @@ async function sendViaWorker(
   metadata?: any
 ): Promise<Response> {
   try {
-    const workerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || 'https://workers.mariohans.cl';
+    const requestId = crypto.randomUUID();
+    const workerUrl = getEmailWorkerUrl();
 
     const emailPayload: any = {
       to,
@@ -198,19 +200,22 @@ async function sendViaWorker(
       }
     }
 
-    console.log('📤 [Backend] Sending via Cloudflare Worker to:', to);
+    console.log('📤 [Backend] Sending via Cloudflare Worker', { requestId, deliveryType: 'manual_email' });
 
     const response = await fetch(`${workerUrl}/send-email`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        ...createEmailWorkerHeaders(requestId),
       },
       body: JSON.stringify(emailPayload)
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ [Backend] Cloudflare Worker error:', errorText);
+      console.error('❌ [Backend] Cloudflare Worker error:', {
+        requestId,
+        failureClass: 'worker_delivery_failed',
+        status: response.status,
+      });
 
       return new Response(JSON.stringify({
         success: false,

@@ -94,7 +94,6 @@ export const sendManualEmail = async (emailData: ManualEmailData): Promise<Manua
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Internal-Request': 'true',
       },
       body: JSON.stringify(emailPayload)
     });

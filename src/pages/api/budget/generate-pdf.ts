@@ -5,6 +5,7 @@ import { BudgetDocument } from '../../../lib/pdf/components/budget/BudgetDocumen
 import type { BudgetDocumentData } from '../../../lib/pdf/core/types';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
 import { formatDateDDMMAAAA, getOrderStatusInSpanish } from '../../../lib/pdf/utils/formatters';
+import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 
 // Interface for the budget data
 interface BudgetData {
@@ -64,8 +65,17 @@ interface GenerateBudgetPDFRequest {
   returnBuffer?: boolean;
 }
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async (context) => {
+  const { request } = context;
   try {
+    if (!(await isFrontendApiKeyOrAdmin(context))) {
+      console.error('[POST /api/budget/generate-pdf] Solicitud no autorizada');
+      return new Response(JSON.stringify({ success: false, error: 'No autorizado' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const { orderData, uploadToR2 = true, sendEmail = true, returnBuffer = false }: GenerateBudgetPDFRequest = await request.json();
     
     console.log('🚀 Starting backend budget PDF generation for order:', orderData?.order_id);
@@ -887,7 +897,7 @@ async function sendBudgetNotificationEmail(orderData: BudgetData, pdfUrl: string
   error?: string;
 }> {
   try {
-    console.log('📧 Sending budget notification email to:', orderData.billing.email);
+    console.log('📧 Sending budget notification email', { hasBillingEmail: !!orderData.billing.email });
     
     console.log('📤 Calling budget email service directly...');
     

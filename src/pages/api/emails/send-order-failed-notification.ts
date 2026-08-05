@@ -1,5 +1,7 @@
 import type { APIRoute } from 'astro';
 import { EmailTemplateService } from '../../../lib/emailTemplateService';
+import { createEmailWorkerHeaders, getEmailWorkerUrl } from '../../../lib/emailWorkerService';
+import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 
 // Order Data Interface for failed orders
 interface FailedOrderData {
@@ -52,8 +54,17 @@ const formatCLP = (amount: string | number) => {
   }).format(numAmount);
 };
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async (context) => {
+  const { request } = context;
   try {
+    if (!(await isFrontendApiKeyOrAdmin(context))) {
+      console.error('[POST /api/emails/send-order-failed-notification] Solicitud no autorizada');
+      return new Response(JSON.stringify({ success: false, error: 'No autorizado' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const { orderData, emailType, customMessage, failureReason }: FailedOrderEmailRequest = await request.json();
     
     console.log('📧 [Backend] Processing order failed email request:', {
@@ -170,7 +181,8 @@ async function sendViaWorker(
   emailType: string
 ): Promise<Response> {
   try {
-    const workerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || 'https://workers.mariohans.cl';
+    const requestId = crypto.randomUUID();
+    const workerUrl = getEmailWorkerUrl();
     
     const emailPayload = {
       to,
@@ -183,19 +195,22 @@ async function sendViaWorker(
       }
     };
 
-    console.log('📤 [Backend] Sending via Cloudflare Worker to:', to);
+    console.log('📤 [Backend] Sending via Cloudflare Worker', { requestId, deliveryType: emailType });
 
     const response = await fetch(`${workerUrl}/send-email`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        ...createEmailWorkerHeaders(requestId),
       },
       body: JSON.stringify(emailPayload)
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ [Backend] Cloudflare Worker error:', errorText);
+      console.error('❌ [Backend] Cloudflare Worker error:', {
+        requestId,
+        failureClass: 'worker_delivery_failed',
+        status: response.status,
+      });
       
       return new Response(JSON.stringify({
         success: false,

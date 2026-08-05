@@ -1,42 +1,17 @@
 import type { APIRoute } from 'astro';
-import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
+import { createInternalApiHeaders, validateFrontendApiKey } from '../../../lib/serverApiAuth';
 
 /**
  * External API endpoint for generating budget PDFs from frontend applications
  * This endpoint is specifically designed to be called from external frontend applications
  * running on different domains (like VPS Hostinger) to generate PDFs using the backend infrastructure
  *
- * Auth: requires either a valid Supabase JWT (Authorization: Bearer <token>)
- * or an inter-service API key (X-API-Key matching FRONTEND_API_SECRET env var).
+ * Auth: requires an inter-service API key (X-API-Key matching FRONTEND_API_SECRET env var).
  */
 
 async function validateExternalRequest(request: Request): Promise<boolean> {
-  // Check inter-service API key first (lightweight, no network call)
-  const apiKeySecret = import.meta.env.FRONTEND_API_SECRET;
-  const apiKey = request.headers.get('X-API-Key');
-  if (apiKeySecret && apiKey && apiKey === apiKeySecret) {
-    return true;
-  }
-
-  // Fall back to validating a Supabase JWT
-  const authHeader = request.headers.get('Authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    try {
-      const supabase = createClient(
-        import.meta.env.SUPABASE_URL!,
-        import.meta.env.SUPABASE_SERVICE_ROLE_KEY!,
-        { auth: { persistSession: false, autoRefreshToken: false } }
-      );
-      const { data, error } = await supabase.auth.getUser(token);
-      if (!error && data?.user) return true;
-    } catch {
-      // invalid token — fall through to 401
-    }
-  }
-
-  return false;
+  return validateFrontendApiKey(request);
 }
 
 export const POST: APIRoute = async ({ request }) => {
@@ -163,27 +138,14 @@ export const POST: APIRoute = async ({ request }) => {
         .single();
       
       if (!customerCheck) {
-        console.log('⚠️  Customer ID does not exist, will try to find any valid customer...');
-        // Get any existing customer as fallback
-        const { data: anyCustomer } = await supabase
-          .from('user_profiles')
-          .select('user_id')
-          .limit(1)
-          .single();
-        
-        if (anyCustomer) {
-          validCustomerId = anyCustomer.user_id;
-          console.log(`✅ Using existing customer ID: ${validCustomerId}`);
-        } else {
-          console.error('❌ No customers found in database');
-          return new Response(JSON.stringify({
-            success: false,
-            message: 'No se encontraron clientes válidos en la base de datos'
-          }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json', ...corsHeaders }
-          });
-        }
+        console.error('❌ Customer ID does not exist for external budget request');
+        return new Response(JSON.stringify({
+          success: false,
+          message: 'Cliente inválido para generar presupuesto'
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
       }
       
       // Prepare order data for Supabase insertion using actual table schema
@@ -272,8 +234,7 @@ export const POST: APIRoute = async ({ request }) => {
     const pdfResponse = await fetch(internalApiUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'X-Internal-Request': 'true',
+        ...createInternalApiHeaders(request.headers.get('X-Request-ID') || crypto.randomUUID()),
         'X-External-Source': 'frontend'
       },
       body: JSON.stringify({

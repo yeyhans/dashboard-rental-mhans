@@ -4,16 +4,45 @@ import { BudgetDocument } from '../../../lib/pdf/components/budget/BudgetDocumen
 import type { BudgetDocumentData } from '../../../lib/pdf/core/types';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
 import { formatDateDDMMAAAA, getOrderStatusInSpanish } from '../../../lib/pdf/utils/formatters';
+import { createEmailWorkerHeaders, getEmailWorkerUrl } from '../../../lib/emailWorkerService';
+import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 
-export const POST: APIRoute = async ({ request }) => {
+export function getBudgetEmailRequestId(request: Request): string {
+  return request.headers.get('X-Request-ID') || crypto.randomUUID();
+}
+
+export function logBudgetEmailFailure(
+  logger: Pick<Console, 'warn'>,
+  requestId: string,
+  event: string,
+  failureClass: string
+) {
+  logger.warn('⚠️ Budget email delivery failed (non-critical)', {
+    requestId,
+    event,
+    failureClass,
+  });
+}
+
+export const POST: APIRoute = async (context) => {
+  const { request } = context;
   try {
+    const routeRequestId = getBudgetEmailRequestId(request);
+    if (!(await isFrontendApiKeyOrAdmin(context))) {
+      console.error('[POST /api/order/generate-budget-pdf] Solicitud no autorizada');
+      return new Response(JSON.stringify({ success: false, error: 'No autorizado' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', 'X-Request-ID': routeRequestId }
+      });
+    }
+
     console.log('🚀 Budget PDF generation API called');
     
     const requestData = await request.json();
     console.log('📋 Received order data:', {
       order_id: requestData.order_id,
       customer_id: requestData.customer_id,
-      billing_email: requestData.billing_email,
+      has_billing_email: !!requestData.billing_email,
       project_name: requestData.project_name
     });
 
@@ -461,20 +490,22 @@ Descarga el detalle del pedido aquí
 
         const subject = `✅ Presupuesto Generado - ${projectName} (Orden #${orderId})`;
 
-        console.log('📧 Sending budget email with data:', {
-          to: customerEmail,
+        console.log('📧 Preparing budget email delivery', {
+          requestId: routeRequestId,
+          hasCustomerEmail: !!customerEmail,
           order_id: orderId,
           project_name: projectName,
-          pdf_url: finalPdfUrl
+          hasPdfUrl: !!finalPdfUrl
         });
 
         // Send customer email with download link via Cloudflare Worker
-        const workerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || 'https://workers.mariohans.cl';
+        const requestId = routeRequestId;
+        const workerUrl = getEmailWorkerUrl();
 
-        console.log('📧 Sending budget email to customer via Worker...');
+        console.log('📧 Sending budget email to customer via Worker', { requestId, deliveryType: 'budget_generated' });
         const workerResponse = await fetch(`${workerUrl}/send-email`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: createEmailWorkerHeaders(requestId),
           body: JSON.stringify({
             to: customerEmail,
             subject,
@@ -496,11 +527,11 @@ Descarga el detalle del pedido aquí
         // Send admin backup (non-blocking) with download link
         try {
           const adminSubject = `[RESPALDO ORDEN] ${subject}`;
-          console.log('📧 Sending admin backup via Worker...');
+          console.log('📧 Sending admin backup via Worker', { requestId, deliveryType: 'budget_admin_backup' });
 
           const adminResponse = await fetch(`${workerUrl}/send-email`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: createEmailWorkerHeaders(requestId),
             body: JSON.stringify({
               to: 'rental.mariohans@gmail.com',
               subject: adminSubject,
@@ -511,14 +542,14 @@ Descarga el detalle del pedido aquí
           if (adminResponse.ok) {
             console.log('✅ Admin backup sent successfully');
           } else {
-            console.warn('⚠️ Failed to send admin backup (non-critical)');
+            logBudgetEmailFailure(console, requestId, 'budget_admin_backup', 'worker_delivery_failed');
           }
         } catch (adminError) {
-          console.warn('⚠️ Failed to send admin backup (non-critical):', adminError);
+          logBudgetEmailFailure(console, requestId, 'budget_admin_backup', 'worker_delivery_exception');
         }
         
       } catch (emailError) {
-        console.warn('⚠️ Email sending failed (non-critical):', emailError);
+        logBudgetEmailFailure(console, routeRequestId, 'budget_customer_email', 'worker_delivery_exception');
       }
     } else if (sendEmail) {
       console.warn('⚠️ Email requested but no billing email found in order data');
