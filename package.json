@@ -75,5 +75,10 @@
     "prettier": "^3.5.3",
     "prettier-plugin-astro": "^0.12.3",
     "vitest": "^3.2.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "@radix-ui/primitive": "1.1.7"
+    }
   }
 }
