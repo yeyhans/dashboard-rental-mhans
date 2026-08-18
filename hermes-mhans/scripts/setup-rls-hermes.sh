@@ -1,27 +1,17 @@
 #!/usr/bin/env bash
-# Policy RLS de SOLO LECTURA en user_profiles para los roles hermes.
+# Verifica la policy RLS de SOLO LECTURA en user_profiles para los roles hermes.
+# NO EMITE DDL.
 #
-# ROOT CAUSE que motiva este script: user_profiles tiene RLS HABILITADO
-# (relrowsecurity=t) con policies solo para public/service_role/authenticated.
-# Los roles hermes_ro / hermes_rw / hermes_notifier tenían GRANT SELECT pero
-# NINGUNA policy los cubría → Postgres devuelve 0 filas SIN error (deny por
-# defecto). El dashboard ve todo porque service_role bypassa RLS.
-# Síntoma: find_client/get_client vacíos y "Cliente: —" en las notificaciones.
+# ROOT CAUSE histórico que motivó esta policy (sin cambios): user_profiles tiene
+# RLS HABILITADO (relrowsecurity=t) con policies solo para public/service_role/
+# authenticated. Los roles hermes_ro/hermes_rw/hermes_notifier tenían GRANT SELECT
+# pero ninguna policy los cubría -> Postgres devolvía 0 filas SIN error (deny por
+# defecto). Síntoma: find_client/get_client vacíos y "Cliente: —" en notificaciones.
 #
-# Decisión: policy SELECT USING(true) SOLO en user_profiles y SOLO para los
-# roles hermes (NO BYPASSRLS — eso anularía RLS en TODAS las tablas).
-# La confidencialidad de PII la gobiernan los tools/skills (PII de a un
-# cliente y solo a pedido), no el RLS: el diseño siempre quiso que el rol
-# pudiera LEER (por eso el GRANT); el RLS lo anulaba silenciosamente.
-#
-# PRE-REQUISITO: los 3 roles deben existir (correr ANTES setup-db-role.sh,
-# setup-db-role-rw.sh y setup-db-role-notifier.sh).
-#
-# ROLLBACK:
-#   DROP POLICY IF EXISTS "Hermes agents can read user_profiles" ON public.user_profiles;
-#
-# Patrón EXACTO de setup-db-role-rw.sh (docker run psql como supabase_admin,
-# ON_ERROR_STOP=1, idempotente via DROP IF EXISTS + CREATE).
+# Inversión de contrato (CONSOLIDADO WEB 2027, ADR-D5): la policy ahora se crea
+# EXCLUSIVAMENTE por dashboard/supabase/migrations/0000_baseline.sql. Este script
+# pasa de "apply" a "verify" — solo consulta pg_policies/pg_class y sale con
+# código != 0 si algo diverge. El nombre del archivo NO cambia.
 set -euo pipefail
 
 DB_CONTAINER=supabase-9cd8-db
@@ -30,53 +20,69 @@ DB_PORT=5434
 
 PGPW=$(docker inspect "$DB_CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -oP '^POSTGRES_PASSWORD=\K.*')
 
-echo "[setup-rls-hermes] Creando policy de lectura en user_profiles para roles hermes ..."
+echo "[setup-rls-hermes] Verificando policy de lectura en user_profiles para roles hermes (solo lectura) ..."
 
 docker run --rm -i --network "$DB_NET" -e PGPASSWORD="$PGPW" postgres:16-alpine \
-  psql -h "$DB_CONTAINER" -p "$DB_PORT" -U supabase_admin -d postgres \
+  psql -h "$DB_CONTAINER" -p "$DB_PORT" -U postgres -d postgres \
   -v ON_ERROR_STOP=1 <<'SQL'
-
--- Guard: los 3 roles deben existir antes de referenciarlos en TO (...).
-DO $do$
+DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hermes_ro')
-       OR NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hermes_rw')
-       OR NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hermes_notifier') THEN
-        RAISE EXCEPTION 'FALLO: faltan roles hermes_* — correr antes setup-db-role*.sh';
+    -- RLS debe seguir habilitado en user_profiles (no relajado por accidente)
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relname = 'user_profiles' AND n.nspname = 'public' AND c.relrowsecurity = true
+    ) THEN
+        RAISE EXCEPTION 'FALLO: user_profiles no tiene RLS habilitado (relrowsecurity=false)';
     END IF;
+
+    -- La policy de los 3 roles hermes debe existir
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename = 'user_profiles'
+          AND policyname = 'Hermes agents can read user_profiles'
+          AND 'hermes_ro' = ANY(string_to_array(trim(both '{}' from roles::text), ','))
+          AND 'hermes_rw' = ANY(string_to_array(trim(both '{}' from roles::text), ','))
+          AND 'hermes_notifier' = ANY(string_to_array(trim(both '{}' from roles::text), ','))
+    ) THEN
+        RAISE EXCEPTION 'FALLO: policy "Hermes agents can read user_profiles" ausente o no cubre los 3 roles hermes';
+    END IF;
+
+    RAISE NOTICE 'check duro OK: RLS habilitado + policy de lectura hermes presente';
 END
-$do$;
-
-DROP POLICY IF EXISTS "Hermes agents can read user_profiles" ON public.user_profiles;
-CREATE POLICY "Hermes agents can read user_profiles"
-    ON public.user_profiles
-    FOR SELECT
-    TO hermes_ro, hermes_rw, hermes_notifier
-    USING (true);
-
+$$;
 SQL
 
-echo "[setup-rls-hermes] policy creada"
+echo "[setup-rls-hermes] check duro OK: policy correcta"
 
 # Smoke: hermes_ro debe ver filas ahora (la DB del rental tiene usuarios reales).
+# `postgres` no es miembro de hermes_ro (`SET ROLE` da "permission denied" —
+# confirmado en T-006), así que el smoke se conecta con la DSN real de hermes_ro
+# ya provisionada out-of-band (ver RESTORE_RUNBOOK.md); este script solo LEE esa
+# DSN existente, nunca la genera ni la rota.
 ENV_FILE=/opt/agents/mhans/.env
-RO_URL=$(grep -m1 '^DATABASE_URL=' "$ENV_FILE" | cut -d= -f2-)
+if [ ! -f "$ENV_FILE" ] || ! grep -q '^DATABASE_URL=' "$ENV_FILE"; then
+  echo "[setup-rls-hermes] smoke omitido: $ENV_FILE sin DATABASE_URL provisionada (ver RESTORE_RUNBOOK.md)"
+else
+  RO_URL=$(grep -m1 '^DATABASE_URL=' "$ENV_FILE" | cut -d= -f2-)
 
-COUNT=$(docker run --rm --network "$DB_NET" postgres:16-alpine \
-  psql "$RO_URL" -tAc "SELECT count(*) FROM public.user_profiles" 2>&1)
+  COUNT=$(docker run --rm --network "$DB_NET" postgres:16-alpine \
+    psql "$RO_URL" -tAc "SELECT count(*) FROM public.user_profiles" 2>&1)
 
-case "$COUNT" in
-  ''|*[!0-9]*)
-    echo "[setup-rls-hermes] FALLO smoke: count no numérico: $COUNT"
-    exit 1
-    ;;
-  0)
-    echo "[setup-rls-hermes] ATENCION: hermes_ro sigue viendo 0 filas — revisar policies"
-    exit 1
-    ;;
-  *)
-    echo "[setup-rls-hermes] smoke OK: hermes_ro ve $COUNT perfiles"
-    ;;
-esac
+  case "$COUNT" in
+    ''|*[!0-9]*)
+      echo "[setup-rls-hermes] FALLO smoke: count no numérico: $COUNT"
+      exit 1
+      ;;
+    0)
+      echo "[setup-rls-hermes] ATENCION: hermes_ro sigue viendo 0 filas — revisar policies"
+      exit 1
+      ;;
+    *)
+      echo "[setup-rls-hermes] smoke OK: hermes_ro ve $COUNT perfiles"
+      ;;
+  esac
+fi
 
-echo "[setup-rls-hermes] listo."
+echo "[setup-rls-hermes] listo (solo verificación, sin DDL)."
