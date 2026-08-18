@@ -1,6 +1,9 @@
 --
 -- 0000_baseline.sql — CONSOLIDADO WEB 2027
 --
+-- SDD artifacts (design.md, specs/*, audits/, rehearsals/) live at the mhans workspace root:
+-- ../../../openspec/changes/consolidado-web-2027/ (outside this repo, see R2-003).
+--
 -- Generated per ADR-D5 (design.md) from:
 --   pg_dump --schema-only --no-owner --no-privileges  (structural diff check)
 --   pg_dump --schema-only --no-owner                  (ACL-retaining source of this file)

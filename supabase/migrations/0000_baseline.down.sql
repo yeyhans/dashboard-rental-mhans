@@ -1,6 +1,9 @@
 --
 -- 0000_baseline.down.sql
 --
+-- SDD artifacts live at ../../../openspec/changes/consolidado-web-2027/ (outside this repo,
+-- see R2-003).
+--
 -- Rollback for 0000_baseline.sql (ADR-D5 `.down.sql` convention).
 --
 -- Data-loss note: NONE. 0000_baseline is descriptive-only — it is never applied against

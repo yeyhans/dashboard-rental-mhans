@@ -134,7 +134,7 @@ SMOKE=$(docker run --rm --network "$DB_NET" -e PGPASSWORD="$PGPW" postgres:16-al
        INSERT INTO public.orders SELECT * FROM _smoke_src;
 
        IF EXISTS (SELECT 1 FROM public.hermes_notifications WHERE order_id = v_new_id) THEN
-           RAISE NOTICE 'notif_ok';
+           RAISE NOTICE 'notif_ok:%', v_new_id;
        ELSE
            RAISE EXCEPTION 'smoke_fail: el trigger NO insertó en hermes_notifications para order_id=%', v_new_id;
        END IF;
@@ -143,7 +143,27 @@ SMOKE=$(docker run --rm --network "$DB_NET" -e PGPASSWORD="$PGPW" postgres:16-al
    ROLLBACK;" 2>&1)
 
 case "$SMOKE" in
-  *notif_ok*)  echo "[setup-notifications] smoke funcional OK: el trigger pobló el outbox" ;;
+  *notif_ok*)
+    echo "[setup-notifications] smoke funcional OK: el trigger pobló el outbox"
+    # R3-006: la transacción implícita del ROLLBACK arriba se confía "a ciegas" si no se
+    # verifica — este check post-hoc confirma que la fila clonada realmente desapareció
+    # (orders Y hermes_notifications) en lugar de asumir que ROLLBACK funcionó.
+    SMOKE_ID=$(echo "$SMOKE" | grep -oP 'notif_ok:\K[0-9]+' | head -1)
+    if [ -n "$SMOKE_ID" ]; then
+      POST_ROLLBACK=$(docker run --rm --network "$DB_NET" -e PGPASSWORD="$PGPW" postgres:16-alpine \
+        psql -h "$DB_CONTAINER" -p "$DB_PORT" -U postgres -d postgres -tAc \
+        "SELECT (SELECT count(*) FROM public.orders WHERE id = $SMOKE_ID) + (SELECT count(*) FROM public.hermes_notifications WHERE order_id = $SMOKE_ID);" 2>&1)
+      if [ "$POST_ROLLBACK" = "0" ]; then
+        echo "[setup-notifications] post-ROLLBACK verificado: order_id=$SMOKE_ID no existe en orders ni hermes_notifications"
+      else
+        echo "[setup-notifications] FALLO: el ROLLBACK del smoke no limpió order_id=$SMOKE_ID (residual=$POST_ROLLBACK)"
+        exit 1
+      fi
+    else
+      echo "[setup-notifications] ATENCION: no se pudo extraer el smoke_id para verificar el ROLLBACK"
+      exit 1
+    fi
+    ;;
   *smoke_skip*) echo "[setup-notifications] smoke funcional omitido (tabla orders vacía)" ;;
   *)
     echo "[setup-notifications] FALLO smoke funcional: $SMOKE"

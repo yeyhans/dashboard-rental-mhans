@@ -1,20 +1,32 @@
 --
--- 0001_pre_revoke_snapshot.sql
+-- _snapshot_0001_pre_revoke.sql
+--
+-- Renamed from 0001_pre_revoke_snapshot.sql (R2-001): a numeric-prefixed filename inside
+-- migrations/ reads as "appliable" by the migration chain, but this file is a reference
+-- snapshot only — see below.
+--
+-- SDD artifacts live at ../../../openspec/changes/consolidado-web-2027/ (outside this repo,
+-- see R2-003).
 --
 -- Pre-revocation grant snapshot (T-012, grants-rls-closure/spec.md — "Snapshot-based
 -- rollback for grant changes"). Captured from production `information_schema.role_table_grants`
--- for the 8 tables `0001_m1_grants_rls.sql` remediates, 2026-08-18, BEFORE any REVOKE.
+-- for the 8 tables `0001_m1_grants_rls.sql` remediates, 2026-08-18, BEFORE any REVOKE. Covers
+-- BOTH `anon` and `authenticated` grantees (the R1-001 fix pass extended the forward migration
+-- to also revoke from `authenticated`; this snapshot already included `authenticated` rows from
+-- the original capture, so no re-capture was needed).
 --
--- This file is NOT applied by the migration chain. It exists purely as the source snapshot
--- `0001_m1_grants_rls.down.sql`'s re-GRANT statements are generated from — kept
+-- This file is NOT applied by the migration chain. It exists purely as the reference snapshot
+-- `0001_m1_grants_rls.down.sql`'s re-GRANT statements were hand-authored against (R3-005: the
+-- down script is NOT mechanically generated from this file — cross-checked against it at
+-- authoring time, which means future drift between the two is not caught automatically) — kept
 -- version-controlled and separate from the down script itself so the down script's intent
 -- (revert to exactly this state) is auditable independently of its implementation.
 --
 -- Note: this is the full per-privilege enumeration pg_dump/information_schema produces
--- (SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER), not just the write privileges
--- `0001` revokes from `anon` — the down script only needs to restore what `0001` actually
--- revokes (anon's INSERT/UPDATE/DELETE/TRUNCATE), but the full snapshot is kept here for
--- completeness and future audit value.
+-- (SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER) for every grantee including
+-- `postgres`/`service_role`, not just the write privileges `0001` revokes from `anon`/
+-- `authenticated` — the down script only needs to restore what `0001` actually revokes, but the
+-- full snapshot is kept here for completeness and future audit value.
 --
 
 GRANT DELETE ON TABLE public.categories TO anon;
