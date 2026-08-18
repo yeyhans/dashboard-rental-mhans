@@ -20,3 +20,6 @@ pnpm-debug.log*
 
 # macOS-specific files
 .DS_Store
+
+# raw pg_dump scratch output (schema-baseline authoring, not the committed migration)
+supabase/migrations/_raw/
