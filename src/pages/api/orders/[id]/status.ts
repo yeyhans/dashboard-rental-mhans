@@ -1,20 +1,17 @@
 import type { APIRoute } from 'astro';
 import { withAuth } from '../../../../middleware/auth';
 import { OrderService } from '../../../../services/orderService';
+import { ORDER_STATUSES, isOrderStatus } from '../../../../lib/orderStatus';
 
 /**
- * Values accepted by the `orders_status_check` constraint. The previous list also carried
- * `trash` and `auto-draft`, which the database rejects — those turned a bad request into a 500.
+ * The accepted values come from `src/lib/orderStatus.ts`, which mirrors the `orders_status_check`
+ * constraint. Previously this route kept its own hand-written list — one of 29 copies of the
+ * vocabulary in `src/` — so the v1.2 migration would have needed 29 correct edits to land.
+ *
+ * Rejecting here rather than letting Postgres do it is deliberate: after 0003 the database refuses
+ * `on-hold`, but as a constraint violation this route turns into a 500. A 400 naming the accepted
+ * values tells an admin on a stale page what actually went wrong.
  */
-const VALID_STATUSES = [
-  'pending',
-  'processing',
-  'on-hold',
-  'completed',
-  'cancelled',
-  'refunded',
-  'failed',
-];
 
 function json(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
@@ -44,9 +41,9 @@ export const PUT: APIRoute = withAuth(async (context) => {
     return json({ success: false, error: 'El estado es requerido' }, 400);
   }
 
-  if (!VALID_STATUSES.includes(body.status)) {
+  if (!isOrderStatus(body.status)) {
     return json(
-      { success: false, error: `Estado inválido. Debe ser uno de: ${VALID_STATUSES.join(', ')}` },
+      { success: false, error: `Estado inválido. Debe ser uno de: ${ORDER_STATUSES.join(', ')}` },
       400
     );
   }

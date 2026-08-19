@@ -72,32 +72,96 @@ describe('PUT /api/orders/[id]/status', () => {
 
   it('updates the status for an authenticated admin', async () => {
     asAdmin();
-    updateOrderStatus.mockResolvedValue({ id: 123, status: 'processing' });
+    updateOrderStatus.mockResolvedValue({ id: 123, status: 'confirmed' });
     const { PUT } = await import('../status');
 
-    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'processing' } }) as never);
+    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'confirmed' } }) as never);
     const payload = await response.json();
 
     expect(response.status).toBe(200);
     expect(payload.success).toBe(true);
-    expect(payload.data.status).toBe('processing');
-    expect(updateOrderStatus).toHaveBeenCalledWith(123, 'processing');
+    expect(payload.data.status).toBe('confirmed');
+    expect(updateOrderStatus).toHaveBeenCalledWith(123, 'confirmed');
   });
 
   /**
-   * The old allowlist accepted `trash` and `auto-draft`, which the `orders_status_check`
-   * constraint rejects — a guaranteed 500 rather than a 400.
+   * T-019. The v1.2 vocabulary (`order-state-machine/spec.md`). The route reads its allowlist from
+   * `src/lib/orderStatus.ts` rather than keeping its own copy — this route's hand-written list was
+   * one of 29 in `src/`, which is what made the migration a 29-edit problem instead of one.
    */
-  it('rejects a status the DB check constraint does not allow', async () => {
+  it.each(['request', 'evaluation', 'confirmed', 'preparation', 'in-rental', 'return', 'completed', 'cancelled'])(
+    'accepts the v1.2 status %s',
+    async (status) => {
+      asAdmin();
+      updateOrderStatus.mockResolvedValue({ id: 123, status });
+      const { PUT } = await import('../status');
+
+      const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status } }) as never);
+
+      expect(response.status).toBe(200);
+      expect(updateOrderStatus).toHaveBeenCalledWith(123, status);
+    }
+  );
+
+  /**
+   * After 0003 the database CHECK rejects these too, but as a constraint violation this route
+   * turns into a 500 — "Error al actualizar" with no indication of which value was wrong. The
+   * 400 has to come from here.
+   */
+  it.each(['on-hold', 'processing', 'pending', 'refunded', 'failed'])(
+    'rejects the legacy status %s without reaching the service',
+    async (legacy) => {
+      asAdmin();
+      const { PUT } = await import('../status');
+
+      const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: legacy } }) as never);
+
+      expect(response.status).toBe(400);
+      expect(updateOrderStatus).not.toHaveBeenCalled();
+    }
+  );
+
+  /**
+   * `reviewing`, `preparing`, `delivering` and `paid` appear in the workflow documentation but
+   * were never database values. `trash` and `auto-draft` were in the route's old allowlist and the
+   * constraint always rejected them — a guaranteed 500 rather than a 400.
+   */
+  it.each(['trash', 'auto-draft', 'reviewing', 'preparing', 'delivering', 'paid'])(
+    'rejects %s, which the database never accepted',
+    async (bogus) => {
+      asAdmin();
+      const { PUT } = await import('../status');
+
+      const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: bogus } }) as never);
+      const payload = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(payload.error).toContain('Estado inválido');
+      expect(updateOrderStatus).not.toHaveBeenCalled();
+    }
+  );
+
+  it('names the accepted values in the error, so a stale client can be corrected', async () => {
     asAdmin();
     const { PUT } = await import('../status');
 
-    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'trash' } }) as never);
+    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'on-hold' } }) as never);
     const payload = await response.json();
 
-    expect(response.status).toBe(400);
-    expect(payload.error).toContain('Estado inválido');
-    expect(updateOrderStatus).not.toHaveBeenCalled();
+    expect(payload.error).toContain('in-rental');
+    expect(payload.error).not.toContain('on-hold');
+  });
+
+  it('returns 500 without leaking the database error text to the caller', async () => {
+    asAdmin();
+    updateOrderStatus.mockRejectedValue(new Error('violates check constraint "orders_status_check"'));
+    const { PUT } = await import('../status');
+
+    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'confirmed' } }) as never);
+    const payload = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(payload.error).not.toMatch(/constraint|orders_status_check/i);
   });
 
   it('rejects a non-numeric order id', async () => {
