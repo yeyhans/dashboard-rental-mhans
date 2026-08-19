@@ -41,6 +41,18 @@
 -- a partial failure this transaction itself would have rolled back, or a deliberate re-run)
 -- does not hard-fail on "policy already exists".
 --
+-- T-014d fix (audits/view-rls-bypass.md): enabling RLS on the base tables above is NOT sufficient,
+-- because `order_summary` and `products_with_categories` are views owned by `supabase_admin`
+-- (superuser, BYPASSRLS) with no `security_invoker` option. Under PostgreSQL 15 that means
+-- security-DEFINER semantics: every permission and RLS check against the underlying tables is
+-- evaluated as the view OWNER, not the caller. So any role holding SELECT on the view reads the
+-- base tables with RLS switched off. The view section at the end of this migration closes that.
+--
+-- T-014f/F-1 fix (audits/rls-impact-hermes-worker.md): `coupons` gains an explicit Hermes read
+-- policy. ADR-D8 recorded `coupons` as unreferenced by the MCP tools; that was wrong —
+-- `_fetch_coupon` (`hermes-mhans/rental-mcp/rental_mcp/server.py:113-119`) reads it as `hermes_ro`
+-- behind both the `quote` tool and `draft_create_order`. See the coupons section below.
+--
 
 SET lock_timeout = '5s';
 SET statement_timeout = '30s';
@@ -139,10 +151,28 @@ CREATE POLICY "Anyone can read categories"
 -- manage coupons" policies (dormant until now, RLS was disabled). Revoke anon
 -- AND authenticated write, turn RLS on; existing policies now take effect
 -- unchanged.
+--
+-- T-014f/F-1: the surviving "Anyone can read active coupons" policy is
+-- `TO PUBLIC USING (status = 'publish')`, so relying on it for Hermes would
+-- make every draft/trash coupon vanish from the agent's view. `_quote_internal`
+-- (server.py:173-190) validates a coupon on `date_expires`, `usage_limit` and
+-- `usage_count` but NEVER on `status`, so today the agent quotes non-publish
+-- coupons; a publish-only filter would silently change that into
+-- "Cupón no encontrado" — a wrong answer, not an error. This policy is
+-- `USING (true)` to preserve the current answer exactly. Whether the agent
+-- SHOULD honour a trashed coupon is an application-logic question for
+-- `_quote_internal`, not something a privilege migration may decide silently.
 -- =========================================================================
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.coupons FROM anon;
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.coupons FROM authenticated;
 ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Hermes agents can read coupons" ON public.coupons;
+CREATE POLICY "Hermes agents can read coupons"
+    ON public.coupons
+    FOR SELECT
+    TO hermes_ro, hermes_rw
+    USING (true);
 
 -- =========================================================================
 -- shipping_methods — already has "Anyone can read active shipping methods"
@@ -276,5 +306,48 @@ CREATE POLICY "hermes_rw can manage its own pending writes"
     TO hermes_rw
     USING (true)
     WITH CHECK (true);
+
+-- =========================================================================
+-- VIEWS — close the security-definer bypass (T-014d, audits/view-rls-bypass.md).
+--
+-- Verified live 2026-08-18 via the read-only `mhans-db` MCP: both relations are `relkind='v'`,
+-- owned by `supabase_admin` (superuser + BYPASSRLS), `reloptions IS NULL` (no security_invoker),
+-- on server 15.8 — and BOTH `anon` AND `authenticated` hold SELECT on both. The audit named only
+-- `anon`; `authenticated` is the same hole with a JWT attached, and is closed here too.
+--
+-- `order_summary` = `orders LEFT JOIN user_profiles`; it exposes billing_email, profile_rut,
+-- customer_name and full financials for all 468 orders. Two independent fixes are applied, because
+-- either one alone leaves a gap: `security_invoker` makes RLS apply to the caller but still lets a
+-- future policy widen the view by accident, and a bare REVOKE leaves the definer semantics in place
+-- for any role that is granted SELECT later.
+--
+-- Consumer evidence for the REVOKE (grep across dashboard-worktrees/consolidado,
+-- frontend-worktrees/consolidado and hermes-mhans, 2026-08-18): `order_summary` has NO application
+-- consumer at all. The only hits are `hermes-mhans/scripts/assert-least-privilege.sh` (the
+-- allowlist assertion) and a prose mention in `hermes-mhans/skills/rental/catalogo/SKILL.md`. The
+-- dashboard reads `orders` directly through `supabaseAdmin` (`service_role`, BYPASSRLS —
+-- unaffected by either statement), and the frontend's only match is the historical DDL in
+-- `src/utils/users_and_order_tables.sql` that created the view. Nothing anonymous or authenticated
+-- reads it, so revoking breaks no caller.
+--
+-- `hermes_ro` KEEPS its SELECT (0002 allowlist) and keeps working under security_invoker: it needs
+-- caller-side privilege plus a policy on each base table, and it has both — SELECT grants on
+-- `orders` and `user_profiles` (0002 allowlist), the "Hermes agents can read orders" policy above,
+-- and the baseline "Hermes agents can read user_profiles" policy (verified live: roles
+-- {hermes_notifier,hermes_ro,hermes_rw}, USING true).
+--
+-- `products_with_categories` = `products LEFT JOIN LATERAL categories WHERE status='publish'`.
+-- Its `anon` SELECT is KEPT: the catalogue is public by design and is the frontend's read path.
+-- Only `security_invoker` is set, and that is behaviour-neutral here because both base tables
+-- carry `USING (true)` SELECT policies ("Anyone can read products"/"Anyone can read categories",
+-- created above) and `anon`/`authenticated`/`hermes_ro` all retain base-table SELECT (verified
+-- live). Setting it removes the definer property from the whole class rather than leaving one
+-- view that would silently re-open the hole the day someone adds a PII column to `products`.
+-- =========================================================================
+ALTER VIEW public.order_summary SET (security_invoker = on);
+REVOKE SELECT ON public.order_summary FROM anon;
+REVOKE SELECT ON public.order_summary FROM authenticated;
+
+ALTER VIEW public.products_with_categories SET (security_invoker = on);
 
 COMMIT;

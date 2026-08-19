@@ -16,6 +16,15 @@
 -- Data-loss note: recreating `allow_all_for_testing` restores the exact pre-migration posture,
 -- intentionally including that pre-existing test-only policy's over-broad grant.
 --
+-- SECURITY note for the view section (T-014d): reverting `security_invoker` and re-granting
+-- `anon`/`authenticated` SELECT on `order_summary` deliberately re-opens the PII bypass — 468
+-- rows of billing_email / profile_rut / financials readable with the public anon key. That is what
+-- "restore the pre-migration state" means here; it is not an oversight. Do not park the chain on
+-- this rollback. `RESET` (not `SET (security_invoker = off)`) is used so `pg_class.reloptions`
+-- returns to NULL, matching the verified pre-migration state exactly rather than to
+-- `{security_invoker=off}`, which is semantically equal but would defeat a reloptions-equality
+-- assertion.
+--
 
 SET lock_timeout = '5s';
 SET statement_timeout = '30s';
@@ -47,6 +56,7 @@ GRANT INSERT, UPDATE, DELETE, TRUNCATE ON public.categories TO authenticated;
 
 -- ---- coupons (pre-existing policies "Anyone can read active coupons" and
 -- "Only admins can manage coupons" are untouched by this migration and stay) ----
+DROP POLICY IF EXISTS "Hermes agents can read coupons" ON public.coupons;
 ALTER TABLE public.coupons DISABLE ROW LEVEL SECURITY;
 GRANT INSERT, UPDATE, DELETE, TRUNCATE ON public.coupons TO anon;
 GRANT INSERT, UPDATE, DELETE, TRUNCATE ON public.coupons TO authenticated;
@@ -82,5 +92,12 @@ DROP POLICY IF EXISTS "hermes_rw can manage its own pending writes" ON public.he
 ALTER TABLE public.hermes_pending_writes DISABLE ROW LEVEL SECURITY;
 GRANT INSERT, UPDATE, DELETE, TRUNCATE ON public.hermes_pending_writes TO anon;
 GRANT INSERT, UPDATE, DELETE, TRUNCATE ON public.hermes_pending_writes TO authenticated;
+
+-- ---- views (see the SECURITY note in the header) ----
+ALTER VIEW public.order_summary RESET (security_invoker);
+GRANT SELECT ON public.order_summary TO anon;
+GRANT SELECT ON public.order_summary TO authenticated;
+
+ALTER VIEW public.products_with_categories RESET (security_invoker);
 
 COMMIT;
