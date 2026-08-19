@@ -1,5 +1,15 @@
 import { communicationsService } from './communicationsService';
 
+/**
+ * Runs in the browser: `ProcessOrder.tsx` reaches it through the `useOrderNotifications` hook.
+ * It therefore writes through `communicationsService`, i.e. the admin-gated API route, and must
+ * never import the service-role client.
+ *
+ * The three `sendMessage` calls below used to pass their arguments in the wrong positions
+ * (`messageType` where `userName` goes, the display name where `fileUrl` goes). Production still
+ * holds ~669 rows with `user_name = 'text'` and an emoji-prefixed name in `file_url`.
+ */
+
 export interface OrderNotificationData {
   orderId: number;
   customerId: string;
@@ -48,23 +58,15 @@ class OrderNotificationService {
         email: orderData.adminEmail || this.defaultAdminInfo.email
       };
 
-      let message = '';
-      let messageType: 'text' | 'image' | 'file' = 'text';
-
-      if (emailData.success) {
-        message = this.buildSuccessEmailMessage(emailData);
-      } else {
-        message = this.buildFailedEmailMessage(emailData);
-      }
+      const message = emailData.success
+        ? this.buildSuccessEmailMessage(emailData)
+        : this.buildFailedEmailMessage(emailData);
 
       await communicationsService.sendMessage(
         orderData.orderId,
         adminInfo.id,
         'admin',
         message,
-        messageType,
-        undefined,
-        undefined,
         `📧 ${adminInfo.name}`,
         adminInfo.email
       );
@@ -97,9 +99,6 @@ class OrderNotificationService {
         adminInfo.id,
         'admin',
         message,
-        'text',
-        undefined,
-        undefined,
         `🔄 ${adminInfo.name}`,
         adminInfo.email
       );
@@ -146,9 +145,6 @@ class OrderNotificationService {
         adminInfo.id,
         'admin',
         message,
-        'text',
-        undefined,
-        undefined,
         `📄 ${adminInfo.name}`,
         adminInfo.email
       );
