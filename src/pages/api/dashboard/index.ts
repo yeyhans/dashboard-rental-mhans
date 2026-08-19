@@ -1,68 +1,21 @@
 import type { APIRoute } from 'astro';
+import { withAuth } from '../../../middleware/auth';
 import { UserService } from '../../../services/userService';
 import { OrderService } from '../../../services/orderService';
 import { ProductService } from '../../../services/productService';
 import { CouponService } from '../../../services/couponService';
-import { supabaseAdmin } from '../../../lib/supabase';
 // withCors removed - global middleware handles CORS
 
-export const GET: APIRoute = async (context) => {
-  // Check for admin session from HTTP-only cookie
-  const sessionCookie = context.cookies.get('admin_session')?.value;
-  
-  if (!sessionCookie) {
-    return new Response(JSON.stringify({
-      success: false,
-      error: 'Sesión de administrador requerida'
-    }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  let sessionData;
-  try {
-    sessionData = JSON.parse(decodeURIComponent(sessionCookie));
-    
-    // Check if session is still valid
-    if (!sessionData.expires_at || Date.now() >= sessionData.expires_at) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Sesión expirada'
-      }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Verify admin user still exists
-    const { data: admin, error } = await supabaseAdmin
-      .from('admin_users')
-      .select('*')
-      .eq('user_id', sessionData.user_id)
-      .eq('role', 'admin')
-      .single();
-      
-    if (error || !admin) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Acceso denegado. Permisos de administrador requeridos.'
-      }), {
-        status: 403,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  } catch (error) {
-    console.error('Error validating session:', error);
-    return new Response(JSON.stringify({
-      success: false,
-      error: 'Sesión inválida'
-    }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
+/**
+ * Aggregate revenue/order statistics — authenticated admin only (F5,
+ * external-endpoint-authentication/spec.md).
+ *
+ * This replaces a bespoke `admin_session` cookie check that trusted the cookie's own
+ * `expires_at` and `user_id` without verifying any signature, and that matched
+ * `role = 'admin'` exactly (locking out `super_admin` with a 403). `withAuth` verifies
+ * the Supabase session server-side and accepts both admin roles.
+ */
+export const GET: APIRoute = withAuth(async () => {
   try {
     // Obtener estadísticas de todos los servicios en paralelo
     const [userStats, orderStats, productStats, couponStats] = await Promise.all([
@@ -156,6 +109,6 @@ export const GET: APIRoute = async (context) => {
       }
     });
   }
-};
+});
 
 // OPTIONS handler removed - handled by global middleware
