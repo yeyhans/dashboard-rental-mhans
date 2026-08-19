@@ -129,10 +129,15 @@ export class SerialisedAssetService {
     if (!normalised) return null;
 
     const client = this.ensureSupabaseAdmin();
+    // `ilike` without wildcards is an exact match that ignores case, which is what the
+    // `lower(btrim(serial_number))` unique index enforces on write. `eq` would miss a unit stored
+    // as "PROFOTO-B10-0007" when the admin types the serial off the label in lower case.
+    // Escape the LIKE metacharacters so a serial containing % or _ stays an exact lookup.
+    const pattern = normalised.replace(/([\\%_])/g, '\\$1');
     const { data, error } = await client
       .from('serialised_assets')
       .select('*')
-      .eq('serial_number', normalised)
+      .ilike('serial_number', pattern)
       .maybeSingle();
 
     if (error && (error as { code?: string }).code !== 'PGRST116') {

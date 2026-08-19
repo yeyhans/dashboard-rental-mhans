@@ -33,6 +33,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # `.only` narrows the run to a single block while still exiting 0, so the tick would mean
+      # "one test passed", not "the suite passed". Vitest has no built-in guard for this.
+      - name: Reject focused tests
+        run: |
+          if grep -rnE '\b(it|test|describe)\.only\(' src 2>/dev/null; then
+            echo "::error::focused test found — remove .only before merging"
+            exit 1
+          fi
+
       - name: Run tests
         run: npm test
 

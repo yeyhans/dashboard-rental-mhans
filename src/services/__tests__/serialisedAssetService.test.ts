@@ -45,6 +45,7 @@ function createQueryBuilder(result: QueryResult): QueryBuilderDouble {
     select: record('select'),
     insert: record('insert'),
     eq: record('eq'),
+    ilike: record('ilike'),
     or: record('or'),
     in: record('in'),
     order: record('order'),
@@ -171,8 +172,28 @@ describe('SerialisedAssetService', () => {
     const asset = await SerialisedAssetService.getAssetBySerial('  profoto-b10-0007  ');
 
     expect(asset?.id).toBe(1);
-    const ilike = query.calls.find((call) => call.method === 'eq' || call.method === 'or');
-    expect(ilike).toBeDefined();
+
+    // The builder double returns `sampleAsset` whatever it is asked, so asserting only that a row
+    // came back would pass against a broken lookup. Assert the filter itself: `eq` is
+    // case-sensitive in Postgres and would miss the stored "PROFOTO-B10-0007", which is the defect
+    // this test exists to catch.
+    const filter = query.calls.find((call) => ['ilike', 'eq', 'or'].includes(call.method));
+    expect(filter?.method).toBe('ilike');
+    expect(filter?.args[0]).toBe('serial_number');
+    expect(filter?.args[1]).toBe('profoto-b10-0007');
+  });
+
+  it('treats LIKE metacharacters in a serial as literals, not wildcards', async () => {
+    const query = createQueryBuilder({ data: sampleAsset });
+    from.mockReturnValue(query);
+
+    const { SerialisedAssetService } = await import('../serialisedAssetService');
+    await SerialisedAssetService.getAssetBySerial('CAM_100%');
+
+    // Unescaped, `_` matches any character and `%` any run of them, so this lookup would return
+    // an unrelated unit — a wrong asset, not merely a miss.
+    const filter = query.calls.find((call) => call.method === 'ilike');
+    expect(filter?.args[1]).toBe('CAM\\_100\\%');
   });
 
   it('returns null rather than throwing when a serial is not registered', async () => {
