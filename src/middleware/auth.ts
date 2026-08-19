@@ -114,7 +114,11 @@ export const requireRole = (...roles: string[]) => (handler: (context: any) => P
  * IMPORTANTE: Este middleware debe estar ANTES de withAuth para manejar preflight OPTIONS
  */
 
-const CORS_HEADERS = 'Content-Type, Authorization, Cookie, X-Frontend-Source, x-frontend-source, X-External-Source, X-API-Key, X-Requested-With, Accept, X-Internal-Request, X-Requested-User-Id, X-Requested-Order-Id';
+// `X-Internal-Request`, `X-Requested-User-Id` and `X-Requested-Order-Id` were removed from this
+// allowlist: no code emits them, and every route that used to trust them now ignores headers for
+// authorization (see lib/pdfPageAuth.ts and lib/serverApiAuth.ts). Advertising them in the
+// preflight response only invited a browser client to keep sending them.
+const CORS_HEADERS = 'Content-Type, Authorization, Cookie, X-Frontend-Source, x-frontend-source, X-External-Source, X-API-Key, X-Requested-With, Accept';
 const CORS_METHODS = 'GET, POST, PUT, DELETE, OPTIONS, PATCH';
 
 export function getAllowedOrigin(requestOrigin: string | null): string | null {
