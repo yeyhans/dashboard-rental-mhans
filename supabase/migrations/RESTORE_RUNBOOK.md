@@ -127,6 +127,16 @@ deliberately.
    ```
    psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f 0001_m1_grants_rls.sql
    ```
+   The `-U supabase_admin` is load-bearing, not a convention. Production's `public` relations are
+   all owned by `supabase_admin`, and its `postgres` role is neither a superuser nor a member of
+   that role (prod-parity audit, 2026-08-19). Run as `postgres`, `ALTER TABLE`/`ALTER VIEW`/
+   `CREATE POLICY`/`ALTER DEFAULT PRIVILEGES` all error — but `REVOKE ... FROM anon` returns the
+   `REVOKE` tag with only a `WARNING: no privileges could be revoked` and changes nothing. Since
+   2026-08-19 every privilege migration opens with a `pg_has_role` guard that raises before any of
+   that can happen, so a wrong-role apply now aborts with an explicit message instead of a
+   confusing one. `-v ON_ERROR_STOP=1` is equally load-bearing: without it psql can exit 0 on a
+   transaction that aborted and applied nothing.
+
    Do **not** add `--single-transaction` here — `0001_m1_grants_rls.sql` already wraps itself in
    its own `BEGIN`/`COMMIT` (verified 2026-08-18: combining both produces a harmless
    `WARNING: there is no transaction in progress` at the trailing `COMMIT`, but the extra flag

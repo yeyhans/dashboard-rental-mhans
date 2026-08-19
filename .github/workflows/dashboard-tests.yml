@@ -57,6 +57,19 @@ jobs:
       - name: Lint migration ordering (T-016, ADR-D8)
         run: bash supabase/migrations/lint-chain.sh
 
+      # A lint that has never been seen to fail is not a gate. Each fixture violates exactly one
+      # rule and MUST exit non-zero; if one starts passing, the rule it covers has silently
+      # stopped detecting anything and the clean run above means nothing.
+      - name: Assert the lint can actually fail (negative fixtures)
+        run: |
+          for fixture in misordered no-anon-revoke no-role-guard; do
+            if bash supabase/migrations/lint-chain.sh "supabase/lint-fixtures/$fixture" >/dev/null 2>&1; then
+              echo "::error::fixture $fixture passed the lint — the rule it covers is no longer detecting violations"
+              exit 1
+            fi
+            echo "fixture $fixture correctly rejected"
+          done
+
       - name: Report least-privilege gate status
         if: vars.DB_GUARD_RUNNER == ''
         run: |

@@ -76,6 +76,12 @@
 # That fixture also guards the comment-stripping behaviour: it documents the missing REVOKE lines
 # in a trailing comment, and an earlier draft of rule 2 passed it for exactly that reason.
 #
+#   $ ./lint-chain.sh ../lint-fixtures/no-role-guard
+#   [lint-chain] FINDING: 0007_missing_role_guard_fixture.sql changes privileges but has no
+#                supabase_admin role guard
+#   [lint-chain] 1 finding(s) — chain invariants violated
+#   exit 1
+#
 # Running against this directory returns 0 findings over 13 sequenced files — including
 # 0004_serialised_assets.sql, which satisfies rule 2 via its real REVOKE at line 94.
 set -euo pipefail
@@ -136,6 +142,32 @@ for path in "$TARGET_DIR"/*.sql; do
     echo "[lint-chain] FINDING: $file creates a table in public. but contains no REVOKE naming anon"
     echo "             pg_default_acl grants anon the full table privilege set (arwdDxt, incl."
     echo "             TRUNCATE) on every new table — see 0004_serialised_assets.sql:93-94"
+    findings=$((findings + 1))
+  fi
+
+  # ---- rule 3: a privilege migration must assert it runs as supabase_admin ----
+  # Production parity audit (2026-08-19): every relation in production's `public` is owned by
+  # `supabase_admin`, and `postgres` there is neither superuser nor a member of that role. Run as
+  # `postgres`, ALTER TABLE/VIEW and ALTER DEFAULT PRIVILEGES fail outright — but a plain REVOKE
+  # returns the `REVOKE` tag with only a WARNING and changes nothing, so the operator sees success
+  # while anon keeps every privilege. That silent shape is why this is a lint rule and not a
+  # runbook sentence.
+  #
+  # Matching the guard rather than the wrong-role usage is deliberate: the failure is an ABSENCE,
+  # and enumerating every statement that needs ownership would miss the next one someone writes.
+  #
+  # Scoped to the 4-digit chain, matching this lint's stated scope. The legacy date-prefixed files
+  # (20260203_*, 20260331_*, 20260416_*) do change privileges, but they are historical — superseded
+  # by 0000_baseline.sql and never re-applied — so guarding them would be churn, not safety.
+  # `.down.sql` files ARE in scope: a rollback run as the wrong role fails the same way.
+  if [ "${#seq_raw}" -eq 4 ] &&
+     printf '%s' "$stripped" | grep -qiE '(REVOKE|GRANT)[[:space:]]|ALTER[[:space:]]+DEFAULT[[:space:]]+PRIVILEGES|ENABLE[[:space:]]+ROW[[:space:]]+LEVEL[[:space:]]+SECURITY|CREATE[[:space:]]+POLICY' &&
+     ! printf '%s' "$stripped" | grep -qiE "pg_has_role\(.*supabase_admin"; then
+    echo "[lint-chain] FINDING: $file changes privileges but has no supabase_admin role guard"
+    echo "             public. relations are owned by supabase_admin in production and postgres is"
+    echo "             NOT a member; run as postgres, REVOKE reports success and revokes nothing."
+    echo "             Add the pg_has_role(current_user, 'supabase_admin', 'USAGE') assertion —"
+    echo "             see 0001_m1_grants_rls.sql and ops/prod-parity-audit-2026-08-19.md"
     findings=$((findings + 1))
   fi
 

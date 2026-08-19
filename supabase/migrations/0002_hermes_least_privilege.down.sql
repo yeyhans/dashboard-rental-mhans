@@ -33,6 +33,34 @@ SET statement_timeout = '30s';
 
 BEGIN;
 
+-- =========================================================================
+-- ROLE GUARD (prod-parity audit, 2026-08-19). Runs FIRST, inside the transaction.
+--
+-- Every relation in production's `public` schema is owned by `supabase_admin`, and the `postgres`
+-- role there is NOT a superuser and NOT a member of `supabase_admin` (staging had it as superuser,
+-- which is why the rehearsals passed and hid this). Executed as `postgres`, this migration:
+--   * ALTER TABLE / ALTER VIEW / CREATE POLICY -> ERROR: must be owner of ...
+--   * ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin -> ERROR: must be member of role ...
+--   * REVOKE ... FROM anon -> returns the tag `REVOKE` with only `WARNING: no privileges could be
+--     revoked`, changing nothing while psql exits 0.
+--
+-- That last one is the reason this guard exists: without it the wrong-role apply reports success
+-- and leaves anon holding every privilege the migration claims to have removed.
+--
+-- Apply with:  psql -U supabase_admin -v ON_ERROR_STOP=1 -f <this file>
+-- =========================================================================
+DO $role_guard$
+BEGIN
+  IF NOT pg_has_role(current_user, 'supabase_admin', 'USAGE') THEN
+    RAISE EXCEPTION
+      'Esta migracion debe ejecutarse como supabase_admin (rol actual: %). Las relaciones de public '
+      'pertenecen a supabase_admin: como postgres, REVOKE informa exito y no revoca nada.',
+      current_user
+      USING HINT = 'psql -U supabase_admin -v ON_ERROR_STOP=1 -f <archivo>';
+  END IF;
+END
+$role_guard$;
+
 -- ---- default privileges (both grantors, as captured in baseline) ----
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO hermes_ro;
 ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT SELECT ON TABLES TO hermes_ro;
