@@ -13,6 +13,7 @@ import {
   Tag,
   CreditCard,
   LogOut,
+  Boxes,
   Grid3X3,
   Truck,
   BarChart3,
@@ -488,6 +489,10 @@ const currentPath = Astro.url.pathname;
               <a href="/products/categories" class={`sidebar-nav-item text-[0.8125rem] ${currentPath.startsWith('/products/categories') ? 'active' : ''}`}>
                 <Grid3X3 className="nav-icon" />
                 <span class="sidebar-label">Categorías</span>
+              </a>
+              <a href="/inventory" class={`sidebar-nav-item text-[0.8125rem] ${currentPath.startsWith('/inventory') ? 'active' : ''}`}>
+                <Boxes className="nav-icon" />
+                <span class="sidebar-label">Inventario</span>
               </a>
             </div>
 

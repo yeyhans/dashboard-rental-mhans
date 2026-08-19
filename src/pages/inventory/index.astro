@@ -1,0 +1,54 @@
+---
+import Base from "../../layout/Base.astro";
+import InventoryIntakeDashboard from "../../components/inventory/InventoryIntakeDashboard";
+import { clearAuthCookies, getServerAdmin } from "../../lib/supabase";
+import { ProductService } from "../../services/productService";
+import { SerialisedAssetService } from "../../services/serialisedAssetService";
+import type { IntakeProduct } from "../../types/inventory";
+
+export const prerender = false;
+
+// Serialised-inventory intake (M6, T-035/T-036). Admin-only, same session gate as the rest of the
+// dashboard.
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  console.log('🚫 Acceso denegado a inventory - Usuario no es administrador');
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+
+// Server-side fetch, props to the island — the pattern the products and orders pages use. The
+// catalogue is ~145 rows, so the picker gets the whole list and filters client-side.
+const [{ products }, progress, report] = await Promise.all([
+  ProductService.getAllProducts(1, 1000),
+  SerialisedAssetService.getIntakeProgress(),
+  SerialisedAssetService.getDataQualityReport(),
+]);
+
+// Only the fields the intake UI needs. All nullable on purpose: the picker must render a product
+// whose sku, brands, type or stock_status are missing.
+const intakeProducts: IntakeProduct[] = (products || []).map((product: any) => ({
+  id: product.id,
+  name: product.name ?? null,
+  slug: product.slug ?? null,
+  sku: product.sku ?? null,
+  brands: product.brands ?? null,
+  type: product.type ?? null,
+  status: product.status ?? null,
+  stock_status: product.stock_status ?? null,
+}));
+
+const title = `Inventario serializado | ${adminSession.admin.email}`;
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    <InventoryIntakeDashboard
+      client:load
+      products={intakeProducts}
+      initialProgress={progress}
+      initialReport={report}
+    />
+  </div>
+</Base>
