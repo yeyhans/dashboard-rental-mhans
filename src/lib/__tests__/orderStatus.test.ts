@@ -11,6 +11,8 @@ import {
   statusChartColor,
   bookingStatusFilter,
   activeStatusFilter,
+  canonicalStatus,
+  emptyStatusBuckets,
   EMAIL_ON_ENTER,
   isOrderStatus,
   isLegacyOrderStatus,
@@ -482,5 +484,57 @@ describe('activeStatusFilter', () => {
     );
     expect(activeStatusFilter()).not.toContain('completed');
     expect(activeStatusFilter()).not.toContain('failed');
+  });
+});
+
+describe('canonicalStatus', () => {
+  /**
+   * The normaliser every bucketing loop needs. `dashboardService` grouped orders with a four-case
+   * `switch` on `on-hold | pending | processing | completed`, and anything else fell through with
+   * no default — so after 0003, orders in `evaluation`, `preparation`, `in-rental`, `return` and
+   * `cancelled` would simply not appear on the dashboard. No error, no empty state: five of the
+   * eight stages just gone.
+   */
+  it('passes a v1.2 status through unchanged', () => {
+    for (const status of ORDER_STATUSES) {
+      expect(canonicalStatus(status)).toBe(status);
+    }
+  });
+
+  it('folds a legacy value onto its v1.2 equivalent', () => {
+    expect(canonicalStatus('on-hold')).toBe('request');
+    expect(canonicalStatus('processing')).toBe('confirmed');
+    expect(canonicalStatus('failed')).toBe('cancelled');
+  });
+
+  it('returns null for anything it cannot place, rather than guessing a bucket', () => {
+    // A silent wrong bucket is worse than a visibly unplaced order: the count still adds up.
+    expect(canonicalStatus('reviewing')).toBeNull();
+    expect(canonicalStatus('')).toBeNull();
+    expect(canonicalStatus(null)).toBeNull();
+  });
+
+  it('places every value either vocabulary can hold', () => {
+    for (const value of [...ORDER_STATUSES, ...LEGACY_ORDER_STATUSES]) {
+      expect(canonicalStatus(value)).not.toBeNull();
+    }
+  });
+});
+
+describe('emptyStatusBuckets', () => {
+  it('starts every one of the eight statuses at an empty array', () => {
+    const buckets = emptyStatusBuckets<number>();
+    expect(Object.keys(buckets).sort()).toEqual([...ORDER_STATUSES].sort());
+    for (const status of ORDER_STATUSES) {
+      expect(buckets[status]).toEqual([]);
+    }
+  });
+
+  it('returns independent arrays, not one shared reference', () => {
+    // A single shared array is the classic `Object.fromEntries(keys.map(k => [k, ARR]))` bug: one
+    // push lands in all eight buckets and the dashboard shows every order in every column.
+    const buckets = emptyStatusBuckets<number>();
+    buckets.request.push(1);
+    expect(buckets.completed).toEqual([]);
   });
 });

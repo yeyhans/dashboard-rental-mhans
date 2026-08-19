@@ -205,6 +205,31 @@ function legacyEquivalents(statuses: readonly OrderStatus[]): LegacyOrderStatus[
 }
 
 /**
+ * Normalises any value either vocabulary can hold to its v1.2 status, or `null`.
+ *
+ * The helper every bucketing loop needs. `dashboardService` grouped orders with a four-case
+ * `switch` on `on-hold | pending | processing | completed` and no `default`, so after 0003 orders
+ * in `evaluation`, `preparation`, `in-rental`, `return` and `cancelled` fall through and are
+ * dropped — five of the eight stages missing from the dashboard, with no error and no empty state
+ * to hint at it.
+ *
+ * `null` rather than a guess: an order placed in the wrong bucket still makes the totals add up,
+ * which is a harder problem to notice than one that visibly refuses to be placed.
+ */
+export function canonicalStatus(value: unknown): OrderStatus | null {
+  if (isOrderStatus(value)) return value;
+  return migrateLegacyStatus(value);
+}
+
+/** One empty array per status, each a distinct reference. */
+export function emptyStatusBuckets<T>(): Record<OrderStatus, T[]> {
+  return Object.fromEntries(ORDER_STATUSES.map((status) => [status, [] as T[]])) as Record<
+    OrderStatus,
+    T[]
+  >;
+}
+
+/**
  * Statuses whose order still occupies its equipment for its date range — everything but
  * `cancelled`.
  *
