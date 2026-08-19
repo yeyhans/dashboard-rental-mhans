@@ -78,3 +78,12 @@ jobs:
           DB_NET: ${{ vars.DB_NET }}
           DB_PORT: ${{ vars.DB_PORT }}
         run: bash hermes-mhans/scripts/assert-least-privilege.sh
+
+      # T-034. Names the M6 table explicitly, so it keeps failing for the right reason even if the
+      # ADR-D8 allowlist is ever widened and the exact-match check above stops covering it.
+      - name: Assert serialised_assets is not agent-readable
+        env:
+          DB_CONTAINER: ${{ vars.DB_CONTAINER }}
+          DB_NET: ${{ vars.DB_NET }}
+          DB_PORT: ${{ vars.DB_PORT }}
+        run: bash hermes-mhans/scripts/assert-serialised-assets-isolation.sh
