@@ -187,6 +187,51 @@ export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
 }
 
 /* ---------------------------------------------------------------------------------------------
+ * Query filters
+ * ------------------------------------------------------------------------------------------ */
+
+/**
+ * The legacy values that map onto each v1.2 status, derived from `LEGACY_TO_V12`.
+ *
+ * Every `.in('status', ...)` filter has to span BOTH vocabularies. Between the code deploy and the
+ * 0003 apply the table still holds legacy values, so a filter listing only the new eight matches
+ * zero rows — and it does so silently: Postgres returns an empty set, PostgREST returns 200, and
+ * the caller renders "no hay órdenes" as though that were the answer.
+ */
+function legacyEquivalents(statuses: readonly OrderStatus[]): LegacyOrderStatus[] {
+  return LEGACY_ORDER_STATUSES.filter(
+    (legacy) => statuses.includes(LEGACY_TO_V12[legacy]) && !statuses.includes(legacy as OrderStatus)
+  );
+}
+
+/**
+ * Statuses whose order still occupies its equipment for its date range — everything but
+ * `cancelled`.
+ *
+ * `completed` belongs here: a finished rental is a past booking, and its dates were genuinely
+ * unavailable. Conflict detection asks "was this gear spoken for on these days", not "is this
+ * order open".
+ *
+ * Replaces the hard-coded `['processing','completed','on-hold']` in `orderService` and
+ * `dashboardService`. Post-0003 that literal matched `completed` alone, so availability checking
+ * would have stopped seeing the orders that hold the gear — and the first visible symptom is
+ * double-booked equipment on a shoot day, not an error in a log.
+ */
+export function bookingStatusFilter(): string[] {
+  const current = ORDER_STATUSES.filter((s) => s !== 'cancelled');
+  return [...current, ...legacyEquivalents(current)];
+}
+
+/**
+ * Statuses of an order still in flight — the six non-terminal stages, plus their legacy
+ * equivalents. Use for "en curso" dashboard buckets, not for availability.
+ */
+export function activeStatusFilter(): string[] {
+  const current = ORDER_STATUSES.filter((s) => !isTerminalStatus(s));
+  return [...current, ...legacyEquivalents(current)];
+}
+
+/* ---------------------------------------------------------------------------------------------
  * Presentation
  * ------------------------------------------------------------------------------------------ */
 

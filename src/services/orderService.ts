@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../lib/supabase';
+import { bookingStatusFilter } from '../lib/orderStatus';
 import type { Database } from '../types/database';
 
 type Order = Database['public']['Tables']['orders']['Row'];
@@ -917,7 +918,11 @@ export class OrderService {
           billing_email
         `)
         .neq('id', currentOrderId) // Excluir la orden actual
-        .in('status', ['processing', 'completed', 'on-hold']) // Solo órdenes activas
+        // Toda orden no cancelada retiene su equipo en su rango de fechas. La lista literal que
+        // habia aqui era ['processing','completed','on-hold']: despues de 0003 esos tres valores
+        // solo coinciden con `completed`, y la consulta habria devuelto menos filas sin ningun
+        // error — la deteccion de conflictos dejaria de ver las ordenes que tienen el equipo.
+        .in('status', bookingStatusFilter())
         .not('order_fecha_inicio', 'is', null)
         .not('order_fecha_termino', 'is', null);
 

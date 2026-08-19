@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../lib/supabase';
+import { bookingStatusFilter } from '../lib/orderStatus';
 import type { Database } from '../types/database';
 
 type Order = Database['public']['Tables']['orders']['Row'];
@@ -147,7 +148,7 @@ export class DashboardService {
           ),
           line_items
         `)
-        .in('status', ['on-hold', 'pending', 'processing', 'completed'])
+        .in('status', bookingStatusFilter())
         .order('order_fecha_inicio', { ascending: false, nullsFirst: false })
         .limit(1000); // Aumentar límite significativamente para mostrar todas las órdenes
 
@@ -216,7 +217,7 @@ export class DashboardService {
           status,
           line_items
         `)
-        .in('status', ['processing', 'completed', 'on-hold'])
+        .in('status', bookingStatusFilter())
         .not('order_fecha_termino', 'is', null)
         .gte('order_fecha_termino', currentDate.toISOString());
 
@@ -288,7 +289,7 @@ export class DashboardService {
           pago_reserva,
           pago_completo
         `)
-        .in('status', ['completed', 'processing', 'on-hold', 'pending']);
+        .in('status', bookingStatusFilter());
 
       if (error) throw error;
 

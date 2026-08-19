@@ -9,6 +9,8 @@ import {
   statusTone,
   statusBadgeClass,
   statusChartColor,
+  bookingStatusFilter,
+  activeStatusFilter,
   EMAIL_ON_ENTER,
   isOrderStatus,
   isLegacyOrderStatus,
@@ -423,5 +425,62 @@ describe('statusChartColor', () => {
     for (const bogus of ['on-hold', 'reviewing', 'preparing', 'delivering', 'paid']) {
       expect(statusChartColor(bogus)).toBe('var(--neutral)');
     }
+  });
+});
+
+/**
+ * Query filter sets.
+ *
+ * These exist because of a failure mode that leaves no trace. `orderService` and
+ * `dashboardService` filtered availability and dashboard buckets with hard-coded
+ * `.in('status', ['processing','completed','on-hold'])`. After 0003 those three strings match
+ * only `completed` rows — Postgres returns a smaller result set with no error, PostgREST returns
+ * 200, and equipment conflict detection quietly stops seeing the orders that hold the gear. The
+ * first symptom is double-booked equipment on a shoot day.
+ */
+describe('bookingStatusFilter', () => {
+  it('covers every status that still holds equipment', () => {
+    // An order holds its gear for its date range unless it was cancelled. `completed` is included
+    // on purpose: it is a past rental whose dates still occupied the equipment.
+    for (const status of ORDER_STATUSES) {
+      expect(bookingStatusFilter().includes(status)).toBe(status !== 'cancelled');
+    }
+  });
+
+  it('spans BOTH vocabularies, because the window has rows in each', () => {
+    // Between the code deploy and the 0003 apply, live rows still hold legacy values. A filter
+    // listing only the v1.2 eight would match zero rows for the whole window — the exact silent
+    // emptiness this helper exists to prevent.
+    for (const legacy of ['on-hold', 'processing', 'pending'] as const) {
+      expect(bookingStatusFilter()).toContain(legacy);
+    }
+  });
+
+  it('excludes every value that releases the equipment, old and new', () => {
+    for (const released of ['cancelled', 'failed', 'refunded']) {
+      expect(bookingStatusFilter()).not.toContain(released);
+    }
+  });
+
+  it('has no duplicates, so the generated IN list stays minimal', () => {
+    const filter = bookingStatusFilter();
+    expect(new Set(filter).size).toBe(filter.length);
+  });
+});
+
+describe('activeStatusFilter', () => {
+  it('is the in-flight set: everything that is not a terminal', () => {
+    for (const status of ORDER_STATUSES) {
+      expect(activeStatusFilter().includes(status)).toBe(!isTerminalStatus(status));
+    }
+  });
+
+  it('carries the legacy values that map onto a non-terminal status', () => {
+    // `on-hold` → request and `processing` → confirmed are both in flight; `pending` → request too.
+    expect(activeStatusFilter()).toEqual(
+      expect.arrayContaining(['on-hold', 'processing', 'pending'])
+    );
+    expect(activeStatusFilter()).not.toContain('completed');
+    expect(activeStatusFilter()).not.toContain('failed');
   });
 });
