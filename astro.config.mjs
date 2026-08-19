@@ -11,6 +11,13 @@ export default defineConfig({
   adapter: vercel(),
   integrations: [tailwind(), react()],
 
+  // Local dev only — the Vercel adapter ignores this, serverless functions do not bind a port.
+  // Both apps are Astro and both default to 4321, so without this the one started first wins the
+  // port and the other silently moves to 4322, inverting the CORS origins configured below and
+  // the PUBLIC_BACKEND_URL the frontend points at. Pinning the dashboard here keeps 4321 for the
+  // customer site, which is what every hardcoded origin in this repo already assumes.
+  server: { port: 4322 },
+
   vite: {
     ssr: {
       external: ["micromatch"],
