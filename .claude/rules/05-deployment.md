@@ -103,7 +103,7 @@ npm run format           # Prettier con plugin astro
 
 | Archivo | Razón | Riesgo si se rompe |
 |---------|-------|--------------------|
-| `src/lib/pdfService.ts` | Puppeteer optimizado para Vercel serverless (timeouts 7-8s, flags específicos) | PDFs no se generan |
+| `src/lib/pdf/core/pdfService.ts` | Render de PDFs con `@react-pdf/renderer` (`generatePdfBuffer`) | PDFs no se generan |
 | `src/lib/budgetGenerationService.ts` | Workflow completo presupuesto: PDF + R2 + DB + email | Presupuestos no funcionan |
 | `src/lib/emailService.ts` | Sistema emails con fallback y copias admin | Emails no se envían |
 | `src/middleware/index.ts` | Auth + CORS para toda la app | Acceso sin auth a todo |

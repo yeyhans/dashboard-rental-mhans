@@ -15,7 +15,7 @@ metadata:
 4. **Devolución**: hasta las 13:00 del día siguiente al término, coordinada antes.
 5. **Multa por atraso**: 1 día adicional cobrado por cada día de retraso. Avisarlo ANTES del arriendo.
 6. Todo equipo se revisa al salir Y al volver (fotos de garantía, máx 10 por orden). Equipos vuelven limpios, baterías cargadas.
-7. **Workflow de órdenes**: on-hold → reviewing → processing → preparing → delivering → completed → paid (failed si se cancela). A `processing` SOLO con pago de reserva verificado.
+7. **Workflow de órdenes**: pending → on-hold → processing → completed (→ refunded si se devuelve el dinero). Desde cualquier estado no terminal: `cancelled` o `failed`. A `processing` SOLO con pago de reserva verificado. Estos son los siete estados que acepta la base de datos hoy; `reviewing`, `preparing`, `delivering` y `paid` NO existen y la DB los rechaza.
 8. **Confidencialidad**: datos personales de clientes (RUT, teléfono, email, documentos) se muestran de a UN cliente y SOLO si el admin los pide explícitamente. Jamás listas masivas con PII.
 9. **Números**: TODO monto, precio, stock o disponibilidad sale de las tools (`rental` / `rentaldb`), NUNCA de memoria. Si una tool falla, decirlo — no estimar.
 10. Moneda CLP sin decimales (formato chileno: $1.234.567). Fechas al usuario: DD/MM/YYYY. IVA y cálculos: los hace la tool `quote_rental`, no tú.
