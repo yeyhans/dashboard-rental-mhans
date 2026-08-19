@@ -12,9 +12,11 @@
 # outbox de notificaciones está intacto, sin volver a aplicar DDL manualmente.
 set -euo pipefail
 
-DB_CONTAINER=supabase-9cd8-db
-DB_NET=rental-pre0225supabase-sssmcr
-DB_PORT=5434
+# Objetivo por defecto: producción (los runbooks referencian estos valores). Sobreescribible por
+# entorno para apuntar a staging o a un restore de rehearsal sin parchear el script con sed.
+DB_CONTAINER=${DB_CONTAINER:-supabase-9cd8-db}
+DB_NET=${DB_NET:-rental-pre0225supabase-sssmcr}
+DB_PORT=${DB_PORT:-5434}
 
 PGPW=$(docker inspect "$DB_CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -oP '^POSTGRES_PASSWORD=\K.*')
 

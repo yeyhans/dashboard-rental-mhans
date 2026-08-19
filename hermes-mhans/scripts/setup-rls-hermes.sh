@@ -14,9 +14,11 @@
 # código != 0 si algo diverge. El nombre del archivo NO cambia.
 set -euo pipefail
 
-DB_CONTAINER=supabase-9cd8-db
-DB_NET=rental-pre0225supabase-sssmcr
-DB_PORT=5434
+# Objetivo por defecto: producción (los runbooks referencian estos valores). Sobreescribible por
+# entorno para apuntar a staging o a un restore de rehearsal sin parchear el script con sed.
+DB_CONTAINER=${DB_CONTAINER:-supabase-9cd8-db}
+DB_NET=${DB_NET:-rental-pre0225supabase-sssmcr}
+DB_PORT=${DB_PORT:-5434}
 
 PGPW=$(docker inspect "$DB_CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -oP '^POSTGRES_PASSWORD=\K.*')
 
@@ -61,14 +63,18 @@ echo "[setup-rls-hermes] check duro OK: policy correcta"
 # confirmado en T-006), así que el smoke se conecta con la DSN real de hermes_ro
 # ya provisionada out-of-band (ver RESTORE_RUNBOOK.md); este script solo LEE esa
 # DSN existente, nunca la genera ni la rota.
-ENV_FILE=/opt/agents/mhans/.env
+ENV_FILE=${ENV_FILE:-/opt/agents/mhans/.env}
 if [ ! -f "$ENV_FILE" ] || ! grep -q '^DATABASE_URL=' "$ENV_FILE"; then
   echo "[setup-rls-hermes] smoke omitido: $ENV_FILE sin DATABASE_URL provisionada (ver RESTORE_RUNBOOK.md)"
 else
   RO_URL=$(grep -m1 '^DATABASE_URL=' "$ENV_FILE" | cut -d= -f2-)
 
+  # `|| true`: bajo `set -e` un docker/psql que falla abortaría el script AQUI, dejando el
+  # diagnóstico de abajo inalcanzable — se moría sin mensaje tras una línea de éxito, que se lee
+  # como un run que pasó y se detuvo porque sí. El `2>&1` ya captura el error en COUNT; dejar que
+  # la asignación "triunfe" es lo que permite al `case` clasificarlo como no numérico.
   COUNT=$(docker run --rm --network "$DB_NET" postgres:16-alpine \
-    psql "$RO_URL" -tAc "SELECT count(*) FROM public.user_profiles" 2>&1)
+    psql "$RO_URL" -tAc "SELECT count(*) FROM public.user_profiles" 2>&1) || true
 
   case "$COUNT" in
     ''|*[!0-9]*)
