@@ -48,16 +48,29 @@ export const LEGACY_ORDER_STATUSES = [
 
 export type LegacyOrderStatus = (typeof LEGACY_ORDER_STATUSES)[number];
 
-/** Spanish labels for the admin UI. Project convention: UI copy in Spanish, identifiers in English. */
+/**
+ * Spanish labels, taken verbatim from the client's approved design.
+ *
+ * Source: `CONSOLIDADO WEB YEYSON/Area 02 - portal Cliente/
+ * MarioHans_OS_Client_Portal_Canonical_Visual_v2.0.html` — the `<option>` values of the Pedidos
+ * filter. Do not paraphrase them here: the customer portal renders these exact strings, and the
+ * dashboard naming the same state differently is precisely the inconsistency this consolidation
+ * is meant to remove.
+ *
+ * Note the grammatical gender. The client writes "pedido" (masculine), so the labels are
+ * `Confirmado` / `Completado` / `Cancelado`, not the `Confirmada` / `Completada` / `Cancelada`
+ * that "orden" would take. An earlier draft of this file invented the labels and got six of the
+ * eight wrong for that reason.
+ */
 export const STATUS_LABELS: Record<OrderStatus, string> = {
   request: 'Solicitud',
-  evaluation: 'En evaluación',
-  confirmed: 'Confirmada',
-  preparation: 'En preparación',
+  evaluation: 'Evaluación',
+  confirmed: 'Confirmado',
+  preparation: 'Preparación',
   'in-rental': 'En arriendo',
-  return: 'En devolución',
-  completed: 'Completada',
-  cancelled: 'Cancelada',
+  return: 'Devolución',
+  completed: 'Completado',
+  cancelled: 'Cancelado',
 };
 
 /**

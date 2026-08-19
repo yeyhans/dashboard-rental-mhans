@@ -46,6 +46,29 @@ describe('ORDER_STATUSES', () => {
     }
     expect(Object.keys(STATUS_LABELS).sort()).toEqual([...ORDER_STATUSES].sort());
   });
+
+  it('uses the client-canonical labels verbatim, not paraphrases of them', () => {
+    // Source: `CONSOLIDADO WEB YEYSON/Area 02 - portal Cliente/
+    // MarioHans_OS_Client_Portal_Canonical_Visual_v2.0.html`, the <option> values of the Pedidos
+    // filter. These are the strings the customer already sees in the approved design.
+    //
+    // The first draft of this module invented them and got six of eight wrong: it wrote
+    // "Confirmada"/"Completada"/"Cancelada" (feminine, agreeing with "orden") where the client
+    // writes "Confirmado"/"Completado"/"Cancelado" (masculine, agreeing with "pedido"), and
+    // padded two more into "En evaluación"/"En devolución". Wrong copy is not cosmetic here: the
+    // customer portal and the admin dashboard would name the same state differently, which is
+    // exactly the confusion the consolidation exists to remove.
+    expect(STATUS_LABELS).toEqual({
+      request: 'Solicitud',
+      evaluation: 'Evaluación',
+      confirmed: 'Confirmado',
+      preparation: 'Preparación',
+      'in-rental': 'En arriendo',
+      return: 'Devolución',
+      completed: 'Completado',
+      cancelled: 'Cancelado',
+    });
+  });
 });
 
 describe('isOrderStatus', () => {
