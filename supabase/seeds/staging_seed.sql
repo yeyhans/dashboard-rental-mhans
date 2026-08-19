@@ -515,7 +515,60 @@ JOIN LATERAL (
 ON CONFLICT (order_id) DO NOTHING;
 
 -- -------------------------------------------------------------------------------------
--- 12. Summary
+-- 12. A deliberately INCOMPLETE product.
+--
+--     `serialised-inventory-operations/spec.md` requires intake to work against a catalogue
+--     row whose fields are not filled in — during a physical count the unit is in your hands
+--     and the catalogue entry may be a stub. `products` has no NOT NULL column without a
+--     default, so a stub really is possible: this row carries a name and a slug and nothing
+--     else. Without it every serialised-asset probe would run against fully-populated
+--     products and the spec's stated case would stay untested.
+-- -------------------------------------------------------------------------------------
+INSERT INTO public.products (name, slug)
+VALUES ('STG Producto incompleto (stub de conteo)', 'stg-producto-incompleto')
+ON CONFLICT (slug) DO NOTHING;
+
+-- -------------------------------------------------------------------------------------
+-- 13. SERIALISED ASSETS (migration 0004).
+--
+--     Guarded by to_regclass: this seed is also run against databases at baseline+0001+0002,
+--     where the table does not exist yet. Skipping is correct there; failing is not.
+--
+--     Rows are chosen so the table is not uniform — several units behind ONE catalogue row
+--     (the case that motivated the table in the first place), four of the five `condition`
+--     values, kit members and loose units, and one unit on the incomplete product above.
+--     `serialised_assets_serial_number_lower_key` is case-insensitive, so the serials here
+--     are also the fixture for that: re-running must not create PROFOTO vs profoto twins.
+-- -------------------------------------------------------------------------------------
+DO $serialised$
+BEGIN
+    IF to_regclass('public.serialised_assets') IS NULL THEN
+        RAISE NOTICE 'serialised_assets no existe (0004 no aplicada) — bloque omitido';
+        RETURN;
+    END IF;
+
+    INSERT INTO public.serialised_assets (product_id, serial_number, condition, location, kit_code, notes)
+    SELECT p.id, v.serial_number, v.condition, v.location, v.kit_code, v.notes
+    FROM (VALUES
+        -- Three units behind a single catalogue row: the reason this table exists.
+        ('stg-cuerpo-mirrorless-a1', 'STG-SN-A1-0001', 'operational', 'Estante A1', 'STG-KIT-RETRATO', 'Unidad sintetica de staging'),
+        ('stg-cuerpo-mirrorless-a1', 'STG-SN-A1-0002', 'operational', 'Estante A1', NULL,              'Unidad sintetica de staging'),
+        ('stg-cuerpo-mirrorless-a1', 'STG-SN-A1-0003', 'maintenance', 'Taller',     NULL,              'En mantencion — sintetico'),
+        ('stg-cuerpo-reflex-b1',     'STG-SN-B1-0001', 'cleaning',    'Mesa limpieza', 'STG-KIT-RETRATO', NULL),
+        ('stg-cuerpo-cine-c1',       'STG-SN-C1-0001', 'damaged',     'Bodega',     NULL,              'Golpe en montura — sintetico'),
+        -- Intake against a catalogue stub, per the spec.
+        ('stg-producto-incompleto',  'STG-SN-STUB-01', 'operational', 'Estante Z9', NULL,              'Producto de catalogo incompleto a proposito')
+    ) AS v(product_slug, serial_number, condition, location, kit_code, notes)
+    JOIN public.products p ON p.slug = v.product_slug
+    WHERE NOT EXISTS (
+        SELECT 1 FROM public.serialised_assets sa
+        WHERE lower(btrim(sa.serial_number)) = lower(btrim(v.serial_number))
+    );
+END
+$serialised$;
+
+-- -------------------------------------------------------------------------------------
+-- 14. Summary
 -- -------------------------------------------------------------------------------------
 DO $summary$
 DECLARE r record;
@@ -532,6 +585,9 @@ BEGIN
         UNION ALL SELECT 'admin_users',          count(*) FROM public.admin_users
         UNION ALL SELECT 'coupon_usage',         count(*) FROM public.coupon_usage
         UNION ALL SELECT 'shipping_usage',       count(*) FROM public.shipping_usage
+        UNION ALL SELECT 'serialised_assets',
+                         CASE WHEN to_regclass('public.serialised_assets') IS NULL THEN -1
+                              ELSE (SELECT count(*) FROM public.serialised_assets) END
         ORDER BY 1
     LOOP
         RAISE NOTICE 'seed result: % = %', r.t, r.n;
