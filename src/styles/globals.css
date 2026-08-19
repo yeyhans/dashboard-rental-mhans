@@ -67,6 +67,39 @@
       --chart-4: 142 71% 45%;         /* success #16A34A */
       --chart-5: 32 95% 44%;          /* warning #D97706 */
 
+      /* Estados funcionales — el unico lenguaje cromatico que la marca admite.
+         Copiados literalmente de `Diseño/MarioHans OS Design System/tokens/colors.css`
+         y no convertidos a HSL: el portal del cliente pinta los mismos estados con
+         estos hexadecimales, y una diferencia de redondeo se ve como dos productos
+         distintos mostrando el mismo pedido. Se consumen con `bg-[var(--success-tint)]`,
+         no con utilidades `bg-green-100`, que no pertenecen al sistema. */
+      --success-text: #15803D;
+      --success: #16A34A;
+      --success-tint: #DCFCE7;
+      --success-border: #A7D8B4;
+
+      --warning-text: #B45309;
+      --warning: #D97706;
+      --warning-tint: #FEF3C7;
+      --warning-border: #EAD48A;
+
+      --danger-text: #B91C1C;
+      --danger: #DC2626;
+      --danger-tint: #FEE2E2;
+      --danger-border: #F1B4B4;
+
+      --info-text: #1D4ED8;
+      --info: #2563EB;
+      --info-tint: #DBEAFE;
+      --info-border: #AFC8EE;
+
+      /* `neutral` es el tono de `request` y `completed`: los dos estados que no son
+         una senal. Su tinte y borde son la misma rampa gris del resto del tema. */
+      --neutral-text: #4E504F;
+      --neutral: #666666;
+      --neutral-tint: #F4F4F4;
+      --neutral-border: #E2E2E2;
+
       /* Barra lateral sobre el lienzo gris, no blanco sobre blanco */
       --sidebar-background: 0 0% 98%; /* #FAFAFA gray-50 */
       --sidebar-foreground: 0 0% 20%; /* #333333 */

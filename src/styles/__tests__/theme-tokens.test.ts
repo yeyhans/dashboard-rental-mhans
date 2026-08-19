@@ -113,3 +113,37 @@ describe('dashboard theme tokens', () => {
     expect(css).not.toMatch(/\.dark\s*\{/);
   });
 });
+
+/**
+ * Functional status tones.
+ *
+ * These are the ONLY chromatic values the brand allows, and the design system is explicit about
+ * why: "Brand is black & white; the only chromatic language is functional status." They are
+ * copied verbatim out of `Diseño/MarioHans OS Design System/tokens/colors.css` rather than
+ * converted, because a badge tint is compared against the customer portal rendering the same
+ * state — a rounding difference in an HSL conversion is a visible mismatch across two products.
+ */
+const TONES = {
+  success: { text: '#15803D', base: '#16A34A', tint: '#DCFCE7', border: '#A7D8B4' },
+  warning: { text: '#B45309', base: '#D97706', tint: '#FEF3C7', border: '#EAD48A' },
+  danger: { text: '#B91C1C', base: '#DC2626', tint: '#FEE2E2', border: '#F1B4B4' },
+  info: { text: '#1D4ED8', base: '#2563EB', tint: '#DBEAFE', border: '#AFC8EE' },
+  neutral: { text: '#4E504F', base: '#666666', tint: '#F4F4F4', border: '#E2E2E2' },
+} as const;
+
+describe('functional status tone tokens', () => {
+  it.each(Object.entries(TONES))('defines the %s triplet verbatim', (name, tone) => {
+    expect(token(`${name}-text`).toUpperCase()).toBe(tone.text);
+    expect(token(name).toUpperCase()).toBe(tone.base);
+    expect(token(`${name}-tint`).toUpperCase()).toBe(tone.tint);
+    expect(token(`${name}-border`).toUpperCase()).toBe(tone.border);
+  });
+
+  it('keeps neutral aligned with the brand gray ramp', () => {
+    // `neutral` is the tone for `request` and `completed` — the two states that are not a signal.
+    // Its tint and border must be the same gray-100 / gray-200 the rest of the theme uses, or a
+    // neutral badge reads as a faint colour cast next to a card border.
+    expect(token('neutral-tint').toUpperCase()).toBe('#F4F4F4');
+    expect(token('neutral-border').toUpperCase()).toBe('#E2E2E2');
+  });
+});

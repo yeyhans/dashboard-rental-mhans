@@ -187,6 +187,92 @@ export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
 }
 
 /* ---------------------------------------------------------------------------------------------
+ * Presentation
+ * ------------------------------------------------------------------------------------------ */
+
+/**
+ * The five tones of the design system. `Diseño/MarioHans OS Design System/tokens/colors.css`
+ * defines a `-text / -tint / -border` triplet plus a base for each, and nothing else is chromatic:
+ * "Brand is black & white; the only chromatic language is functional status."
+ */
+export const STATUS_TONES_VALUES = ['success', 'warning', 'danger', 'info', 'neutral'] as const;
+
+export type StatusTone = (typeof STATUS_TONES_VALUES)[number];
+
+/**
+ * Tone per status — derived, not chosen.
+ *
+ * `Diseño/MarioHans OS Design System/components/data/StatusBadge.jsx` carries a `STATES` table
+ * that names each operational stage in Spanish and fixes its tone. Its key set is not the v1.2
+ * enum (it is a 13-entry superset that also covers equipment states), but every v1.2 status lands
+ * on exactly one named stage, so the tone comes from the design system rather than from taste:
+ *
+ *   request → solicitud · evaluation → evaluacion · confirmed → confirmado
+ *   preparation → preparacion · in-rental → activo · return → retorno
+ *   completed → finalizado · cancelled → rechazado
+ *
+ * Before this map, five components each kept their own `bg-yellow-100 text-yellow-800`-style
+ * table, and they disagreed: the same order read "En Espera" amber on one screen and gray on
+ * another. Colour here is information, so a disagreement is a wrong reading, not a style nit.
+ */
+export const STATUS_TONES: Record<OrderStatus, StatusTone> = {
+  request: 'neutral',
+  evaluation: 'info',
+  confirmed: 'success',
+  preparation: 'warning',
+  'in-rental': 'info',
+  return: 'warning',
+  completed: 'neutral',
+  cancelled: 'danger',
+};
+
+/**
+ * Tone for display, `neutral` for anything unrecognised.
+ *
+ * The fallback is deliberate and matches `statusLabel`: legacy rows exist between the code deploy
+ * and the 0003 apply, and exported archives carry them forever. A gray badge on an unexpected
+ * value is a far better outcome than a thrown error inside a React island.
+ */
+export function statusTone(status: string): StatusTone {
+  return isOrderStatus(status) ? STATUS_TONES[status] : 'neutral';
+}
+
+/**
+ * Tailwind classes for a status badge, one tone across tint, text and border.
+ *
+ * Returned as data rather than as a React component on purpose: the project has no jsdom or
+ * testing-library, so a component would ship untested, while a pure string is covered here.
+ *
+ * The arbitrary-value syntax is not a shortcut around Tailwind's palette — it IS the design
+ * system's rule, whose bundled oxlint config enforces "referenciar siempre custom properties,
+ * nunca hexadecimales crudos". The five duplicated maps this replaces were built from
+ * `bg-yellow-100 text-yellow-800`, Tailwind palette colours that appear in no token file and
+ * drifted apart between components.
+ */
+const TONE_BADGE_CLASSES: Record<StatusTone, string> = {
+  success: 'bg-[var(--success-tint)] text-[var(--success-text)] border-[var(--success-border)]',
+  warning: 'bg-[var(--warning-tint)] text-[var(--warning-text)] border-[var(--warning-border)]',
+  danger: 'bg-[var(--danger-tint)] text-[var(--danger-text)] border-[var(--danger-border)]',
+  info: 'bg-[var(--info-tint)] text-[var(--info-text)] border-[var(--info-border)]',
+  neutral: 'bg-[var(--neutral-tint)] text-[var(--neutral-text)] border-[var(--neutral-border)]',
+};
+
+export function statusBadgeClass(status: string): string {
+  return TONE_BADGE_CLASSES[statusTone(status)];
+}
+
+/**
+ * Ready-made `<select>` options, in chain order.
+ *
+ * `OrderEstado.tsx` hand-wrote nine of these, including `trash` and `auto-draft` — values the
+ * `orders_status_check` constraint never admitted, so choosing one produced a constraint
+ * violation surfaced as a 500. Chain order matters too: the machine only advances one stage, so
+ * the option immediately below the current one is the only ordinary move.
+ */
+export const STATUS_OPTIONS: ReadonlyArray<{ value: OrderStatus; label: string }> =
+  ORDER_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }));
+
+/* ---------------------------------------------------------------------------------------------
  * Email trigger matrix
  * ------------------------------------------------------------------------------------------ */
 

@@ -4,6 +4,10 @@ import {
   LEGACY_ORDER_STATUSES,
   STATUS_LABELS,
   TERMINAL_STATUSES,
+  STATUS_TONES,
+  STATUS_OPTIONS,
+  statusTone,
+  statusBadgeClass,
   EMAIL_ON_ENTER,
   isOrderStatus,
   isLegacyOrderStatus,
@@ -300,5 +304,104 @@ describe('EMAIL_ON_ENTER', () => {
     for (const status of Object.keys(EMAIL_ON_ENTER)) {
       expect(isOrderStatus(status)).toBe(true);
     }
+  });
+});
+
+/* ---------------------------------------------------------------------------------------------
+ * Presentation layer
+ * ------------------------------------------------------------------------------------------ */
+
+describe('STATUS_TONES', () => {
+  it('assigns every status exactly one design-system tone', () => {
+    for (const status of ORDER_STATUSES) {
+      expect(STATUS_TONES[status]).toMatch(/^(success|warning|danger|info|neutral)$/);
+    }
+    expect(Object.keys(STATUS_TONES)).toHaveLength(ORDER_STATUSES.length);
+  });
+
+  /**
+   * Not invented here. The tones are read off the design system's own canonical component,
+   * `Diseño/MarioHans OS Design System/components/data/StatusBadge.jsx`, whose `STATES` table
+   * names each operational stage in Spanish and fixes its tone. Each v1.2 status maps onto exactly
+   * one of those named stages, so the tone is derived rather than chosen:
+   *
+   *   request     ← solicitud    (neutral)   completed ← finalizado (neutral)
+   *   evaluation  ← evaluacion   (info)      cancelled ← rechazado  (danger)
+   *   confirmed   ← confirmado   (success)
+   *   preparation ← preparacion  (warning)
+   *   in-rental   ← activo       (info)
+   *   return      ← retorno      (warning)
+   */
+  it('matches the tone the design system assigns to each named stage', () => {
+    expect(STATUS_TONES).toEqual({
+      request: 'neutral',
+      evaluation: 'info',
+      confirmed: 'success',
+      preparation: 'warning',
+      'in-rental': 'info',
+      return: 'warning',
+      completed: 'neutral',
+      cancelled: 'danger',
+    });
+  });
+
+  it('reserves danger for the failure exit only', () => {
+    // The brand is monochrome and red is the loudest thing on the screen. An order that merely
+    // sits in an early stage is not a problem, and painting it red trains admins to ignore red.
+    const danger = ORDER_STATUSES.filter((s) => STATUS_TONES[s] === 'danger');
+    expect(danger).toEqual(['cancelled']);
+  });
+});
+
+describe('statusTone', () => {
+  it('returns the mapped tone for a known status', () => {
+    expect(statusTone('in-rental')).toBe('info');
+  });
+
+  it('falls back to neutral for an unknown value rather than throwing', () => {
+    // Legacy rows survive between the code deploy and the 0003 apply, and exports carry them
+    // forever. A badge that crashes the island is far worse than a gray badge.
+    expect(statusTone('on-hold')).toBe('neutral');
+    expect(statusTone('')).toBe('neutral');
+  });
+});
+
+describe('STATUS_OPTIONS', () => {
+  it('lists the eight statuses in chain order with their canonical labels', () => {
+    // The `<select>` in OrderEstado.tsx hand-wrote nine options including `trash` and
+    // `auto-draft`, which the constraint never accepted — picking one was a guaranteed 500.
+    expect(STATUS_OPTIONS).toEqual(
+      ORDER_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }))
+    );
+  });
+});
+
+describe('statusBadgeClass', () => {
+  it('renders every status through design-system custom properties, never palette utilities', () => {
+    // The rule the design system's own oxlint config enforces: "referenciar siempre custom
+    // properties, nunca hexadecimales crudos". `bg-yellow-100` is a Tailwind palette colour that
+    // exists in no token file — it is exactly what the five duplicated maps were made of.
+    for (const status of ORDER_STATUSES) {
+      const cls = statusBadgeClass(status);
+      expect(cls).toMatch(/bg-\[var\(--[a-z]+-tint\)\]/);
+      expect(cls).toMatch(/text-\[var\(--[a-z]+-text\)\]/);
+      expect(cls).toMatch(/border-\[var\(--[a-z]+-border\)\]/);
+      expect(cls).not.toMatch(/(bg|text|border)-(red|green|blue|yellow|amber|emerald|gray|slate|zinc)-\d/);
+    }
+  });
+
+  it('uses one tone consistently across all three properties of a badge', () => {
+    // A badge with a success tint and a warning border is not a style slip, it is two signals.
+    for (const status of ORDER_STATUSES) {
+      const tones = [...statusBadgeClass(status).matchAll(/--([a-z]+)-(?:tint|text|border)\)/g)]
+        .map((m) => m[1]);
+      expect(tones).toHaveLength(3);
+      expect(new Set(tones).size).toBe(1);
+      expect(tones[0]).toBe(STATUS_TONES[status]);
+    }
+  });
+
+  it('falls back to the neutral badge for a legacy or unknown value', () => {
+    expect(statusBadgeClass('on-hold')).toBe(statusBadgeClass('completed'));
   });
 });
