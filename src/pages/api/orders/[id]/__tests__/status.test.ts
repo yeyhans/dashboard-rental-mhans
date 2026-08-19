@@ -19,8 +19,10 @@ vi.mock('@supabase/supabase-js', () => ({
 
 const updateOrderStatus = vi.fn();
 
+const getOrderById = vi.fn();
+
 vi.mock('../../../../../services/orderService', () => ({
-  OrderService: { updateOrderStatus },
+  OrderService: { updateOrderStatus, getOrderById },
 }));
 
 function stubAdminLookup(result: { data: unknown; error: unknown }) {
@@ -47,19 +49,23 @@ function context(options: { cookie?: string; body?: unknown; id?: string } = {})
   };
 }
 
-describe('PUT /api/orders/[id]/status', () => {
-  beforeEach(() => {
-    vi.resetModules();
-    vi.stubEnv('PUBLIC_SUPABASE_URL', 'https://project.supabase.co');
-    vi.stubEnv('PUBLIC_SUPABASE_ANON_KEY', 'anon-key');
-    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'service-key');
-    refreshSession.mockResolvedValue({ data: {}, error: { message: 'Invalid Refresh Token' } });
-  });
+beforeEach(() => {
+  vi.resetModules();
+  vi.stubEnv('PUBLIC_SUPABASE_URL', 'https://project.supabase.co');
+  vi.stubEnv('PUBLIC_SUPABASE_ANON_KEY', 'anon-key');
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'service-key');
+  refreshSession.mockResolvedValue({ data: {}, error: { message: 'Invalid Refresh Token' } });
+  // Por defecto la orden esta una etapa antes de `confirmed`, para que los casos felices avancen
+  // de forma legal. Cada test de transicion sobreescribe este estado de origen.
+  getOrderById.mockResolvedValue({ id: 123, status: 'evaluation' });
+});
 
-  afterEach(() => {
-    vi.clearAllMocks();
-    vi.unstubAllEnvs();
-  });
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.unstubAllEnvs();
+});
+
+describe('PUT /api/orders/[id]/status', () => {
 
   it('rejects an unauthenticated status change', async () => {
     const { PUT } = await import('../status');
@@ -93,6 +99,12 @@ describe('PUT /api/orders/[id]/status', () => {
     'accepts the v1.2 status %s',
     async (status) => {
       asAdmin();
+      // Origin is a legacy value on purpose. This test asks one question — does the VOCABULARY
+      // admit this status — and the state machine must not answer it. From a v1.2 origin only two
+      // of the eight targets are ever legal, so a shared origin would make six of these fail for
+      // a reason that has nothing to do with the vocabulary. A legacy origin is outside the
+      // machine's knowledge, so it defers, and the vocabulary check is what decides.
+      getOrderById.mockResolvedValue({ id: 123, status: 'on-hold' });
       updateOrderStatus.mockResolvedValue({ id: 123, status });
       const { PUT } = await import('../status');
 
@@ -182,5 +194,99 @@ describe('PUT /api/orders/[id]/status', () => {
 
     expect(response.status).toBe(400);
     expect(updateOrderStatus).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * State machine enforcement (Área 01 §5 `TRANSICIONES_VALIDAS`, via `src/lib/orderStatus.ts`).
+ *
+ * The vocabulary check above answers "is this a real status". It cannot answer "is this a legal
+ * move", and the two failures look nothing alike: a stale client sends a status that does not
+ * exist, whereas a mis-click in Área 01 sends a perfectly valid status from the wrong stage. The
+ * second one is the dangerous case — it is how an order reaches `in-rental` without anyone having
+ * assigned units by serial number during `preparation`, and nothing downstream would flag it.
+ */
+describe('PUT /api/orders/[id]/status — transiciones', () => {
+  it('advances one stage along the chain', async () => {
+    asAdmin();
+    getOrderById.mockResolvedValue({ id: 123, status: 'preparation' });
+    updateOrderStatus.mockResolvedValue({ id: 123, status: 'in-rental' });
+    const { PUT } = await import('../status');
+
+    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'in-rental' } }) as never);
+
+    expect(response.status).toBe(200);
+    expect(updateOrderStatus).toHaveBeenCalledWith(123, 'in-rental');
+  });
+
+  it('refuses to skip a stage, naming the only legal next one', async () => {
+    asAdmin();
+    getOrderById.mockResolvedValue({ id: 123, status: 'confirmed' });
+    const { PUT } = await import('../status');
+
+    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'in-rental' } }) as never);
+    const payload = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(payload.error).toContain('Preparación');
+    expect(updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('refuses to move backwards', async () => {
+    asAdmin();
+    getOrderById.mockResolvedValue({ id: 123, status: 'in-rental' });
+    const { PUT } = await import('../status');
+
+    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'preparation' } }) as never);
+
+    expect(response.status).toBe(409);
+    expect(updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('allows cancelling from a non-terminal stage', async () => {
+    asAdmin();
+    getOrderById.mockResolvedValue({ id: 123, status: 'evaluation' });
+    updateOrderStatus.mockResolvedValue({ id: 123, status: 'cancelled' });
+    const { PUT } = await import('../status');
+
+    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'cancelled' } }) as never);
+
+    expect(response.status).toBe(200);
+  });
+
+  it('refuses to reopen a completed order', async () => {
+    asAdmin();
+    getOrderById.mockResolvedValue({ id: 123, status: 'completed' });
+    const { PUT } = await import('../status');
+
+    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'return' } }) as never);
+
+    expect(response.status).toBe(409);
+    expect(updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 when the order does not exist', async () => {
+    asAdmin();
+    getOrderById.mockResolvedValue(null);
+    const { PUT } = await import('../status');
+
+    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'confirmed' } }) as never);
+
+    expect(response.status).toBe(404);
+    expect(updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('lets an order still on a legacy status be migrated forward by hand', async () => {
+    // Between the code deploy and the 0003 apply, live rows still hold `on-hold`. Refusing every
+    // move on those would freeze the panel during the window; the machine cannot judge a
+    // transition whose origin is not in its vocabulary, so it defers to the vocabulary check.
+    asAdmin();
+    getOrderById.mockResolvedValue({ id: 123, status: 'on-hold' });
+    updateOrderStatus.mockResolvedValue({ id: 123, status: 'request' });
+    const { PUT } = await import('../status');
+
+    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'request' } }) as never);
+
+    expect(response.status).toBe(200);
   });
 });

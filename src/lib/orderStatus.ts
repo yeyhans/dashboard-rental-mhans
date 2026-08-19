@@ -119,3 +119,107 @@ export function migrateLegacyStatus(value: unknown): OrderStatus | null {
 export function statusLabel(status: string): string {
   return isOrderStatus(status) ? STATUS_LABELS[status] : status;
 }
+
+/* ---------------------------------------------------------------------------------------------
+ * State machine
+ * ------------------------------------------------------------------------------------------ */
+
+/**
+ * The single linear chain, from `TRANSICIONES_VALIDAS` in Área 01 §5
+ * (`CONSOLIDADO WEB YEYSON/Área 01 · Rental Técnico/
+ * MarioHans_OS_Area01_Final_Architecture_Module_Consolidation_v1.1.html`).
+ *
+ * The order is the only entity in the system modelled as an explicit state machine, and the
+ * document is emphatic that no view may skip a stage. Each stage has exactly one successor, and
+ * the action that advances it is an operational fact, not a UI affordance:
+ *
+ *   Solicitud     --("Confirmar y crear pedido", genera presupuesto versionado)--> En evaluación
+ *   En evaluación --("Registrar preparación")------------------------------------> Confirmada
+ *   Confirmada    --(asignación de unidades por N° de serie)---------------------> Preparación
+ *   Preparación   --("Registrar entrega")---------------------------------------> En Arriendo
+ *   En Arriendo   --("Registrar devolución")------------------------------------> Devolución
+ *   Devolución    --("Completar pedido")----------------------------------------> Completado
+ */
+const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
+  request: 'evaluation',
+  evaluation: 'confirmed',
+  confirmed: 'preparation',
+  preparation: 'in-rental',
+  'in-rental': 'return',
+  return: 'completed',
+};
+
+/**
+ * The two exits. Área 01 describes the machine as "lineal con dos salidas terminales".
+ *
+ * That document actually keeps three terminals — Completado, Rechazada and Cancelada — where the
+ * v1.2 vocabulary has two, collapsing Rechazada and Cancelada into `cancelled`. The distinction is
+ * not lost: it lives in `orders.cancellation_reason`, added by migration 0003 for exactly this.
+ */
+export const TERMINAL_STATUSES = ['completed', 'cancelled'] as const;
+
+export function isTerminalStatus(status: unknown): boolean {
+  return typeof status === 'string' && (TERMINAL_STATUSES as readonly string[]).includes(status);
+}
+
+/** The one stage an order may advance to, or `null` at a terminal. */
+export function nextStatus(status: OrderStatus): OrderStatus | null {
+  return NEXT_STATUS[status] ?? null;
+}
+
+/**
+ * Whether a status change is legal.
+ *
+ * Two rules, and no third:
+ *  1. Advance exactly one stage along the chain. Skipping is how an order reaches `in-rental`
+ *     without anyone having assigned units by serial number during `preparation`.
+ *  2. Cancel from any non-terminal stage. This is NOT in the Área 01 table, which maps only the
+ *     advance action — but email 06 "Equipos no disponibles" fires when staff finds no
+ *     availability for an order still awaiting review, so early termination demonstrably exists.
+ *
+ * Going backwards is never allowed. Neither is leaving a terminal state.
+ */
+export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
+  if (!isOrderStatus(from) || !isOrderStatus(to)) return false;
+  if (isTerminalStatus(from)) return false;
+  if (to === 'cancelled') return true;
+  return NEXT_STATUS[from] === to;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Email trigger matrix
+ * ------------------------------------------------------------------------------------------ */
+
+/**
+ * Which of the eight approved transactional emails fires on ENTERING a status.
+ *
+ * Resolved by joining two sources, not by reading either alone. The email handoff
+ * (`correos/MarioHans_OS_Rental_Email_Flow_Developer_Handoff_v1.0.html`) names states in the
+ * operational Spanish of the flow diagram — "En espera", "Disponibilidad confirmada", "Arriendo en
+ * curso" — which does not map onto the v1.2 enum by itself; four of its eight rows were ambiguous
+ * or explicitly "Por definir". Área 01 §5 supplies the missing half.
+ *
+ * The two resolutions worth knowing:
+ *
+ *  · **04 Equipos disponibles fires on `evaluation`, not `confirmed`.** The handoff warns
+ *    "Disponibilidad confirmada ≠ reserva confirmada", and the email is the one that ASKS for the
+ *    25% deposit — so the reservation cannot already be confirmed when it goes out.
+ *  · **06 Equipos no disponibles fires on `cancelled`.** The handoff left it "Por definir (posible
+ *    correspondencia con Fallido)"; Área 01's "dos salidas terminales" settles it.
+ *
+ * Three of the eight emails are absent here on purpose:
+ *  · 01 Registro and 02 Contrato hang off the ACCOUNT lifecycle, not off `orders.status`.
+ *  · 05 Pedido actualizado is marked "Evento, no estado" — it fires on a new presupuesto version,
+ *    so it cannot be keyed on a status at all.
+ *
+ * `preparation` and `return` send nothing, and that is deliberate: both are internal operational
+ * stages (bodega assigns units, check-in verifies equipment) where nothing is asked of the
+ * customer. There is no ninth template to write.
+ */
+export const EMAIL_ON_ENTER: Partial<Record<OrderStatus, string>> = {
+  request: 'solicitud-recibida', //      03
+  evaluation: 'equipos-disponibles', //  04
+  'in-rental': 'equipos-entregados', //  07
+  completed: 'pedido-completado', //     08
+  cancelled: 'equipos-no-disponibles', //06
+};
