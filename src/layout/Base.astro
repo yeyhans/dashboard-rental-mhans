@@ -55,9 +55,7 @@ const currentPath = Astro.url.pathname;
 
     <style is:inline>
       /* ── Theme base ── */
-      .dark { background-color: hsl(0 0% 3.9%); color: hsl(0 0% 98%); }
       body { background-color: hsl(0 0% 100%); color: hsl(0 0% 3.9%); }
-      html.dark body { background-color: hsl(0 0% 3.9%); color: hsl(0 0% 98%); }
 
       /* ── Sidebar ── */
       #sidebar {
@@ -69,10 +67,6 @@ const currentPath = Astro.url.pathname;
       #sidebar .sidebar-inner {
         background-color: hsl(0 0% 100%);
         border-right: 1px solid hsl(0 0% 89.8%);
-      }
-      html.dark #sidebar .sidebar-inner {
-        background-color: hsl(0 0% 3.9%);
-        border-right-color: hsl(0 0% 14.9%);
       }
 
       /* ── Sidebar text fade ── */
@@ -127,22 +121,13 @@ const currentPath = Astro.url.pathname;
         position: relative;
         white-space: nowrap;
       }
-      html.dark .sidebar-nav-item { color: hsl(0 0% 63.9%); }
       .sidebar-nav-item:hover {
         color: hsl(0 0% 9%);
         background-color: hsl(0 0% 95.1%);
       }
-      html.dark .sidebar-nav-item:hover {
-        color: hsl(0 0% 98%);
-        background-color: hsl(0 0% 14.9%);
-      }
       .sidebar-nav-item.active {
         color: hsl(0 0% 9%);
         background-color: hsl(0 0% 95.1%);
-      }
-      html.dark .sidebar-nav-item.active {
-        color: hsl(0 0% 98%);
-        background-color: hsl(0 0% 14.9%);
       }
       .sidebar-nav-item .nav-icon {
         flex-shrink: 0;
@@ -179,10 +164,6 @@ const currentPath = Astro.url.pathname;
         z-index: 50;
         box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
       }
-      html.dark .sidebar-nav-item .nav-tooltip {
-        background-color: hsl(0 0% 98%);
-        color: hsl(0 0% 9%);
-      }
       .sidebar-collapsed .sidebar-nav-item:hover .nav-tooltip {
         opacity: 1;
       }
@@ -204,11 +185,6 @@ const currentPath = Astro.url.pathname;
       .sidebar-toggle:hover {
         color: hsl(0 0% 9%);
         background-color: hsl(0 0% 95.1%);
-      }
-      html.dark .sidebar-toggle { color: hsl(0 0% 63.9%); }
-      html.dark .sidebar-toggle:hover {
-        color: hsl(0 0% 98%);
-        background-color: hsl(0 0% 14.9%);
       }
 
       /* ── Admin badge (collapsed) ── */
@@ -238,14 +214,9 @@ const currentPath = Astro.url.pathname;
         color: hsl(0 62.8% 30.6%);
         transition: color 150ms ease, background-color 150ms ease;
       }
-      html.dark .sidebar-logout { color: hsl(0 62.8% 60.6%); }
       .sidebar-logout:hover {
         background-color: hsl(0 100% 97.1%);
         color: hsl(0 72.2% 50.6%);
-      }
-      html.dark .sidebar-logout:hover {
-        background-color: hsl(0 62.8% 10%);
-        color: hsl(0 62.8% 70%);
       }
       .sidebar-collapsed .sidebar-logout { justify-content: center; padding: 0.625rem; }
 
@@ -260,11 +231,6 @@ const currentPath = Astro.url.pathname;
         background-color: hsl(0 0% 100%);
         color: hsl(0 0% 45.1%);
         border-top: 1px solid hsl(0 0% 89.8%);
-      }
-      html.dark #footer {
-        background-color: hsl(0 0% 3.9%);
-        color: hsl(0 0% 63.9%);
-        border-top-color: hsl(0 0% 14.9%);
       }
       #footer a { color: inherit; }
       #footer a:hover { text-decoration: underline; }
@@ -353,7 +319,6 @@ const currentPath = Astro.url.pathname;
         white-space: nowrap;
         transition: opacity 200ms ease;
       }
-      html.dark .sidebar-section-label { color: hsl(0 0% 45.1%); }
       .sidebar-collapsed .sidebar-section-label { opacity: 0; height: 0; padding: 0; }
     </style>
   </head>
@@ -705,13 +670,17 @@ const currentPath = Astro.url.pathname;
       }, 100);
     });
 
-    // Logo images
+    // Logo images.
+    //
+    // Un solo tema, así que siempre la variante para fondo claro. Ojo con el nombre de los
+    // archivos, que se lee al revés de lo que parece: `logo-white.png` NO es un logo blanco, es
+    // el logo negro *para fondo blanco*. Es el que corresponde a la superficie del panel.
+    // `data-dark-src` se conserva en el markup porque describe un asset que existe, pero ya no
+    // hay condición que lo seleccione.
     window.updateLogoImages = function() {
-      var isDark = document.documentElement.classList.contains('dark');
       document.querySelectorAll('.logo-image').forEach(function(img) {
-        var ds = img.getAttribute('data-dark-src');
         var ls = img.getAttribute('data-light-src');
-        if (ds && ls) img.src = isDark ? ds : ls;
+        if (ls) img.src = ls;
       });
     };
 
@@ -730,23 +699,18 @@ const currentPath = Astro.url.pathname;
 </script>
 
 <script>
-  const getThemePreference = () => {
-    if (typeof localStorage !== 'undefined' && localStorage.getItem('theme')) {
-      return localStorage.getItem('theme');
-    }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  };
-  const isDark = getThemePreference() === 'dark';
-  document.documentElement.classList[isDark ? 'add' : 'remove']('dark');
-
+  // El selector de tema se eliminó: el sistema de diseño del cliente fija "white-first" como
+  // regla no negociable, así que el panel tiene un solo tema.
+  //
+  // Lo que había aquí no era código muerto, aunque lo pareciera: leía
+  // `prefers-color-scheme` y añadía la clase `dark` al <html>, de modo que cualquier admin con
+  // el sistema operativo en oscuro veía el panel en oscuro sin haberlo pedido. Se arrastraba
+  // además una preferencia persistida en localStorage, que seguiría forzando el tema oscuro
+  // aunque el script desapareciera — de ahí la limpieza explícita de abajo.
   if (typeof localStorage !== 'undefined') {
-    const observer = new MutationObserver(() => {
-      const isDark = document.documentElement.classList.contains('dark');
-      localStorage.setItem('theme', isDark ? 'dark' : 'light');
-      if (typeof updateLogoImages === 'function') updateLogoImages();
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    localStorage.removeItem('theme');
   }
+  document.documentElement.classList.remove('dark');
 
   document.addEventListener('DOMContentLoaded', function() {
     if (typeof updateLogoImages === 'function') updateLogoImages();

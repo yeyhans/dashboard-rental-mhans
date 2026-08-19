@@ -3,76 +3,79 @@
 @tailwind utilities;
 
 
+/* ============================================================================
+   Tema — MarioHans OS Design System.
+   Fuente: CONSOLIDADO WEB YEYSON/Diseño/MarioHans OS Design System/tokens/colors.css
+   ----------------------------------------------------------------------------
+   "El color no es decoración — es lenguaje operacional."
+
+   Reemplaza la paleta zinc que traía shadcn por la rampa de marca. La diferencia
+   no es sutil: los neutros de zinc llevan tono 240° (azulado) y los de marca son
+   neutros puros, así que la paleta anterior teñía en frío todas las superficies.
+
+   Reglas que fija el sistema y que estos valores respetan:
+     · Blanco primero. #000 puro queda reservado al logotipo; el texto en pantalla
+       usa #0A0A0A, que es más suave en pantalla.
+     · Grises anclados en la marca: #333 #999 #E2E2E2 #F4F4F4.
+     · Color cromático SOLO como lenguaje de estado funcional. El acento #FF4500
+       del documento maestro fue descartado por el propio sistema: choca con una
+       marca monocroma y se lee como una advertencia falsa.
+
+   Sin tema oscuro: "white-first" es no negociable (ver SKILL.md del sistema).
+   El bloque `.dark` anterior era código muerto — nadie aplicaba la clase y los
+   componentes no usan ninguna utilidad `dark:` — pero dejarlo invitaba a
+   reactivar un tema que la marca prohíbe.
+   ============================================================================ */
 @layer base {
     :root {
-      --background: 0 0% 100%;
-      --foreground: 240 10% 3.9%;
+      /* Tinta y papel */
+      --background: 0 0% 100%;        /* #FFFFFF */
+      --foreground: 0 0% 3.9%;        /* #0A0A0A ink */
       --card: 0 0% 100%;
-      --card-foreground: 240 10% 3.9%;
+      --card-foreground: 0 0% 3.9%;
       --popover: 0 0% 100%;
-      --popover-foreground: 240 10% 3.9%;
-      --primary: 240 5.9% 10%;
-      --primary-foreground: 0 0% 98%;
-      --secondary: 240 4.8% 95.9%;
-      --secondary-foreground: 240 5.9% 10%;
-      --muted: 240 4.8% 95.9%;
-      --muted-foreground: 240 3.8% 35%;
-      --accent: 240 4.8% 95.9%;
-      --accent-foreground: 240 5.9% 10%;
-      --destructive: 0 84.2% 60.2%;
-      --destructive-foreground: 0 0% 98%;
-      --border: 240 5.9% 80%;
-      --input: 240 5.9% 80%;
-      --ring: 240 5.9% 10%;
-      --radius: 1rem;
-      --chart-1: 12 76% 61%;
-      --chart-2: 173 58% 39%;
-      --chart-3: 197 37% 24%;
-      --chart-4: 43 74% 66%;
-      --chart-5: 27 87% 67%;
-      --sidebar-background: 0 0% 98%;
-      --sidebar-foreground: 240 5.3% 26.1%;
-      --sidebar-primary: 240 5.9% 10%;
-      --sidebar-primary-foreground: 0 0% 98%;
-      --sidebar-accent: 240 4.8% 95.9%;
-      --sidebar-accent-foreground: 240 5.9% 10%;
-      --sidebar-border: 220 13% 91%;
-      --sidebar-ring: 217.2 91.2% 59.8%;
-    }
-  
-    .dark {
-      --background: 240 10% 3.9%;
-      --foreground: 0 0% 98%;
-      --card: 240 10% 3.9%;
-      --card-foreground: 0 0% 98%;
-      --popover: 240 10% 3.9%;
-      --popover-foreground: 0 0% 98%;
-      --primary: 0 0% 98%;
-      --primary-foreground: 240 5.9% 10%;
-      --secondary: 240 3.7% 15.9%;
-      --secondary-foreground: 0 0% 98%;
-      --muted: 240 3.7% 15.9%;
-      --muted-foreground: 240 5% 64.9%;
-      --accent: 240 3.7% 15.9%;
-      --accent-foreground: 0 0% 98%;
-      --destructive: 0 62.8% 30.6%;
-      --destructive-foreground: 0 0% 98%;
-      --border: 240 3.7% 15.9%;
-      --input: 240 3.7% 15.9%;
-      --ring: 240 4.9% 83.9%;
-      --chart-1: 220 70% 50%;
-      --chart-2: 160 60% 45%;
-      --chart-3: 30 80% 55%;
-      --chart-4: 280 65% 60%;
-      --chart-5: 340 75% 55%;
-      --sidebar-background: 240 5.9% 10%;
-      --sidebar-foreground: 240 4.8% 95.9%;
-      --sidebar-primary: 224.3 76.3% 48%;
+      --popover-foreground: 0 0% 3.9%;
+
+      /* Primario monocromo */
+      --primary: 0 0% 3.9%;           /* #0A0A0A */
+      --primary-foreground: 0 0% 100%;
+
+      /* Rampa neutra de marca */
+      --secondary: 0 0% 95.7%;        /* #F4F4F4 gray-100 */
+      --secondary-foreground: 0 0% 20%;   /* #333333 gray-700 */
+      --muted: 0 0% 95.7%;            /* #F4F4F4 */
+      --muted-foreground: 0 0% 40%;   /* #666666 gray-500 */
+      --accent: 0 0% 95.7%;
+      --accent-foreground: 0 0% 20%;
+
+      /* Estado funcional: danger #DC2626 */
+      --destructive: 0 72.2% 50.6%;
+      --destructive-foreground: 0 0% 100%;
+
+      /* Filetes: gray-200 es el borde por defecto del sistema */
+      --border: 0 0% 88.6%;           /* #E2E2E2 */
+      --input: 0 0% 88.6%;
+      --ring: 0 0% 3.9%;              /* foco monocromo */
+
+      --radius: 0.75rem;              /* 12px — radius-lg del sistema */
+
+      /* Gráficos: única superficie donde el color es inevitable. Se usan los
+         colores de estado del sistema, no una paleta decorativa. */
+      --chart-1: 0 0% 3.9%;           /* ink */
+      --chart-2: 0 0% 40%;            /* gray-500 */
+      --chart-3: 217 91% 53%;         /* info #2563EB */
+      --chart-4: 142 71% 45%;         /* success #16A34A */
+      --chart-5: 32 95% 44%;          /* warning #D97706 */
+
+      /* Barra lateral sobre el lienzo gris, no blanco sobre blanco */
+      --sidebar-background: 0 0% 98%; /* #FAFAFA gray-50 */
+      --sidebar-foreground: 0 0% 20%; /* #333333 */
+      --sidebar-primary: 0 0% 3.9%;
       --sidebar-primary-foreground: 0 0% 100%;
-      --sidebar-accent: 240 3.7% 15.9%;
-      --sidebar-accent-foreground: 240 4.8% 95.9%;
-      --sidebar-border: 240 3.7% 15.9%;
-      --sidebar-ring: 217.2 91.2% 59.8%;
+      --sidebar-accent: 0 0% 95.7%;
+      --sidebar-accent-foreground: 0 0% 20%;
+      --sidebar-border: 0 0% 88.6%;
+      --sidebar-ring: 0 0% 3.9%;
     }
   }
 
