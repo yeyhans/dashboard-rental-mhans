@@ -26,13 +26,19 @@ from pydantic import BaseModel
 from rental_mcp import db
 from rental_mcp import dashboard_client
 from rental_mcp.validators import (
+    ACTIVE_ORDER_STATUSES,
+    DB_ORDER_STATUSES,
     SAFE_CLIENT_FIELDS,
+    VALID_TRANSITIONS,
     _filter_client_fields,
     _validate_email,          # used directly in draft_create_client
     _validate_rut as _validate_rut_impl,
+    is_valid_status,
+    is_valid_transition,
 )
 from rental_mcp.domain import pricing as domain_pricing
 from rental_mcp.domain import availability as domain_avail
+from rental_mcp.domain.orders import build_order_insert_params, order_insert_sql
 from rental_mcp.models import (
     AvailabilityResult,
     ClientDetail,
@@ -93,21 +99,10 @@ def _validate_rut(rut: str) -> bool:
     return _validate_rut_impl(rut)
 
 
-# Workflow transition map
-_VALID_TRANSITIONS: dict[str, list[str]] = {
-    "on-hold":     ["reviewing", "failed"],
-    "reviewing":   ["processing", "failed"],
-    "processing":  ["preparing", "failed"],
-    "preparing":   ["delivering", "failed"],
-    "delivering":  ["completed", "failed"],
-    "completed":   ["paid", "failed"],
-    "paid":        ["failed"],
-    "failed":      [],
-}
-
-
-def _is_valid_transition(current: str, new: str) -> bool:
-    return new in _VALID_TRANSITIONS.get(current, [])
+# Workflow transition map — lives in validators.py (pure, testable).
+# Aliased here so existing call-sites inside server.py don't need to change.
+_VALID_TRANSITIONS = VALID_TRANSITIONS
+_is_valid_transition = is_valid_transition
 
 
 async def _fetch_coupon(code: str) -> dict[str, Any] | None:
@@ -263,10 +258,10 @@ async def check_availability(
 ) -> dict[str, Any]:
     """
     Verifica disponibilidad de productos para un rango de fechas.
-    Detecta solapamientos con órdenes activas (on-hold → delivering).
+    Detecta solapamientos con órdenes activas (pending, on-hold, processing).
     """
     try:
-        active_statuses = ("on-hold", "reviewing", "processing", "preparing", "delivering")
+        active_statuses = ACTIVE_ORDER_STATUSES
         placeholders_p = ",".join(["%s"] * len(product_ids))
         placeholders_s = ",".join(["%s"] * len(active_statuses))
 
@@ -606,7 +601,7 @@ async def list_pickups_today(target_date: date | None = None) -> dict[str, Any]:
     try:
         today = target_date or _now().date()
         yesterday = today - timedelta(days=1)
-        active = ("on-hold", "reviewing", "processing", "preparing", "delivering")
+        active = ACTIVE_ORDER_STATUSES
         placeholders = ",".join(["%s"] * len(active))
 
         base_sql = f"""
@@ -1054,10 +1049,19 @@ async def draft_create_order(
 async def update_order_status_draft(order_id: int, new_status: str) -> dict[str, Any]:
     """
     Prepara un cambio de estado de orden (requiere confirmación).
-    Valida la transición de workflow. Si new_status='processing', advierte
-    que se requiere confirmar pago de reserva antes de proceder.
+    Estados válidos: pending, on-hold, processing, completed, cancelled,
+    refunded, failed. Valida la transición de workflow. Si new_status='processing',
+    advierte que se requiere confirmar pago de reserva antes de proceder.
     """
     try:
+        # Reject values the CHECK constraint would refuse here, not on confirm:
+        # a draft that can never commit only wastes the operator's time.
+        if not is_valid_status(new_status):
+            return {
+                "error": f"Estado '{new_status}' no existe en la base de datos. "
+                         f"Estados válidos: {sorted(DB_ORDER_STATUSES)}"
+            }
+
         order = await db.fetch_one(
             "SELECT id, status, pago_completo FROM orders WHERE id = %s",
             (order_id,),
@@ -1420,7 +1424,10 @@ async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]
         if action == "create_order":
             customer_id = plan["customer_id"]
             product_ids = plan["product_ids"]
-            quantities = plan["quantities"]
+            # JSONB object keys are always strings, but `_quote_internal` looks them up with
+            # int product ids. Without this the lookup misses, every line silently falls back to
+            # quantity 1, and the CAS guard rejects the confirmation (rehearsal 0002, F-6).
+            quantities = {int(pid): qty for pid, qty in plan["quantities"].items()}
             start_date = date.fromisoformat(plan["start_date"])
             end_date = date.fromisoformat(plan["end_date"])
             order_proyecto = plan["order_proyecto"]
@@ -1470,10 +1477,15 @@ async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]
             q = new_quote
             jornadas = q["num_jornadas"]
 
-            # Billing data: columnas NOT NULL sin default en orders (verificado
-            # contra information_schema) — obligatorio poblarlas desde el perfil.
+            # Billing data: orders tiene 11 columnas NOT NULL sin default y
+            # siete de ellas se pueblan desde el perfil. La lista completa y el
+            # mapeo viven en domain/orders.py.
             billing_row = await db.fetch_one(
-                "SELECT nombre, apellido, email, telefono FROM user_profiles WHERE user_id = %s",
+                """
+                SELECT nombre, apellido, email, telefono, direccion, ciudad, rut
+                  FROM user_profiles
+                 WHERE user_id = %s
+                """,
                 (customer_id,),
                 pool="rw",
             ) or {}
@@ -1533,37 +1545,23 @@ async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]
                         await conn.rollback()
                         return {"error": "Este plan ya fue ejecutado por otro proceso (race condition evitada)"}
 
-                    # Insert order. Sin columna apply_iva (NO existe en esta DB:
-                    # el branch apply_iva ya quedo reflejado en calculated_iva).
                     await cur.execute(
-                        """
-                        INSERT INTO orders (
-                            status, customer_id, order_proyecto,
-                            order_fecha_inicio, order_fecha_termino, num_jornadas,
-                            calculated_subtotal, calculated_discount, calculated_iva, calculated_total,
-                            shipping_total, pago_completo, line_items,
-                            billing_first_name, billing_last_name, billing_email, billing_phone
-                        ) VALUES (
-                            'on-hold', %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s, %s, false, %s::jsonb,
-                            %s, %s, %s, %s
-                        ) RETURNING id
-                        """,
-                        (
-                            customer_id, order_proyecto,
-                            start_date, end_date, jornadas,
-                            q["calculated_subtotal"], q["descuento_cupon"],
-                            q["calculated_iva"], q["calculated_total"],
-                            q["shipping_total"],
-                            line_items_json,
-                            str(billing_row.get("nombre") or ""),
-                            str(billing_row.get("apellido") or ""),
-                            str(billing_row.get("email") or ""),
-                            str(billing_row.get("telefono") or ""),
+                        order_insert_sql(),
+                        build_order_insert_params(
+                            customer_id=customer_id,
+                            order_proyecto=order_proyecto,
+                            fecha_inicio=start_date,
+                            fecha_termino=end_date,
+                            num_jornadas=jornadas,
+                            quote=q,
+                            line_items_json=line_items_json,
+                            profile=billing_row,
                         ),
                     )
                     order_row = await cur.fetchone()
-                    order_id = order_row[0] if order_row else None
+                    # Both pools set row_factory=dict_row (db.py), so fetchone() yields a dict:
+                    # order_row[0] raised KeyError(0) and surfaced as the bare message "0".
+                    order_id = order_row["id"] if order_row else None
 
                     if not order_id:
                         await conn.rollback()

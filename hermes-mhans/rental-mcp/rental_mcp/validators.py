@@ -7,6 +7,8 @@ Exported:
   _filter_client_fields  allowlist filter returning {ok, fields, rejected}
   _validate_email        basic RFC-5322-ish email check
   _validate_rut          Chilean RUT módulo 11 validator
+  DB_ORDER_STATUSES      order status values the CHECK constraint accepts
+  VALID_TRANSITIONS      workflow transition map, restricted to those values
 """
 from __future__ import annotations
 
@@ -61,6 +63,55 @@ def _filter_client_fields(fields: dict[str, Any]) -> dict[str, Any]:
         else:
             rejected.append(key)
     return {"ok": len(rejected) == 0, "fields": safe, "rejected": rejected}
+
+
+# ---------------------------------------------------------------------------
+# Order status vocabulary
+# ---------------------------------------------------------------------------
+
+# The seven values orders_status_check accepts TODAY.
+#
+# INTERIM ALIGNMENT (rehearsal 0002, F-4). The documented workflow adds
+# 'reviewing', 'preparing', 'delivering' and 'paid'; the database has never
+# accepted any of them, so offering those transitions produced drafts whose
+# confirm always died on the CHECK constraint. Migration 0003 (Batch 5 / M4)
+# moves orders.status to the v1.2 eight-value vocabulary; adopting it here is
+# task T-021 and MUST ship in lockstep with that migration, not before.
+DB_ORDER_STATUSES: frozenset[str] = frozenset({
+    "pending",
+    "processing",
+    "on-hold",
+    "completed",
+    "cancelled",
+    "refunded",
+    "failed",
+})
+
+# Statuses that still hold equipment: they block availability for their dates.
+ACTIVE_ORDER_STATUSES: tuple[str, ...] = ("pending", "on-hold", "processing")
+
+# Workflow transitions, expressed only with committable values. The linear
+# progression of the documented workflow collapses onto the states that exist,
+# and every state keeps its escape hatches.
+VALID_TRANSITIONS: dict[str, list[str]] = {
+    "pending":    ["on-hold", "cancelled", "failed"],
+    "on-hold":    ["processing", "cancelled", "failed"],
+    "processing": ["completed", "cancelled", "failed"],
+    "completed":  ["refunded"],
+    "cancelled":  [],
+    "refunded":   [],
+    "failed":     [],
+}
+
+
+def is_valid_status(status: str) -> bool:
+    """True if the database CHECK constraint would accept this status."""
+    return status in DB_ORDER_STATUSES
+
+
+def is_valid_transition(current: str, new: str) -> bool:
+    """True if the workflow allows current → new AND the DB accepts new."""
+    return new in VALID_TRANSITIONS.get(current, [])
 
 
 # ---------------------------------------------------------------------------
