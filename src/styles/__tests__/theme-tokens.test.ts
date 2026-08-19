@@ -85,9 +85,10 @@ describe('dashboard theme tokens', () => {
     expect(neutrals.length).toBeGreaterThan(10);
 
     const tinted = neutrals
-      .filter(([, name]) => !name.startsWith('chart-') && !name.startsWith('destructive'))
-      .filter(([, , hue, sat]) => Number(hue) !== 0 || Number(sat) !== 0)
-      .map(([, name]) => name);
+      .map(([, name, hue, sat]) => ({ name: name ?? '', hue: Number(hue), sat: Number(sat) }))
+      .filter(({ name }) => !name.startsWith('chart-') && !name.startsWith('destructive'))
+      .filter(({ hue, sat }) => hue !== 0 || sat !== 0)
+      .map(({ name }) => name);
 
     expect(tinted).toEqual([]);
   });
