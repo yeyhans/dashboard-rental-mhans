@@ -31,6 +31,7 @@ import {
   ArrowDownRight,
 } from 'lucide-react';
 import type { FinancialAnalytics } from '../../services/advancedAnalyticsService';
+import { statusChartColor, statusLabel } from '../../lib/orderStatus';
 
 interface FinancialAnalyticsCardProps {
   data: FinancialAnalytics;
@@ -52,29 +53,10 @@ const formatMonthLabel = (m: string) => {
   return date.toLocaleDateString('es-CL', { month: 'short', year: '2-digit' });
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  completed: 'hsl(142, 71%, 45%)',
-  paid: 'hsl(160, 60%, 45%)',
-  processing: 'hsl(217, 91%, 60%)',
-  'on-hold': 'hsl(45, 93%, 47%)',
-  reviewing: 'hsl(280, 65%, 60%)',
-  preparing: 'hsl(190, 80%, 42%)',
-  delivering: 'hsl(30, 80%, 55%)',
-  failed: 'hsl(0, 84%, 60%)',
-  cancelled: 'hsl(0, 0%, 60%)',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  completed: 'Completada',
-  paid: 'Pagada',
-  processing: 'En Proceso',
-  'on-hold': 'En Espera',
-  reviewing: 'En Revisión',
-  preparing: 'Preparando',
-  delivering: 'En Entrega',
-  failed: 'Fallida',
-  cancelled: 'Cancelada',
-};
+// Los dos mapas locales que vivian aqui se reemplazaron por `src/lib/orderStatus.ts`. Tenian
+// nueve entradas de `hsl(...)` crudos que no coincidian con ningun token del sistema, y tres de
+// sus claves — `reviewing`, `preparing`, `delivering` — son estados que el CHECK nunca admitio,
+// asi que esos tres colores no se pudieron pintar jamas.
 
 // Chart configs
 const revenueChartConfig: ChartConfig = {
@@ -333,7 +315,7 @@ export default function FinancialAnalyticsCard({ data }: FinancialAnalyticsCardP
                 config={Object.fromEntries(
                   data.revenueByStatus.map(item => [
                     item.status,
-                    { label: STATUS_LABELS[item.status] || item.status, color: STATUS_COLORS[item.status] || 'hsl(0, 0%, 60%)' }
+                    { label: statusLabel(item.status), color: statusChartColor(item.status) }
                   ])
                 )}
                 className="h-[280px] w-full"
@@ -350,8 +332,8 @@ export default function FinancialAnalyticsCard({ data }: FinancialAnalyticsCardP
                   <Pie
                     data={data.revenueByStatus.map(item => ({
                       ...item,
-                      status: STATUS_LABELS[item.status] || item.status,
-                      fill: STATUS_COLORS[item.status] || 'hsl(0, 0%, 60%)',
+                      status: statusLabel(item.status),
+                      fill: statusChartColor(item.status),
                     }))}
                     dataKey="revenue"
                     nameKey="status"
@@ -364,7 +346,7 @@ export default function FinancialAnalyticsCard({ data }: FinancialAnalyticsCardP
                     {data.revenueByStatus.map((item, index) => (
                       <Cell
                         key={index}
-                        fill={STATUS_COLORS[item.status] || 'hsl(0, 0%, 60%)'}
+                        fill={statusChartColor(item.status)}
                       />
                     ))}
                   </Pie>
@@ -377,9 +359,9 @@ export default function FinancialAnalyticsCard({ data }: FinancialAnalyticsCardP
                   <div className="flex items-center gap-2">
                     <div
                       className="h-3 w-3 rounded-full"
-                      style={{ backgroundColor: STATUS_COLORS[item.status] || '#999' }}
+                      style={{ backgroundColor: statusChartColor(item.status) }}
                     />
-                    <span>{STATUS_LABELS[item.status] || item.status}</span>
+                    <span>{statusLabel(item.status)}</span>
                     <Badge variant="secondary" className="text-xs">{item.orderCount}</Badge>
                   </div>
                   <span className="font-medium">{formatCurrency(item.revenue)}</span>

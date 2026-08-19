@@ -262,6 +262,19 @@ export function statusBadgeClass(status: string): string {
 }
 
 /**
+ * Colour for a chart series, as a custom-property reference.
+ *
+ * Recharts fills an SVG and needs a value, not a class, so this is the one place a badge class
+ * will not do. It is still not a literal: `FinancialAnalyticsCard` kept a nine-entry table of raw
+ * `hsl(...)` triples that matched nothing in any token file, and three of its keys — `reviewing`,
+ * `preparing`, `delivering` — are statuses the CHECK constraint never admitted, so those slices
+ * could never be drawn at all.
+ */
+export function statusChartColor(status: string): string {
+  return `var(--${statusTone(status)})`;
+}
+
+/**
  * Ready-made `<select>` options, in chain order.
  *
  * `OrderEstado.tsx` hand-wrote nine of these, including `trash` and `auto-draft` — values the

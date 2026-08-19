@@ -1,5 +1,6 @@
 import { Label } from "../ui/label";
 import { Button } from "../ui/button";
+import { STATUS_OPTIONS, canTransition, isOrderStatus } from "../../lib/orderStatus";
 
 // Icons as SVG components
 const FileTextIcon = () => (
@@ -14,18 +15,9 @@ const FileCheckIcon = () => (
   </svg>
 );
 
-// Status translations
-const statusTranslations: { [key: string]: string } = {
-  'pending': 'Pendiente',
-  'processing': 'En proceso',
-  'on-hold': 'En espera',
-  'completed': 'Completado',
-  'cancelled': 'Cancelado',
-  'refunded': 'Reembolsado',
-  'failed': 'Fallido',
-  'trash': 'Papelera',
-  'auto-draft': 'Borrador'
-};
+// Las opciones vienen de `src/lib/orderStatus.ts`. La lista escrita a mano que habia aqui
+// ofrecia nueve valores, dos de los cuales — `trash` y `auto-draft` — el CHECK de la tabla nunca
+// admitio: elegirlos producia una violacion de constraint que el endpoint devolvia como 500.
 
 // Format date
 const formatDate = (dateString: string) => {
@@ -64,9 +56,21 @@ function OrderEstado({ order, handleStatusUpdate, loading }: OrderEstadoProps) {
               onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
               disabled={loading}
             >
-              {Object.entries(statusTranslations).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
+              {STATUS_OPTIONS.map(({ value, label }) => {
+                // Area 01 §5: "ninguna vista permite saltar un estado". El endpoint ya devuelve
+                // 409 ante un salto, pero dejar la opcion elegible convierte un clic equivocado
+                // en un error; deshabilitarla lo convierte en algo que no se puede hacer.
+                // El estado actual queda habilitado para que el <select> pueda mostrarlo.
+                const isCurrent = value === order.status;
+                const isLegal = isOrderStatus(order.status)
+                  ? canTransition(order.status, value)
+                  : true; // origen legado: la maquina no lo conoce, no puede juzgarlo
+                return (
+                  <option key={value} value={value} disabled={!isCurrent && !isLegal}>
+                    {label}
+                  </option>
+                );
+              })}
             </select>
             {loading && (
               <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>

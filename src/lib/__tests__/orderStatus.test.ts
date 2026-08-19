@@ -8,6 +8,7 @@ import {
   STATUS_OPTIONS,
   statusTone,
   statusBadgeClass,
+  statusChartColor,
   EMAIL_ON_ENTER,
   isOrderStatus,
   isLegacyOrderStatus,
@@ -403,5 +404,24 @@ describe('statusBadgeClass', () => {
 
   it('falls back to the neutral badge for a legacy or unknown value', () => {
     expect(statusBadgeClass('on-hold')).toBe(statusBadgeClass('completed'));
+  });
+});
+
+describe('statusChartColor', () => {
+  it('returns the tone base as a custom-property reference, usable as an SVG fill', () => {
+    // Recharts needs a colour value, not a class, so this is the one place a badge class will not
+    // do. It still must not be a literal: `FinancialAnalyticsCard` had a nine-entry table of raw
+    // `hsl(...)` triples that shared no value with any token file.
+    for (const status of ORDER_STATUSES) {
+      expect(statusChartColor(status)).toBe(`var(--${STATUS_TONES[status]})`);
+    }
+  });
+
+  it('falls back to the neutral base for legacy and never-existing values', () => {
+    // That same table keyed on `reviewing`, `preparing` and `delivering` — statuses the CHECK
+    // constraint never admitted, so those three colours could never have been painted.
+    for (const bogus of ['on-hold', 'reviewing', 'preparing', 'delivering', 'paid']) {
+      expect(statusChartColor(bogus)).toBe('var(--neutral)');
+    }
   });
 });
