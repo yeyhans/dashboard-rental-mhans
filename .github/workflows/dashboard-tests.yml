@@ -1,0 +1,80 @@
+# Dashboard test + database-guard pipeline.
+#
+# Before this workflow the only CI in the repo was rental-mcp-tests.yml (an unrelated Python
+# suite), so the vitest suite could go red without blocking a merge. Every job here fails the
+# build on a non-zero exit — nothing is advisory.
+name: Dashboard Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+# The repository root IS the dashboard, so there is no paths filter: any change to it is a
+# change to the code under test.
+
+jobs:
+  test:
+    name: Vitest suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Astro 6 + @astrojs/vercel target Node 22, the current Vercel runtime default.
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  migration-lint:
+    name: Migration chain lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Needs no database: it reads the migration filenames and their SQL text only.
+      - name: Lint migration ordering (T-016, ADR-D8)
+        run: bash supabase/migrations/lint-chain.sh
+
+      - name: Report least-privilege gate status
+        if: vars.DB_GUARD_RUNNER == ''
+        run: |
+          echo "::warning::assert-least-privilege.sh did NOT run: repository variable DB_GUARD_RUNNER is unset."
+          {
+            echo "### hermes_ro least-privilege assertion: NOT RUN"
+            echo
+            echo "\`hermes-mhans/scripts/assert-least-privilege.sh\` needs \`docker\` access to the"
+            echo "Supabase container on the database host, so it cannot run on a GitHub-hosted runner."
+            echo "Set the repository variable \`DB_GUARD_RUNNER\` to a self-hosted runner label on that"
+            echo "host to enable it. Until then this check is unenforced in CI and must be run manually."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  least-privilege:
+    name: hermes_ro least-privilege assertion
+    # Only runs where the Supabase container is reachable. The skip is never silent: the
+    # migration-lint job emits an explicit ::warning:: and a job summary entry when unset.
+    if: vars.DB_GUARD_RUNNER != ''
+    runs-on: ${{ vars.DB_GUARD_RUNNER }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Assert hermes_ro grants match the ADR-D8 allowlist
+        env:
+          DB_CONTAINER: ${{ vars.DB_CONTAINER }}
+          DB_NET: ${{ vars.DB_NET }}
+          DB_PORT: ${{ vars.DB_PORT }}
+        run: bash hermes-mhans/scripts/assert-least-privilege.sh
