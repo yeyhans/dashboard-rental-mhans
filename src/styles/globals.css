@@ -118,6 +118,38 @@
       --color-muted: #707070;
       --color-muted-bg: #F7F7F6;
 
+      /* Acentos de modulo: tipos de ruta en Delivery */
+      --color-dot-estandar: #6E6E68;
+      --color-dot-ultra: #5A2A8A;
+      --color-dot-retiro: #9A9A97;
+
+      /*
+       * Tipografia. La mono no es decorativa: el canonico la exige en cifras, RUT, folios y
+       * horas, donde el ancho variable de Inter desalinea las columnas de una tabla.
+       */
+      --font-ui: "Inter", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+      --font-mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+
+      /* Radios */
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 10px;
+      --radius-pill: 999px;
+
+      /* Sombras y foco */
+      --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.16);
+      --shadow-drawer: 8px 0 24px rgba(0, 0, 0, 0.18);
+      --focus-ring: 0 0 0 3px rgba(17, 17, 17, 0.22);
+      --focus-ring-danger: 0 0 0 3px rgba(163, 39, 31, 0.22);
+
+      /* Escala de espaciado */
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 24px;
+      --space-6: 32px;
+
       /* Layout del canonico */
       --sidebar-w: 232px;
       --ficha-w: 640px;

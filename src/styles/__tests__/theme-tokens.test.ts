@@ -176,4 +176,39 @@ describe('tokens canónicos de Área 01', () => {
     expect(token('sidebar-w')).toBe('232px');
     expect(token('ficha-w')).toBe('640px');
   });
+
+  /**
+   * El shell de Área 01 no se sostiene solo con color. Su `:root` declara además una escala de
+   * espaciado, una de radios, dos familias tipográficas y las sombras, y el CSS de cada módulo
+   * las referencia por nombre (`var(--space-5)`, `var(--radius-pill)`, `var(--font-mono)`).
+   * Sin ellas el navegador resuelve la propiedad a nada y el componente se renderiza sin
+   * separación ni esquinas — un fallo que se ve pero que ninguna herramienta reporta.
+   */
+  it.each([
+    ['space-1', '4px'], ['space-2', '8px'], ['space-3', '12px'],
+    ['space-4', '16px'], ['space-5', '24px'], ['space-6', '32px'],
+  ])('define la escala de espaciado %s como %s', (name, value) => {
+    expect(token(name)).toBe(value);
+  });
+
+  it.each([
+    ['radius-sm', '6px'], ['radius-md', '8px'], ['radius-lg', '10px'], ['radius-pill', '999px'],
+  ])('define el radio %s como %s', (name, value) => {
+    expect(token(name)).toBe(value);
+  });
+
+  it('declara las dos familias tipográficas del canónico', () => {
+    // Inter para la interfaz; la mono es obligatoria en cifras, RUT, folios y horas, donde el
+    // ancho variable de Inter desalinea las columnas de una tabla.
+    expect(token('font-ui')).toContain('Inter');
+    expect(token('font-mono')).toContain('JetBrains Mono');
+  });
+
+  it('declara las sombras y el anillo de foco', () => {
+    expect(token('shadow-md')).toBeTruthy();
+    expect(token('shadow-drawer')).toBeTruthy();
+    // El anillo de foco es requisito de accesibilidad, no decoración: sin él la navegación por
+    // teclado no tiene indicador visible.
+    expect(token('focus-ring')).toBeTruthy();
+  });
 });

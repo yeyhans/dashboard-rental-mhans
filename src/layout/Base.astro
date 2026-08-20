@@ -3,24 +3,27 @@ import "../styles/globals.css";
 import { getServerAdmin } from "../lib/supabase";
 import { ModeToggle } from "../components/ModeToggle";
 import {
+  Bell,
+  Boxes,
   ChevronLeft,
   ChevronRight,
-  Home,
-  ShoppingBag,
-  Users,
-  Package,
-  ClipboardList,
-  Tag,
+  CircleCheck,
+  Coins,
   CreditCard,
-  LogOut,
-  Boxes,
   Grid3X3,
-  Truck,
-  BarChart3,
+  LogOut,
+  Package,
   PanelLeftClose,
   PanelLeftOpen,
-  X
+  Paperclip,
+  RadioTower,
+  Tag,
+  TrendingUp,
+  Truck,
+  Users,
+  X,
 } from "lucide-react";
+import { NAV_GROUPS, activeModule } from "../lib/navigation";
 
 interface Props {
   title: string;
@@ -34,6 +37,42 @@ const canonicalURL = new URL(Astro.url).href;
 const adminSession = await getServerAdmin(Astro);
 const isAuthenticated = !!adminSession;
 const currentPath = Astro.url.pathname;
+
+/**
+ * Iconos de la barra lateral. `navigation.ts` guarda el NOMBRE del icono, no el componente, para
+ * seguir siendo un modulo de datos testeable sin depender del renderizador.
+ */
+const NAV_ICONS: Record<string, any> = {
+  Tower: RadioTower,
+  Bell,
+  Paperclip,
+  CircleCheck,
+  Truck,
+  Package,
+  Users,
+  Coins,
+  TrendingUp,
+};
+
+/**
+ * Subenlaces que el canonico no lista como modulos de primer nivel. Se conservan dentro de su
+ * modulo padre: sacarlos de la barra sin darles otra entrada los volveria inalcanzables.
+ */
+const NAV_SUBLINKS: Record<string, ReadonlyArray<{ label: string; href: string; icon: any }>> = {
+  '/orders': [
+    { label: 'Cupones', href: '/orders/coupons', icon: Tag },
+    { label: 'Envios', href: '/orders/shipping', icon: Truck },
+  ],
+  '/products': [
+    { label: 'Categorias', href: '/products/categories', icon: Grid3X3 },
+    { label: 'Inventario', href: '/inventory', icon: Boxes },
+  ],
+  '/finance': [
+    { label: 'Pagos', href: '/payments-table', icon: CreditCard },
+  ],
+};
+
+const activeNav = activeModule(currentPath);
 ---
 
 <html lang="es" class="h-full w-full">
@@ -401,79 +440,49 @@ const currentPath = Astro.url.pathname;
             </div>
           )}
 
-          <!-- Navigation -->
-          <nav class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-1">
-            <a href="/dashboard" class={`sidebar-nav-item ${currentPath === '/dashboard' || currentPath === '/dashboard/' ? 'active' : ''}`}>
-              <Home className="nav-icon" />
-              <span class="sidebar-label">Dashboard</span>
-              <span class="nav-tooltip">Dashboard</span>
-            </a>
-
-            <div class="sidebar-section-label">Gestión</div>
-
-            <!-- Pedidos group -->
-            <button onclick="toggleSubmenu('orders')" class="sidebar-nav-item w-full text-left">
-              <ShoppingBag className="nav-icon" />
-              <span class="sidebar-label flex-1">Pedidos</span>
-              <ChevronRight className="h-3.5 w-3.5 submenu-arrow sidebar-label" />
-              <span class="nav-tooltip">Pedidos</span>
-            </button>
-            <div class="sidebar-submenu pl-9 space-y-0.5" id="orders-submenu">
-              <a href="/orders" class={`sidebar-nav-item text-[0.8125rem] ${currentPath === '/orders' || currentPath === '/orders/' ? 'active' : ''}`}>
-                <ClipboardList className="nav-icon" />
-                <span class="sidebar-label">Todos los Pedidos</span>
-              </a>
-              <a href="/orders/coupons" class={`sidebar-nav-item text-[0.8125rem] ${currentPath.startsWith('/orders/coupons') ? 'active' : ''}`}>
-                <Tag className="nav-icon" />
-                <span class="sidebar-label">Cupones</span>
-              </a>
-              <a href="/orders/shipping" class={`sidebar-nav-item text-[0.8125rem] ${currentPath.startsWith('/orders/shipping') ? 'active' : ''}`}>
-                <Truck className="nav-icon" />
-                <span class="sidebar-label">Envios</span>
-              </a>
-            </div>
-
-            <a href="/users" class={`sidebar-nav-item ${currentPath.startsWith('/users') ? 'active' : ''}`}>
-              <Users className="nav-icon" />
-              <span class="sidebar-label">Usuarios</span>
-              <span class="nav-tooltip">Usuarios</span>
-            </a>
-
-            <!-- Productos group -->
-            <button onclick="toggleSubmenu('products')" class="sidebar-nav-item w-full text-left">
-              <Package className="nav-icon" />
-              <span class="sidebar-label flex-1">Productos</span>
-              <ChevronRight className="h-3.5 w-3.5 submenu-arrow sidebar-label" />
-              <span class="nav-tooltip">Productos</span>
-            </button>
-            <div class="sidebar-submenu pl-9 space-y-0.5" id="products-submenu">
-              <a href="/products" class={`sidebar-nav-item text-[0.8125rem] ${currentPath === '/products' || currentPath === '/products/' ? 'active' : ''}`}>
-                <Package className="nav-icon" />
-                <span class="sidebar-label">Todos los Productos</span>
-              </a>
-              <a href="/products/categories" class={`sidebar-nav-item text-[0.8125rem] ${currentPath.startsWith('/products/categories') ? 'active' : ''}`}>
-                <Grid3X3 className="nav-icon" />
-                <span class="sidebar-label">Categorías</span>
-              </a>
-              <a href="/inventory" class={`sidebar-nav-item text-[0.8125rem] ${currentPath.startsWith('/inventory') ? 'active' : ''}`}>
-                <Boxes className="nav-icon" />
-                <span class="sidebar-label">Inventario</span>
-              </a>
-            </div>
-
-            <div class="sidebar-section-label">Finanzas</div>
-
-            <a href="/payments-table" class={`sidebar-nav-item ${currentPath.startsWith('/payments') ? 'active' : ''}`}>
-              <CreditCard className="nav-icon" />
-              <span class="sidebar-label">Pagos</span>
-              <span class="nav-tooltip">Pagos</span>
-            </a>
-
-            <a href="/analytics" class={`sidebar-nav-item ${currentPath.startsWith('/analytics') ? 'active' : ''}`}>
-              <BarChart3 className="nav-icon" />
-              <span class="sidebar-label">Analytics</span>
-              <span class="nav-tooltip">Analytics</span>
-            </a>
+          <!--
+            Navegacion. Tres grupos rotulados y ocho modulos, del `<aside class="side">` del
+            canonico de Area 01, que es identico en los ocho documentos entregados. La estructura
+            vive en `lib/navigation.ts` y esta cubierta por tests; aqui solo se renderiza.
+          -->
+          <nav class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-4" aria-label="Navegacion principal">
+            {NAV_GROUPS.map((group) => (
+              <div class="space-y-0.5">
+                <div class="sidebar-section-label">{group.label}</div>
+                {group.items.map((item) => {
+                  const Icon = NAV_ICONS[item.icon];
+                  const isActive = activeNav?.href === item.href;
+                  const sublinks = NAV_SUBLINKS[item.href] ?? [];
+                  return (
+                    <>
+                      <a
+                        href={item.href}
+                        class={`sidebar-nav-item ${isActive ? 'active' : ''}`}
+                        aria-current={isActive ? 'page' : undefined}
+                      >
+                        <Icon className="nav-icon" />
+                        <span class="sidebar-label flex-1">{item.label}</span>
+                        <span class="nav-tooltip">{item.label}</span>
+                      </a>
+                      {sublinks.length > 0 && (
+                        <div class="pl-9 space-y-0.5">
+                          {sublinks.map((sub) => (
+                            <a
+                              href={sub.href}
+                              class={`sidebar-nav-item text-[0.8125rem] ${currentPath.startsWith(sub.href) ? 'active' : ''}`}
+                              aria-current={currentPath.startsWith(sub.href) ? 'page' : undefined}
+                            >
+                              <sub.icon className="nav-icon" />
+                              <span class="sidebar-label">{sub.label}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })}
+              </div>
+            ))}
           </nav>
 
           <!-- Logout + admin email -->
