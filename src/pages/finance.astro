@@ -1,0 +1,66 @@
+---
+import Base from "../layout/Base.astro";
+import FinanceBoard from "../components/finance/FinanceBoard";
+import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
+import { FinanceService } from "../services/financeService";
+
+export const prerender = false;
+
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+
+const now = new Date();
+
+let board = {
+  pending: {
+    montoPendiente: 0, documentosPendientes: 0, pedidosPendientes: 0,
+    reservasPendientes: 0, montoReservasPendientes: 0,
+    montoVencido: 0, documentosVencidos: 0,
+  },
+  paid: { cobradoPeriodo: 0, pedidosPagados: 0, ticketPromedio: 0 },
+  summary: { ingresosPeriodo: 0, cobrosRecibidos: 0, porCobrar: 0, tasaCobranza: 0 },
+  pendingRows: [],
+  paidRows: [],
+};
+let loadError: string | null = null;
+
+try {
+  board = await FinanceService.getBoard(now);
+} catch (error) {
+  console.error('[finance] Error al cargar el tablero de cobranza:', {
+    admin: adminSession.admin.email,
+    error,
+  });
+  loadError = 'No se pudo cargar la cobranza. Recarga la pagina o intentalo en unos minutos.';
+}
+
+const periodLabel = new Intl.DateTimeFormat('es-CL', { month: 'long', year: 'numeric' }).format(now);
+
+const title = `Finanzas & Cobranza | ${adminSession.admin.email}`;
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    <header class="mb-5 border-b border-[var(--color-border)] pb-4">
+      <h1 class="text-xl font-semibold tracking-tight">Finanzas &amp; Cobranza</h1>
+      <p class="mt-1 text-sm text-[var(--color-text-secondary)]">
+        ¿Cuánto dinero ingresó y qué dinero falta cobrar?
+      </p>
+    </header>
+
+    {loadError ? (
+      <div
+        role="alert"
+        class="rounded-[10px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-4 text-sm text-[var(--color-crit)]"
+      >
+        {loadError}
+      </div>
+    ) : (
+      <FinanceBoard client:load data={board} periodLabel={periodLabel} />
+    )}
+  </div>
+</Base>
