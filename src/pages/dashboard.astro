@@ -40,6 +40,12 @@ try {
       createdOrders: 0,
       byStatus: Object.fromEntries(ORDER_STATUSES.map((s) => [s, 0])),
     },
+    operationalKpis: {
+      retirosHoy: 0,
+      entregasHoy: 0,
+      devolucionesHoy: 0,
+      pedidosActivos: 0,
+    },
     ordersByStatus: emptyStatusBuckets(),
     rentedEquipment: [],
     financialSummary: {

@@ -56,15 +56,27 @@ interface OrderStatusTablesProps {
   ordersByStatus: Record<OrderStatus, Order[]>;
   isFiltered?: boolean;
   filterInfo?: string;
+  /**
+   * Pestaña activa, controlada desde fuera. Existe porque en el canónico las tarjetas de la
+   * `.kpi-row` llevan `data-action="filter-tab"`: hacer clic en "Retiros Hoy" abre la pestaña
+   * Preparación. Sin control externo, ese enlace no tendría a dónde ir.
+   * Si no se pasa, el componente gestiona su propia pestaña.
+   */
+  selectedTab?: string;
+  onSelectTab?: (tab: string) => void;
 }
 
 export default function OrderStatusTables({
   ordersByStatus,
   isFiltered = false,
-  filterInfo = ''
+  filterInfo = '',
+  selectedTab: controlledTab,
+  onSelectTab
 }: OrderStatusTablesProps) {
   // Arranca en "Todos", igual que el canónico, que marca ese tab como `active`.
-  const [selectedTab, setSelectedTab] = useState<string>('todos');
+  const [uncontrolledTab, setUncontrolledTab] = useState<string>('todos');
+  const selectedTab = controlledTab ?? uncontrolledTab;
+  const setSelectedTab = onSelectTab ?? setUncontrolledTab;
 
   /** Los pedidos de un tab. "Todos" concatena en orden de cadena, sin canceladas. */
   const ordersForTab = (tab: string): Order[] =>

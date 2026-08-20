@@ -3,6 +3,7 @@ import DashboardFilters from './DashboardFilters';
 import OrderSummaryStats from './OrderSummaryStats';
 import OrderStatusTables from './OrderStatusTables';
 import RentedEquipmentTable from './RentedEquipmentTable';
+import OrderKpiRow from './OrderKpiRow';
 import FinancialSummary from './FinancialSummary';
 import { Separator } from './ui/separator';
 import { Alert, AlertDescription } from './ui/alert';
@@ -39,6 +40,8 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastFilters, setLastFilters] = useState<FilterState | null>(null);
+  // Pestaña de la lista, controlada aquí para que las tarjetas de KPI puedan cambiarla.
+  const [selectedTab, setSelectedTab] = useState<string>('todos');
 
   // Función para generar descripción de filtros
   const getFilterDescription = (filters: FilterState): string => {
@@ -214,6 +217,10 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
 
       setDashboardData({
         monthlyOrderStats: monthlyStats,
+        // Los KPIs son del dia de hoy y no del rango filtrado: el canonico los rotula
+        // "Retiros Hoy" / "Entregas Hoy". Recalcularlos contra un filtro de, por ejemplo, marzo
+        // daria un numero que contradice su propio rotulo.
+        operationalKpis: initialData.operationalKpis,
         ordersByStatus,
         rentedEquipment: filteredRentedEquipment,
         financialSummary
@@ -258,6 +265,9 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
 
       {/* Contenido del Dashboard */}
       <div className={isLoading ? 'opacity-50 pointer-events-none' : ''}>
+        {/* Fila de KPIs del canónico: cada tarjeta salta a su pestaña */}
+        <OrderKpiRow kpis={dashboardData.operationalKpis} onSelectTab={setSelectedTab} />
+
         {/* Estadísticas del Mes */}
         <OrderSummaryStats
           monthlyStats={dashboardData.monthlyOrderStats}
@@ -270,6 +280,8 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
         {/* Tablas de Órdenes por Estado */}
         <OrderStatusTables
           ordersByStatus={dashboardData.ordersByStatus}
+          selectedTab={selectedTab}
+          onSelectTab={setSelectedTab}
           isFiltered={lastFilters !== null}
           filterInfo={lastFilters ? getFilterDescription(lastFilters) : ''}
         />

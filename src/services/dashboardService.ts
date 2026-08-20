@@ -4,11 +4,36 @@ import {
   bookingStatusFilter,
   canonicalStatus,
   emptyStatusBuckets,
+  isTerminalStatus,
   type OrderStatus,
 } from '../lib/orderStatus';
 import type { Database } from '../types/database';
 
 type Order = Database['public']['Tables']['orders']['Row'];
+
+/** Los cuatro contadores de la `.kpi-row` del canónico de Pedidos. */
+export interface OperationalKpis {
+  retirosHoy: number;
+  entregasHoy: number;
+  devolucionesHoy: number;
+  pedidosActivos: number;
+}
+
+/**
+ * Día calendario en `YYYY-MM-DD`.
+ *
+ * Las columnas `order_fecha_inicio`/`order_fecha_termino` son `date`, no `timestamptz`, así que
+ * llegan como `'2026-06-12'`. Pasarlas por `new Date()` las interpretaría como medianoche UTC y
+ * en Chile (UTC-4) restaría un día — el mismo error que `formatDate` ya evita usando métodos UTC.
+ * Por eso se recorta la cadena en vez de parsearla.
+ */
+function toIsoDay(value: string | Date): string {
+  if (typeof value === 'string') return value.slice(0, 10);
+  const y = value.getFullYear();
+  const m = String(value.getMonth() + 1).padStart(2, '0');
+  const d = String(value.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 export interface MonthlyOrderStats {
   totalOrders: number;
@@ -24,6 +49,8 @@ export interface MonthlyOrderStats {
 
 export interface DashboardStats {
   monthlyOrderStats: MonthlyOrderStats;
+  /** Contadores de la `.kpi-row` del canónico de Pedidos. */
+  operationalKpis: OperationalKpis;
   /** Un bucket por estado v1.2; siempre estan las ocho claves, aunque vengan vacias. */
   ordersByStatus: Record<OrderStatus, Order[]>;
   rentedEquipment: Array<{
@@ -73,8 +100,12 @@ export class DashboardService {
       // Obtener resumen financiero
       const financialSummary = await this.getFinancialSummary();
 
+      // Contadores operacionales del dia (fila de KPIs del canonico)
+      const operationalKpis = await this.getOperationalKpis();
+
       return {
         monthlyOrderStats: monthlyStats,
+        operationalKpis,
         ordersByStatus,
         rentedEquipment,
         financialSummary
@@ -116,6 +147,70 @@ export class DashboardService {
       return stats;
     } catch (error) {
       console.error('Error fetching monthly order stats:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fila de KPIs de la pantalla canónica de Pedidos (`.kpi-row`).
+   *
+   * El canónico fija los cuatro rótulos y la pestaña a la que enlaza cada tarjeta, pero sus
+   * valores son mock estático y no trae cómputo. La semántica sale de las reglas operacionales
+   * de `.claude/rules/01-business-context.md`, que son la autoridad de negocio:
+   *
+   *   · "Retiro: día anterior al inicio del arriendo, 15:00–20:00"
+   *   · "Devolución: hasta las 13:00 del día siguiente al término"
+   *
+   * De ahí, y de la pestaña destino de cada tarjeta:
+   *
+   *   Retiros Hoy      → en `preparation` y con inicio MAÑANA  → pestaña preparacion
+   *   Entregas Hoy     → inicio HOY                            → pestaña arriendo
+   *   Devoluciones Hoy → término HOY                           → pestaña devolucion
+   *   Pedidos Activos  → todo lo no terminal                   → pestaña todos
+   *
+   * `today` se inyecta para que el cálculo sea determinista: un KPI atado al reloj del proceso
+   * produce un test que falla a medianoche y pasa el resto del día.
+   */
+  static async getOperationalKpis(today: Date = new Date()): Promise<OperationalKpis> {
+    const kpis: OperationalKpis = {
+      retirosHoy: 0,
+      entregasHoy: 0,
+      devolucionesHoy: 0,
+      pedidosActivos: 0,
+    };
+
+    try {
+      if (!supabaseAdmin) {
+        throw new Error('Supabase admin client is not initialized');
+      }
+
+      const { data: orders, error } = await supabaseAdmin
+        .from('orders')
+        .select('id, status, order_fecha_inicio, order_fecha_termino')
+        .in('status', bookingStatusFilter());
+
+      if (error) throw error;
+
+      const hoy = toIsoDay(today);
+      const manana = toIsoDay(new Date(today.getTime() + 24 * 60 * 60 * 1000));
+
+      orders?.forEach(order => {
+        const status = canonicalStatus(order.status);
+        if (!status || isTerminalStatus(status)) return;
+
+        kpis.pedidosActivos++;
+
+        const inicio = order.order_fecha_inicio ? toIsoDay(order.order_fecha_inicio) : null;
+        const termino = order.order_fecha_termino ? toIsoDay(order.order_fecha_termino) : null;
+
+        if (status === 'preparation' && inicio === manana) kpis.retirosHoy++;
+        if (inicio === hoy) kpis.entregasHoy++;
+        if (termino === hoy) kpis.devolucionesHoy++;
+      });
+
+      return kpis;
+    } catch (error) {
+      console.error('[DashboardService] Error calculando los KPIs operacionales:', error);
       throw error;
     }
   }
