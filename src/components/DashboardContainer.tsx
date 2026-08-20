@@ -21,7 +21,13 @@ interface FilterState {
   searchTerm: string;
 }
 
-import type { DashboardStats } from '../services/dashboardService';
+import type { DashboardStats, MonthlyOrderStats } from '../services/dashboardService';
+import {
+  ORDER_STATUSES,
+  canonicalStatus,
+  emptyStatusBuckets,
+  type OrderStatus,
+} from '../lib/orderStatus';
 
 interface DashboardContainerProps {
   initialData: DashboardStats;
@@ -160,23 +166,22 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
       // Procesar datos filtrados y actualizar estado
       const filteredData = result.data;
 
-      // Reorganizar órdenes por estado
-      const ordersByStatus = {
-        onHold: filteredData.orders.filter((order: any) => order.status === 'on-hold'),
-        pending: filteredData.orders.filter((order: any) => order.status === 'pending'),
-        processing: filteredData.orders.filter((order: any) => order.status === 'processing'),
-        completed: filteredData.orders.filter((order: any) => order.status === 'completed')
+      // Reorganizar órdenes por estado. Esta era una segunda copia de la agrupación del
+      // servidor, con los mismos cuatro estados legados: al filtrar, las órdenes en las cuatro
+      // etapas operacionales reales desaparecían del tablero aunque el filtro sí las devolviera.
+      const ordersByStatus = emptyStatusBuckets<any>();
+      const monthlyStats: MonthlyOrderStats = {
+        totalOrders: filteredData.stats.totalOrders,
+        createdOrders: filteredData.stats.totalOrders,
+        byStatus: Object.fromEntries(ORDER_STATUSES.map(s => [s, 0])) as Record<OrderStatus, number>,
       };
 
-      // Actualizar estadísticas mensuales basadas en datos filtrados
-      const monthlyStats = {
-        totalOrders: filteredData.stats.totalOrders,
-        completedOrders: filteredData.stats.statusBreakdown.completed || 0,
-        createdOrders: filteredData.stats.totalOrders,
-        pendingOrders: filteredData.stats.statusBreakdown.pending || 0,
-        processingOrders: filteredData.stats.statusBreakdown.processing || 0,
-        onHoldOrders: filteredData.stats.statusBreakdown['on-hold'] || 0
-      };
+      filteredData.orders.forEach((order: any) => {
+        const bucket = canonicalStatus(order.status);
+        if (!bucket) return;
+        ordersByStatus[bucket].push(order);
+        monthlyStats.byStatus[bucket]++;
+      });
 
       // Actualizar resumen financiero basado en datos filtrados
       const completedOrders = filteredData.orders.filter((order: any) => order.status === 'completed');

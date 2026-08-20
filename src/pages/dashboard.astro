@@ -2,6 +2,7 @@
 import Base from "../layout/Base.astro";
 import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
 import { DashboardService } from "../services/dashboardService";
+import { ORDER_STATUSES, emptyStatusBuckets } from "../lib/orderStatus";
 import DashboardContainer from "../components/DashboardContainer";
 
 export const prerender = false;
@@ -36,18 +37,10 @@ try {
   dashboardStats = {
     monthlyOrderStats: {
       totalOrders: 0,
-      completedOrders: 0,
       createdOrders: 0,
-      pendingOrders: 0,
-      processingOrders: 0,
-      onHoldOrders: 0,
+      byStatus: Object.fromEntries(ORDER_STATUSES.map((s) => [s, 0])),
     },
-    ordersByStatus: {
-      onHold: [],
-      pending: [],
-      processing: [],
-      completed: [],
-    },
+    ordersByStatus: emptyStatusBuckets(),
     rentedEquipment: [],
     financialSummary: {
       totalSales: 0,

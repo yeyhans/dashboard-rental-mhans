@@ -1,24 +1,31 @@
 import { supabaseAdmin } from '../lib/supabase';
-import { bookingStatusFilter } from '../lib/orderStatus';
+import {
+  ORDER_STATUSES,
+  bookingStatusFilter,
+  canonicalStatus,
+  emptyStatusBuckets,
+  type OrderStatus,
+} from '../lib/orderStatus';
 import type { Database } from '../types/database';
 
 type Order = Database['public']['Tables']['orders']['Row'];
 
+export interface MonthlyOrderStats {
+  totalOrders: number;
+  createdOrders: number;
+  /**
+   * Conteo por estado v1.2. Reemplaza a los cuatro contadores fijos
+   * (`completedOrders`/`pendingOrders`/`processingOrders`/`onHoldOrders`), que nombraban estados
+   * que despues de 0003 dejan de existir y dejaban sin contar a las cuatro etapas operacionales
+   * mas cargadas del canonico.
+   */
+  byStatus: Record<OrderStatus, number>;
+}
+
 export interface DashboardStats {
-  monthlyOrderStats: {
-    totalOrders: number;
-    completedOrders: number;
-    createdOrders: number;
-    pendingOrders: number;
-    processingOrders: number;
-    onHoldOrders: number;
-  };
-  ordersByStatus: {
-    onHold: Order[];
-    pending: Order[];
-    processing: Order[];
-    completed: Order[];
-  };
+  monthlyOrderStats: MonthlyOrderStats;
+  /** Un bucket por estado v1.2; siempre estan las ocho claves, aunque vengan vacias. */
+  ordersByStatus: Record<OrderStatus, Order[]>;
   rentedEquipment: Array<{
     productName: string;
     productImage: string;
@@ -95,30 +102,15 @@ export class DashboardService {
 
       if (error) throw error;
 
-      const stats = {
+      const stats: MonthlyOrderStats = {
         totalOrders: monthlyOrders?.length || 0,
-        completedOrders: 0,
         createdOrders: monthlyOrders?.length || 0,
-        pendingOrders: 0,
-        processingOrders: 0,
-        onHoldOrders: 0
+        byStatus: Object.fromEntries(ORDER_STATUSES.map(s => [s, 0])) as Record<OrderStatus, number>,
       };
 
       monthlyOrders?.forEach(order => {
-        switch (order.status) {
-          case 'completed':
-            stats.completedOrders++;
-            break;
-          case 'pending':
-            stats.pendingOrders++;
-            break;
-          case 'processing':
-            stats.processingOrders++;
-            break;
-          case 'on-hold':
-            stats.onHoldOrders++;
-            break;
-        }
+        const bucket = canonicalStatus(order.status);
+        if (bucket) stats.byStatus[bucket]++;
       });
 
       return stats;
@@ -154,12 +146,12 @@ export class DashboardService {
 
       if (error) throw error;
 
-      const ordersByStatus = {
-        onHold: [] as Order[],
-        pending: [] as Order[],
-        processing: [] as Order[],
-        completed: [] as Order[]
-      };
+      // Un bucket por estado del vocabulario v1.2. Antes eran cuatro casos fijos
+      // (`on-hold | pending | processing | completed`) sin `default`: despues de 0003 las cuatro
+      // etapas operacionales mas cargadas del canonico — evaluacion, preparacion, arriendo y
+      // devolucion — caian por el hueco del switch y desaparecian del tablero. Sin error, sin
+      // estado vacio, sin linea de log: el pedido no aparece y el equipo esta fuera de bodega.
+      const ordersByStatus = emptyStatusBuckets<Order>();
 
       orders?.forEach(order => {
         // Ensure calculated fields
@@ -173,19 +165,16 @@ export class DashboardService {
           shipping_total: order.shipping_total || 0
         };
 
-        switch (order.status) {
-          case 'on-hold':
-            ordersByStatus.onHold.push(orderWithCalculatedFields);
-            break;
-          case 'pending':
-            ordersByStatus.pending.push(orderWithCalculatedFields);
-            break;
-          case 'processing':
-            ordersByStatus.processing.push(orderWithCalculatedFields);
-            break;
-          case 'completed':
-            ordersByStatus.completed.push(orderWithCalculatedFields);
-            break;
+        // Durante la ventana conviven ambos vocabularios; `canonicalStatus` pliega el valor
+        // legado sobre su equivalente v1.2 en lugar de descartar la fila.
+        const bucket = canonicalStatus(order.status);
+        if (bucket) {
+          ordersByStatus[bucket].push(orderWithCalculatedFields);
+        } else {
+          console.warn('[DashboardService] Pedido con estado no reconocido, sin agrupar:', {
+            orderId: order.id,
+            status: order.status,
+          });
         }
       });
 

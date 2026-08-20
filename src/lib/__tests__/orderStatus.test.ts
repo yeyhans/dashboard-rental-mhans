@@ -13,6 +13,8 @@ import {
   activeStatusFilter,
   canonicalStatus,
   emptyStatusBuckets,
+  ORDER_LIST_TABS,
+  statusesForTab,
   EMAIL_ON_ENTER,
   isOrderStatus,
   isLegacyOrderStatus,
@@ -536,5 +538,77 @@ describe('emptyStatusBuckets', () => {
     const buckets = emptyStatusBuckets<number>();
     buckets.request.push(1);
     expect(buckets.completed).toEqual([]);
+  });
+});
+
+/* ---------------------------------------------------------------------------------------------
+ * Pedidos list tabs
+ * ------------------------------------------------------------------------------------------ */
+
+/**
+ * Source: `CONSOLIDADO WEB YEYSON/Área 01 · Rental Técnico/OFF/
+ * MarioHans_OS_Area01_Pedidos_Canonical_RC2.1.2.html`, the `#list-tabs` block.
+ *
+ * This is the structure the v1.1 architecture document did not carry, and the reason the dashboard
+ * bucketing was left blocked: with eight statuses and a four-tab UI, someone had to decide the
+ * grouping. The canonical answers it — ONE TAB PER STATUS, no grouping at all.
+ */
+describe('ORDER_LIST_TABS', () => {
+  it('is Todos plus one tab per non-cancelled status, in chain order', () => {
+    expect(ORDER_LIST_TABS.map((t) => t.value)).toEqual([
+      'todos',
+      'request',
+      'evaluation',
+      'confirmed',
+      'preparation',
+      'in-rental',
+      'return',
+      'completed',
+    ]);
+  });
+
+  it('uses the canonical labels verbatim, irregular capitalisation included', () => {
+    // "En evaluación" lowercase, "En Arriendo" capitalised. Copying the inconsistency is the
+    // point: DOCUMENT, DON'T REDESIGN. Normalising it here is a redesign nobody approved.
+    expect(ORDER_LIST_TABS.map((t) => t.label)).toEqual([
+      'Todos',
+      'Solicitudes',
+      'En evaluación',
+      'Confirmados',
+      'Preparación',
+      'En Arriendo',
+      'Devolución',
+      'Completados',
+    ]);
+  });
+
+  it('has no tab for cancelled', () => {
+    // The canonical counts sum exactly to the Todos count (5+3+8+7+12+2+1 = 38), so "Todos" is
+    // the non-cancelled set — the same definition as bookingStatusFilter().
+    expect(ORDER_LIST_TABS.map((t) => t.value)).not.toContain('cancelled');
+  });
+
+  it('labels collections in the plural, unlike the singular badge labels', () => {
+    // Two label sets with two different sources, on purpose. A tab names a group of pedidos;
+    // a badge names one. Collapsing them would put "Completado" on a tab counting 12 orders.
+    expect(STATUS_LABELS.request).toBe('Solicitud');
+    expect(ORDER_LIST_TABS.find((t) => t.value === 'request')?.label).toBe('Solicitudes');
+  });
+});
+
+describe('statusesForTab', () => {
+  it('returns the single status behind a status tab', () => {
+    expect(statusesForTab('in-rental')).toEqual(['in-rental']);
+  });
+
+  it('returns the whole non-cancelled set for Todos', () => {
+    expect(statusesForTab('todos')).toEqual(
+      ORDER_STATUSES.filter((s) => s !== 'cancelled')
+    );
+  });
+
+  it('returns an empty list for an unknown tab rather than silently meaning Todos', () => {
+    // Falling back to Todos would make a typo in a tab id look like a working filter.
+    expect(statusesForTab('preparing')).toEqual([]);
   });
 });

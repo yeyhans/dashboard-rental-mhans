@@ -4,6 +4,13 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import {
+  ORDER_LIST_TABS,
+  statusBadgeClass,
+  statusLabel,
+  statusesForTab,
+  type OrderStatus,
+} from '../lib/orderStatus';
+import {
   Table,
   TableBody,
   TableCell,
@@ -12,16 +19,11 @@ import {
   TableRow
 } from './ui/table';
 import {
-  Clock,
-  AlertCircle,
-  CheckCircle,
   Eye,
   User,
-  DollarSign,
   Filter,
   Package,
   AlertTriangle,
-  ChevronDown
 } from 'lucide-react';
 import {
   Accordion,
@@ -49,15 +51,9 @@ interface Order {
   line_items?: any;
 }
 
-interface OrdersByStatus {
-  onHold: Order[];
-  pending: Order[];
-  processing: Order[];
-  completed: Order[];
-}
-
 interface OrderStatusTablesProps {
-  ordersByStatus: OrdersByStatus;
+  /** Un bucket por estado v1.2, tal como lo entrega `DashboardService.getOrdersByStatus`. */
+  ordersByStatus: Record<OrderStatus, Order[]>;
   isFiltered?: boolean;
   filterInfo?: string;
 }
@@ -67,13 +63,15 @@ export default function OrderStatusTables({
   isFiltered = false,
   filterInfo = ''
 }: OrderStatusTablesProps) {
-  const [selectedTab, setSelectedTab] = useState('on-hold');
-  const [showAllOrders, setShowAllOrders] = useState<{ [key: string]: boolean }>({
-    'on-hold': false,
-    'pending': false,
-    'processing': false,
-    'completed': false
-  });
+  // Arranca en "Todos", igual que el canónico, que marca ese tab como `active`.
+  const [selectedTab, setSelectedTab] = useState<string>('todos');
+
+  /** Los pedidos de un tab. "Todos" concatena en orden de cadena, sin canceladas. */
+  const ordersForTab = (tab: string): Order[] =>
+    statusesForTab(tab).flatMap((status) => ordersByStatus[status] ?? []);
+  // Clave por tab, sin precargar: las claves fijas eran las cuatro legadas, así que cualquier
+  // tab nuevo quedaba con `undefined` y el "ver todas" no funcionaba en él.
+  const [showAllOrders, setShowAllOrders] = useState<{ [key: string]: boolean }>({});
 
   // States for conflict checking
   const [conflictsByOrder, setConflictsByOrder] = useState<{ [orderId: number]: any[] }>({});
@@ -128,56 +126,15 @@ export default function OrderStatusTables({
     }
   };
 
-  const getStatusConfig = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return {
-          label: 'Pendientes',
-          icon: Clock,
-          color: 'text-yellow-600',
-          bgColor: 'bg-yellow-50',
-          borderColor: 'border-yellow-200',
-          badgeVariant: 'secondary' as const
-        };
-      case 'on-hold':
-        return {
-          label: 'En Espera',
-          icon: AlertCircle,
-          color: 'text-orange-600',
-          bgColor: 'bg-orange-50',
-          borderColor: 'border-orange-200',
-          badgeVariant: 'destructive' as const
-        };
-
-      case 'processing':
-        return {
-          label: 'Procesando',
-          icon: Clock,
-          color: 'text-blue-600',
-          bgColor: 'bg-blue-50',
-          borderColor: 'border-blue-200',
-          badgeVariant: 'default' as const
-        };
-      case 'completed':
-        return {
-          label: 'Completadas',
-          icon: CheckCircle,
-          color: 'text-green-600',
-          bgColor: 'bg-green-50',
-          borderColor: 'border-green-200',
-          badgeVariant: 'default' as const
-        };
-      default:
-        return {
-          label: status,
-          icon: Clock,
-          color: 'text-gray-600',
-          bgColor: 'bg-gray-50',
-          borderColor: 'border-gray-200',
-          badgeVariant: 'outline' as const
-        };
-    }
-  };
+  /**
+   * Etiqueta y tono de un tab. Reemplaza un `switch` con cuatro estados legados y la paleta de
+   * Tailwind (`bg-yellow-50`, `border-orange-200`), colores que no existen en ningún token del
+   * sistema de diseño y que además discrepaban de los que usaban las otras cuatro pantallas.
+   */
+  const getStatusConfig = (tab: string) => ({
+    label: ORDER_LIST_TABS.find((t) => t.value === tab)?.label ?? tab,
+    badgeClass: statusBadgeClass(tab),
+  });
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CL', {
@@ -213,17 +170,16 @@ export default function OrderStatusTables({
 
   const renderOrderTable = (orders: Order[], status: string) => {
     const config = getStatusConfig(status);
-    const Icon = config.icon;
     const showAll = showAllOrders[status];
     const displayOrders = showAll ? orders : orders.slice(0, 10);
     const hasMoreOrders = orders.length > 10;
 
     if (orders.length === 0) {
       return (
-        <Card className={`${config.bgColor} ${config.borderColor}`}>
+        <Card>
           <CardContent className="flex flex-col items-center justify-center py-8">
-            <Icon className={`h-12 w-12 ${config.color} mb-4`} />
-            <p className="text-muted-foreground">No hay órdenes {config.label.toLowerCase()}</p>
+            <Package className="h-12 w-12 text-muted-foreground opacity-40 mb-4" />
+            <p className="text-muted-foreground">No hay pedidos en {config.label.toLowerCase()}</p>
           </CardContent>
         </Card>
       );
@@ -233,14 +189,17 @@ export default function OrderStatusTables({
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Icon className={`h-5 w-5 ${config.color}`} />
-            <CardTitle>Órdenes {config.label}</CardTitle>
-            <Badge variant={config.badgeVariant}>
+            <span
+              className={`h-2.5 w-2.5 rounded-full border ${config.badgeClass}`}
+              aria-hidden="true"
+            />
+            <CardTitle>{config.label}</CardTitle>
+            <Badge className={config.badgeClass}>
               {orders.length}
             </Badge>
           </div>
           <CardDescription>
-            Gestión de órdenes con estado {config.label.toLowerCase()}
+            Gestión de pedidos en {config.label.toLowerCase()}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -400,15 +359,15 @@ export default function OrderStatusTables({
                                                 </p>
                                                 <div className="flex flex-col gap-1.5 mt-1">
                                                   {productConflicts.map((c, i) => {
-                                                    const statusCfg = getStatusConfig(c.status);
+                                                    // Este badge nombra UN pedido en conflicto, no una colección: etiqueta singular.
                                                     return (
                                                       <div key={i} className="flex flex-wrap items-center gap-1.5">
                                                         <a href={`/orders/${c.orderId}`} target="_blank" rel="noreferrer"
                                                           className="text-[10px] text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100 hover:underline leading-tight font-medium">
                                                           Ord. #{c.orderId}
                                                         </a>
-                                                        <Badge variant={statusCfg.badgeVariant} className={`text-[9px] px-1 py-0 h-4 min-h-0 leading-none uppercase align-middle ${statusCfg.color} ${statusCfg.bgColor} ${statusCfg.borderColor}`}>
-                                                          {statusCfg.label}
+                                                        <Badge className={`text-[9px] px-1 py-0 h-4 min-h-0 leading-none uppercase align-middle ${statusBadgeClass(c.status)}`}>
+                                                          {statusLabel(c.status)}
                                                         </Badge>
                                                         <span className="text-[10px] text-red-700/80 dark:text-red-300/80 leading-tight">
                                                           ({formatDate(c.startDate)} - {formatDate(c.endDate)})
@@ -448,7 +407,7 @@ export default function OrderStatusTables({
               >
                 {showAll
                   ? `Mostrar menos (${displayOrders.length} de ${orders.length})`
-                  : `Ver todas las ${orders.length} órdenes ${config.label.toLowerCase()}`
+                  : `Ver los ${orders.length} pedidos en ${config.label.toLowerCase()}`
                 }
               </Button>
             </div>
@@ -471,38 +430,29 @@ export default function OrderStatusTables({
         )}
       </div>
 
+      {/* Pestañas verbatim del canónico: `Área 01 · Rental Técnico/OFF/
+          MarioHans_OS_Area01_Pedidos_Canonical_RC2.1.2.html`, bloque `#list-tabs`.
+          Antes eran tres disparadores sobre cuatro contenidos: `pending` tenía tabla pero ningún
+          tab que la abriera, así que era inalcanzable. Y con el vocabulario v1.2 las cuatro
+          etapas operacionales reales no tenían dónde mostrarse. */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="on-hold" className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4" />
-            En Espera ({ordersByStatus.onHold.length})
-          </TabsTrigger>
-
-          <TabsTrigger value="processing" className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Procesando ({ordersByStatus.processing.length})
-          </TabsTrigger>
-          <TabsTrigger value="completed" className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4" />
-            Completadas ({ordersByStatus.completed.length})
-          </TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 h-auto">
+          {ORDER_LIST_TABS.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value} className="flex items-center gap-2">
+              <span
+                className={`h-2 w-2 rounded-full border ${statusBadgeClass(tab.value)}`}
+                aria-hidden="true"
+              />
+              {tab.label} ({ordersForTab(tab.value).length})
+            </TabsTrigger>
+          ))}
         </TabsList>
 
-        <TabsContent value="on-hold" className="mt-4">
-          {renderOrderTable(ordersByStatus.onHold, 'on-hold')}
-        </TabsContent>
-
-        <TabsContent value="pending" className="mt-4">
-          {renderOrderTable(ordersByStatus.pending, 'pending')}
-        </TabsContent>
-
-        <TabsContent value="processing" className="mt-4">
-          {renderOrderTable(ordersByStatus.processing, 'processing')}
-        </TabsContent>
-
-        <TabsContent value="completed" className="mt-4">
-          {renderOrderTable(ordersByStatus.completed, 'completed')}
-        </TabsContent>
+        {ORDER_LIST_TABS.map((tab) => (
+          <TabsContent key={tab.value} value={tab.value} className="mt-4">
+            {renderOrderTable(ordersForTab(tab.value), tab.value)}
+          </TabsContent>
+        ))}
       </Tabs>
     </div>
   );

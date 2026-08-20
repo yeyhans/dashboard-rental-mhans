@@ -356,6 +356,51 @@ export const STATUS_OPTIONS: ReadonlyArray<{ value: OrderStatus; label: string }
   ORDER_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }));
 
 /* ---------------------------------------------------------------------------------------------
+ * Pedidos list tabs
+ * ------------------------------------------------------------------------------------------ */
+
+/** `todos` plus the seven status tabs. `cancelled` has no tab in the canonical. */
+export type OrderListTab = 'todos' | Exclude<OrderStatus, 'cancelled'>;
+
+/**
+ * The Pedidos list tabs, verbatim from the client's canonical screen.
+ *
+ * Source: `CONSOLIDADO WEB YEYSON/Área 01 · Rental Técnico/OFF/
+ * MarioHans_OS_Area01_Pedidos_Canonical_RC2.1.2.html`, the `#list-tabs` block.
+ *
+ * This settles the question the v1.1 architecture document left open, and that blocked the
+ * dashboard bucketing: with eight statuses and a four-tab UI, someone had to choose a grouping.
+ * The canonical chooses none — one tab per status, plus Todos.
+ *
+ * `cancelled` deliberately has no tab, and the canonical's own counts prove Todos excludes it:
+ * 5+3+8+7+12+2+1 = 38, the exact Todos count. That is the same set as `bookingStatusFilter()`.
+ *
+ * The labels are PLURAL because a tab names a collection, where `STATUS_LABELS` is singular
+ * because a badge names one pedido. Two label sets, two sources; merging them would put
+ * "Completado" on a tab counting twelve orders. The irregular capitalisation ("En evaluación"
+ * against "En Arriendo") is copied as found — normalising it is a redesign nobody approved.
+ */
+export const ORDER_LIST_TABS: ReadonlyArray<{ value: OrderListTab; label: string }> = [
+  { value: 'todos', label: 'Todos' },
+  { value: 'request', label: 'Solicitudes' },
+  { value: 'evaluation', label: 'En evaluación' },
+  { value: 'confirmed', label: 'Confirmados' },
+  { value: 'preparation', label: 'Preparación' },
+  { value: 'in-rental', label: 'En Arriendo' },
+  { value: 'return', label: 'Devolución' },
+  { value: 'completed', label: 'Completados' },
+];
+
+/**
+ * The statuses a tab shows. Empty for an unrecognised tab id — falling back to Todos would make
+ * a typo in a tab id look like a working filter that just happens to show everything.
+ */
+export function statusesForTab(tab: string): OrderStatus[] {
+  if (tab === 'todos') return ORDER_STATUSES.filter((s) => s !== 'cancelled');
+  return isOrderStatus(tab) && tab !== 'cancelled' ? [tab] : [];
+}
+
+/* ---------------------------------------------------------------------------------------------
  * Email trigger matrix
  * ------------------------------------------------------------------------------------------ */
 
