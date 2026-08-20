@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trash2, Plus, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { STATUS_OPTIONS, enteredStatus, statusBadgeClass } from '@/lib/orderStatus';
 
 // Types
 interface LineItem {
@@ -81,15 +82,11 @@ interface EditOrderFormProps {
   loading?: boolean;
 }
 
-// Status options
-const statusOptions = [
-  { value: 'on-hold', label: 'En espera', color: 'bg-gray-100 text-gray-800' },
-  { value: 'processing', label: 'En proceso', color: 'bg-blue-100 text-blue-800' },
-  { value: 'completed', label: 'Completado', color: 'bg-green-100 text-green-800' },
-  { value: 'cancelled', label: 'Cancelado', color: 'bg-red-100 text-red-800' },
-  { value: 'refunded', label: 'Reembolsado', color: 'bg-purple-100 text-purple-800' },
-  { value: 'failed', label: 'Fallido', color: 'bg-red-100 text-red-800' }
-];
+// Las ocho etapas del canónico, con el color de estado que les corresponde.
+const statusOptions = STATUS_OPTIONS.map(option => ({
+  ...option,
+  color: statusBadgeClass(option.value),
+}));
 
 const EditOrderForm: React.FC<EditOrderFormProps> = ({ order, onSave, onCancel, loading = false }) => {
   const [formData, setFormData] = useState<OrderData>(order);
@@ -181,14 +178,10 @@ const EditOrderForm: React.FC<EditOrderFormProps> = ({ order, onSave, onCancel, 
 
   const handleSave = async () => {
     try {
-      // Check if status is being changed to 'completed' or 'failed'
-      const wasCompleted = order.status === 'completed';
-      const isNowCompleted = formData.status === 'completed';
-      const statusChangedToCompleted = !wasCompleted && isNowCompleted;
-
-      const wasFailed = order.status === 'failed';
-      const isNowFailed = formData.status === 'failed';
-      const statusChangedToFailed = !wasFailed && isNowFailed;
+      // El pedido ENTRA a una etapa terminal. `failed` era el literal de la salida fallida y
+      // después de 0003 no vuelve a existir: su etapa es `cancelled`.
+      const statusChangedToCompleted = enteredStatus(order.status, formData.status, 'completed');
+      const statusChangedToFailed = enteredStatus(order.status, formData.status, 'cancelled');
 
       // Save the order first
       await onSave(formData);

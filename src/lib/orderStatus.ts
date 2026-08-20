@@ -493,3 +493,27 @@ export const EMAIL_ON_ENTER: Partial<Record<OrderStatus, string>> = {
   completed: 'pedido-completado', //     08
   cancelled: 'equipos-no-disponibles', //06
 };
+
+/**
+ * Whether saving moves the order INTO `target`, comparing canonical stages on both sides.
+ *
+ * Callers wrote this as `order.status !== 'failed' && form.status === 'failed'`. Post-0003 the
+ * right-hand side never holds, so the side effect — an email, a PDF — silently stops. Comparing
+ * canonical stages also stops a legacy row being rewritten in the new vocabulary from counting
+ * as a transition: `on-hold` → `request` is the same stage, and must not re-send.
+ */
+export function enteredStatus(previous: unknown, next: unknown, target: OrderStatus): boolean {
+  const to = canonicalStatus(next);
+  if (to !== target) return false;
+  return canonicalStatus(previous) !== target;
+}
+
+/**
+ * The template key a status change should send, or `null`. Single decision point for the eight
+ * emails of the handoff, replacing one hard-coded `if` per endpoint.
+ */
+export function emailOnTransition(previous: unknown, next: unknown): string | null {
+  const to = canonicalStatus(next);
+  if (!to || canonicalStatus(previous) === to) return null;
+  return EMAIL_ON_ENTER[to] ?? null;
+}
