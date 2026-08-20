@@ -1683,8 +1683,20 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     const oldStatus = orderData.status || 'unknown';
 
     try {
-      // Aquí iría la lógica para actualizar el estado en la base de datos
-      // Por ahora solo notificamos el cambio
+      // Antes esto solo notificaba: el comentario decía "aquí iría la lógica para actualizar el
+      // estado" y el toast anunciaba un cambio que nunca ocurría. Al recargar, el admin veía el
+      // estado anterior y volvía a intentarlo. El endpoint valida además la transición contra la
+      // cadena del canónico, así que un salto ilegal se rechaza con un mensaje en español.
+      const response = await fetch(`/api/orders/${orderData.id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus, reason }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'No se pudo actualizar el estado de la orden');
+      }
 
       await notifyStatusChange(
         oldStatus,
@@ -1693,7 +1705,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         `Cambio realizado desde el panel administrativo por ${sessionData?.user?.name || 'Administrador'}`
       );
 
-      toast.success(`Estado cambiado de ${oldStatus} a ${newStatus}`);
+      toast.success(`Estado cambiado de ${statusLabel(oldStatus)} a ${statusLabel(newStatus)}`);
 
       // Recargar la página para mostrar el nuevo estado
       setTimeout(() => {
@@ -1701,8 +1713,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       }, 1500);
 
     } catch (error) {
-      console.error('Error changing order status:', error);
-      toast.error('Error al cambiar el estado de la orden');
+      console.error('[ProcessOrder] Error al cambiar el estado de la orden:', {
+        orderId: orderData.id, oldStatus, newStatus, error,
+      });
+      toast.error(error instanceof Error ? error.message : 'Error al cambiar el estado de la orden');
     }
   };
 
@@ -1717,7 +1731,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   const handleMarkAsFailed = async () => {
     const reason = prompt('Ingresa el motivo por el cual la orden falló:');
     if (reason) {
-      await handleStatusChange('failed', reason);
+      // `failed` sale del CHECK con 0003; la salida terminal por fallo es `cancelled`.
+      await handleStatusChange('cancelled', reason);
     }
   };
 
