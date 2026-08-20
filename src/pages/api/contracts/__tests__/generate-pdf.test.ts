@@ -4,6 +4,17 @@ vi.mock('../../../../lib/supabase', () => ({
   getServerAdmin: vi.fn(async () => null),
 }));
 
+/**
+ * El endpoint arrastra `@react-pdf/renderer` entero por su import de `pdfService`. Este test
+ * comprueba la autorización y devuelve 401 antes de renderizar nada, así que esa carga es puro
+ * peso: bajo `--file-parallelism` su transform excedía el límite de la fase de recolección y la
+ * suite fallaba de forma intermitente con `STACK_TRACE_ERROR` en la línea del `it`, sin relación
+ * con la aserción. En serie siempre pasaba, que es la firma de una contención, no de un bug.
+ */
+vi.mock('../../../../lib/pdf/core/pdfService', () => ({
+  generatePdfBuffer: vi.fn(async () => Buffer.from('')),
+}));
+
 describe('contract PDF generation authorization', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
