@@ -268,6 +268,27 @@ export function activeStatusFilter(): string[] {
   return [...current, ...legacyEquivalents(current)];
 }
 
+/**
+ * Expands an admin's status selection into every slug the table may actually hold.
+ *
+ * `/api/dashboard/filtered` kept only `status[0]` and fed it to a literal `.eq()`. Two silent
+ * failures in one line: the rest of the selection was dropped, and a v1.2 value matched nothing
+ * while the migration window still has legacy rows. Returns `null` when nothing usable was
+ * selected, which the caller must read as "no status filter" rather than "match nothing".
+ */
+export function expandStatusFilter(selection: readonly string[] | undefined): string[] | null {
+  if (!selection || selection.length === 0) return null;
+
+  const canonical: OrderStatus[] = [];
+  for (const value of selection) {
+    const status = canonicalStatus(value);
+    if (status && !canonical.includes(status)) canonical.push(status);
+  }
+  if (canonical.length === 0) return null;
+
+  return [...canonical, ...legacyEquivalents(canonical)];
+}
+
 /* ---------------------------------------------------------------------------------------------
  * Presentation
  * ------------------------------------------------------------------------------------------ */

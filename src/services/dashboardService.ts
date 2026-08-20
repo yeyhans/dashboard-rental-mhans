@@ -2,6 +2,7 @@ import { supabaseAdmin } from '../lib/supabase';
 import {
   ORDER_STATUSES,
   bookingStatusFilter,
+  expandStatusFilter,
   canonicalStatus,
   emptyStatusBuckets,
   isTerminalStatus,
@@ -427,7 +428,7 @@ export class DashboardService {
   /**
    * Obtener órdenes filtradas por rango de fechas
    */
-  static async getOrdersByDateRange(startDate: string, endDate: string, status?: string) {
+  static async getOrdersByDateRange(startDate: string, endDate: string, status?: readonly string[]) {
     try {
       if (!supabaseAdmin) {
         throw new Error('Supabase admin client is not initialized');
@@ -455,8 +456,11 @@ export class DashboardService {
         .order('date_created', { ascending: false })
         .limit(1000); // Agregar límite alto para asegurar que se obtengan todas las órdenes
 
-      if (status) {
-        query = query.eq('status', status);
+      // El filtro llega como la selección del admin y puede traer varios estados. Se expande a
+      // los equivalentes legados para que la ventana de migración no devuelva cero filas.
+      const statusFilter = expandStatusFilter(status);
+      if (statusFilter) {
+        query = query.in('status', statusFilter);
       }
 
       const { data, error } = await query;

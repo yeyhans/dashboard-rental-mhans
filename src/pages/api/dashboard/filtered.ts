@@ -50,7 +50,7 @@ export const POST: APIRoute = withAuth(async ({ request }) => {
     const filteredOrders = await DashboardService.getOrdersByDateRange(
       actualDateRange.start,
       actualDateRange.end,
-      status?.length > 0 ? status[0] : undefined // Por ahora solo el primer status
+      status // La selección completa; el service la expande y la aplica con `.in()`
     );
 
     // Aplicar filtros adicionales en memoria
