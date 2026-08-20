@@ -1,0 +1,56 @@
+---
+import type { CatalogKpis } from "../lib/catalogAvailability";
+
+/**
+ * `.kpi-strip` del canónico de Catálogo de Equipos, cuyo subtítulo es "Inventario de activos
+ * físicos con disponibilidad en tiempo real".
+ *
+ * La disponibilidad se calcula cruzando los arriendos activos de hoy contra el catálogo: el
+ * esquema no tiene inventario serializado, así que ese cruce es el único lugar donde la respuesta
+ * existe. Por lo mismo se informan unidades EN USO, nunca "3 de 5 disponibles": sin tabla de
+ * unidades no hay denominador, y esa razón sería inventada.
+ *
+ * Componente Astro y no React: no tiene estado ni interacción.
+ */
+interface Props {
+  kpis: CatalogKpis;
+}
+
+const { kpis } = Astro.props;
+---
+
+<div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+  <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <div class="text-xs text-[var(--color-text-secondary)]">Modelos Publicados</div>
+    <div class="mt-1 font-mono text-2xl font-semibold">{kpis.modelosPublicados}</div>
+    <div class="mt-1 text-[11px] text-[var(--color-text-faint)]">En el catálogo</div>
+  </div>
+
+  <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <div class="text-xs text-[var(--color-text-secondary)]">Disponibles Hoy</div>
+    <div class="mt-1 font-mono text-2xl font-semibold text-[var(--color-ok)]">
+      {kpis.disponiblesHoy}
+    </div>
+    <div class="mt-1 text-[11px] text-[var(--color-text-faint)]">
+      {kpis.porcentajeDisponible}% del catálogo
+    </div>
+  </div>
+
+  <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <div class="text-xs text-[var(--color-text-secondary)]">En Arriendo</div>
+    <div class="mt-1 font-mono text-2xl font-semibold text-[var(--color-info)]">
+      {kpis.modelosEnArriendo}
+    </div>
+    <div class="mt-1 text-[11px] text-[var(--color-text-faint)]">
+      {kpis.unidadesEnArriendo} {kpis.unidadesEnArriendo === 1 ? "unidad" : "unidades"} en uso
+    </div>
+  </div>
+
+  <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <div class="text-xs text-[var(--color-text-secondary)]">Bloqueados</div>
+    <div class="mt-1 font-mono text-2xl font-semibold text-[var(--color-warn)]">
+      {kpis.bloqueados}
+    </div>
+    <div class="mt-1 text-[11px] text-[var(--color-text-faint)]">Sin stock o bajo pedido</div>
+  </div>
+</div>
