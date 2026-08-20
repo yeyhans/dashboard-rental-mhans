@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { NAV_GROUPS, activeModule } from "../lib/navigation";
+import { AlertService } from "../services/alertService";
 
 interface Props {
   title: string;
@@ -73,6 +74,13 @@ const NAV_SUBLINKS: Record<string, ReadonlyArray<{ label: string; href: string; 
 };
 
 const activeNav = activeModule(currentPath);
+
+/**
+ * Contador de la campana. El canonico lo muestra en los ocho modulos, asi que se resuelve en el
+ * shell. `getAlertCount` traga sus propios errores y devuelve 0: una campana rota no puede tumbar
+ * todas las paginas que renderizan la barra lateral.
+ */
+const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
 ---
 
 <html lang="es" class="h-full w-full">
@@ -462,6 +470,14 @@ const activeNav = activeModule(currentPath);
                       >
                         <Icon className="nav-icon" />
                         <span class="sidebar-label flex-1">{item.label}</span>
+                        {item.badgeKey === 'alerts' && alertCount > 0 && (
+                          <span
+                            class="sidebar-label ml-auto rounded-full bg-[var(--color-crit)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+                            aria-label={`${alertCount} alertas`}
+                          >
+                            {alertCount}
+                          </span>
+                        )}
                         <span class="nav-tooltip">{item.label}</span>
                       </a>
                       {sublinks.length > 0 && (

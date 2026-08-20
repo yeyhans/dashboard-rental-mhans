@@ -1,0 +1,102 @@
+---
+import Base from "../../layout/Base.astro";
+import { getServerAdmin, clearAuthCookies } from "../../lib/supabase";
+import { AlertService } from "../../services/alertService";
+
+export const prerender = false;
+
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+
+const now = new Date();
+
+let alerts: Awaited<ReturnType<typeof AlertService.getAlerts>> = [];
+let loadError: string | null = null;
+
+try {
+  alerts = await AlertService.getAlerts(now);
+} catch (error) {
+  console.error('[alerts] Error al cargar las alertas:', {
+    admin: adminSession.admin.email,
+    error,
+  });
+  loadError = 'No se pudieron cargar las alertas. Recarga la pagina o intentalo en unos minutos.';
+}
+
+const criticas = alerts.filter((a) => a.severity === 'crit');
+const advertencias = alerts.filter((a) => a.severity === 'warn');
+
+const title = `Alertas | ${adminSession.admin.email}`;
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    <header class="mb-5 border-b border-[var(--color-border)] pb-4">
+      <h1 class="text-xl font-semibold tracking-tight">Alertas</h1>
+      <p class="mt-1 text-sm text-[var(--color-text-secondary)]">
+        Operaciones bloqueadas y cobros en riesgo
+      </p>
+    </header>
+
+    {loadError ? (
+      <div
+        role="alert"
+        class="rounded-[10px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-4 text-sm text-[var(--color-crit)]"
+      >
+        {loadError}
+      </div>
+    ) : alerts.length === 0 ? (
+      <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center">
+        <p class="text-sm font-medium text-[var(--color-ok)]">No hay alertas.</p>
+        <p class="mt-1 text-xs text-[var(--color-text-secondary)]">
+          Ningún retiro está bloqueado y no hay devoluciones ni saldos vencidos.
+        </p>
+      </div>
+    ) : (
+      <div class="space-y-5">
+        <div class="grid grid-cols-2 gap-3 sm:max-w-md">
+          <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div class="text-xs text-[var(--color-text-secondary)]">Bloquean una operación</div>
+            <div class="mt-1 font-mono text-2xl font-semibold text-[var(--color-crit)]">
+              {criticas.length}
+            </div>
+          </div>
+          <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div class="text-xs text-[var(--color-text-secondary)]">Cuestan dinero</div>
+            <div class="mt-1 font-mono text-2xl font-semibold text-[var(--color-warn)]">
+              {advertencias.length}
+            </div>
+          </div>
+        </div>
+
+        <ul class="space-y-2">
+          {alerts.map((alert) => (
+            <li
+              class={`rounded-[10px] border-l-4 border border-[var(--color-border)] bg-[var(--color-surface)] p-4 ${
+                alert.severity === 'crit'
+                  ? 'border-l-[var(--color-crit)]'
+                  : 'border-l-[var(--color-warn)]'
+              }`}
+            >
+              <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 class="text-sm font-semibold">{alert.title}</h2>
+                <a
+                  href={`/orders/${alert.orderId}`}
+                  class="font-mono text-[11px] underline underline-offset-2"
+                >
+                  {alert.reference} →
+                </a>
+              </div>
+              <p class="mt-0.5 text-xs text-[var(--color-text-secondary)]">{alert.client}</p>
+              <p class="mt-1.5 text-xs text-[var(--color-text-secondary)]">{alert.detail}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+  </div>
+</Base>
