@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { canonicalStatus } from '../../../../lib/orderStatus';
 import { OrderService } from '../../../../services/orderService';
 import { supabaseAdmin } from '../../../../lib/supabase';
 import { createInternalApiHeaders } from '../../../../lib/serverApiAuth';
@@ -134,13 +135,18 @@ export const PUT: APIRoute = withAuth(async ({ params, request }) => {
     sanitizedData.date_modified = new Date().toISOString();
     
     // If status is being changed to completed, set completion date
-    if (updateData.status === 'completed' && !sanitizedData.date_completed) {
+    if (canonicalStatus(updateData.status) === 'completed' && !sanitizedData.date_completed) {
       sanitizedData.date_completed = new Date().toISOString();
     }
 
-    const notificationTarget = newStatus === 'completed' && previousStatus !== 'completed'
+    // Se compara el estado normalizado, no el literal. `failed` desaparece en 0003 plegado sobre
+    // `cancelled`: comparar contra `'failed'` haria que el correo de disculpas dejara de salir
+    // justo cuando el pedido no prospera, que es cuando mas importa.
+    const nuevoCanonico = canonicalStatus(newStatus);
+    const anteriorCanonico = canonicalStatus(previousStatus);
+    const notificationTarget = nuevoCanonico === 'completed' && anteriorCanonico !== 'completed'
       ? { path: '/api/emails/send-order-completed-notification', emailType: 'order_completed' }
-      : newStatus === 'failed' && previousStatus !== 'failed'
+      : nuevoCanonico === 'cancelled' && anteriorCanonico !== 'cancelled'
         ? { path: '/api/emails/send-order-failed-notification', emailType: 'order_failed' }
         : null;
 

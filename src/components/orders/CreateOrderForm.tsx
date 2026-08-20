@@ -18,6 +18,7 @@ import { Plus, Search, FileText, Mail, Truck, CheckCircle, MapPin } from 'lucide
 import type { Database } from '../../types/database';
 import type { Product } from '../../types/product';
 import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliveryTime } from '../../services/shippingService';
+import { isBudgetStatus } from '../../lib/orderStatus';
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
 
@@ -617,7 +618,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
       const budgetData = {
         order_id: Date.now(), // ID temporal solo para el PDF de vista previa
         customer_id: formData.customer_id,
-        status: 'on-hold',
+        status: 'request',
         billing: {
           first_name: formData.billing.first_name,
           last_name: formData.billing.last_name,
@@ -774,7 +775,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           }
         }] : [],
         line_items: formData.line_items,
-        status: 'on-hold' // Cambiar a on-hold para generar presupuesto automáticamente
+        status: 'request' // Etapa inicial: dispara la generación automática del presupuesto
       };
 
       const response = await fetch('/api/orders', {
@@ -793,8 +794,11 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
       if (data.success) {
         console.log('✅ Order created successfully:', data.data);
         
-        // Generar presupuesto automáticamente para órdenes 'on-hold'
-        if (data.data.status === 'on-hold') {
+        // Generar presupuesto automáticamente si el pedido nace en la etapa que lo amerita.
+        // Antes esto comparaba contra el literal `'on-hold'`. Dejó de funcionar en cuanto
+        // `POST /api/orders` empezó a normalizar el vocabulario: el endpoint responde `request`,
+        // así que la comparación no se cumplía y la generación automática se caía en silencio.
+        if (isBudgetStatus(data.data.status)) {
           console.log('🚀 Triggering budget generation for on-hold order...');
           // No esperar la generación del presupuesto para no bloquear el cierre del formulario
           generateBudgetForCreatedOrder(data.data).catch(err => {

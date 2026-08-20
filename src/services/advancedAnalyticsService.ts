@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../lib/supabase';
+import { canonicalStatus } from '../lib/orderStatus';
 import type { Database } from '../types/database';
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
@@ -871,8 +872,11 @@ export class AdvancedAnalyticsService {
         .slice(0, 10);
 
       // Tasas de completación y cancelación
-      const completedCount = orders?.filter(o => o.status === 'completed').length || 0;
-      const canceledCount = orders?.filter(o => o.status === 'cancelled' || o.status === 'failed').length || 0;
+      // Se normaliza antes de contar: `failed` y `refunded` se pliegan sobre `cancelled` en
+      // 0003, asi que compararlos como literales dejaria de sumarlos despues de la migracion y
+      // la tasa de cancelacion caeria sola, sin que nada haya cambiado en el negocio.
+      const completedCount = orders?.filter(o => canonicalStatus(o.status) === 'completed').length || 0;
+      const canceledCount = orders?.filter(o => canonicalStatus(o.status) === 'cancelled').length || 0;
 
       const completionRate = totalOrders > 0 ? (completedCount / totalOrders) * 100 : 0;
       const cancelationRate = totalOrders > 0 ? (canceledCount / totalOrders) * 100 : 0;

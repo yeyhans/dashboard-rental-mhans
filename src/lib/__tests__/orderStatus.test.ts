@@ -10,6 +10,7 @@ import {
   statusBadgeClass,
   statusChartColor,
   bookingStatusFilter,
+  isBookingStatus,
   activeStatusFilter,
   canonicalStatus,
   emptyStatusBuckets,
@@ -615,5 +616,44 @@ describe('statusesForTab', () => {
   it('returns an empty list for an unknown tab rather than silently meaning Todos', () => {
     // Falling back to Todos would make a typo in a tab id look like a working filter.
     expect(statusesForTab('preparing')).toEqual([]);
+  });
+});
+
+describe('isBookingStatus', () => {
+  /**
+   * Versión predicado de `bookingStatusFilter()`, para filtrar en memoria lo que ya está cargado.
+   * `OrderStatsEquip` y `advancedAnalyticsService` usaban `['completed','processing'].includes(...)`
+   * para decidir qué pedido consumió equipo: después de 0003 eso deja fuera las cuatro etapas
+   * operacionales, y las estadísticas de uso de equipo quedan cortas sin ningún error.
+   */
+  it('acepta todo pedido que retuvo el equipo, incluidos los completados', () => {
+    for (const status of ORDER_STATUSES) {
+      expect(isBookingStatus(status)).toBe(status !== 'cancelled');
+    }
+  });
+
+  it('acepta el vocabulario legado que no libera el equipo', () => {
+    expect(isBookingStatus('on-hold')).toBe(true);
+    expect(isBookingStatus('processing')).toBe(true);
+    expect(isBookingStatus('pending')).toBe(true);
+  });
+
+  it('rechaza todo lo que libera el equipo, viejo y nuevo', () => {
+    for (const released of ['cancelled', 'failed', 'refunded']) {
+      expect(isBookingStatus(released)).toBe(false);
+    }
+  });
+
+  it('rechaza lo que no puede ubicar', () => {
+    expect(isBookingStatus('paid')).toBe(false);
+    expect(isBookingStatus(null)).toBe(false);
+  });
+
+  it('coincide exactamente con bookingStatusFilter()', () => {
+    // Dos formas de la misma regla; si divergen, una consulta y un filtro en memoria darían
+    // conjuntos distintos sobre los mismos datos.
+    for (const value of [...ORDER_STATUSES, ...LEGACY_ORDER_STATUSES]) {
+      expect(isBookingStatus(value)).toBe(bookingStatusFilter().includes(value));
+    }
   });
 });

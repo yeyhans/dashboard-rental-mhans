@@ -248,6 +248,18 @@ export function bookingStatusFilter(): string[] {
 }
 
 /**
+ * Versión predicado de `bookingStatusFilter()`, para filtrar en memoria lo ya cargado.
+ *
+ * `OrderStatsEquip` y `advancedAnalyticsService` decidían con `['completed','processing']` qué
+ * pedido había consumido equipo. Después de 0003 eso excluye las cuatro etapas operacionales, y
+ * las estadísticas de uso salen cortas sin que nada falle.
+ */
+export function isBookingStatus(status: unknown): boolean {
+  const canonical = canonicalStatus(status);
+  return canonical !== null && canonical !== 'cancelled';
+}
+
+/**
  * Statuses of an order still in flight — the six non-terminal stages, plus their legacy
  * equivalents. Use for "en curso" dashboard buckets, not for availability.
  */
@@ -360,6 +372,23 @@ export function statusChartColor(status: string): string {
  */
 export const STATUS_OPTIONS: ReadonlyArray<{ value: OrderStatus; label: string }> =
   ORDER_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }));
+
+/**
+ * Si en esta etapa corresponde generar o regenerar el presupuesto.
+ *
+ * Reemplaza al literal `order.status !== 'on-hold'` que tenía `budgetGenerationService`. Después
+ * de 0003 ninguna orden vuelve a estar en `on-hold`, así que esa condición pasa a ser siempre
+ * verdadera y el sistema deja de generar presupuestos — sin excepción ni log, solo un botón que
+ * no hace nada.
+ *
+ * `request` es la traducción directa de `on-hold`, y `evaluation` es donde Área 01 §5 sitúa la
+ * acción que "genera presupuesto versionado". Acepta además el vocabulario legado porque durante
+ * la ventana entre el despliegue y el apply hay filas de los dos.
+ */
+export function isBudgetStatus(status: unknown): boolean {
+  const canonical = canonicalStatus(status);
+  return canonical === 'request' || canonical === 'evaluation';
+}
 
 /* ---------------------------------------------------------------------------------------------
  * Pedidos list tabs
