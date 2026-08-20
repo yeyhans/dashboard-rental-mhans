@@ -22,6 +22,7 @@ import { createEventFromOrder, openGoogleCalendar } from '@/lib/simpleCalendar';
 import { sendManualEmail, validateManualEmailData, type ManualEmailData } from '@/services/manualEmailService';
 import { AdminCommunications } from './AdminCommunications';
 import { useOrderNotifications } from '../../hooks/useOrderNotifications';
+import { statusBadgeClass, statusLabel } from '../../lib/orderStatus';
 
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
@@ -437,25 +438,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   }, [orderData.pago_completo]);
 
   // Status translations and colors
-  const statusTranslations: { [key: string]: string } = {
-    'pending': 'Pendiente',
-    'processing': 'En proceso',
-    'on-hold': 'En espera',
-    'completed': 'Completado',
-    'cancelled': 'Cancelado',
-    'refunded': 'Reembolsado',
-    'failed': 'Fallido'
-  };
 
-  const statusColors: { [key: string]: string } = {
-    'pending': 'bg-yellow-100 text-yellow-800',
-    'processing': 'bg-blue-100 text-blue-800',
-    'on-hold': 'bg-gray-100 text-gray-800',
-    'completed': 'bg-green-100 text-green-800',
-    'cancelled': 'bg-red-100 text-red-800',
-    'refunded': 'bg-purple-100 text-purple-800',
-    'failed': 'bg-red-100 text-red-800'
-  };
 
   const handleSaveOrder = async (updatedOrder: any) => {
     try {
@@ -1945,8 +1928,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             <CardTitle>Estado del Pedido</CardTitle>
           </CardHeader>
           <CardContent>
-            <Badge className={statusColors[orderData.status] || 'bg-gray-100 text-gray-800'}>
-              {statusTranslations[orderData.status] || orderData.status}
+            <Badge className={statusBadgeClass(orderData.status)}>
+              {statusLabel(orderData.status)}
             </Badge>
           </CardContent>
         </Card>
@@ -2902,8 +2885,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                                         <a href={`/orders/${conflict.orderId}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-700 font-medium font-bold mr-1">
                                           Orden #{conflict.orderId}
                                         </a>
-                                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 leading-none uppercase align-middle ${statusColors[conflict.status] || ''}`}>
-                                          {statusTranslations[conflict.status] || conflict.status}
+                                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 leading-none uppercase align-middle ${statusBadgeClass(conflict.status)}`}>
+                                          {statusLabel(conflict.status)}
                                         </Badge>
                                         ) entre las fechas {formatConflictDate(conflict.startDate)} y {formatConflictDate(conflict.endDate)}.
                                       </div>
