@@ -4,22 +4,25 @@
 
 
 /* ============================================================================
-   Tema — MarioHans OS Design System.
-   Fuente: CONSOLIDADO WEB YEYSON/Diseño/MarioHans OS Design System/tokens/colors.css
+   Tema del dashboard — canónico de Área 01.
+   Fuente: CONSOLIDADO WEB YEYSON/Área 01 · Rental Técnico/OFF/*.html, bloque
+   `:root`, que se declara "CANONICAL DESIGN TOKENS (System Alignment RC1) —
+   Single source of truth shared by all Área 01 modules".
    ----------------------------------------------------------------------------
    "El color no es decoración — es lenguaje operacional."
 
-   Reemplaza la paleta zinc que traía shadcn por la rampa de marca. La diferencia
-   no es sutil: los neutros de zinc llevan tono 240° (azulado) y los de marca son
-   neutros puros, así que la paleta anterior teñía en frío todas las superficies.
+   Reemplaza la paleta zinc que traía shadcn. La diferencia no es sutil: los
+   neutros de zinc llevan tono 240° (azulado), y aquí las superficies son
+   neutras o apenas cálidas (#F7F7F6).
 
-   Reglas que fija el sistema y que estos valores respetan:
-     · Blanco primero. #000 puro queda reservado al logotipo; el texto en pantalla
-       usa #0A0A0A, que es más suave en pantalla.
-     · Grises anclados en la marca: #333 #999 #E2E2E2 #F4F4F4.
-     · Color cromático SOLO como lenguaje de estado funcional. El acento #FF4500
-       del documento maestro fue descartado por el propio sistema: choca con una
-       marca monocroma y se lee como una advertencia falsa.
+   POR QUÉ NO SE USAN LOS TOKENS DE `Diseño/MarioHans OS Design System`:
+   hay dos paletas de estado en el handoff y la división es deliberada.
+     · Portal cliente (Área 02) y web pública (RC1): paleta viva.
+       success #16A34A sobre #DCFCE7.
+     · Consola operacional (Área 01, este proyecto): paleta apagada.
+       ok #256B44 sobre #E7F2EC.
+   Se verificó leyendo el `:root` de los tres HTML canónicos. Un admin mira
+   estos badges todo el día; el cliente ve el suyo un par de veces por arriendo.
 
    Sin tema oscuro: "white-first" es no negociable (ver SKILL.md del sistema).
    El bloque `.dark` anterior era código muerto — nadie aplicaba la clase y los
@@ -30,85 +33,104 @@
     :root {
       /* Tinta y papel */
       --background: 0 0% 100%;        /* #FFFFFF */
-      --foreground: 0 0% 3.9%;        /* #0A0A0A ink */
+      --foreground: 0 0% 6.7%;        /* #111111 text-primary del canonico */
       --card: 0 0% 100%;
-      --card-foreground: 0 0% 3.9%;
+      --card-foreground: 0 0% 6.7%;
       --popover: 0 0% 100%;
-      --popover-foreground: 0 0% 3.9%;
+      --popover-foreground: 0 0% 6.7%;
 
       /* Primario monocromo */
-      --primary: 0 0% 3.9%;           /* #0A0A0A */
+      --primary: 0 0% 6.7%;           /* #111111 — text-primary del canonico */
       --primary-foreground: 0 0% 100%;
 
-      /* Rampa neutra de marca */
-      --secondary: 0 0% 95.7%;        /* #F4F4F4 gray-100 */
-      --secondary-foreground: 0 0% 20%;   /* #333333 gray-700 */
-      --muted: 0 0% 95.7%;            /* #F4F4F4 */
-      --muted-foreground: 0 0% 40%;   /* #666666 gray-500 */
-      --accent: 0 0% 95.7%;
-      --accent-foreground: 0 0% 20%;
+      /* Rampa neutra del canonico de Area 01 */
+      --secondary: 60 5.9% 96.7%;     /* #F7F7F6 surface-2 */
+      --secondary-foreground: 0 0% 40%;   /* #666666 text-secondary */
+      --muted: 60 5.9% 96.7%;         /* #F7F7F6 */
+      --muted-foreground: 0 0% 40%;   /* #666666 */
+      --accent: 60 5.9% 96.7%;
+      --accent-foreground: 0 0% 40%;
 
-      /* Estado funcional: danger #DC2626 */
-      --destructive: 0 72.2% 50.6%;
+      /* Estado critico del canonico: #A3271F, no el #DC2626 del Design System */
+      --destructive: 4 68% 38%;
       --destructive-foreground: 0 0% 100%;
 
-      /* Filetes: gray-200 es el borde por defecto del sistema */
-      --border: 0 0% 88.6%;           /* #E2E2E2 */
-      --input: 0 0% 88.6%;
-      --ring: 0 0% 3.9%;              /* foco monocromo */
+      /* Filetes: #EAEAEA es el borde por defecto del canonico */
+      --border: 0 0% 91.8%;           /* #EAEAEA */
+      --input: 0 0% 91.8%;
+      --ring: 0 0% 6.7%;              /* foco monocromo sobre #111111 */
 
-      --radius: 0.75rem;              /* 12px — radius-lg del sistema */
+      --radius: 0.625rem;             /* 10px — --radius-lg del canonico */
 
       /* Gráficos: única superficie donde el color es inevitable. Se usan los
          colores de estado del sistema, no una paleta decorativa. */
-      --chart-1: 0 0% 3.9%;           /* ink */
-      --chart-2: 0 0% 40%;            /* gray-500 */
-      --chart-3: 217 91% 53%;         /* info #2563EB */
-      --chart-4: 142 71% 45%;         /* success #16A34A */
-      --chart-5: 32 95% 44%;          /* warning #D97706 */
+      --chart-1: 0 0% 6.7%;           /* #111111 text-primary */
+      --chart-2: 0 0% 40%;            /* #666666 neutral */
+      --chart-3: 217 52% 37%;         /* #2E5490 info */
+      --chart-4: 147 49% 28%;         /* #256B44 ok */
+      --chart-5: 42 64% 33%;          /* #8A6A1E warn */
 
-      /* Estados funcionales — el unico lenguaje cromatico que la marca admite.
-         Copiados literalmente de `Diseño/MarioHans OS Design System/tokens/colors.css`
-         y no convertidos a HSL: el portal del cliente pinta los mismos estados con
-         estos hexadecimales, y una diferencia de redondeo se ve como dos productos
-         distintos mostrando el mismo pedido. Se consumen con `bg-[var(--success-tint)]`,
-         no con utilidades `bg-green-100`, que no pertenecen al sistema. */
-      --success-text: #15803D;
-      --success: #16A34A;
-      --success-tint: #DCFCE7;
-      --success-border: #A7D8B4;
+      /* ============================================================
+         TOKENS CANONICOS DE AREA 01
+         Copiados literalmente del `:root` de los HTML canonicos en
+         `Área 01 · Rental Técnico/OFF/`, que se declaran a si mismos
+         "CANONICAL DESIGN TOKENS (System Alignment RC1) — Single source
+         of truth shared by all Área 01 modules".
 
-      --warning-text: #B45309;
-      --warning: #D97706;
-      --warning-tint: #FEF3C7;
-      --warning-border: #EAD48A;
+         NO son los valores de `Diseño/MarioHans OS Design System/tokens/colors.css`,
+         y la diferencia es deliberada, no una deriva: el portal del cliente
+         (Area 02) y la web publica (RC1) llevan la paleta viva (#16A34A / #DCFCE7),
+         mientras la consola operacional lleva una apagada (#256B44 / #E7F2EC).
+         Un admin mira estos badges todo el dia.
+         ============================================================ */
 
-      --danger-text: #B91C1C;
-      --danger: #DC2626;
-      --danger-tint: #FEE2E2;
-      --danger-border: #F1B4B4;
+      /* Superficies */
+      --color-background: #FFFFFF;
+      --color-surface: #FFFFFF;
+      --color-surface-soft: #FAFAFA;
+      --color-surface-2: #F7F7F6;
+      --color-sidebar-bg: #FAFAFA;
 
-      --info-text: #1D4ED8;
-      --info: #2563EB;
-      --info-tint: #DBEAFE;
-      --info-border: #AFC8EE;
+      /* Texto */
+      --color-text-primary: #111111;
+      --color-text-secondary: #666666;
+      --color-text-faint: #707070;
+      --color-ink-hover: #2B2B2B;
 
-      /* `neutral` es el tono de `request` y `completed`: los dos estados que no son
-         una senal. Su tinte y borde son la misma rampa gris del resto del tema. */
-      --neutral-text: #4E504F;
-      --neutral: #666666;
-      --neutral-tint: #F4F4F4;
-      --neutral-border: #E2E2E2;
+      /* Filetes */
+      --color-border: #EAEAEA;
+      --color-border-soft: #F0F0EF;
+      --color-border-strong: #D6D6D4;
+
+      /* Estados. `muted` no viene del `:root` canonico: lo derivamos de
+         `.badge-cancelada`, que usa `--paper-2` sobre `--text-faint`. Es el unico
+         estado con un gris mas apagado que `neutral`. */
+      --color-ok: #256B44;
+      --color-ok-bg: #E7F2EC;
+      --color-info: #2E5490;
+      --color-info-bg: #EAF0FA;
+      --color-warn: #8A6A1E;
+      --color-warn-bg: #FBF3DE;
+      --color-crit: #A3271F;
+      --color-crit-bg: #FBEEEC;
+      --color-neutral: #666666;
+      --color-neutral-bg: #F7F7F6;
+      --color-muted: #707070;
+      --color-muted-bg: #F7F7F6;
+
+      /* Layout del canonico */
+      --sidebar-w: 232px;
+      --ficha-w: 640px;
 
       /* Barra lateral sobre el lienzo gris, no blanco sobre blanco */
       --sidebar-background: 0 0% 98%; /* #FAFAFA gray-50 */
-      --sidebar-foreground: 0 0% 20%; /* #333333 */
-      --sidebar-primary: 0 0% 3.9%;
+      --sidebar-foreground: 0 0% 40%; /* #666666 text-secondary */
+      --sidebar-primary: 0 0% 6.7%;
       --sidebar-primary-foreground: 0 0% 100%;
-      --sidebar-accent: 0 0% 95.7%;
-      --sidebar-accent-foreground: 0 0% 20%;
-      --sidebar-border: 0 0% 88.6%;
-      --sidebar-ring: 0 0% 3.9%;
+      --sidebar-accent: 60 5.9% 96.7%;
+      --sidebar-accent-foreground: 0 0% 40%;
+      --sidebar-border: 0 0% 91.8%;
+      --sidebar-ring: 0 0% 6.7%;
     }
   }
 

@@ -321,42 +321,49 @@ describe('EMAIL_ON_ENTER', () => {
 describe('STATUS_TONES', () => {
   it('assigns every status exactly one design-system tone', () => {
     for (const status of ORDER_STATUSES) {
-      expect(STATUS_TONES[status]).toMatch(/^(success|warning|danger|info|neutral)$/);
+      expect(STATUS_TONES[status]).toMatch(/^(ok|warn|crit|info|neutral|muted)$/);
     }
     expect(Object.keys(STATUS_TONES)).toHaveLength(ORDER_STATUSES.length);
   });
 
   /**
-   * Not invented here. The tones are read off the design system's own canonical component,
-   * `Diseño/MarioHans OS Design System/components/data/StatusBadge.jsx`, whose `STATES` table
-   * names each operational stage in Spanish and fixes its tone. Each v1.2 status maps onto exactly
-   * one of those named stages, so the tone is derived rather than chosen:
+   * Read off the client's canonical dashboard screen, not chosen.
    *
-   *   request     ← solicitud    (neutral)   completed ← finalizado (neutral)
-   *   evaluation  ← evaluacion   (info)      cancelled ← rechazado  (danger)
-   *   confirmed   ← confirmado   (success)
-   *   preparation ← preparacion  (warning)
-   *   in-rental   ← activo       (info)
-   *   return      ← retorno      (warning)
+   * Source: `Área 01 · Rental Técnico/OFF/MarioHans_OS_Area01_Pedidos_Canonical_RC2.1.2.html`,
+   * whose `.badge-*` rules bind each stage to a state variable:
+   *
+   *   badge-solicitud   → --s-sol   → --color-neutral    badge-arriendo   → --h-rodaje → --color-info
+   *   badge-evaluacion  → --s-eval  → --color-warn       badge-devolucion → --h-dev    → --color-neutral
+   *   badge-confirmada  → --s-conf  → --color-ok         badge-completado → --paper-2 / --text-muted
+   *   badge-preparacion → --h-prep  → --color-warn       badge-cancelada  → --paper-2 / --text-faint
+   *
+   * An earlier version of this map derived the tones from the design system's generic
+   * `StatusBadge.jsx` instead, and got two of the eight wrong: `evaluation` came out info where
+   * the dashboard paints it warn, and `return` came out warning where the dashboard paints it
+   * neutral. `StatusBadge.jsx` is a cross-product component with a 13-key superset; for Área 01
+   * the canonical screen is the more specific authority and wins.
    */
-  it('matches the tone the design system assigns to each named stage', () => {
+  it('matches the tone the canonical Pedidos screen paints on each badge', () => {
     expect(STATUS_TONES).toEqual({
       request: 'neutral',
-      evaluation: 'info',
-      confirmed: 'success',
-      preparation: 'warning',
+      evaluation: 'warn',
+      confirmed: 'ok',
+      preparation: 'warn',
       'in-rental': 'info',
-      return: 'warning',
+      return: 'neutral',
       completed: 'neutral',
-      cancelled: 'danger',
+      cancelled: 'muted',
     });
   });
 
-  it('reserves danger for the failure exit only', () => {
-    // The brand is monochrome and red is the loudest thing on the screen. An order that merely
-    // sits in an early stage is not a problem, and painting it red trains admins to ignore red.
-    const danger = ORDER_STATUSES.filter((s) => STATUS_TONES[s] === 'danger');
-    expect(danger).toEqual(['cancelled']);
+  it('never paints an order in the critical tone', () => {
+    // The canonical reserves `--color-crit` for `badge-rechazada`, and v1.2 folds Rechazada into
+    // `cancelled`, whose own canonical class `badge-cancelada` is muted grey. An operations
+    // console shows these badges all day; a cancelled order is a closed matter, not an alarm, and
+    // painting it red trains the admin to stop seeing red.
+    for (const status of ORDER_STATUSES) {
+      expect(STATUS_TONES[status]).not.toBe('crit');
+    }
   });
 });
 
@@ -390,9 +397,8 @@ describe('statusBadgeClass', () => {
     // exists in no token file — it is exactly what the five duplicated maps were made of.
     for (const status of ORDER_STATUSES) {
       const cls = statusBadgeClass(status);
-      expect(cls).toMatch(/bg-\[var\(--[a-z]+-tint\)\]/);
-      expect(cls).toMatch(/text-\[var\(--[a-z]+-text\)\]/);
-      expect(cls).toMatch(/border-\[var\(--[a-z]+-border\)\]/);
+      expect(cls).toMatch(/bg-\[var\(--color-[a-z]+-bg\)\]/);
+      expect(cls).toMatch(/text-\[var\(--color-[a-z]+\)\]/);
       expect(cls).not.toMatch(/(bg|text|border)-(red|green|blue|yellow|amber|emerald|gray|slate|zinc)-\d/);
     }
   });
@@ -400,11 +406,10 @@ describe('statusBadgeClass', () => {
   it('uses one tone consistently across all three properties of a badge', () => {
     // A badge with a success tint and a warning border is not a style slip, it is two signals.
     for (const status of ORDER_STATUSES) {
-      const tones = [...statusBadgeClass(status).matchAll(/--([a-z]+)-(?:tint|text|border)\)/g)]
+      const tones = [...statusBadgeClass(status).matchAll(/--color-([a-z]+)(?:-bg)?\)/g)]
         .map((m) => m[1]);
-      expect(tones).toHaveLength(3);
+      expect(tones).toHaveLength(2);
       expect(new Set(tones).size).toBe(1);
-      expect(tones[0]).toBe(STATUS_TONES[status]);
     }
   });
 
@@ -419,7 +424,7 @@ describe('statusChartColor', () => {
     // do. It still must not be a literal: `FinancialAnalyticsCard` had a nine-entry table of raw
     // `hsl(...)` triples that shared no value with any token file.
     for (const status of ORDER_STATUSES) {
-      expect(statusChartColor(status)).toBe(`var(--${STATUS_TONES[status]})`);
+      expect(statusChartColor(status)).toBe(`var(--color-${STATUS_TONES[status]})`);
     }
   });
 
@@ -427,7 +432,7 @@ describe('statusChartColor', () => {
     // That same table keyed on `reviewing`, `preparing` and `delivering` — statuses the CHECK
     // constraint never admitted, so those three colours could never have been painted.
     for (const bogus of ['on-hold', 'reviewing', 'preparing', 'delivering', 'paid']) {
-      expect(statusChartColor(bogus)).toBe('var(--neutral)');
+      expect(statusChartColor(bogus)).toBe('var(--color-neutral)');
     }
   });
 });

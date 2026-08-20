@@ -261,11 +261,16 @@ export function activeStatusFilter(): string[] {
  * ------------------------------------------------------------------------------------------ */
 
 /**
- * The five tones of the design system. `Diseño/MarioHans OS Design System/tokens/colors.css`
- * defines a `-text / -tint / -border` triplet plus a base for each, and nothing else is chromatic:
- * "Brand is black & white; the only chromatic language is functional status."
+ * The state tones of the Área 01 canonical, whose `:root` declares itself "CANONICAL DESIGN
+ * TOKENS (System Alignment RC1) — Single source of truth shared by all Área 01 modules".
+ *
+ * These are NOT the design system's `success/warning/danger/info` values, and the difference is
+ * deliberate rather than a drift: the customer-facing products (portal Área 02 and the public web
+ * RC1) both carry the bright set (`#16A34A` / `#DCFCE7`), while the operational console carries a
+ * muted, desaturated one (`#256B44` / `#E7F2EC`). An admin stares at these badges all day.
+ * `muted` is the extra one — the canonical's `badge-cancelada` is greyer still than `neutral`.
  */
-export const STATUS_TONES_VALUES = ['success', 'warning', 'danger', 'info', 'neutral'] as const;
+export const STATUS_TONES_VALUES = ['ok', 'warn', 'crit', 'info', 'neutral', 'muted'] as const;
 
 export type StatusTone = (typeof STATUS_TONES_VALUES)[number];
 
@@ -287,13 +292,13 @@ export type StatusTone = (typeof STATUS_TONES_VALUES)[number];
  */
 export const STATUS_TONES: Record<OrderStatus, StatusTone> = {
   request: 'neutral',
-  evaluation: 'info',
-  confirmed: 'success',
-  preparation: 'warning',
+  evaluation: 'warn',
+  confirmed: 'ok',
+  preparation: 'warn',
   'in-rental': 'info',
-  return: 'warning',
+  return: 'neutral',
   completed: 'neutral',
-  cancelled: 'danger',
+  cancelled: 'muted',
 };
 
 /**
@@ -320,11 +325,12 @@ export function statusTone(status: string): StatusTone {
  * drifted apart between components.
  */
 const TONE_BADGE_CLASSES: Record<StatusTone, string> = {
-  success: 'bg-[var(--success-tint)] text-[var(--success-text)] border-[var(--success-border)]',
-  warning: 'bg-[var(--warning-tint)] text-[var(--warning-text)] border-[var(--warning-border)]',
-  danger: 'bg-[var(--danger-tint)] text-[var(--danger-text)] border-[var(--danger-border)]',
-  info: 'bg-[var(--info-tint)] text-[var(--info-text)] border-[var(--info-border)]',
-  neutral: 'bg-[var(--neutral-tint)] text-[var(--neutral-text)] border-[var(--neutral-border)]',
+  ok: 'bg-[var(--color-ok-bg)] text-[var(--color-ok)]',
+  warn: 'bg-[var(--color-warn-bg)] text-[var(--color-warn)]',
+  crit: 'bg-[var(--color-crit-bg)] text-[var(--color-crit)]',
+  info: 'bg-[var(--color-info-bg)] text-[var(--color-info)]',
+  neutral: 'bg-[var(--color-neutral-bg)] text-[var(--color-neutral)]',
+  muted: 'bg-[var(--color-muted-bg)] text-[var(--color-muted)]',
 };
 
 export function statusBadgeClass(status: string): string {
@@ -341,7 +347,7 @@ export function statusBadgeClass(status: string): string {
  * could never be drawn at all.
  */
 export function statusChartColor(status: string): string {
-  return `var(--${statusTone(status)})`;
+  return `var(--color-${statusTone(status)})`;
 }
 
 /**

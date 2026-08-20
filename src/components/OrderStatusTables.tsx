@@ -436,16 +436,33 @@ export default function OrderStatusTables({
           tab que la abriera, así que era inalcanzable. Y con el vocabulario v1.2 las cuatro
           etapas operacionales reales no tenían dónde mostrarse. */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 h-auto">
-          {ORDER_LIST_TABS.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value} className="flex items-center gap-2">
-              <span
-                className={`h-2 w-2 rounded-full border ${statusBadgeClass(tab.value)}`}
-                aria-hidden="true"
-              />
-              {tab.label} ({ordersForTab(tab.value).length})
-            </TabsTrigger>
-          ))}
+        {/* Barra de pestañas del canónico: subrayado, sin cápsulas ni grilla. El CSS de origen es
+            `.tabs{display:flex;gap:2px;border-bottom:1px solid var(--rule);overflow-x:auto}` y
+            `.tab.active{color:var(--ink);border-bottom-color:var(--ink);font-weight:500}`, con el
+            contador `.tc` en pastilla monoespaciada que se invierte en la pestaña activa. */}
+        <TabsList className="flex h-auto w-full justify-start gap-0.5 overflow-x-auto rounded-none border-b border-[var(--color-border)] bg-transparent p-0">
+          {ORDER_LIST_TABS.map((tab) => {
+            const count = ordersForTab(tab.value).length;
+            const isActive = selectedTab === tab.value;
+            return (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className="-mb-px whitespace-nowrap rounded-none border-b-2 border-transparent bg-transparent px-3 py-[7px] text-xs font-normal text-[var(--color-text-secondary)] shadow-none transition-colors hover:text-[var(--color-text-primary)] data-[state=active]:border-[var(--color-text-primary)] data-[state=active]:bg-transparent data-[state=active]:font-medium data-[state=active]:text-[var(--color-text-primary)] data-[state=active]:shadow-none"
+              >
+                {tab.label}
+                <span
+                  className={`ml-[5px] inline-block rounded-[10px] px-[5px] py-px font-mono text-[10px] ${
+                    isActive
+                      ? 'bg-[var(--color-text-primary)] text-white'
+                      : 'bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]'
+                  }`}
+                >
+                  {count}
+                </span>
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
 
         {ORDER_LIST_TABS.map((tab) => (

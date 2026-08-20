@@ -30,51 +30,49 @@ function token(name: string): string {
   return (value ?? '').trim();
 }
 
-/** Brand ramp, converted from the hexes in the design system's colors.css. */
-const BRAND = {
+/** Rampa del canónico de Área 01, convertida a HSL para las variables de shadcn. */
+const CANON_HSL = {
   white: '0 0% 100%',
-  ink: '0 0% 3.9%', //     #0A0A0A
-  gray700: '0 0% 20%', //  #333333
-  gray500: '0 0% 40%', //  #666666
-  gray300: '0 0% 60%', //  #999999
-  gray200: '0 0% 88.6%', //#E2E2E2
-  gray100: '0 0% 95.7%', //#F4F4F4
-  gray50: '0 0% 98%', //   #FAFAFA
+  ink: '0 0% 6.7%', //       #111111 text-primary
+  secondary: '0 0% 40%', //  #666666 text-secondary
+  surface2: '60 5.9% 96.7%', // #F7F7F6 — apenas cálido, así viene el canónico
+  border: '0 0% 91.8%', //   #EAEAEA
+  sidebar: '0 0% 98%', //    #FAFAFA
 } as const;
 
 describe('dashboard theme tokens', () => {
   it('paints surfaces white and text in brand ink', () => {
-    expect(token('background')).toBe(BRAND.white);
-    expect(token('foreground')).toBe(BRAND.ink);
-    expect(token('card')).toBe(BRAND.white);
-    expect(token('card-foreground')).toBe(BRAND.ink);
-    expect(token('popover')).toBe(BRAND.white);
-    expect(token('popover-foreground')).toBe(BRAND.ink);
+    expect(token('background')).toBe(CANON_HSL.white);
+    expect(token('foreground')).toBe(CANON_HSL.ink);
+    expect(token('card')).toBe(CANON_HSL.white);
+    expect(token('card-foreground')).toBe(CANON_HSL.ink);
+    expect(token('popover')).toBe(CANON_HSL.white);
+    expect(token('popover-foreground')).toBe(CANON_HSL.ink);
   });
 
   it('uses ink for primary, not a chromatic accent', () => {
     // The design system explicitly DROPPED the master doc's #FF4500 accent: it conflicts with a
     // monochrome brand and reads as a false warning.
-    expect(token('primary')).toBe(BRAND.ink);
-    expect(token('primary-foreground')).toBe(BRAND.white);
+    expect(token('primary')).toBe(CANON_HSL.ink);
+    expect(token('primary-foreground')).toBe(CANON_HSL.white);
   });
 
   it('anchors the secondary and muted surfaces on the brand grays', () => {
-    expect(token('secondary')).toBe(BRAND.gray100);
-    expect(token('secondary-foreground')).toBe(BRAND.gray700);
-    expect(token('muted')).toBe(BRAND.gray100);
-    expect(token('muted-foreground')).toBe(BRAND.gray500);
-    expect(token('accent')).toBe(BRAND.gray100);
-    expect(token('accent-foreground')).toBe(BRAND.gray700);
+    expect(token('secondary')).toBe(CANON_HSL.surface2);
+    expect(token('secondary-foreground')).toBe(CANON_HSL.secondary);
+    expect(token('muted')).toBe(CANON_HSL.surface2);
+    expect(token('muted-foreground')).toBe(CANON_HSL.secondary);
+    expect(token('accent')).toBe(CANON_HSL.surface2);
+    expect(token('accent-foreground')).toBe(CANON_HSL.secondary);
   });
 
   it('draws hairlines in gray-200, the design system default border', () => {
-    expect(token('border')).toBe(BRAND.gray200);
-    expect(token('input')).toBe(BRAND.gray200);
+    expect(token('border')).toBe(CANON_HSL.border);
+    expect(token('input')).toBe(CANON_HSL.border);
   });
 
   it('keeps the focus ring monochrome', () => {
-    expect(token('ring')).toBe(BRAND.ink);
+    expect(token('ring')).toBe(CANON_HSL.ink);
   });
 
   it('carries no blue-tinted zinc neutrals anywhere in :root', () => {
@@ -87,7 +85,10 @@ describe('dashboard theme tokens', () => {
     const tinted = neutrals
       .map(([, name, hue, sat]) => ({ name: name ?? '', hue: Number(hue), sat: Number(sat) }))
       .filter(({ name }) => !name.startsWith('chart-') && !name.startsWith('destructive'))
-      .filter(({ hue, sat }) => hue !== 0 || sat !== 0)
+      // La regla real no es "tono 0": es "nada azulado". El canónico usa #F7F7F6,
+      // que es tono 60 con 5.9% de saturación — apenas cálido, y así viene del cliente.
+      // Zinc escribe 240°; ese es el intruso que este test existe para atrapar.
+      .filter(({ hue, sat }) => sat > 0 && hue >= 180 && hue <= 300)
       .map(({ name }) => name);
 
     expect(tinted).toEqual([]);
@@ -96,14 +97,14 @@ describe('dashboard theme tokens', () => {
   it('reserves chromatic colour for functional status only', () => {
     // `destructive` is the one non-neutral in the core set, and it must be the design system's
     // danger red (#DC2626), not shadcn's stock 0 84.2% 60.2%.
-    expect(token('destructive')).toBe('0 72.2% 50.6%');
-    expect(token('destructive-foreground')).toBe(BRAND.white);
+    expect(token('destructive')).toBe('4 68% 38%');
+    expect(token('destructive-foreground')).toBe(CANON_HSL.white);
   });
 
   it('gives the sidebar the canvas gray, not a white-on-white surface', () => {
-    expect(token('sidebar-background')).toBe(BRAND.gray50);
-    expect(token('sidebar-foreground')).toBe(BRAND.gray700);
-    expect(token('sidebar-border')).toBe(BRAND.gray200);
+    expect(token('sidebar-background')).toBe(CANON_HSL.sidebar);
+    expect(token('sidebar-foreground')).toBe(CANON_HSL.secondary);
+    expect(token('sidebar-border')).toBe(CANON_HSL.border);
   });
 
   it('carries no dark theme at all', () => {
@@ -115,35 +116,64 @@ describe('dashboard theme tokens', () => {
 });
 
 /**
- * Functional status tones.
+ * Estado funcional — tokens canónicos de Área 01.
  *
- * These are the ONLY chromatic values the brand allows, and the design system is explicit about
- * why: "Brand is black & white; the only chromatic language is functional status." They are
- * copied verbatim out of `Diseño/MarioHans OS Design System/tokens/colors.css` rather than
- * converted, because a badge tint is compared against the customer portal rendering the same
- * state — a rounding difference in an HSL conversion is a visible mismatch across two products.
+ * Copiados verbatim del `:root` de `Área 01 · Rental Técnico/OFF/*.html`, que se declara
+ * "CANONICAL DESIGN TOKENS (System Alignment RC1) — Single source of truth shared by all Área 01
+ * modules".
+ *
+ * Estos NO son los valores de `Diseño/MarioHans OS Design System/tokens/colors.css`. Una versión
+ * anterior de este archivo asertaba los del Design System, y estaba equivocada para el dashboard:
+ * al leer el `:root` de los tres HTML canónicos se ve que el portal cliente (Área 02) y la web
+ * pública (RC1) llevan la paleta viva (`#16A34A` / `#DCFCE7`) mientras la consola operacional
+ * lleva una apagada (`#256B44` / `#E7F2EC`). La división es deliberada, no una deriva.
  */
-const TONES = {
-  success: { text: '#15803D', base: '#16A34A', tint: '#DCFCE7', border: '#A7D8B4' },
-  warning: { text: '#B45309', base: '#D97706', tint: '#FEF3C7', border: '#EAD48A' },
-  danger: { text: '#B91C1C', base: '#DC2626', tint: '#FEE2E2', border: '#F1B4B4' },
-  info: { text: '#1D4ED8', base: '#2563EB', tint: '#DBEAFE', border: '#AFC8EE' },
-  neutral: { text: '#4E504F', base: '#666666', tint: '#F4F4F4', border: '#E2E2E2' },
+const CANON = {
+  'color-ok': '#256B44',
+  'color-ok-bg': '#E7F2EC',
+  'color-info': '#2E5490',
+  'color-info-bg': '#EAF0FA',
+  'color-warn': '#8A6A1E',
+  'color-warn-bg': '#FBF3DE',
+  'color-crit': '#A3271F',
+  'color-crit-bg': '#FBEEEC',
+  'color-neutral': '#666666',
+  'color-neutral-bg': '#F7F7F6',
+  'color-muted': '#707070',
+  'color-muted-bg': '#F7F7F6',
 } as const;
 
-describe('functional status tone tokens', () => {
-  it.each(Object.entries(TONES))('defines the %s triplet verbatim', (name, tone) => {
-    expect(token(`${name}-text`).toUpperCase()).toBe(tone.text);
-    expect(token(name).toUpperCase()).toBe(tone.base);
-    expect(token(`${name}-tint`).toUpperCase()).toBe(tone.tint);
-    expect(token(`${name}-border`).toUpperCase()).toBe(tone.border);
+const CANON_SURFACES = {
+  'color-background': '#FFFFFF',
+  'color-surface-soft': '#FAFAFA',
+  'color-surface-2': '#F7F7F6',
+  'color-sidebar-bg': '#FAFAFA',
+  'color-text-primary': '#111111',
+  'color-text-secondary': '#666666',
+  'color-text-faint': '#707070',
+  'color-border': '#EAEAEA',
+  'color-border-soft': '#F0F0EF',
+  'color-border-strong': '#D6D6D4',
+} as const;
+
+describe('tokens canónicos de Área 01', () => {
+  it.each(Object.entries(CANON))('define %s como %s', (name, hex) => {
+    expect(token(name).toUpperCase()).toBe(hex);
   });
 
-  it('keeps neutral aligned with the brand gray ramp', () => {
-    // `neutral` is the tone for `request` and `completed` — the two states that are not a signal.
-    // Its tint and border must be the same gray-100 / gray-200 the rest of the theme uses, or a
-    // neutral badge reads as a faint colour cast next to a card border.
-    expect(token('neutral-tint').toUpperCase()).toBe('#F4F4F4');
-    expect(token('neutral-border').toUpperCase()).toBe('#E2E2E2');
+  it.each(Object.entries(CANON_SURFACES))('define %s como %s', (name, hex) => {
+    expect(token(name).toUpperCase()).toBe(hex);
+  });
+
+  it('reserva el tono crítico: ningún estado de pedido lo usa', () => {
+    // El canónico usa `--color-crit` solo en `.badge-rechazada`, y v1.2 pliega Rechazada dentro
+    // de `cancelled`, cuya clase canónica `.badge-cancelada` es gris apagado. El token existe
+    // para incidencias, no para pedidos.
+    expect(token('color-crit')).toBeTruthy();
+  });
+
+  it('lleva las medidas de layout del canónico', () => {
+    expect(token('sidebar-w')).toBe('232px');
+    expect(token('ficha-w')).toBe('640px');
   });
 });
