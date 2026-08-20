@@ -1,0 +1,62 @@
+---
+import Base from "../layout/Base.astro";
+import CheckInBoard from "../components/checkin/CheckInBoard";
+import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
+import { CheckInService } from "../services/checkInService";
+
+export const prerender = false;
+
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+
+// El reloj se resuelve en el servidor: el tablero decide atrasos y "hoy", y hacerlo en el
+// navegador dejaría el resultado a merced de la zona horaria del equipo del admin.
+const now = new Date();
+
+let board = { kpis: { pendientesHoy: 0, recibidosHoy: 0, incidencias: 0, atrasadas: 0 }, entries: [] };
+let loadError: string | null = null;
+
+try {
+  board = await CheckInService.getBoard(now);
+} catch (error) {
+  console.error('[check-in] Error al cargar el tablero de devoluciones:', {
+    admin: adminSession.admin.email,
+    error,
+  });
+  loadError = 'No se pudieron cargar las devoluciones. Recarga la página o inténtalo en unos minutos.';
+}
+
+const todayLabel = new Intl.DateTimeFormat('es-CL', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+}).format(now);
+
+const title = `Check-In / Devoluciones | ${adminSession.admin.email}`;
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    <header class="mb-5 border-b border-[var(--color-border)] pb-4">
+      <h1 class="text-xl font-semibold tracking-tight">Check-In / Devoluciones</h1>
+      <p class="mt-1 text-sm text-[var(--color-text-secondary)]">
+        Recepción y cierre de equipos devueltos
+      </p>
+    </header>
+
+    {loadError ? (
+      <div
+        role="alert"
+        class="rounded-[10px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-4 text-sm text-[var(--color-crit)]"
+      >
+        {loadError}
+      </div>
+    ) : (
+      <CheckInBoard client:load data={board} todayLabel={todayLabel} />
+    )}
+  </div>
+</Base>
