@@ -1127,8 +1127,11 @@ export class AdvancedAnalyticsService {
         date_created: string;
       }>;
 
-      const completedStatuses = ['completed', 'paid'];
-      const completedOrders = allOrders.filter(o => completedStatuses.includes(o.status));
+      // `paid` no está en el CHECK de ningún vocabulario — ni el legado ni el v1.2 — así que
+      // esa mitad del filtro nunca coincidió con nada. Se compara por etapa canónica para que
+      // una fila legada sin migrar siga contando como ingreso realizado.
+      const isCompleted = (status: string) => canonicalStatus(status) === 'completed';
+      const completedOrders = allOrders.filter(o => isCompleted(o.status));
 
       // --- KPIs ---
       const totalRevenue = completedOrders.reduce((sum, o) => sum + (o.calculated_total || 0), 0);
@@ -1138,7 +1141,7 @@ export class AdvancedAnalyticsService {
       let totalCollected = 0;
       allOrders.forEach(o => {
         const total = o.calculated_total || 0;
-        if (completedStatuses.includes(o.status)) {
+        if (isCompleted(o.status)) {
           if (o.pago_completo) {
             totalCollected += total;
           } else if (o.pago_reserva) {
@@ -1164,7 +1167,7 @@ export class AdvancedAnalyticsService {
       // --- Monthly Revenue ---
       const monthlyGroups = groupByMonth(allOrders);
       const monthlyRevenue = monthlyGroups.map(([month, monthOrders]) => {
-        const completed = monthOrders.filter(o => completedStatuses.includes(o.status));
+        const completed = monthOrders.filter(o => isCompleted(o.status));
         return {
           month,
           revenue: completed.reduce((sum, o) => sum + (o.calculated_total || 0), 0),
@@ -1178,7 +1181,7 @@ export class AdvancedAnalyticsService {
         let pending = 0;
         monthOrders.forEach(o => {
           const total = o.calculated_total || 0;
-          if (completedStatuses.includes(o.status)) {
+          if (isCompleted(o.status)) {
             if (o.pago_completo) {
               collected += total;
             } else if (o.pago_reserva) {
@@ -1199,7 +1202,7 @@ export class AdvancedAnalyticsService {
         let reservesPaid = 0;
         let finalPaymentsPending = 0;
         let fullyPaid = 0;
-        monthOrders.filter(o => completedStatuses.includes(o.status)).forEach(o => {
+        monthOrders.filter(o => isCompleted(o.status)).forEach(o => {
           const total = o.calculated_total || 0;
           if (o.pago_completo) {
             fullyPaid += total;
