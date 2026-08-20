@@ -77,8 +77,10 @@ describe('orderNotificationService', () => {
     expect(call.orderId).toBe(42);
     expect(call.userId).toBe('admin-1');
     expect(call.userType).toBe('admin');
-    expect(call.message).toContain('En Espera');
-    expect(call.message).toContain('En Proceso');
+    // Una fila legada se rotula por su ETAPA canónica: `on-hold` es Solicitud, `processing` es
+    // Confirmado. El admin lee un solo vocabulario aunque la columna todavía no se haya migrado.
+    expect(call.message).toContain('Solicitud');
+    expect(call.message).toContain('Confirmado');
     expect(call.userName).toBe('🔄 Administrador');
     expect(call.fileUrl).toBeUndefined();
   });

@@ -271,7 +271,7 @@ function generateBudgetHTML(orderData: BudgetData): string {
 
   // Additional order information
   const orderIdNum = orderData.order_id;
-  const orderStatus = orderData.status || 'on-hold';
+  const orderStatus = orderData.status || 'request';
   const paymentMethod = 'Por definir';
 
   // Format currency
@@ -736,7 +736,7 @@ async function generateBudgetPDFWithReactPDF(orderData: BudgetData): Promise<{
         reserve: parseFloat(orderData.metadata?.calculated_total || '0') * 0.25,
       },
       couponCode: orderData.coupon_code,
-      status: getOrderStatusInSpanish(orderData.status || 'on-hold'),
+      status: getOrderStatusInSpanish(orderData.status || 'request'),
       shippingInfo: orderData.shipping_lines && orderData.shipping_lines.length > 0 ? {
         method: orderData.shipping_lines[0].method_title || 'Delivery',
         total: parseFloat(orderData.shipping_lines[0].total || '0'),

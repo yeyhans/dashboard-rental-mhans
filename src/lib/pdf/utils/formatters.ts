@@ -1,3 +1,4 @@
+import { statusLabel } from '../../orderStatus';
 /**
  * Currency formatting utilities
  */
@@ -76,20 +77,12 @@ export function generateContractNumber(userId: number): string {
 }
 
 /**
- * Order status translation to Spanish
+ * Order status translation to Spanish.
+ *
+ * Este mapa era una tercera copia del vocabulario legado. Los PDF que ya están emitidos siguen
+ * llevando estados legados, así que `statusLabel` los traduce igual, pero ahora un solo archivo
+ * decide el rótulo de cada etapa.
  */
 export function getOrderStatusInSpanish(status: string): string {
-  const statusMap: { [key: string]: string } = {
-    pending: 'Pendiente',
-    processing: 'En Proceso',
-    'on-hold': 'En Espera',
-    completed: 'Completado',
-    cancelled: 'Cancelado',
-    refunded: 'Reembolsado',
-    failed: 'Fallido',
-    draft: 'Borrador',
-    trash: 'Eliminado',
-  };
-
-  return statusMap[status] || status.charAt(0).toUpperCase() + status.slice(1);
+  return statusLabel(status);
 }

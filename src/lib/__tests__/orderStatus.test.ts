@@ -172,7 +172,9 @@ describe('statusLabel', () => {
   it('returns the raw value for an unknown status instead of throwing or rendering undefined', () => {
     // A dashboard row must still render if the database somehow holds an unexpected value; the
     // admin seeing the raw string is far better than a blank cell or a crashed island.
-    expect(statusLabel('on-hold')).toBe('on-hold');
+    // `on-hold` is NOT an example of this: it is a legacy status with a canonical stage, and
+    // `statusLabel` translates it — see `statusLabelLegacy.test.ts`.
+    expect(statusLabel('paid')).toBe('paid');
     expect(statusLabel('')).toBe('');
   });
 });

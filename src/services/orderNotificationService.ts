@@ -1,4 +1,5 @@
 import { communicationsService } from './communicationsService';
+import { canonicalStatus, statusLabel } from '../lib/orderStatus';
 
 /**
  * Runs in the browser: `ProcessOrder.tsx` reaches it through the `useOrderNotifications` hook.
@@ -203,37 +204,13 @@ class OrderNotificationService {
    * Construir mensaje para cambio de estado (compacto)
    */
   private buildStatusChangeMessage(statusData: StatusChangeNotificationData): string {
-    const statusNames: { [key: string]: string } = {
-      'pending': 'Pendiente',
-      'processing': 'En Proceso',
-      'on-hold': 'En Espera',
-      'completed': 'Completado',
-      'cancelled': 'Cancelado',
-      'failed': 'Fallido',
-      'refunded': 'Reembolsado'
-    };
+    const oldStatusName = statusLabel(statusData.oldStatus);
+    const newStatusName = statusLabel(statusData.newStatus);
 
-    const oldStatusName = statusNames[statusData.oldStatus] || statusData.oldStatus;
-    const newStatusName = statusNames[statusData.newStatus] || statusData.newStatus;
-
-    // Determinar emoji según el nuevo estado
-    let emoji = '🔄';
-    switch (statusData.newStatus) {
-      case 'completed':
-        emoji = '✅';
-        break;
-      case 'failed':
-        emoji = '❌';
-        break;
-      case 'cancelled':
-        emoji = '❌';
-        break;
-      case 'refunded':
-        emoji = '💸';
-        break;
-      default:
-        emoji = '🔄';
-    }
+    // El emoji sale de la etapa canónica: `failed` y `refunded` eran casos propios y después de
+    // 0003 ninguno vuelve a llegar, así que el aviso saldría siempre con el genérico.
+    const destino = canonicalStatus(statusData.newStatus);
+    const emoji = destino === 'completed' ? '✅' : destino === 'cancelled' ? '❌' : '🔄';
 
     const reasonText = statusData.reason ? ` - ${statusData.reason}` : '';
     return `${emoji} **Estado:** ${oldStatusName} → ${newStatusName}${reasonText}`;

@@ -117,7 +117,10 @@ export function migrateLegacyStatus(value: unknown): OrderStatus | null {
  * string is far more useful than a blank cell or a crashed React island.
  */
 export function statusLabel(status: string): string {
-  return isOrderStatus(status) ? STATUS_LABELS[status] : status;
+  // Se normaliza antes de rotular: durante la ventana una fila sin migrar seguiría mostrando su
+  // slug en inglés en pantalla y en los PDF. Su etapa es la canónica, aunque la columna no lo diga.
+  const canonical = canonicalStatus(status);
+  return canonical ? STATUS_LABELS[canonical] : status;
 }
 
 /* ---------------------------------------------------------------------------------------------

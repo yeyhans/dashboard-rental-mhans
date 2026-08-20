@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '../lib/supabase';
-import { bookingStatusFilter } from '../lib/orderStatus';
+import { ORDER_STATUSES, bookingStatusFilter, canonicalStatus, expandStatusFilter } from '../lib/orderStatus';
 import type { Database } from '../types/database';
 
 type Order = Database['public']['Tables']['orders']['Row'];
@@ -199,8 +199,11 @@ export class OrderService {
         `, { count: 'exact' })
         .order('date_created', { ascending: false });
 
-      if (status) {
-        query = query.eq('status', status);
+      // El listado filtra por una etapa canónica, pero durante la ventana la fila puede seguir
+      // escrita en vocabulario legado: un `.eq()` literal devolvería la lista vacía sin error.
+      const statusFilter = expandStatusFilter(status ? [status] : undefined);
+      if (statusFilter) {
+        query = query.in('status', statusFilter);
       }
 
       const { data, error, count } = await query
@@ -842,10 +845,13 @@ export class OrderService {
 
       if (statusError) throw statusError;
 
-      const statusCounts = statusData.reduce((acc: any, order) => {
-        acc[order.status] = (acc[order.status] || 0) + 1;
+      // Se cuenta por etapa canónica: mientras la ventana tenga filas legadas, contar por el
+      // valor crudo parte cada etapa en dos claves y ninguna refleja el total real.
+      const statusCounts = statusData.reduce((acc: Record<string, number>, order) => {
+        const bucket = canonicalStatus(order.status);
+        if (bucket) acc[bucket] = (acc[bucket] || 0) + 1;
         return acc;
-      }, {});
+      }, Object.fromEntries(ORDER_STATUSES.map(s => [s, 0])) as Record<string, number>);
 
       // Ingresos totales
       const { data: revenueData, error: revenueError } = await supabaseAdmin
@@ -878,8 +884,6 @@ export class OrderService {
         totalRevenue: totalRevenue.toFixed(2),
         monthlyOrders: monthlyOrders || 0,
         averageOrderValue,
-        pendingOrders: statusCounts['pending'] || 0,
-        processingOrders: statusCounts['processing'] || 0,
         completedOrders: statusCounts['completed'] || 0,
         cancelledOrders: statusCounts['cancelled'] || 0
       };

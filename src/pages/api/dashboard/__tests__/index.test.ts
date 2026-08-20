@@ -34,11 +34,9 @@ function stubStats() {
     totalRevenue: '1000',
     averageOrderValue: '50',
     monthlyOrders: 4,
-    pendingOrders: 1,
-    processingOrders: 1,
     completedOrders: 17,
     cancelledOrders: 1,
-    statusCounts: {},
+    statusCounts: { request: 1, confirmed: 1, completed: 17, cancelled: 1 },
   });
   getProductStats.mockResolvedValue({
     totalProducts: 5,
@@ -143,6 +141,25 @@ describe('dashboard aggregate stats authorization (F5)', () => {
     expect(response.status).toBe(200);
     expect(payload.success).toBe(true);
     expect(payload.data.overview.totalRevenue).toBe('1000');
+  });
+
+  /**
+   * El bloque `orders` publicaba `pending` y `processing`, dos etapas que 0003 elimina: después
+   * de la migración habrían quedado en cero para siempre, y un cero es indistinguible de "no hay
+   * pedidos ahí". Se reemplazan por `byStatus`, las ocho etapas canónicas completas.
+   */
+  it('publishes the eight canonical stages instead of two states that stop existing', async () => {
+    authGetUser.mockResolvedValue({ data: { user: { id: 'admin-1', email: 'admin@x.cl' } }, error: null });
+    stubAdminLookup({ data: { id: 1, user_id: 'admin-1', email: 'admin@x.cl', role: 'admin' }, error: null });
+    const { GET } = await import('../index');
+
+    const payload = await (await GET(requestWithCookie('sb-access-token=valid-jwt') as never)).json();
+
+    expect(payload.data.orders).not.toHaveProperty('pending');
+    expect(payload.data.orders).not.toHaveProperty('processing');
+    expect(payload.data.orders.byStatus).toMatchObject({ request: 1, confirmed: 1, completed: 17 });
+    expect(payload.data.orders.completed).toBe(17);
+    expect(payload.data.orders.cancelled).toBe(1);
   });
 
   it('serves super_admin sessions, not just role admin', async () => {

@@ -50,8 +50,9 @@ export const GET: APIRoute = withAuth(async () => {
       },
       orders: {
         total: orderStats.totalOrders,
-        pending: orderStats.pendingOrders,
-        processing: orderStats.processingOrders,
+        // `pending` y `processing` nombraban etapas que 0003 elimina: publicarlas sería servir
+        // un cero permanente. Las ocho etapas canónicas van completas en `byStatus`.
+        byStatus: orderStats.statusCounts,
         completed: orderStats.completedOrders,
         cancelled: orderStats.cancelledOrders,
         monthly: orderStats.monthlyOrders,

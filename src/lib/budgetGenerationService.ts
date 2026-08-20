@@ -476,7 +476,7 @@ export const canGenerateBudget = async (orderId: number): Promise<{
  */
 export const processOrderForBudget = async (
   orderId: number,
-  newStatus: string = 'on-hold'
+  newStatus: string = 'request'
 ): Promise<{
   success: boolean;
   message: string;

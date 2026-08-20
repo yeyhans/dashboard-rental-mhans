@@ -163,7 +163,7 @@ export const POST: APIRoute = async (context) => {
           reserve: parseFloat(orderData.metadata?.calculated_total || orderData.calculated_total?.toString() || '0') * 0.25,
         },
         couponCode: orderData.coupon_code,
-        status: getOrderStatusInSpanish(orderData.status || 'on-hold'),
+        status: getOrderStatusInSpanish(orderData.status || 'request'),
         ...(shippingInfoData && { shippingInfo: shippingInfoData }),
       };
 
