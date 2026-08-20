@@ -1,0 +1,72 @@
+---
+import Base from "../layout/Base.astro";
+import ProfitabilityBoard from "../components/profitability/ProfitabilityBoard";
+import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
+import { ProfitabilityService } from "../services/profitabilityService";
+
+export const prerender = false;
+
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+
+const now = new Date();
+
+const emptyMetrics = {
+  ingresos: 0, jornadasVendidas: 0, pedidosRealizados: 0,
+  ticketPromedio: 0, equiposUtilizados: 0,
+};
+
+let board = {
+  current: emptyMetrics,
+  previous: emptyMetrics,
+  deltas: {
+    ingresos: null, jornadasVendidas: null, ticketPromedio: null,
+    pedidosRealizados: null, equiposUtilizados: null,
+  },
+  series: [],
+  rotation: [],
+  idle: [],
+  diasPeriodo: 30,
+};
+let loadError: string | null = null;
+
+try {
+  board = await ProfitabilityService.getBoard(now);
+} catch (error) {
+  console.error('[profitability] Error al cargar la rentabilidad:', {
+    admin: adminSession.admin.email,
+    error,
+  });
+  loadError = 'No se pudo cargar la rentabilidad. Recarga la pagina o intentalo en unos minutos.';
+}
+
+const periodLabel = new Intl.DateTimeFormat('es-CL', { month: 'long', year: 'numeric' }).format(now);
+
+const title = `Rentabilidad | ${adminSession.admin.email}`;
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    <header class="mb-5 border-b border-[var(--color-border)] pb-4">
+      <h1 class="text-xl font-semibold tracking-tight">Rentabilidad</h1>
+      <p class="mt-1 text-sm text-[var(--color-text-secondary)]">
+        ¿Cuánto gana el negocio y qué tan bien trabajan los activos?
+      </p>
+    </header>
+
+    {loadError ? (
+      <div
+        role="alert"
+        class="rounded-[10px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-4 text-sm text-[var(--color-crit)]"
+      >
+        {loadError}
+      </div>
+    ) : (
+      <ProfitabilityBoard client:load data={board} periodLabel={periodLabel} />
+    )}
+  </div>
+</Base>
