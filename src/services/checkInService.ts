@@ -51,8 +51,12 @@ export class CheckInService {
 
     if (error) throw error;
 
-    const rows = data ?? [];
-    const entries: CheckInListEntry[] = rows.map(row => {
+    // `row` se tipa como `any` a proposito: `src/types/database.ts` esta desactualizado respecto
+    // de la DB real — le falta `pago_reserva`, entre otras — y con esa definicion el cliente de
+    // Supabase infiere `SelectQueryError` para toda la fila. Es el mismo caso que ya arrastran
+    // `orderService` y `api/dashboard/filtered`. Se resuelve regenerando los tipos, no aqui.
+    const rows: any[] = data ?? [];
+    const entries: CheckInListEntry[] = rows.map((row: any) => {
       const lineItems = Array.isArray(row.line_items) ? (row.line_items as LineItem[]) : [];
       const company = row.billing_company?.trim();
       const person = `${row.billing_first_name ?? ''} ${row.billing_last_name ?? ''}`.trim();
@@ -71,7 +75,7 @@ export class CheckInService {
     });
 
     const kpis = checkInKpis(
-      rows.map(row => ({ status: row.status, endDate: row.order_fecha_termino })),
+      rows.map((row: any) => ({ status: row.status, endDate: row.order_fecha_termino })),
       now
     );
 

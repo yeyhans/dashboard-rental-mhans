@@ -155,6 +155,12 @@ describe('idleAssets', () => {
     expect(idleAssets([{ id: 3, name: 'Usado' }], rot)).toEqual([]);
   });
 
+  it('respalda el nombre nulo, porque products.name es nullable', () => {
+    // Sin respaldo la fila se renderiza vacía y el admin ve un item en blanco en la lista de
+    // capital ocioso, sin forma de saber a qué equipo se refiere.
+    expect(idleAssets([{ id: 9, name: null }], [])).toEqual([{ id: '9', name: 'Equipo #9' }]);
+  });
+
   it('con el catálogo vacío no inventa activos ociosos', () => {
     expect(idleAssets([], [])).toEqual([]);
   });

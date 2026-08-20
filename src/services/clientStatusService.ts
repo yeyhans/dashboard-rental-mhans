@@ -39,7 +39,9 @@ export class ClientStatusService {
 
     // Saldo por cliente, acumulado desde sus pedidos abiertos.
     const balances = new Map<number, { outstanding: number; hasOverdue: boolean }>();
-    for (const row of orders ?? []) {
+    // `row` como `any` por la misma razon que en `checkInService`: los tipos generados no
+    // conocen `pago_reserva` y Supabase infiere un error de consulta para la fila entera.
+    for (const row of (orders ?? []) as any[]) {
       const like = {
         status: row.status,
         total: Number(row.calculated_total) || 0,

@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { formatCLP } from '../../lib/delivery';
-import { statusBadgeClass, statusLabel } from '../../lib/orderStatus';
 import type { FinanceBoard as FinanceBoardData, FinanceRow } from '../../services/financeService';
 
 /**

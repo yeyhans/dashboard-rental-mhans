@@ -154,13 +154,15 @@ export function assetRotation(orders: readonly RevenueOrderLike[]): AssetRotatio
  * from every order is idle capital, and naming it is actionable without knowing its cost.
  */
 export function idleAssets(
-  catalogue: ReadonlyArray<{ id: number | string; name: string }>,
+  catalogue: ReadonlyArray<{ id: number | string; name: string | null }>,
   rotation: readonly AssetRotation[]
 ): Array<{ id: string; name: string }> {
   const used = new Set(rotation.map(r => r.productId));
   return catalogue
     .filter(product => !used.has(String(product.id)))
-    .map(product => ({ id: String(product.id), name: product.name }));
+    // `products.name` es nullable. Sin este respaldo la fila se renderiza vacia y el admin ve un
+    // item en blanco en la lista de capital ocioso, sin forma de saber a que equipo se refiere.
+    .map(product => ({ id: String(product.id), name: product.name ?? `Equipo #${product.id}` }));
 }
 
 /** Percentage change against the previous period, or `null` when there is no base. */
