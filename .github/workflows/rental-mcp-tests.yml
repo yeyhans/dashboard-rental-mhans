@@ -30,14 +30,11 @@ on:
       - 'src/services/orderItemService.ts'
       - 'src/services/orderNotificationService.ts'
       - '.github/workflows/rental-mcp-tests.yml'
+  # Sin path filters en pull_request A PROPÓSITO: `pytest` es required check, y
+  # un required check con paths deja en "Expected" eterno (merge bloqueado) a
+  # cualquier PR que no toque esos paths. La suite corre en <1s; el costo de
+  # correrla siempre es menor que ese deadlock.
   pull_request:
-    paths:
-      - 'hermes-mhans/**'
-      - 'supabase/migrations/**'
-      - 'src/services/orderService.ts'
-      - 'src/services/orderItemService.ts'
-      - 'src/services/orderNotificationService.ts'
-      - '.github/workflows/rental-mcp-tests.yml'
 
 jobs:
   # NOTE: job id `pytest` is the required-check name pinned in branch
