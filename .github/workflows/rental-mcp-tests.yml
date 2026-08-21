@@ -61,13 +61,23 @@ jobs:
             exit 1
           fi
 
-      # supabase-stg-db binds 127.0.0.1:5435 on the VPS only. Forward it to the
-      # runner so the DSN (postgresql://...@127.0.0.1:5435/...) resolves locally.
-      - name: Open SSH tunnel to staging Postgres
+      # supabase-stg-db binds 127.0.0.1:5435 on the VPS only, so the job needs
+      # an SSH tunnel. Tunnel, connectivity gate and staging suite live in ONE
+      # step on purpose: a backgrounded `ssh -f` from a previous step does not
+      # reliably survive the step boundary on GitHub runners (first live run
+      # timed out exactly that way), and a trap cleans the tunnel up at the end.
+      # The connectivity gate proves the DSN points at a LIVE staging Postgres
+      # and logs host/port/db/user — NEVER the password.
+      - name: Staging suite via SSH tunnel (connectivity gate + legacy vocabulary)
         env:
           STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
           STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
           STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          STAGING_DB_DSN: ${{ secrets.STAGING_DB_DSN }}
+          # Staging DB is pre-0003, so the DB-facing vocabulary MUST be legacy
+          # (matches its CHECK constraint).
+          DATABASE_URL: ${{ secrets.STAGING_DB_DSN }}
+          ORDER_STATUS_VOCABULARY: legacy
         run: |
           if [ -z "$STAGING_SSH_KEY" ] || [ -z "$STAGING_SSH_HOST" ]; then
             echo "::error::secrets STAGING_SSH_KEY/STAGING_SSH_HOST faltantes — el Postgres de staging es loopback-only en el VPS y requiere túnel."
@@ -81,14 +91,9 @@ jobs:
             -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
             -L 5435:127.0.0.1:5435 \
             "${STAGING_SSH_USER:-root}@$STAGING_SSH_HOST"
+          trap 'pkill -f "ssh -f -N -i $HOME/.ssh/staging_key" || true' EXIT
           echo "Túnel SSH abierto: 127.0.0.1:5435 -> $STAGING_SSH_HOST:127.0.0.1:5435"
 
-      # Proves the DSN is live and points at staging. Logs host/port/db/user —
-      # NEVER the password.
-      - name: Assert staging DB reachable (connectivity gate)
-        env:
-          STAGING_DB_DSN: ${{ secrets.STAGING_DB_DSN }}
-        run: |
           uv run --extra dev python - <<'EOF'
           import os, sys
           import psycopg
@@ -112,13 +117,7 @@ jobs:
               sys.exit(1)
           EOF
 
-      # Full suite with the staging env exported. Staging DB is pre-0003, so
-      # the DB-facing vocabulary MUST be 'legacy' (matches its CHECK constraint).
-      - name: Full suite vs staging env (ORDER_STATUS_VOCABULARY=legacy)
-        env:
-          DATABASE_URL: ${{ secrets.STAGING_DB_DSN }}
-          ORDER_STATUS_VOCABULARY: legacy
-        run: uv run --extra dev python -m pytest tests/ -q
+          uv run --extra dev python -m pytest tests/ -q
 
       # Second pass WITHOUT any DSN: proves the suite stays green offline and
       # pins the v12 vocabulary table (validators.py reads the env at import).
