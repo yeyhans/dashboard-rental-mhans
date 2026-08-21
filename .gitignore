@@ -26,3 +26,5 @@ supabase/migrations/_raw/
 .env.local
 .env.*.local
 .env.local.produccion.bak
+
+.vercel
