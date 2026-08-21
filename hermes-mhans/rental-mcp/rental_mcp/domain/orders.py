@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..validators import is_valid_status
+from ..validators import DEFAULT_NEW_ORDER_STATUS, is_valid_status
 
 # The eleven NOT NULL columns of `orders` that have no default. Omitting any
 # of them aborts the INSERT, and Postgres reports only the first violation —
@@ -83,7 +83,7 @@ def build_order_insert_params(
     quote: dict[str, Any],
     line_items_json: str,
     profile: dict[str, Any],
-    status: str = "on-hold",
+    status: str | None = None,
 ) -> tuple[Any, ...]:
     """
     Build the INSERT values from a quote and a user_profiles row.
@@ -97,6 +97,10 @@ def build_order_insert_params(
       column name it holds the billing RUT of whoever rents — the personal RUT
       for a natural person — and '' when the profile has none. No sentinel.
     """
+    if status is None:
+        # Entry stage of the active vocabulary: 'on-hold' (legacy) or
+        # 'request' (v12). See ORDER_STATUS_VOCABULARY in validators.py.
+        status = DEFAULT_NEW_ORDER_STATUS
     if not is_valid_status(status):
         raise ValueError(
             f"Estado '{status}' no permitido por la base de datos. "

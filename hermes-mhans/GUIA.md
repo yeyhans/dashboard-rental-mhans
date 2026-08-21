@@ -175,6 +175,10 @@ Total: $360.570 CLP
 Estado: on-hold
 ```
 
+> El estado inicial mostrado depende del vocabulario activo: `on-hold` con el
+> vocabulario legacy (default, DB pre-migración 0003); `request` una vez que la
+> migración 0003 esté aplicada y el contenedor corra con `ORDER_STATUS_VOCABULARY=v12`.
+
 Reglas del mensaje:
 - Texto plano sin `parse_mode` — previene inyección de formato Markdown
 - PII mínima: SIN rut, email, dirección ni URLs de documentos
@@ -233,6 +237,7 @@ El notifier usa `entrypoint: ["tini","--"]` para saltear el `entrypoint.sh` base
 | `DATABASE_URL_NOTIFIER` | Conexión directa al postmaster :5434 (rol hermes_notifier) | LISTEN/NOTIFY — requiere postmaster directo, NO pooler; lo escribe `setup-db-role-notifier.sh` |
 | `DASHBOARD_API_URL` | URL base del dashboard (`https://dashboard.mariohans.cl`) | Estuvo AUSENTE — causa raíz de "dashboard caído" |
 | `DASHBOARD_API_TOKEN` | Secreto estático 32 chars == `FRONTEND_API_SECRET` de Vercel | NO es JWT — el comentario viejo era erróneo |
+| `ORDER_STATUS_VOCABULARY` | Vocabulario de estados de órdenes: `legacy` (default) o `v12` | Dejar en `legacy` hasta que la migración 0003 esté aplicada; recién entonces pasar a `v12` (ventana T-024). Recrear el contenedor tras el cambio |
 | `HERMES_HOME` | Directorio de datos del agente (volumen persistente) | Sembrado por entrypoint.sh |
 | `LOG_LEVEL` | Nivel de logging (INFO por defecto) | Opcional |
 

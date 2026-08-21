@@ -28,6 +28,8 @@ from rental_mcp import dashboard_client
 from rental_mcp.validators import (
     ACTIVE_ORDER_STATUSES,
     DB_ORDER_STATUSES,
+    DEFAULT_NEW_ORDER_STATUS,
+    PAYMENT_GATE_STATUS,
     SAFE_CLIENT_FIELDS,
     VALID_TRANSITIONS,
     _filter_client_fields,
@@ -258,7 +260,8 @@ async def check_availability(
 ) -> dict[str, Any]:
     """
     Verifica disponibilidad de productos para un rango de fechas.
-    Detecta solapamientos con órdenes activas (pending, on-hold, processing).
+    Detecta solapamientos con órdenes activas (las etapas no terminales del
+    vocabulario de estados activo — ver ORDER_STATUS_VOCABULARY).
     """
     try:
         active_statuses = ACTIVE_ORDER_STATUSES
@@ -1049,9 +1052,13 @@ async def draft_create_order(
 async def update_order_status_draft(order_id: int, new_status: str) -> dict[str, Any]:
     """
     Prepara un cambio de estado de orden (requiere confirmación).
-    Estados válidos: pending, on-hold, processing, completed, cancelled,
-    refunded, failed. Valida la transición de workflow. Si new_status='processing',
-    advierte que se requiere confirmar pago de reserva antes de proceder.
+    Los estados válidos dependen del vocabulario activo (ORDER_STATUS_VOCABULARY):
+    legacy = pending, on-hold, processing, completed, cancelled, refunded,
+    failed; v12 = request, evaluation, confirmed, preparation, in-rental,
+    return, completed, cancelled. Valida la transición de workflow. Si el nuevo
+    estado es la etapa gateada por pago ('processing' en legacy, 'confirmed'
+    en v12), advierte que se requiere confirmar pago de reserva antes de
+    proceder.
     """
     try:
         # Reject values the CHECK constraint would refuse here, not on confirm:
@@ -1078,10 +1085,10 @@ async def update_order_status_draft(order_id: int, new_status: str) -> dict[str,
             }
 
         advertencias: list[str] = []
-        if new_status == "processing" and not order.get("pago_completo"):
+        if new_status == PAYMENT_GATE_STATUS and not order.get("pago_completo"):
             advertencias.append(
                 "ATENCIÓN: La orden no tiene pago_completo=true. "
-                "El estado 'processing' SOLO debe activarse si el pago de reserva está confirmado. "
+                f"El estado '{PAYMENT_GATE_STATUS}' SOLO debe activarse si el pago de reserva está confirmado. "
                 "Confirmar esta acción es responsabilidad del operador."
             )
 
@@ -1578,7 +1585,7 @@ async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]
             return {
                 "applied": True,
                 "order_id": order_id,
-                "status": "on-hold",
+                "status": DEFAULT_NEW_ORDER_STATUS,
                 "pdf_result": pdf_result,
                 "mensaje": nota or "Orden creada exitosamente",
             }
@@ -1613,7 +1620,10 @@ async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]
                     await conn.commit()
 
             pdf_result = None
-            if new_status == "processing":
+            # Al pasar la etapa gateada por pago ('processing' en legacy,
+            # 'confirmed' en v1.2 — heredero según mapeo 0003) se genera el
+            # PDF de orden de procesamiento.
+            if new_status == PAYMENT_GATE_STATUS:
                 pdf_result = await dashboard_client.generate_processing_pdf(oid)
 
             return {

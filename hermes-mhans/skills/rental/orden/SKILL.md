@@ -26,7 +26,7 @@ Protocolo obligatorio en DOS pasos. JAMÁS te saltes el paso de confirmación hu
    - Disponibilidad ok (el draft la re-chequea y te devuelve advertencias).
 2. **Muestra el preview COMPLETO al admin por Telegram**: cliente, equipos, fechas, jornadas, desglose de montos, advertencias. Pregunta explícitamente: **"¿Confirmo la creación? (sí/no)"** y ESPERA la respuesta.
 3. Solo con un "sí" claro del admin: `confirm_write(plan_id, confirmation_token)`. Si dice no o pide cambios: `cancel_write(plan_id)` y rearma.
-4. Reporta el resultado: número de orden, estado (on-hold) y si el presupuesto PDF/email se disparó o quedó pendiente.
+4. Reporta el resultado: número de orden, estado inicial (`on-hold` con vocabulario legacy; `request` cuando rige v1.2 — la tool te lo devuelve) y si el presupuesto PDF/email se disparó o quedó pendiente.
 
 El token expira a los 15 minutos — si expiró, genera un draft nuevo (no lo "reintentes").
 
@@ -36,7 +36,7 @@ El token expira a los 15 minutos — si expiró, genera un draft nuevo (no lo "r
 2. Preview al admin + pregunta explícita + esperar "sí".
 3. `confirm_write(...)`.
 
-Guard crítico: a `processing` SOLO si la reserva está pagada. Si el draft advierte pago no verificado, díselo al admin y que él confirme bajo su responsabilidad.
+Guard crítico: a la etapa gateada por pago (`processing` con vocabulario legacy; `confirmed` cuando rige v1.2) SOLO si la reserva está pagada. Si el draft advierte pago no verificado, díselo al admin y que él confirme bajo su responsabilidad.
 
 ## Nunca
 
