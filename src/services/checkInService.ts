@@ -40,8 +40,7 @@ export class CheckInService {
     const { data, error } = await supabaseAdmin!
       .from('orders')
       .select(
-        'id, order_key, status, order_proyecto, order_fecha_termino, ' +
-          'billing_first_name, billing_last_name, billing_company, line_items'
+        'id, order_key, status, order_proyecto, order_fecha_termino, billing_first_name, billing_last_name, billing_company, line_items'
       )
       // Etapas en curso más las cerradas: el canónico lista ambas, marcando las segundas como
       // completadas. `activeStatusFilter()` abarca los dos vocabularios durante la ventana.
@@ -51,12 +50,8 @@ export class CheckInService {
 
     if (error) throw error;
 
-    // `row` se tipa como `any` a proposito: `src/types/database.ts` esta desactualizado respecto
-    // de la DB real — le falta `pago_reserva`, entre otras — y con esa definicion el cliente de
-    // Supabase infiere `SelectQueryError` para toda la fila. Es el mismo caso que ya arrastran
-    // `orderService` y `api/dashboard/filtered`. Se resuelve regenerando los tipos, no aqui.
-    const rows: any[] = data ?? [];
-    const entries: CheckInListEntry[] = rows.map((row: any) => {
+    const rows = data ?? [];
+    const entries: CheckInListEntry[] = rows.map((row) => {
       const lineItems = Array.isArray(row.line_items) ? (row.line_items as LineItem[]) : [];
       const company = row.billing_company?.trim();
       const person = `${row.billing_first_name ?? ''} ${row.billing_last_name ?? ''}`.trim();

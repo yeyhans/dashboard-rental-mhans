@@ -23,22 +23,12 @@ import {
 /** `products.status` value that marks a catalogue row as live (WooCommerce-derived vocabulary). */
 const PUBLISHED_STATUS = 'publish';
 
-/**
- * `serialised_assets` is not in the generated `src/types/database.ts` (stale — see
- * `src/types/inventory.ts`), so the typed client rejects the table name. Reaching for the
- * untyped client here is narrower than hand-editing a generated file that every other service
- * imports.
- */
-type UntypedClient = {
-  from: (table: string) => any;
-};
-
 export class SerialisedAssetService {
-  private static ensureSupabaseAdmin(): UntypedClient {
+  private static ensureSupabaseAdmin() {
     if (!supabaseAdmin) {
       throw new Error('Supabase admin client not available');
     }
-    return supabaseAdmin as unknown as UntypedClient;
+    return supabaseAdmin;
   }
 
   /**

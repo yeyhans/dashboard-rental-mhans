@@ -52,11 +52,7 @@ export class DeliveryService {
   static async getBoard(now: Date = new Date(), historyLimit = 200): Promise<DeliveryBoard> {
     DeliveryService.ensureSupabaseAdmin();
 
-    // `src/types/database.ts` no declara `shipping_usage` — y en cambio declara `order_items`,
-    // una tabla que la DB real NO tiene. Es la prueba de que los tipos generados estan
-    // desactualizados. Se castea el cliente para esta consulta en vez de silenciar el archivo
-    // entero; se resuelve regenerando los tipos, no aqui.
-    const db = supabaseAdmin as any;
+    const db = supabaseAdmin!;
 
     const [{ data: usage, error: usageError }, { data: methods, error: methodsError }] = await Promise.all([
       db

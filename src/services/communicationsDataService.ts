@@ -29,7 +29,7 @@ export class CommunicationsDataService {
     if (!supabaseAdmin) {
       throw new Error('supabaseAdmin no está inicializado');
     }
-    return supabaseAdmin as any;
+    return supabaseAdmin;
   }
 
   static async listByOrder(orderId: number, options: ListByOrderOptions = {}): Promise<ListByOrderResult> {
