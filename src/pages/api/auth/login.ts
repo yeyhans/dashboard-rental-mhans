@@ -123,12 +123,14 @@ export const POST: APIRoute = withCors(async (context) => {
     // Login exitoso — resetear contador de intentos fallidos para este email
     resetLockout(normalizedEmail);
 
-    // Verify admin user exists in admin_users table
+    // Verify admin user exists in admin_users table.
+    // .in() en vez de .eq('role', 'admin'): los super_admin quedaban excluidos
+    // (misma regresión ya corregida en lib/supabase.ts).
     const { data: adminUser, error: adminError } = await supabaseAdmin
       .from('admin_users')
       .select('*')
       .eq('user_id', authData.user.id)
-      .eq('role', 'admin')
+      .in('role', ['admin', 'super_admin'])
       .single();
 
     if (adminError || !adminUser) {
