@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   assetRotation,
+  calculateMargin,
+  calculateROI,
+  expensesByCategory,
+  expensesByMonth,
   growth,
   idleAssets,
   monthlyRevenueSeries,
@@ -8,6 +12,7 @@ import {
   type RevenueOrderLike,
 } from '../profitability';
 import type { LineItem } from '../../types/order';
+import type { ExpenseLike } from '../../types/expenses';
 
 const now = new Date('2026-06-15T10:00');
 
@@ -173,5 +178,64 @@ describe('growth', () => {
 
   it('devuelve null sin base de comparación', () => {
     expect(growth(500, 0)).toBeNull();
+  });
+});
+
+// T-026: cierre del gap de gastos/margen/ROI (ver el header del archivo).
+function expense(category: ExpenseLike['category'], amount: number, date: string): ExpenseLike {
+  return { category, amount, expense_date: date };
+}
+
+describe('expensesByCategory', () => {
+  it('returns an empty map for no expenses', () => {
+    expect(expensesByCategory([])).toEqual({});
+  });
+
+  it('sums amounts per category', () => {
+    const expenses = [
+      expense('warehouse', 100000, '2026-08-01'),
+      expense('internet', 30000, '2026-08-05'),
+      expense('warehouse', 50000, '2026-08-10'),
+    ];
+    expect(expensesByCategory(expenses)).toEqual({ warehouse: 150000, internet: 30000 });
+  });
+});
+
+describe('expensesByMonth', () => {
+  it('buckets by YYYY-MM regardless of day', () => {
+    const expenses = [
+      expense('transport', 10000, '2026-08-01'),
+      expense('transport', 20000, '2026-08-28'),
+      expense('transport', 5000, '2026-09-02'),
+    ];
+    expect(expensesByMonth(expenses)).toEqual({ '2026-08': 30000, '2026-09': 5000 });
+  });
+});
+
+describe('calculateMargin', () => {
+  it('computes absolute margin and percentage against revenue', () => {
+    const result = calculateMargin(1000000, 400000);
+    expect(result.margin).toBe(600000);
+    expect(result.marginPercentage).toBe(60);
+  });
+
+  it('returns null percentage when revenue is zero, instead of Infinity/NaN', () => {
+    const result = calculateMargin(0, 400000);
+    expect(result.margin).toBe(-400000);
+    expect(result.marginPercentage).toBeNull();
+  });
+});
+
+describe('calculateROI', () => {
+  it('divides profit by acquisition cost', () => {
+    expect(calculateROI(50000, 200000)).toBe(0.25);
+  });
+
+  it('returns null when acquisition cost is zero, instead of Infinity/NaN', () => {
+    expect(calculateROI(50000, 0)).toBeNull();
+  });
+
+  it('returns null when acquisition cost is missing', () => {
+    expect(calculateROI(50000, null)).toBeNull();
   });
 });
