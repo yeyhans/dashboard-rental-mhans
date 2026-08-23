@@ -159,17 +159,30 @@ export function checkInTotals(items: readonly CheckInItem[]): CheckInTotals {
  * Every unit starts `pending`: the schema has no per-item reception column, so there is nothing
  * to read back. See the note in `pages/check-in.astro` — showing a control that cannot persist
  * would repeat exactly the defect this change removed from `ProcessOrder`.
+ *
+ * `orders.line_items` is jsonb with no CHECK and no guaranteed shape (R3-202, review on
+ * `e1a5b23`+`05c83cf`). A malformed element — `null`, a bare string, a number, or an object
+ * missing `name`/`sku` — is skipped instead of read: this function feeds a `useMemo` inside
+ * `CheckInBoard.tsx` and `DeliveryBoard.tsx`, neither of which has an ErrorBoundary, so a throw
+ * here does not fail one panel — it takes down the whole island (`/check-in` or `/delivery`,
+ * KPIs and all). Same defensive posture as `lib/profitability.ts`'s `item?.product_id != null`.
  */
 export function itemsFromLineItems(lineItems: readonly LineItem[] | null | undefined): CheckInItem[] {
   if (!lineItems) return [];
-  return lineItems.map(item => {
+
+  const items: CheckInItem[] = [];
+  for (const item of lineItems) {
+    if (!item || typeof item !== 'object') continue;
+    if (typeof item.name !== 'string' || typeof item.sku !== 'string') continue;
+
     const productId = Number(item.product_id);
-    return {
+    items.push({
       name: item.name,
       sku: item.sku,
       productId: Number.isFinite(productId) ? productId : null,
       quantity: Number(item.quantity) || 0,
       state: 'pending' as const,
-    };
-  });
+    });
+  }
+  return items;
 }

@@ -38,6 +38,25 @@ export function isAwaitingDispatch(status: string): boolean {
   return status === 'pending' || status === 'processing';
 }
 
+/**
+ * Whether a shipment's equipment has actually left and a `checkout` movement may be registered
+ * against it (T-026 gap 2/4, R3-201 CRITICAL: review on `e1a5b23`+`05c83cf`).
+ *
+ * `pending`/`processing` (`isAwaitingDispatch`) means the equipment is still on the shelf —
+ * registering a checkout there would mark it as "out" before it physically leaves, corrupting
+ * `hasOpenCheckout` and blocking that unit for whichever order actually needs it. `delivered` and
+ * `cancelled` are excluded too: the dispatch is already closed one way or the other.
+ *
+ * Canonical evidence: `MarioHans_OS_Area01_Pedidos_Canonical_RC2.1.2.html`'s `renderActions` cfg
+ * only offers `'Registrar entrega / Check-Out'` from the `preparacion` stage, i.e. the moment the
+ * equipment is confirmed leaving — the real DB equivalent of "confirmed leaving" in
+ * `shipping_usage.status` is `shipped`, not `pending`/`processing` (still being prepared) nor
+ * `delivered` (already arrived).
+ */
+export function canRecordCheckout(status: string): boolean {
+  return status === 'shipped';
+}
+
 function isoDay(value: string | Date): string {
   if (typeof value === 'string') return value.slice(0, 10);
   const y = value.getFullYear();

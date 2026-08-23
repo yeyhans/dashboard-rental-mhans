@@ -177,4 +177,35 @@ describe('itemsFromLineItems', () => {
     expect(items[0]?.productId).toBe(7);
     expect(items[1]?.productId).toBeNull();
   });
+
+  /**
+   * R3-202 (CRITICAL, review sobre e1a5b23+05c83cf): `orders.line_items` es jsonb sin CHECK ni
+   * forma garantizada. Sin esta guarda, un elemento `null` o no-objeto lanza dentro del `useMemo`
+   * de `DeliveryBoard`/`CheckInBoard` — y como ninguna de las dos islas tiene ErrorBoundary, ese
+   * throw tumba la página completa (KPIs, tipos de envío, historial), no solo un panel.
+   */
+  it('descarta elementos null o no-objeto en vez de lanzar', () => {
+    const items = itemsFromLineItems([
+      { name: 'Válido', product_id: 1, sku: 'V-1', price: '0', quantity: 1 },
+      null as never,
+      undefined as never,
+      'no-es-un-objeto' as never,
+      42 as never,
+    ]);
+    expect(items).toEqual([
+      { name: 'Válido', sku: 'V-1', productId: 1, quantity: 1, state: 'pending' },
+    ]);
+  });
+
+  it('descarta un elemento objeto sin los campos esperados en vez de lanzar', () => {
+    const items = itemsFromLineItems([{} as never, { name: 'Sin más datos' } as never]);
+    expect(items).toEqual([]);
+  });
+
+  it('trata una cantidad no numérica en un elemento por lo demás válido como cero', () => {
+    const items = itemsFromLineItems([
+      { name: 'X', product_id: 1, sku: 'X', price: '0', quantity: undefined as never },
+    ]);
+    expect(items).toEqual([{ name: 'X', sku: 'X', productId: 1, quantity: 0, state: 'pending' }]);
+  });
 });

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2, Pencil, Plus, Search, Trash2, Truck } from 'lucide-react';
 import { itemsFromLineItems } from '../../lib/checkIn';
-import { SHIPMENT_STATUSES, formatCLP, shipmentLabel } from '../../lib/delivery';
+import { SHIPMENT_STATUSES, canRecordCheckout, formatCLP, shipmentLabel } from '../../lib/delivery';
 import {
   shippingMethodDeleteWarning,
   shippingMethodFromRecord,
@@ -43,6 +43,20 @@ import type { DeliveryBoard as DeliveryBoardData, ShipmentRow } from '../../serv
  * error: `validateMovementTransition`/`MOVEMENT_TRANSITION_ERRORS` en `lib/assetMovements.ts` ya
  * cubren checkout de forma genérica (`assetMovements.test.ts` ya los prueba con ambas
  * direcciones) — este componente solo le da una vía de entrada real.
+ *
+ * Fix de review R3 (2026-08-23, sobre `e1a5b23`+`05c83cf`, CRITICAL x2):
+ * - R3-201: la primera versión ofrecía el control en toda fila de `data.active`, que
+ *   `DeliveryService.getBoard` define como `isAwaitingDispatch(status) || status === 'shipped'` —
+ *   es decir, también `pending`/`processing`, equipo que AÚN NO SALE de bodega. Registrar la
+ *   salida ahí corrompe `hasOpenCheckout` (queda "afuera" sin haber salido) y bloquea esa unidad
+ *   para la orden que sí la necesita. Ahora se usa `canRecordCheckout(row.status)` (`lib/delivery.ts`,
+ *   probada en `delivery.test.ts`) — solo `shipped` habilita el control; las demás filas muestran el
+ *   motivo en español en vez del botón.
+ * - R3-202: `itemsFromLineItems` no tenía guarda sobre elementos malformados de `line_items`
+ *   (jsonb sin CHECK). Un `null` ahí lanzaba dentro del `useMemo` de `ShipmentTableRow`, y como
+ *   esta isla no tiene ErrorBoundary, tumbaba TODO `/delivery`, no solo esta tabla. Corregido en
+ *   `lib/checkIn.ts` (descarta elementos no-objeto o sin `name`/`sku`), con tests en
+ *   `checkIn.test.ts`.
  */
 interface DeliveryBoardProps {
   data: DeliveryBoardData;
@@ -58,8 +72,21 @@ interface AssetOption {
  * Espejo de `AssetCheckInControl` (`CheckInBoard.tsx`), con `direction: 'checkout'`. Vive fuera de
  * `ShipmentTableRow` por la misma razón: cada línea necesita su propio estado de
  * búsqueda/selección/envío.
+ *
+ * R3-203 (WARNING): en una línea con `quantity > 1` un solo checkout exitoso ya no deja el
+ * control "colgado" — se resetea la selección, se saca el serial ya registrado de las opciones (no
+ * puede volver a elegirse en esta sesión) y se muestra un contador "X de Y registradas" mientras
+ * queden unidades pendientes.
  */
-function AssetCheckOutControl({ productId, orderId }: { productId: number; orderId: number }) {
+function AssetCheckOutControl({
+  productId,
+  orderId,
+  quantity,
+}: {
+  productId: number;
+  orderId: number;
+  quantity: number;
+}) {
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<AssetOption[] | null>(null);
   const [loadingOptions, setLoadingOptions] = useState(false);
@@ -67,6 +94,7 @@ function AssetCheckOutControl({ productId, orderId }: { productId: number; order
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [registeredCount, setRegisteredCount] = useState(0);
 
   const loadOptions = async () => {
     setOpen(true);
@@ -105,6 +133,12 @@ function AssetCheckOutControl({ productId, orderId }: { productId: number; order
         setResult({ ok: false, message: payload.error || 'No se pudo registrar la salida' });
         return;
       }
+      // El serial recién despachado no puede volver a elegirse para esta misma línea, y la
+      // selección se limpia para que la siguiente unidad no reutilice por error el mismo notes/id.
+      setOptions(prev => (prev ?? []).filter(asset => asset.id !== selectedAssetId));
+      setRegisteredCount(count => count + 1);
+      setSelectedAssetId('');
+      setNotes('');
       setResult({ ok: true, message: 'Salida registrada' });
       toast.success('Salida registrada');
     } catch (error) {
@@ -113,6 +147,8 @@ function AssetCheckOutControl({ productId, orderId }: { productId: number; order
       setSubmitting(false);
     }
   };
+
+  const pending = Math.max(0, quantity - registeredCount);
 
   if (!open) {
     return (
@@ -128,38 +164,51 @@ function AssetCheckOutControl({ productId, orderId }: { productId: number; order
 
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-      <select
-        value={selectedAssetId}
-        onChange={e => setSelectedAssetId(e.target.value ? Number(e.target.value) : '')}
-        disabled={loadingOptions || (options?.length ?? 0) === 0}
-        aria-label="Número de serie"
-        className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-[11px]"
-      >
-        <option value="">
-          {loadingOptions ? 'Cargando…' : options?.length ? 'Elige el número de serie' : 'Sin equipos registrados'}
-        </option>
-        {(options ?? []).map(asset => (
-          <option key={asset.id} value={asset.id}>
-            {asset.serial_number}
-          </option>
-        ))}
-      </select>
-      <input
-        type="text"
-        value={notes}
-        onChange={e => setNotes(e.target.value)}
-        placeholder="Notas (opcional)"
-        aria-label="Notas de la salida"
-        className="w-28 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-[11px]"
-      />
-      <button
-        type="button"
-        onClick={handleCheckOut}
-        disabled={submitting || !selectedAssetId}
-        className="rounded-[6px] bg-[var(--color-text-primary)] px-2 py-1 text-[11px] font-medium text-white disabled:opacity-50"
-      >
-        {submitting ? 'Guardando…' : 'Confirmar'}
-      </button>
+      {quantity > 1 && (
+        <span className="w-full text-[10px] text-[var(--color-text-faint)]">
+          {registeredCount} de {quantity} registradas
+        </span>
+      )}
+      {pending === 0 ? (
+        <span className="text-[11px] text-[var(--color-ok)]" role="status">
+          Todas las unidades de esta línea ya tienen salida registrada.
+        </span>
+      ) : (
+        <>
+          <select
+            value={selectedAssetId}
+            onChange={e => setSelectedAssetId(e.target.value ? Number(e.target.value) : '')}
+            disabled={loadingOptions || (options?.length ?? 0) === 0}
+            aria-label="Número de serie"
+            className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-[11px]"
+          >
+            <option value="">
+              {loadingOptions ? 'Cargando…' : options?.length ? 'Elige el número de serie' : 'Sin equipos registrados'}
+            </option>
+            {(options ?? []).map(asset => (
+              <option key={asset.id} value={asset.id}>
+                {asset.serial_number}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="Notas (opcional)"
+            aria-label="Notas de la salida"
+            className="w-28 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-[11px]"
+          />
+          <button
+            type="button"
+            onClick={handleCheckOut}
+            disabled={submitting || !selectedAssetId}
+            className="rounded-[6px] bg-[var(--color-text-primary)] px-2 py-1 text-[11px] font-medium text-white disabled:opacity-50"
+          >
+            {submitting ? 'Guardando…' : 'Confirmar'}
+          </button>
+        </>
+      )}
       {result && (
         <span
           className={`text-[11px] ${result.ok ? 'text-[var(--color-ok)]' : 'text-[var(--color-crit)]'}`}
@@ -689,9 +738,16 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
  * `line_items` (ver `itemsFromLineItems`) no muestran ningún control — no hay nada serializado que
  * registrar.
  */
+/**
+ * `eligible` gatea el control por `canRecordCheckout(row.status)` (R3-201): `shipping_usage` en
+ * `pending`/`processing` es equipo que aún no sale de bodega, y ofrecer "Registrar salida" ahí
+ * corrompería `hasOpenCheckout` para esa unidad. Las filas no elegibles muestran el motivo en
+ * español en vez del control.
+ */
 function ShipmentTableRow({ row }: { row: ShipmentRow }) {
   const items = useMemo(() => itemsFromLineItems(row.lineItems), [row.lineItems]);
   const serialisableItems = items.filter(item => item.productId !== null);
+  const eligible = canRecordCheckout(row.status);
 
   return (
     <tr className="border-b border-[var(--color-border-soft)]">
@@ -712,13 +768,21 @@ function ShipmentTableRow({ row }: { row: ShipmentRow }) {
       <td className="px-4 py-2">
         {serialisableItems.length === 0 ? (
           <span className="text-[10px] text-[var(--color-text-faint)]">—</span>
+        ) : !eligible ? (
+          <span className="text-[10px] text-[var(--color-text-faint)]">
+            Disponible cuando el envío esté en ruta ({shipmentLabel('shipped')})
+          </span>
         ) : (
           <div className="flex flex-col gap-1.5">
             {serialisableItems.map((item, index) => (
               <div key={`${item.sku}-${index}`}>
                 <div className="truncate text-[10px] text-[var(--color-text-secondary)]">{item.name}</div>
                 {/* `item.productId` no es null: filtrado arriba en `serialisableItems`. */}
-                <AssetCheckOutControl productId={item.productId as number} orderId={row.orderId} />
+                <AssetCheckOutControl
+                  productId={item.productId as number}
+                  orderId={row.orderId}
+                  quantity={item.quantity}
+                />
               </div>
             ))}
           </div>

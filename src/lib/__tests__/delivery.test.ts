@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canRecordCheckout,
   deliveryKpis,
   formatCLP,
   historyTotals,
@@ -137,6 +138,33 @@ describe('historyTotals', () => {
     const t = historyTotals([shipment({ cost: 10000 }), shipment({ status: 'cancelled', cost: 90000 })]);
     expect(t.totalEnvios).toBe(1);
     expect(t.promedioPorEnvio).toBe(10000);
+  });
+});
+
+/**
+ * R3-201 (CRITICAL, review sobre e1a5b23+05c83cf): el equipo solo sale físicamente cuando el
+ * despacho ya está `shipped` — `pending`/`processing` es "todavía en la repisa". Registrar un
+ * checkout ahí corrompe `hasOpenCheckout` y bloquea la unidad para la orden que sí la necesita.
+ * `delivered` tampoco es elegible: ese despacho ya se completó (y en la práctica ya no aparece en
+ * `data.active`, pero la función no debe asumirlo).
+ */
+describe('canRecordCheckout', () => {
+  it('solo permite registrar la salida cuando el despacho ya está en ruta', () => {
+    expect(canRecordCheckout('shipped')).toBe(true);
+  });
+
+  it('rechaza un despacho que todavía no sale de bodega', () => {
+    expect(canRecordCheckout('pending')).toBe(false);
+    expect(canRecordCheckout('processing')).toBe(false);
+  });
+
+  it('rechaza un despacho ya entregado o cancelado', () => {
+    expect(canRecordCheckout('delivered')).toBe(false);
+    expect(canRecordCheckout('cancelled')).toBe(false);
+  });
+
+  it('rechaza cualquier valor fuera del CHECK de shipping_usage.status', () => {
+    expect(canRecordCheckout('inventado')).toBe(false);
   });
 });
 
