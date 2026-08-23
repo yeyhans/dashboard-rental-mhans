@@ -118,6 +118,8 @@ export type ItemReceiptState = 'pending' | 'received' | 'incomplete' | 'damaged'
 export interface CheckInItem {
   readonly name: string;
   readonly sku: string;
+  /** `null` when `line_items.product_id` is not a valid numeric id — see `itemsFromLineItems`. */
+  readonly productId: number | null;
   readonly quantity: number;
   readonly state: ItemReceiptState;
 }
@@ -160,10 +162,14 @@ export function checkInTotals(items: readonly CheckInItem[]): CheckInTotals {
  */
 export function itemsFromLineItems(lineItems: readonly LineItem[] | null | undefined): CheckInItem[] {
   if (!lineItems) return [];
-  return lineItems.map(item => ({
-    name: item.name,
-    sku: item.sku,
-    quantity: Number(item.quantity) || 0,
-    state: 'pending' as const,
-  }));
+  return lineItems.map(item => {
+    const productId = Number(item.product_id);
+    return {
+      name: item.name,
+      sku: item.sku,
+      productId: Number.isFinite(productId) ? productId : null,
+      quantity: Number(item.quantity) || 0,
+      state: 'pending' as const,
+    };
+  });
 }

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { AlertTriangle, CheckCircle2, Clock, Package, Search } from 'lucide-react';
 import {
   checkInTotals,
@@ -7,6 +8,7 @@ import {
   type ReturnUrgency,
 } from '../../lib/checkIn';
 import { statusBadgeClass, statusLabel } from '../../lib/orderStatus';
+import { apiClient } from '../../services/apiClient';
 import type { CheckInBoard as CheckInBoardData, CheckInListEntry } from '../../services/checkInService';
 
 /**
@@ -16,11 +18,17 @@ import type { CheckInBoard as CheckInBoardData, CheckInListEntry } from '../../s
  * `.kpi-strip` de cuatro indicadores, y debajo un `.content-split` con la lista de devoluciones a
  * la izquierda y el detalle del pedido seleccionado a la derecha, que arranca vacío.
  *
- * Lo que el canónico muestra y este módulo NO persiste: marcar cada equipo como recibido, dañado
- * o incompleto. `orders.line_items` es un jsonb sin campo de recepción y no existe tabla de
- * unidades, así que no hay dónde guardarlo. Los controles se muestran deshabilitados y con el
- * motivo a la vista, en vez de aceptar un clic que se pierde al recargar — que es exactamente el
- * defecto que se acaba de corregir en `ProcessOrder`.
+ * T-026 (2026-08-23, cableado de UI): cada línea ahora puede registrar el check-in de un equipo
+ * SERIALIZADO puntual contra `POST /api/inventory/movements` (`AssetMovementService`,
+ * `validateMovementTransition`). Esto NO reemplaza el estado `pending/received/incomplete/damaged`
+ * por línea del canónico — ese campo sigue sin existir en `orders.line_items` — sino que registra
+ * el evento de auditoría real que el esquema SÍ sostiene: qué unidad con número de serie volvió,
+ * de qué orden, y quién lo recibió (`checked_by_admin_id`, resuelto server-side). El control
+ * exige elegir el número de serie exacto porque no hay ninguna tabla que asocie "estas unidades
+ * fueron las que salieron con esta orden" — ver el header de `lib/assetMovements.ts`. Un 409 del
+ * endpoint ("El equipo no tiene un checkout abierto para hacer check-in") es una respuesta real y
+ * esperable mientras el flujo de despacho no registre el checkout correspondiente; se muestra tal
+ * cual, en español, no como un error genérico.
  */
 interface CheckInBoardProps {
   data: CheckInBoardData;
@@ -45,6 +53,131 @@ const ITEM_FILTERS: ReadonlyArray<{ value: string; label: string }> = [
 
 function pad2(value: number): string {
   return String(value).padStart(2, '0');
+}
+
+interface AssetOption {
+  id: number;
+  serial_number: string;
+}
+
+/**
+ * Búsqueda de número de serie + registro de check-in para UNA línea del pedido.
+ *
+ * Vive fuera de `CheckInBoard` porque cada línea necesita su propio estado de
+ * búsqueda/selección/envío, y montarlo condicionalmente en el detalle evita pedir la lista de
+ * equipos de un producto que el admin nunca abre.
+ */
+function AssetCheckInControl({ productId, orderId }: { productId: number; orderId: number }) {
+  const [open, setOpen] = useState(false);
+  const [options, setOptions] = useState<AssetOption[] | null>(null);
+  const [loadingOptions, setLoadingOptions] = useState(false);
+  const [selectedAssetId, setSelectedAssetId] = useState<number | ''>('');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const loadOptions = async () => {
+    setOpen(true);
+    if (options !== null) return;
+    setLoadingOptions(true);
+    try {
+      const response = await apiClient.get(`/api/inventory/assets?product_id=${productId}`);
+      const payload = await apiClient.handleJsonResponse<{
+        success: boolean;
+        data: { assets: AssetOption[] };
+      }>(response);
+      setOptions(payload.data.assets);
+    } catch {
+      setOptions([]);
+    } finally {
+      setLoadingOptions(false);
+    }
+  };
+
+  const handleCheckIn = async () => {
+    if (!selectedAssetId) {
+      toast.error('Selecciona un número de serie');
+      return;
+    }
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const response = await apiClient.post('/api/inventory/movements', {
+        asset_id: selectedAssetId,
+        order_id: orderId,
+        direction: 'checkin',
+        condition_notes: notes.trim() || undefined,
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        setResult({ ok: false, message: payload.error || 'No se pudo registrar el check-in' });
+        return;
+      }
+      setResult({ ok: true, message: 'Check-in registrado' });
+      toast.success('Check-in registrado');
+    } catch (error) {
+      setResult({ ok: false, message: error instanceof Error ? error.message : 'Error de conexión' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={loadOptions}
+        className="whitespace-nowrap rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
+      >
+        Registrar check-in
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <select
+        value={selectedAssetId}
+        onChange={e => setSelectedAssetId(e.target.value ? Number(e.target.value) : '')}
+        disabled={loadingOptions || (options?.length ?? 0) === 0}
+        aria-label="Número de serie"
+        className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-[11px]"
+      >
+        <option value="">
+          {loadingOptions ? 'Cargando…' : options?.length ? 'Elige el número de serie' : 'Sin equipos registrados'}
+        </option>
+        {(options ?? []).map(asset => (
+          <option key={asset.id} value={asset.id}>
+            {asset.serial_number}
+          </option>
+        ))}
+      </select>
+      <input
+        type="text"
+        value={notes}
+        onChange={e => setNotes(e.target.value)}
+        placeholder="Notas (opcional)"
+        aria-label="Notas del check-in"
+        className="w-28 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-[11px]"
+      />
+      <button
+        type="button"
+        onClick={handleCheckIn}
+        disabled={submitting || !selectedAssetId}
+        className="rounded-[6px] bg-[var(--color-text-primary)] px-2 py-1 text-[11px] font-medium text-white disabled:opacity-50"
+      >
+        {submitting ? 'Guardando…' : 'Confirmar'}
+      </button>
+      {result && (
+        <span
+          className={`text-[11px] ${result.ok ? 'text-[var(--color-ok)]' : 'text-[var(--color-crit)]'}`}
+          role="status"
+        >
+          {result.message}
+        </span>
+      )}
+    </div>
+  );
 }
 
 export default function CheckInBoard({ data, todayLabel }: CheckInBoardProps) {
@@ -250,11 +383,14 @@ export default function CheckInBoard({ data, todayLabel }: CheckInBoardProps) {
                 {filteredItems.map((item, index) => (
                   <li
                     key={`${item.sku}-${index}`}
-                    className="flex items-center justify-between gap-3 border-b border-[var(--color-border-soft)] px-4 py-2.5"
+                    className="flex items-start justify-between gap-3 border-b border-[var(--color-border-soft)] px-4 py-2.5"
                   >
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="truncate text-xs font-medium">{item.name}</div>
                       <div className="font-mono text-[10px] text-[var(--color-text-faint)]">{item.sku}</div>
+                      {item.productId !== null && selected && (
+                        <AssetCheckInControl productId={item.productId} orderId={selected.id} />
+                      )}
                     </div>
                     <span className="whitespace-nowrap font-mono text-xs text-[var(--color-text-secondary)]">
                       ×{item.quantity}
@@ -264,10 +400,14 @@ export default function CheckInBoard({ data, todayLabel }: CheckInBoardProps) {
               </ul>
 
               <p className="border-t border-[var(--color-border)] bg-[var(--color-surface-soft)] p-3 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
-                El registro de recepción por equipo todavía no se guarda: <code>orders.line_items</code>{' '}
-                es un jsonb sin campo de recepción y no existe una tabla de unidades. Hasta que el
-                esquema lo soporte, esta vista muestra los equipos del pedido pero no acepta
-                marcarlos — un control que no persiste es peor que ninguno.
+                "Registrar check-in" busca el número de serie exacto del equipo y registra su
+                devolución en el historial de movimientos. El estado{' '}
+                <strong>pendiente/recibido/incompleto/dañado</strong> por línea del canónico
+                todavía no se guarda: <code>orders.line_items</code> es un jsonb sin ese campo, y
+                asociar automáticamente qué unidades salieron con este pedido requeriría una
+                tabla que hoy no existe. Si el equipo elegido no tiene un checkout abierto en el
+                sistema, el check-in se rechaza con un aviso explícito en vez de fallar en
+                silencio.
               </p>
             </div>
           )}

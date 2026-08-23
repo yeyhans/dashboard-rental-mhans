@@ -10,11 +10,36 @@
  * Operacional and ROI por activo now have a schema behind them. That migration has NOT been
  * applied to any database yet (pending staging rehearsal — see `apply-progress.md`, "T-026
  * resuelto"), so the cost/expense/margin/ROI functions below (`expensesByCategory`,
- * `expensesByMonth`, `calculateMargin`, `calculateROI`) are written and tested against the
- * migration's contract ahead of that rehearsal, same as `assetMovementService.ts` /
- * `expenseService.ts`. No canonical formula for margin/ROI was confirmed at the time these were
- * written (the Rentabilidad UI still ships as a placeholder), so they use the standard
- * definitions documented on each function below.
+ * `expensesByMonth`, `sumByCategoryGroup`, `calculateMargin`, `calculateROI`) are written and
+ * tested against the migration's contract ahead of that rehearsal, same as
+ * `assetMovementService.ts` / `expenseService.ts`.
+ *
+ * FORMULA CONFIRMATION (2026-08-23, UI wiring pass): re-read the canonical's embedded `<script>`
+ * looking for the arithmetic behind Costos Directos / Margen Bruto / Gastos Operacionales /
+ * Utilidad Operacional / ROI promedio activos. It contains none — the tab's numbers
+ * (`.kpi-value`, `.period-value`, the ROI "109%") are static markup plus two commented-out
+ * TypeScript interfaces (`Gasto`, `ProductoRentabilidad`, `Inversion`) that were never wired to a
+ * computation. The canonical DOES fix two structural facts used below, both verifiable in the
+ * markup rather than invented: (1) the `#g-cat` `<select>` has exactly two `<optgroup>`s, "Gastos
+ * Fijos" and "Gastos Variables" — captured as `FIXED_EXPENSE_CATEGORIES` /
+ * `VARIABLE_EXPENSE_CATEGORIES` in `types/expenses.ts`; (2) the KPI order is Costos Directos →
+ * Margen Bruto → Gastos Operacionales → Utilidad Operacional, i.e. direct/variable costs are
+ * subtracted from revenue first (gross), then fixed/operational expenses are subtracted from that
+ * (operating). Given no other signal, this file treats that KPI order as the intended computation
+ * order rather than inventing a different one:
+ *   Costos Directos      = sumByCategoryGroup(expenses, VARIABLE_EXPENSE_CATEGORIES)
+ *   Margen Bruto          = calculateMargin(ingresos, Costos Directos)
+ *   Gastos Operacionales  = sumByCategoryGroup(expenses, FIXED_EXPENSE_CATEGORIES)
+ *   Utilidad Operacional  = calculateMargin(Margen Bruto.margin, Gastos Operacionales)
+ *   ROI promedio activos  = calculateROI(Utilidad Operacional.margin, Σ acquisition_cost)
+ * `ROI promedio activos` is computed against the PORTFOLIO'S total acquisition cost, not a
+ * per-asset average: the canonical shows one number for the whole tab, and attributing operating
+ * profit to individual assets would require joining `orders.line_items` to specific
+ * `serialised_assets` rows, a linkage that does not exist in the schema (see `assetMovements.ts`
+ * header — `asset_movements` records which physical unit moved, never which order line it
+ * satisfied for a given product). If a future canonical or client decision defines a different
+ * split, replace this derivation — it is the best-supported reading of static markup, not a
+ * client-confirmed spec.
  *
  * What was ALREADY backed by data before T-026: revenue, jornadas sold, average ticket, orders
  * placed, distinct equipment used, the twelve-month revenue series, and asset rotation — the
@@ -23,7 +48,7 @@
 
 import { canonicalStatus } from './orderStatus';
 import type { LineItem } from '../types/order';
-import type { ExpenseLike } from '../types/expenses';
+import type { ExpenseCategory, ExpenseLike } from '../types/expenses';
 
 export interface RevenueOrderLike {
   readonly status: string;
@@ -181,6 +206,19 @@ export function growth(current: number, previous: number): number | null {
 // =============================================================================================
 // T-026 gap 3 (Costos/Gastos/Margen/ROI). See the module header for the migration-status caveat.
 // =============================================================================================
+
+/**
+ * Sums `amount` for expenses whose `category` is in `group` — the building block behind Costos
+ * Directos (`VARIABLE_EXPENSE_CATEGORIES`) and Gastos Operacionales (`FIXED_EXPENSE_CATEGORIES`),
+ * per the confirmation in this file's header.
+ */
+export function sumByCategoryGroup(
+  expenses: readonly ExpenseLike[],
+  group: readonly ExpenseCategory[]
+): number {
+  const groupSet = new Set<string>(group);
+  return expenses.reduce((sum, e) => (groupSet.has(e.category) ? sum + e.amount : sum), 0);
+}
 
 /** Sums `amount` per `category`. Categories with no expenses are simply absent from the result. */
 export function expensesByCategory(expenses: readonly ExpenseLike[]): Record<string, number> {

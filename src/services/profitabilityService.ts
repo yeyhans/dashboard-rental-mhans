@@ -2,16 +2,33 @@ import { supabaseAdmin } from '../lib/supabase';
 import { bookingStatusFilter } from '../lib/orderStatus';
 import {
   assetRotation,
+  calculateMargin,
+  calculateROI,
   growth,
   idleAssets,
   monthlyRevenueSeries,
   periodMetrics,
+  sumByCategoryGroup,
   type AssetRotation,
+  type MarginResult,
   type MonthlyRevenue,
   type PeriodMetrics,
   type RevenueOrderLike,
 } from '../lib/profitability';
+import { FIXED_EXPENSE_CATEGORIES, VARIABLE_EXPENSE_CATEGORIES } from '../types/expenses';
 import type { LineItem } from '../types/order';
+
+/** Postgres "undefined_table" — raised when `0006` has not been applied yet (see requirement 6). */
+const UNDEFINED_TABLE = '42P01';
+
+export interface ProfitabilityCosts {
+  costosDirectos: number;
+  margenBruto: MarginResult;
+  gastosOperacionales: number;
+  utilidadOperacional: MarginResult;
+  /** `null` when no asset carries a recorded `acquisition_cost`, same convention as `calculateROI`. */
+  roiPromedioActivos: number | null;
+}
 
 export interface ProfitabilityBoard {
   current: PeriodMetrics;
@@ -28,6 +45,12 @@ export interface ProfitabilityBoard {
   idle: Array<{ id: string; name: string }>;
   /** Calendar days in the period, which the canonical prints beside the metrics. */
   diasPeriodo: number;
+  /**
+   * `null` while `0006_t026_schema_gaps.sql` is not applied to the connected database
+   * (`expenses` / `serialised_assets.acquisition_cost` do not exist yet) — see requirement 6:
+   * the board degrades gracefully instead of failing the whole page.
+   */
+  costs: ProfitabilityCosts | null;
 }
 
 function monthBounds(now: Date, offset = 0) {
@@ -47,6 +70,65 @@ function monthBounds(now: Date, offset = 0) {
 export class ProfitabilityService {
   private static ensureSupabaseAdmin() {
     if (!supabaseAdmin) throw new Error('Supabase admin client is not initialized');
+  }
+
+  /**
+   * Costos Directos / Gastos Operacionales / Margen Bruto / Utilidad Operacional / ROI — the
+   * T-026 gap 3 half of the module. `null` if `expenses` or `acquisition_cost` are not present
+   * yet (migration `0006` not applied), so `getBoard` can degrade gracefully instead of throwing.
+   *
+   * `client` is `supabaseAdmin as any` because `expenses` and `acquisition_cost` are not in the
+   * generated `Database` type yet — same cast `expenseService.ts` uses.
+   */
+  private static async getCosts(
+    client: any,
+    ingresos: number,
+    monthStart: Date,
+    monthEnd: Date
+  ): Promise<ProfitabilityCosts | null> {
+    try {
+      const [{ data: expenseRows, error: expensesError }, { data: assetRows, error: assetsError }] =
+        await Promise.all([
+          client
+            .from('expenses')
+            .select('category, amount, expense_date')
+            .gte('expense_date', monthStart.toISOString().slice(0, 10))
+            .lt('expense_date', monthEnd.toISOString().slice(0, 10)),
+          client.from('serialised_assets').select('acquisition_cost'),
+        ]);
+
+      if (expensesError) throw expensesError;
+      if (assetsError) throw assetsError;
+
+      const expenses = (expenseRows ?? []) as Array<{ category: string; amount: number; expense_date: string }>;
+      const costosDirectos = sumByCategoryGroup(expenses as any, VARIABLE_EXPENSE_CATEGORIES);
+      const gastosOperacionales = sumByCategoryGroup(expenses as any, FIXED_EXPENSE_CATEGORIES);
+
+      const margenBruto = calculateMargin(ingresos, costosDirectos);
+      const utilidadOperacional = calculateMargin(margenBruto.margin, gastosOperacionales);
+
+      const totalAcquisitionCost = ((assetRows ?? []) as Array<{ acquisition_cost: number | null }>).reduce(
+        (sum, row) => sum + (Number(row.acquisition_cost) || 0),
+        0
+      );
+
+      return {
+        costosDirectos,
+        margenBruto,
+        gastosOperacionales,
+        utilidadOperacional,
+        roiPromedioActivos: calculateROI(utilidadOperacional.margin, totalAcquisitionCost),
+      };
+    } catch (error) {
+      if ((error as { code?: string })?.code === UNDEFINED_TABLE) {
+        console.warn(
+          '[ProfitabilityService] Costos/gastos no disponibles todavía (migración 0006 sin aplicar):',
+          { error }
+        );
+        return null;
+      }
+      throw error;
+    }
   }
 
   static async getBoard(now: Date = new Date()): Promise<ProfitabilityBoard> {
@@ -91,6 +173,13 @@ export class ProfitabilityService {
     const previous = periodMetrics(previousOrders);
     const rotation = assetRotation(currentOrders);
 
+    const costs = await ProfitabilityService.getCosts(
+      supabaseAdmin as any,
+      current.ingresos,
+      thisMonth.start,
+      thisMonth.end
+    );
+
     return {
       current,
       previous,
@@ -105,6 +194,7 @@ export class ProfitabilityService {
       rotation,
       idle: idleAssets(productRows ?? [], rotation),
       diasPeriodo: thisMonth.days,
+      costs,
     };
   }
 }

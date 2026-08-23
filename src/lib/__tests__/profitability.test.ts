@@ -9,8 +9,10 @@ import {
   idleAssets,
   monthlyRevenueSeries,
   periodMetrics,
+  sumByCategoryGroup,
   type RevenueOrderLike,
 } from '../profitability';
+import { FIXED_EXPENSE_CATEGORIES, VARIABLE_EXPENSE_CATEGORIES } from '../../types/expenses';
 import type { LineItem } from '../../types/order';
 import type { ExpenseLike } from '../../types/expenses';
 
@@ -237,5 +239,31 @@ describe('calculateROI', () => {
 
   it('returns null when acquisition cost is missing', () => {
     expect(calculateROI(50000, null)).toBeNull();
+  });
+});
+
+// T-026: wiring Rentabilidad UI — Costos Directos / Gastos Operacionales split from the canonical
+// `#g-cat` optgroups ("Gastos Fijos" / "Gastos Variables"), already captured as
+// FIXED_EXPENSE_CATEGORIES / VARIABLE_EXPENSE_CATEGORIES in `types/expenses.ts`.
+describe('sumByCategoryGroup', () => {
+  it('sums only the amounts whose category is in the given group', () => {
+    const expenses = [
+      expense('warehouse', 980000, '2026-05-25'), // fixed
+      expense('payroll', 900000, '2026-05-15'), // fixed
+      expense('delivery', 120000, '2026-05-22'), // variable
+      expense('maintenance', 48000, '2026-05-27'), // variable
+    ];
+
+    expect(sumByCategoryGroup(expenses, FIXED_EXPENSE_CATEGORIES)).toBe(1880000);
+    expect(sumByCategoryGroup(expenses, VARIABLE_EXPENSE_CATEGORIES)).toBe(168000);
+  });
+
+  it('returns 0 for an empty expense list', () => {
+    expect(sumByCategoryGroup([], FIXED_EXPENSE_CATEGORIES)).toBe(0);
+  });
+
+  it('ignores expenses whose category is outside the group', () => {
+    const expenses = [expense('warehouse', 100000, '2026-05-01')];
+    expect(sumByCategoryGroup(expenses, VARIABLE_EXPENSE_CATEGORIES)).toBe(0);
   });
 });

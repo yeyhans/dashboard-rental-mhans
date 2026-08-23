@@ -116,10 +116,10 @@ describe('checkInKpis', () => {
  */
 describe('checkInTotals', () => {
   const items: CheckInItem[] = [
-    { name: 'C-Stand', sku: 'CS-01', quantity: 6, state: 'received' },
-    { name: 'Profoto B10', sku: 'PB-10', quantity: 2, state: 'pending' },
-    { name: 'Softbox', sku: 'SB-90', quantity: 3, state: 'damaged' },
-    { name: 'Cable', sku: 'CB-5', quantity: 1, state: 'incomplete' },
+    { name: 'C-Stand', sku: 'CS-01', productId: 1, quantity: 6, state: 'received' },
+    { name: 'Profoto B10', sku: 'PB-10', productId: 2, quantity: 2, state: 'pending' },
+    { name: 'Softbox', sku: 'SB-90', productId: 3, quantity: 3, state: 'damaged' },
+    { name: 'Cable', sku: 'CB-5', productId: 4, quantity: 1, state: 'incomplete' },
   ];
 
   it('cuenta unidades, no líneas', () => {
@@ -137,7 +137,7 @@ describe('checkInTotals', () => {
   });
 
   it('ignora una cantidad negativa en vez de restar del total', () => {
-    const t = checkInTotals([{ name: 'X', sku: 'X', quantity: -4, state: 'received' }]);
+    const t = checkInTotals([{ name: 'X', sku: 'X', productId: 1, quantity: -4, state: 'received' }]);
     expect(t.total).toBe(0);
   });
 
@@ -147,11 +147,13 @@ describe('checkInTotals', () => {
 });
 
 describe('itemsFromLineItems', () => {
-  it('toma nombre, sku y cantidad, y parte todo en pendiente', () => {
+  it('toma nombre, sku, product_id y cantidad, y parte todo en pendiente', () => {
     const items = itemsFromLineItems([
       { name: 'Profoto B10', product_id: 1, sku: 'PB-10', price: '50000', quantity: 2 },
     ]);
-    expect(items).toEqual([{ name: 'Profoto B10', sku: 'PB-10', quantity: 2, state: 'pending' }]);
+    expect(items).toEqual([
+      { name: 'Profoto B10', sku: 'PB-10', productId: 1, quantity: 2, state: 'pending' },
+    ]);
   });
 
   it('tolera line_items nulo, que es lo que devuelve una orden sin ítems', () => {
@@ -165,5 +167,14 @@ describe('itemsFromLineItems', () => {
       { name: 'X', product_id: 1, sku: 'X', price: '0', quantity: 'dos' as never },
     ]);
     expect(items[0]?.quantity).toBe(0);
+  });
+
+  it('normaliza un product_id string a número, o null si no es un id válido', () => {
+    const items = itemsFromLineItems([
+      { name: 'X', product_id: '7', sku: 'X', price: '0', quantity: 1 },
+      { name: 'Y', product_id: 'no-numero' as never, sku: 'Y', price: '0', quantity: 1 },
+    ]);
+    expect(items[0]?.productId).toBe(7);
+    expect(items[1]?.productId).toBeNull();
   });
 });

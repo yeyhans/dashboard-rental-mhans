@@ -1,23 +1,217 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { apiClient } from '../../services/apiClient';
 import { formatCLP } from '../../lib/delivery';
+import {
+  EXPENSE_CATEGORIES,
+  EXPENSE_CATEGORY_LABELS,
+  type Expense,
+  type ExpenseCategory,
+} from '../../types/expenses';
 import type { ProfitabilityBoard as ProfitabilityBoardData } from '../../services/profitabilityService';
 
 /**
  * Rentabilidad.
  *
  * Estructura del canónico `MarioHans_OS_Area01_Rentabilidad_Canonical_RC2.1.2.html`: indicadores
- * económicos, evolución a doce meses, fila de métricas del período e "Inteligencia Económica".
+ * económicos, evolución a doce meses, fila de métricas del período, "Inteligencia Económica" y el
+ * formulario "Registrar Gasto".
  *
- * LA MITAD DEL MÓDULO NO TIENE DATOS DETRÁS. El canónico muestra Costos Directos, Gastos
- * Operacionales, Margen Bruto, Utilidad Operacional, ROI por activo y un formulario "Registrar
- * Gasto". El esquema `public` tiene doce tablas y ninguna registra un gasto ni el costo de
- * adquisición de un equipo — verificado por introspección, no supuesto. Esta vista calcula lo que
- * los datos sostienen y declara lo que falta, en vez de mostrar un cero que se lee como "no
- * gastamos nada".
+ * T-026 (2026-08-23, cableado de UI): Costos Directos, Gastos Operacionales, Margen Bruto,
+ * Utilidad Operacional y ROI ahora tienen esquema detrás (`0006_t026_schema_gaps.sql`:
+ * `expenses` + `serialised_assets.acquisition_cost`) y se calculan en
+ * `profitabilityService.getCosts` — ver el header de `lib/profitability.ts` para la confirmación
+ * de fórmula contra el canónico. `data.costs` es `null` mientras esa migración no esté aplicada
+ * en la base conectada (requisito 6: degradar con gracia, no romper la página).
  */
 interface ProfitabilityBoardProps {
   data: ProfitabilityBoardData;
   periodLabel: string;
+}
+
+function formatROI(value: number | null): string {
+  if (value === null) return 'sin datos';
+  return `${Math.round(value * 1000) / 10}%`;
+}
+
+/** Sección "Registrar Gasto" del canónico. Lista + alta, sobre `/api/expenses`. */
+function ExpensesPanel() {
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [state, setState] = useState<'loading' | 'error' | 'data'>('loading');
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    category: EXPENSE_CATEGORIES[0] as ExpenseCategory,
+    amount: '',
+    expense_date: new Date().toISOString().slice(0, 10),
+    notes: '',
+  });
+
+  const load = async () => {
+    setState('loading');
+    try {
+      const response = await apiClient.get('/api/expenses?page=1&limit=10');
+      const result = await apiClient.handleJsonResponse<{ success: boolean; data: { expenses: Expense[] } }>(
+        response
+      );
+      setExpenses(result.data.expenses);
+      setState('data');
+    } catch {
+      setState('error');
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = Number(form.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('El monto debe ser mayor a cero');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await apiClient.post('/api/expenses', {
+        category: form.category,
+        amount,
+        expense_date: form.expense_date,
+        notes: form.notes.trim() || undefined,
+      });
+      await apiClient.handleJsonResponse(response);
+      toast.success('Gasto registrado');
+      setForm(prev => ({ ...prev, amount: '', notes: '' }));
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo registrar el gasto');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      const response = await apiClient.delete(`/api/expenses/${id}`);
+      await apiClient.handleJsonResponse(response);
+      toast.success('Gasto eliminado');
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo eliminar el gasto');
+    }
+  };
+
+  return (
+    <section className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <div className="border-b border-[var(--color-border)] p-4">
+        <h2 className="text-sm font-semibold">Registrar Gasto</h2>
+        <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
+          Gastos fijos u operacionales relacionados con la operación
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-3 border-b border-[var(--color-border)] p-4 sm:grid-cols-4">
+        <div className="sm:col-span-1">
+          <label htmlFor="exp-cat" className="mb-1 block text-[11px] font-medium text-[var(--color-text-secondary)]">
+            Categoría
+          </label>
+          <select
+            id="exp-cat"
+            value={form.category}
+            onChange={e => setForm(prev => ({ ...prev, category: e.target.value as ExpenseCategory }))}
+            className="w-full rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
+          >
+            {EXPENSE_CATEGORIES.map(cat => (
+              <option key={cat} value={cat}>
+                {EXPENSE_CATEGORY_LABELS[cat]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="exp-amount" className="mb-1 block text-[11px] font-medium text-[var(--color-text-secondary)]">
+            Monto
+          </label>
+          <input
+            id="exp-amount"
+            type="number"
+            min="0"
+            value={form.amount}
+            onChange={e => setForm(prev => ({ ...prev, amount: e.target.value }))}
+            placeholder="$ 0"
+            className="w-full rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
+          />
+        </div>
+        <div>
+          <label htmlFor="exp-date" className="mb-1 block text-[11px] font-medium text-[var(--color-text-secondary)]">
+            Fecha
+          </label>
+          <input
+            id="exp-date"
+            type="date"
+            value={form.expense_date}
+            onChange={e => setForm(prev => ({ ...prev, expense_date: e.target.value }))}
+            className="w-full rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
+          />
+        </div>
+        <div>
+          <label htmlFor="exp-notes" className="mb-1 block text-[11px] font-medium text-[var(--color-text-secondary)]">
+            Notas
+          </label>
+          <input
+            id="exp-notes"
+            type="text"
+            value={form.notes}
+            onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))}
+            placeholder="Opcional"
+            className="w-full rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
+          />
+        </div>
+        <div className="col-span-2 sm:col-span-4">
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-[6px] bg-[var(--color-text-primary)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+          >
+            {saving ? 'Guardando…' : 'Guardar Gasto'}
+          </button>
+        </div>
+      </form>
+
+      {state === 'loading' && (
+        <p className="p-6 text-center text-xs text-[var(--color-text-secondary)]">Cargando gastos…</p>
+      )}
+      {state === 'error' && (
+        <p className="p-6 text-center text-xs text-[var(--color-crit)]">No se pudieron cargar los gastos.</p>
+      )}
+      {state === 'data' && expenses.length === 0 && (
+        <p className="p-6 text-center text-xs text-[var(--color-text-secondary)]">Aún no hay gastos registrados.</p>
+      )}
+      {state === 'data' && expenses.length > 0 && (
+        <ul className="divide-y divide-[var(--color-border-soft)]">
+          {expenses.map(expense => (
+            <li key={expense.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+              <div className="min-w-0">
+                <div className="truncate text-xs font-medium">{EXPENSE_CATEGORY_LABELS[expense.category]}</div>
+                <div className="text-[11px] text-[var(--color-text-secondary)]">{expense.expense_date}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="whitespace-nowrap font-mono text-xs">{formatCLP(expense.amount)}</span>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(expense.id)}
+                  className="text-[11px] text-[var(--color-crit)] underline underline-offset-2"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
 }
 
 function Delta({ value }: { value: number | null }) {
@@ -67,19 +261,56 @@ export default function ProfitabilityBoard({ data, periodLabel }: ProfitabilityB
           </div>
         </div>
 
-        <div className="rounded-[10px] border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface-soft)] p-4">
-          <div className="text-xs font-medium text-[var(--color-text-secondary)]">
-            Costos, márgenes y utilidad
+        {data.costs === null ? (
+          <div className="rounded-[10px] border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface-soft)] p-4">
+            <div className="text-xs font-medium text-[var(--color-text-secondary)]">
+              Costos, márgenes y utilidad
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+              Costos Directos, Gastos Operacionales, Margen Bruto, Utilidad Operacional y ROI por
+              activo todavía no están disponibles: la migración que agrega <code>expenses</code>{' '}
+              y el costo de adquisición de los equipos no se ha aplicado en esta base de datos.
+            </p>
           </div>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
-            Costos Directos, Gastos Operacionales, Margen Bruto, Utilidad Operacional y ROI por
-            activo no se calculan todavía: el esquema no registra gastos ni el costo de
-            adquisición de los equipos. Requieren tablas nuevas —{' '}
-            <code>expenses</code> y el costo por activo — que son una decisión de alcance, no algo
-            que se pueda derivar de los pedidos.
-          </p>
-        </div>
+        ) : (
+          <div className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div className="text-xs text-[var(--color-text-secondary)]">Margen Bruto</div>
+            <div className="mt-1 font-mono text-2xl font-semibold">{formatCLP(data.costs.margenBruto.margin)}</div>
+            <div className="mt-1 text-[11px] text-[var(--color-text-faint)]">
+              {data.costs.margenBruto.marginPercentage === null
+                ? 'sin referencia'
+                : `${Math.round(data.costs.margenBruto.marginPercentage * 10) / 10}% de los ingresos`}
+            </div>
+          </div>
+        )}
       </div>
+
+      {data.costs !== null && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div className="text-xs text-[var(--color-text-secondary)]">Costos Directos</div>
+            <div className="mt-1 font-mono text-xl font-semibold">{formatCLP(data.costs.costosDirectos)}</div>
+          </div>
+          <div className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div className="text-xs text-[var(--color-text-secondary)]">Gastos Operacionales</div>
+            <div className="mt-1 font-mono text-xl font-semibold">{formatCLP(data.costs.gastosOperacionales)}</div>
+          </div>
+          <div className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div className="text-xs text-[var(--color-text-secondary)]">Utilidad Operacional</div>
+            <div
+              className={`mt-1 font-mono text-xl font-semibold ${
+                data.costs.utilidadOperacional.margin < 0 ? 'text-[var(--color-crit)]' : ''
+              }`}
+            >
+              {formatCLP(data.costs.utilidadOperacional.margin)}
+            </div>
+          </div>
+          <div className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <div className="text-xs text-[var(--color-text-secondary)]">ROI promedio activos</div>
+            <div className="mt-1 font-mono text-xl font-semibold">{formatROI(data.costs.roiPromedioActivos)}</div>
+          </div>
+        </div>
+      )}
 
       <section className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
         <h2 className="mb-4 text-sm font-semibold">Evolución de ingresos (12 meses)</h2>
@@ -184,6 +415,8 @@ export default function ProfitabilityBoard({ data, periodLabel }: ProfitabilityB
           )}
         </section>
       </div>
+
+      <ExpensesPanel />
     </div>
   );
 }
