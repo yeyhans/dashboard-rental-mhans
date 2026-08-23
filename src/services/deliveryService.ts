@@ -7,6 +7,7 @@ import {
   type HistoryTotals,
 } from '../lib/delivery';
 import { shippingMethodFromRecord, type StoredShippingMethod } from '../lib/shippingMethods';
+import type { LineItem } from '../types/order';
 
 export interface ShipmentRow {
   id: number;
@@ -22,6 +23,13 @@ export interface ShipmentRow {
   trackingNumber: string | null;
   createdAt: string | null;
   deliveredAt: string | null;
+  /**
+   * T-026 gap 2/4 (checkout registration). Solo se usa en `active` para ofrecer el control de
+   * "Registrar salida" por equipo serializado — mismo insumo que `CheckInService` ya expone para
+   * el check-in, vía `itemsFromLineItems`. `history` no necesita esto en el cliente, pero traerlo
+   * aquí es gratis (mismo `orders` join) y evita una segunda query por fila.
+   */
+  lineItems: LineItem[];
 }
 
 /**
@@ -62,7 +70,7 @@ export class DeliveryService {
         .select(
           'id, order_id, shipping_method_id, shipping_cost, status, tracking_number, created_at, delivered_at, ' +
             'shipping_methods (name), ' +
-            'orders (order_key, order_proyecto, billing_first_name, billing_last_name, billing_company)'
+            'orders (order_key, order_proyecto, billing_first_name, billing_last_name, billing_company, line_items)'
         )
         .order('created_at', { ascending: false })
         .limit(historyLimit),
@@ -96,6 +104,7 @@ export class DeliveryService {
         trackingNumber: row.tracking_number,
         createdAt: row.created_at,
         deliveredAt: row.delivered_at,
+        lineItems: Array.isArray(order.line_items) ? (order.line_items as LineItem[]) : [],
       };
     });
 

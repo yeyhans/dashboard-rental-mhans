@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { Loader2, Pencil, Plus, Search, Trash2, Truck } from 'lucide-react';
+import { itemsFromLineItems } from '../../lib/checkIn';
 import { SHIPMENT_STATUSES, formatCLP, shipmentLabel } from '../../lib/delivery';
 import {
   shippingMethodDeleteWarning,
@@ -9,6 +11,7 @@ import {
   type ShippingMethodForm,
   type StoredShippingMethod,
 } from '../../lib/shippingMethods';
+import { apiClient } from '../../services/apiClient';
 import { ConfirmDialog, ShippingTypeDialog } from './ShippingTypeDialog';
 import type { DeliveryBoard as DeliveryBoardData, ShipmentRow } from '../../services/deliveryService';
 
@@ -23,9 +26,150 @@ import type { DeliveryBoard as DeliveryBoardData, ShipmentRow } from '../../serv
  * tiene doce columnas y ninguna de las dos existe; solo hay un `metadata` jsonb sin forma
  * acordada. Una columna inventada se vería vacía para siempre y se leería como datos faltantes en
  * vez de una función faltante, así que se omiten y queda constancia.
+ *
+ * T-026 gap 2/4 (cierre de brecha, 2026-08-23): antes de este cambio ningún camino de código
+ * registraba un movimiento `checkout` en `asset_movements`, así que el control de Check-In recién
+ * cableado (`CheckInBoard.tsx`) siempre devolvía 409 "no hay checkout abierto" — el módulo no era
+ * usable de punta a punta. Decisión: el checkout se registra aquí, en Delivery, no en el detalle
+ * de la orden. Evidencia canónica: `MarioHans_OS_Area01_Pedidos_Canonical_RC2.1.2.html` declara la
+ * acción explícitamente — el botón primario del estado `preparacion` es
+ * `'Registrar entrega / Check-Out'` (línea ~1230, `act:{a:'change-estado',s:'arriendo'}`, nota
+ * "Verifica el kit completo antes de registrar la salida"), y su historial de ejemplo registra
+ * `'Entrega registrada · Check-out 6 equipos'`. El canónico de Delivery no tiene un botón propio
+ * de check-out — expone despacho/tipo de envío/historial — así que Delivery es el LUGAR (el
+ * equipo sale físicamente durante el despacho) y el control reutiliza el patrón de
+ * `AssetCheckInControl` de `CheckInBoard.tsx`, solo que con `direction: 'checkout'` contra el
+ * mismo `POST /api/inventory/movements`. No se duplica ninguna regla de transición ni string de
+ * error: `validateMovementTransition`/`MOVEMENT_TRANSITION_ERRORS` en `lib/assetMovements.ts` ya
+ * cubren checkout de forma genérica (`assetMovements.test.ts` ya los prueba con ambas
+ * direcciones) — este componente solo le da una vía de entrada real.
  */
 interface DeliveryBoardProps {
   data: DeliveryBoardData;
+}
+
+interface AssetOption {
+  id: number;
+  serial_number: string;
+}
+
+/**
+ * Búsqueda de número de serie + registro de checkout para UNA línea del pedido en despacho.
+ * Espejo de `AssetCheckInControl` (`CheckInBoard.tsx`), con `direction: 'checkout'`. Vive fuera de
+ * `ShipmentTableRow` por la misma razón: cada línea necesita su propio estado de
+ * búsqueda/selección/envío.
+ */
+function AssetCheckOutControl({ productId, orderId }: { productId: number; orderId: number }) {
+  const [open, setOpen] = useState(false);
+  const [options, setOptions] = useState<AssetOption[] | null>(null);
+  const [loadingOptions, setLoadingOptions] = useState(false);
+  const [selectedAssetId, setSelectedAssetId] = useState<number | ''>('');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const loadOptions = async () => {
+    setOpen(true);
+    if (options !== null) return;
+    setLoadingOptions(true);
+    try {
+      const response = await apiClient.get(`/api/inventory/assets?product_id=${productId}`);
+      const payload = await apiClient.handleJsonResponse<{
+        success: boolean;
+        data: { assets: AssetOption[] };
+      }>(response);
+      setOptions(payload.data.assets);
+    } catch {
+      setOptions([]);
+    } finally {
+      setLoadingOptions(false);
+    }
+  };
+
+  const handleCheckOut = async () => {
+    if (!selectedAssetId) {
+      toast.error('Selecciona un número de serie');
+      return;
+    }
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const response = await apiClient.post('/api/inventory/movements', {
+        asset_id: selectedAssetId,
+        order_id: orderId,
+        direction: 'checkout',
+        condition_notes: notes.trim() || undefined,
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        setResult({ ok: false, message: payload.error || 'No se pudo registrar la salida' });
+        return;
+      }
+      setResult({ ok: true, message: 'Salida registrada' });
+      toast.success('Salida registrada');
+    } catch (error) {
+      setResult({ ok: false, message: error instanceof Error ? error.message : 'Error de conexión' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={loadOptions}
+        className="whitespace-nowrap rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
+      >
+        Registrar salida
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <select
+        value={selectedAssetId}
+        onChange={e => setSelectedAssetId(e.target.value ? Number(e.target.value) : '')}
+        disabled={loadingOptions || (options?.length ?? 0) === 0}
+        aria-label="Número de serie"
+        className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-[11px]"
+      >
+        <option value="">
+          {loadingOptions ? 'Cargando…' : options?.length ? 'Elige el número de serie' : 'Sin equipos registrados'}
+        </option>
+        {(options ?? []).map(asset => (
+          <option key={asset.id} value={asset.id}>
+            {asset.serial_number}
+          </option>
+        ))}
+      </select>
+      <input
+        type="text"
+        value={notes}
+        onChange={e => setNotes(e.target.value)}
+        placeholder="Notas (opcional)"
+        aria-label="Notas de la salida"
+        className="w-28 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-[11px]"
+      />
+      <button
+        type="button"
+        onClick={handleCheckOut}
+        disabled={submitting || !selectedAssetId}
+        className="rounded-[6px] bg-[var(--color-text-primary)] px-2 py-1 text-[11px] font-medium text-white disabled:opacity-50"
+      >
+        {submitting ? 'Guardando…' : 'Confirmar'}
+      </button>
+      {result && (
+        <span
+          className={`text-[11px] ${result.ok ? 'text-[var(--color-ok)]' : 'text-[var(--color-crit)]'}`}
+          role="status"
+        >
+          {result.message}
+        </span>
+      )}
+    </div>
+  );
 }
 
 const STATUS_TONES: Record<string, string> = {
@@ -270,6 +414,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
                   <th scope="col" className="px-4 py-2 font-medium">Tipo</th>
                   <th scope="col" className="px-4 py-2 text-right font-medium">Valor</th>
                   <th scope="col" className="px-4 py-2 font-medium">Estado</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Equipos</th>
                 </tr>
               </thead>
               <tbody>
@@ -538,7 +683,16 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
   );
 }
 
+/**
+ * Fila de "Delivery activos" con la lista de equipos con número de serie del pedido, cada uno con
+ * su propio `AssetCheckOutControl` (T-026 gap 2/4). Órdenes sin ningún `product_id` numérico en
+ * `line_items` (ver `itemsFromLineItems`) no muestran ningún control — no hay nada serializado que
+ * registrar.
+ */
 function ShipmentTableRow({ row }: { row: ShipmentRow }) {
+  const items = useMemo(() => itemsFromLineItems(row.lineItems), [row.lineItems]);
+  const serialisableItems = items.filter(item => item.productId !== null);
+
   return (
     <tr className="border-b border-[var(--color-border-soft)]">
       <td className="px-4 py-2 font-mono text-[11px]">
@@ -554,6 +708,21 @@ function ShipmentTableRow({ row }: { row: ShipmentRow }) {
         <span className={`rounded-full px-2 py-0.5 text-[10px] ${statusPill(row.status)}`}>
           {shipmentLabel(row.status)}
         </span>
+      </td>
+      <td className="px-4 py-2">
+        {serialisableItems.length === 0 ? (
+          <span className="text-[10px] text-[var(--color-text-faint)]">—</span>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {serialisableItems.map((item, index) => (
+              <div key={`${item.sku}-${index}`}>
+                <div className="truncate text-[10px] text-[var(--color-text-secondary)]">{item.name}</div>
+                {/* `item.productId` no es null: filtrado arriba en `serialisableItems`. */}
+                <AssetCheckOutControl productId={item.productId as number} orderId={row.orderId} />
+              </div>
+            ))}
+          </div>
+        )}
       </td>
     </tr>
   );
