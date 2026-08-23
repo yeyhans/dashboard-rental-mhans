@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MOVEMENT_TRANSITION_ERRORS, validateMovementTransition } from '../../lib/assetMovements';
 
 /**
  * `assetMovementService.ts` against `asset_movements` (T-026 gap 1/4). The migration
@@ -47,7 +48,7 @@ describe('AssetMovementService.recordMovement', () => {
 
     await expect(
       AssetMovementService.recordMovement({ asset_id: 1, order_id: 10, direction: 'checkout' })
-    ).rejects.toThrow('El equipo ya tiene un checkout abierto, debe hacer check-in primero');
+    ).rejects.toThrow(MOVEMENT_TRANSITION_ERRORS.OPEN_CHECKOUT_EXISTS);
   });
 
   it('rejects a checkin when the asset has no open checkout', async () => {
@@ -55,7 +56,41 @@ describe('AssetMovementService.recordMovement', () => {
 
     await expect(
       AssetMovementService.recordMovement({ asset_id: 1, order_id: 10, direction: 'checkin' })
-    ).rejects.toThrow('El equipo no tiene un checkout abierto para hacer check-in');
+    ).rejects.toThrow(MOVEMENT_TRANSITION_ERRORS.NO_OPEN_CHECKOUT);
+  });
+
+  // R3-103: the service must delegate to the pure validator instead of reimplementing the rule —
+  // proven here by asserting the service's rejection is IDENTICAL to calling
+  // `validateMovementTransition` directly with the same history, not just a coincidentally equal
+  // literal string.
+  it('rejects with exactly what validateMovementTransition returns for the same history (single source of truth)', async () => {
+    const history = [{ asset_id: 1, direction: 'checkout' as const, checked_at: '2026-08-01T10:00:00Z' }];
+    state.history.data = history;
+
+    const expected = validateMovementTransition('checkout', history);
+
+    await expect(
+      AssetMovementService.recordMovement({ asset_id: 1, order_id: 10, direction: 'checkout' })
+    ).rejects.toThrow(expected.error);
+  });
+
+  // R3-102b: TOCTOU defense-in-depth. The DB-level partial unique index
+  // (`asset_movements_one_open_checkout_idx`, added in 0006 per R3-102a) rejects a second
+  // concurrent checkout with a 23505 unique-violation even when the app-level history check
+  // above raced and passed. The service must map that DB error to the SAME message the
+  // synchronous validator uses, so the endpoint's existing CLIENT_ERRORS matcher (409) handles
+  // both paths without a second branch.
+  it('maps a DB unique-violation on insert to the same open-checkout message (TOCTOU defense-in-depth)', async () => {
+    state.history.data = []; // app-level check passes: no open checkout seen by THIS transaction
+    state.insert.error = {
+      code: '23505',
+      message:
+        'duplicate key value violates unique constraint "asset_movements_one_open_checkout_idx"',
+    };
+
+    await expect(
+      AssetMovementService.recordMovement({ asset_id: 1, order_id: 10, direction: 'checkout' })
+    ).rejects.toThrow(MOVEMENT_TRANSITION_ERRORS.OPEN_CHECKOUT_EXISTS);
   });
 
   it('inserts the movement when the transition is valid', async () => {

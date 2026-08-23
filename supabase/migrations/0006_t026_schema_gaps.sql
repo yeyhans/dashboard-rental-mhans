@@ -76,6 +76,24 @@
 --   deleting/blocking that admin, nor silently corrupt historical movement rows — the row survives
 --   as an anonymised movement rather than the delete failing.
 --
+-- POST-REVIEW FIXES (R3, on commit 4de3c5c, 2026-08-23; CRITICAL fixed in the service layer,
+-- this WARNING fixed here):
+--
+--   R3-102 — the app-level "no double checkout" rule (`assetMovementService.ts` reading a
+--   history, then inserting) has a TOCTOU race: two concurrent checkout requests for the same
+--   asset can both read "nothing open" before either insert commits, and both succeed. An
+--   append-only audit trail cannot fix this by mutating a checkout row's own event fields
+--   (direction/checked_at must stay exactly what happened), so the guard is a separate nullable
+--   `closed_by_movement_id` marker plus a partial UNIQUE index: at most one row per asset can have
+--   `direction = 'checkout' AND closed_by_movement_id IS NULL` at a time. Two concurrent INSERTs
+--   of an open checkout for the same asset now serialize at the index itself — the second one
+--   gets a 23505 unique-violation, which `assetMovementService.ts` maps to the same
+--   `MOVEMENT_TRANSITION_ERRORS.OPEN_CHECKOUT_EXISTS` message the synchronous history check
+--   already throws (R3-103's single-sourced constant in `lib/assetMovements.ts`). The marker is
+--   set by an AFTER INSERT trigger on the matching checkin (see `asset_movements_close_checkout`
+--   below), which also re-asserts "a checkin must close an open checkout" at the DB layer as a
+--   second line of defense behind the app-level check.
+--
 -- Idempotent: IF NOT EXISTS / IF EXISTS throughout, so a partial apply can be replayed.
 --
 
@@ -160,6 +178,61 @@ CREATE POLICY "Allow service_role full access to asset_movements"
     TO service_role
     USING (true)
     WITH CHECK (true);
+
+-- -------------------------------------------------------------------------
+-- R3-102 — DB-level guard against a TOCTOU double-open-checkout (see the header note above for
+-- the full rationale). `closed_by_movement_id` is set on a checkout row by the checkin that
+-- closes it; NULL means "still open".
+-- -------------------------------------------------------------------------
+ALTER TABLE public.asset_movements
+    ADD COLUMN IF NOT EXISTS closed_by_movement_id bigint
+        REFERENCES public.asset_movements(id) ON DELETE SET NULL;
+
+COMMENT ON COLUMN public.asset_movements.closed_by_movement_id IS
+    'Set on a checkout row by the checkin movement that closes it. NULL = still open. T-026 R3-102.';
+
+-- The actual concurrency guard: at most one row per asset can be an unmatched (open) checkout.
+-- Two concurrent INSERTs of a second open checkout for the same asset serialize here — the
+-- second commit fails with 23505, which `assetMovementService.ts` maps to
+-- MOVEMENT_TRANSITION_ERRORS.OPEN_CHECKOUT_EXISTS (R3-102b).
+CREATE UNIQUE INDEX IF NOT EXISTS asset_movements_one_open_checkout_idx
+    ON public.asset_movements (asset_id)
+    WHERE direction = 'checkout' AND closed_by_movement_id IS NULL;
+
+-- Fires only for checkin inserts: closes the asset's currently open checkout (if any) by setting
+-- its closed_by_movement_id to the new checkin's id. Raises if there is nothing open to close —
+-- the same rule `validateMovementTransition` enforces at the app layer, now also enforced here so
+-- a direct INSERT bypassing the service (or a future caller) cannot skip it.
+CREATE OR REPLACE FUNCTION public.asset_movements_close_checkout()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    closed_count integer;
+BEGIN
+    UPDATE public.asset_movements
+    SET closed_by_movement_id = NEW.id
+    WHERE asset_id = NEW.asset_id
+      AND direction = 'checkout'
+      AND closed_by_movement_id IS NULL
+      AND id <> NEW.id;
+
+    GET DIAGNOSTICS closed_count = ROW_COUNT;
+
+    IF closed_count = 0 THEN
+        RAISE EXCEPTION 'El equipo no tiene un checkout abierto para hacer check-in';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS asset_movements_close_checkout_trigger ON public.asset_movements;
+CREATE TRIGGER asset_movements_close_checkout_trigger
+    AFTER INSERT ON public.asset_movements
+    FOR EACH ROW
+    WHEN (NEW.direction = 'checkin')
+    EXECUTE FUNCTION public.asset_movements_close_checkout();
 
 -- =========================================================================
 -- Gap 2 — driver + delivery payment on shipping_usage (nullable, one driver/one payment per

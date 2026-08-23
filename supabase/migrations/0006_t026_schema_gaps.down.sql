@@ -17,6 +17,10 @@
 -- dropped columns are on tables that are not being dropped), so order is chosen for readability:
 -- undo gap 3, then gap 2, then gap 1, mirroring the forward migration in reverse.
 --
+-- R3-102: `asset_movements_close_checkout_trigger` and the `closed_by_movement_id` column/partial
+-- index are dropped automatically by `DROP TABLE public.asset_movements` below (they belong to
+-- that table). The trigger FUNCTION does not — a standalone object dropped explicitly here.
+--
 -- Idempotent: IF EXISTS / IF NOT EXISTS throughout, so a re-run is safe.
 --
 
@@ -39,6 +43,10 @@ ALTER TABLE public.shipping_usage
     DROP COLUMN IF EXISTS delivery_payment_amount;
 
 -- ---- gap 1 / 4 ----
+-- Table drop cascades the trigger, the partial unique index, and closed_by_movement_id itself.
 DROP TABLE IF EXISTS public.asset_movements;
+
+-- Standalone object, not owned by the table — must be dropped explicitly (R3-102).
+DROP FUNCTION IF EXISTS public.asset_movements_close_checkout();
 
 COMMIT;

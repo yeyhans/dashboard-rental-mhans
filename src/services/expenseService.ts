@@ -116,16 +116,23 @@ export class ExpenseService {
     return data as Expense;
   }
 
+  /**
+   * `false` when `id` did not exist (R3-101, review R3 on `4de3c5c`): `.delete().eq('id', id)`
+   * alone returns `error: null` with zero affected rows for a nonexistent id — a naive
+   * `if (error) throw; return true` would report success for a delete that deleted nothing. The
+   * trailing `.select()` returns the deleted rows so the caller can tell "deleted" from "there was
+   * nothing to delete", same distinction `update()` above makes via `PGRST116`.
+   */
   static async delete(id: number): Promise<boolean> {
     const client = this.ensureSupabaseAdmin();
-    const { error } = await client.from('expenses').delete().eq('id', id);
+    const { data, error } = await client.from('expenses').delete().eq('id', id).select();
 
     if (error) {
       console.error('[ExpenseService] Error al eliminar el gasto:', { id, error });
       throw error;
     }
 
-    return true;
+    return Array.isArray(data) && data.length > 0;
   }
 }
 

@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { MOVEMENT_TRANSITION_ERRORS } from '../../../lib/assetMovements';
 import { withAuth } from '../../../middleware/auth';
 import { AssetMovementService } from '../../../services/assetMovementService';
 import type { MovementDirection } from '../../../types/assetMovements';
@@ -11,9 +12,12 @@ import type { MovementDirection } from '../../../types/assetMovements';
 // (pending staging rehearsal). This endpoint is written and tested against the migration's
 // contract ahead of that rehearsal.
 
+// R3-103: sourced from `lib/assetMovements.ts`'s exported constants, not duplicated literals —
+// `assetMovementService.ts` throws the exact same strings (both the synchronous validation path
+// and the DB unique-violation defense-in-depth path, R3-102b), so this matcher cannot drift.
 const CLIENT_ERRORS: Array<{ match: string; status: number }> = [
-  { match: 'El equipo ya tiene un checkout abierto', status: 409 },
-  { match: 'El equipo no tiene un checkout abierto', status: 409 },
+  { match: MOVEMENT_TRANSITION_ERRORS.OPEN_CHECKOUT_EXISTS, status: 409 },
+  { match: MOVEMENT_TRANSITION_ERRORS.NO_OPEN_CHECKOUT, status: 409 },
   { match: 'Dirección inválida', status: 400 },
   { match: 'Debes indicar un equipo válido', status: 400 },
   { match: 'Debes indicar una orden válida', status: 400 },

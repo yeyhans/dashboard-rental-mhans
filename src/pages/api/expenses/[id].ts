@@ -46,13 +46,36 @@ export const PUT: APIRoute = withAuth(async ({ request, params, locals }) => {
     if (typeof body.expense_date !== 'string' || !body.expense_date) {
       return fail('La fecha del gasto es obligatoria', 400);
     }
+    // R3-106: reject an unparseable date instead of forwarding an opaque string to the DB, where
+    // Postgres would reject it with a generic error the client can't act on.
+    if (Number.isNaN(new Date(body.expense_date).getTime())) {
+      return fail('La fecha del gasto no es una fecha válida', 400);
+    }
     updates.expense_date = body.expense_date;
   }
   if (body.related_order_id !== undefined) {
-    updates.related_order_id = body.related_order_id === null ? null : Number(body.related_order_id);
+    // R3-105: same validation as POST (`index.ts`) — Number.isInteger && > 0, not just a
+    // null-check, so a non-numeric or non-positive value doesn't silently reach the service.
+    if (body.related_order_id === null) {
+      updates.related_order_id = null;
+    } else {
+      const relatedOrderId = Number(body.related_order_id);
+      if (!Number.isInteger(relatedOrderId) || relatedOrderId <= 0) {
+        return fail('ID de orden relacionada inválido', 400);
+      }
+      updates.related_order_id = relatedOrderId;
+    }
   }
   if (body.related_asset_id !== undefined) {
-    updates.related_asset_id = body.related_asset_id === null ? null : Number(body.related_asset_id);
+    if (body.related_asset_id === null) {
+      updates.related_asset_id = null;
+    } else {
+      const relatedAssetId = Number(body.related_asset_id);
+      if (!Number.isInteger(relatedAssetId) || relatedAssetId <= 0) {
+        return fail('ID de equipo relacionado inválido', 400);
+      }
+      updates.related_asset_id = relatedAssetId;
+    }
   }
   if (body.notes !== undefined) {
     updates.notes = typeof body.notes === 'string' ? body.notes.trim() || null : null;
@@ -86,7 +109,12 @@ export const DELETE: APIRoute = withAuth(async ({ params, locals }) => {
   }
 
   try {
-    await ExpenseService.delete(id);
+    // R3-101 (CRITICAL): `delete()` returns `false` when nothing existed at `id` — must map to
+    // 404, not the 200 a bare `await ExpenseService.delete(id)` would always return.
+    const deleted = await ExpenseService.delete(id);
+    if (!deleted) {
+      return fail('Gasto no encontrado', 404);
+    }
     return json({ success: true, message: 'Gasto eliminado correctamente' }, 200);
   } catch (error) {
     console.error('[DELETE /api/expenses/[id]] Error:', {

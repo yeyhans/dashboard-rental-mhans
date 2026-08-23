@@ -14,6 +14,18 @@
 import type { AssetMovementLike, MovementDirection } from '../types/assetMovements';
 
 /**
+ * Single source of truth for the transition-rejection messages (R3-103, review R3 on
+ * `4de3c5c`). `validateMovementTransition` returns these; `assetMovementService.ts` re-throws
+ * them (including on the DB-level unique-violation path, R3-102b) and
+ * `api/inventory/movements.ts`'s `CLIENT_ERRORS` matcher imports the same constants — no
+ * duplicated literal strings, so the three cannot drift out of sync with each other.
+ */
+export const MOVEMENT_TRANSITION_ERRORS = {
+  OPEN_CHECKOUT_EXISTS: 'El equipo ya tiene un checkout abierto, debe hacer check-in primero',
+  NO_OPEN_CHECKOUT: 'El equipo no tiene un checkout abierto para hacer check-in',
+} as const;
+
+/**
  * True when the asset's most recent movement in `history` is an unmatched `checkout`.
  * `history` MUST already be filtered to a single asset — this function does not group by
  * `asset_id` (see `availabilityFromMovements` for the multi-asset case).
@@ -44,11 +56,11 @@ export function validateMovementTransition(
   const open = hasOpenCheckout(history);
 
   if (direction === 'checkout' && open) {
-    return { valid: false, error: 'El equipo ya tiene un checkout abierto, debe hacer check-in primero' };
+    return { valid: false, error: MOVEMENT_TRANSITION_ERRORS.OPEN_CHECKOUT_EXISTS };
   }
 
   if (direction === 'checkin' && !open) {
-    return { valid: false, error: 'El equipo no tiene un checkout abierto para hacer check-in' };
+    return { valid: false, error: MOVEMENT_TRANSITION_ERRORS.NO_OPEN_CHECKOUT };
   }
 
   return { valid: true };

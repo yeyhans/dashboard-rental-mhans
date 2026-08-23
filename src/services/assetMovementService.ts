@@ -1,6 +1,9 @@
-import { hasOpenCheckout } from '../lib/assetMovements';
+import { MOVEMENT_TRANSITION_ERRORS, validateMovementTransition } from '../lib/assetMovements';
 import { supabaseAdmin } from '../lib/supabase';
 import { isMovementDirection, type AssetMovement, type AssetMovementInput } from '../types/assetMovements';
+
+/** Postgres unique-violation error code. */
+const UNIQUE_VIOLATION = '23505';
 
 /**
  * Asset movements — checkout/checkin audit trail against `serialised_assets` (T-026 gap 1/4).
@@ -55,6 +58,16 @@ export class AssetMovementService {
    * Records a checkout or checkin against an asset, after validating the transition against that
    * asset's own history. Rejects before hitting the database if `direction` is not one of the
    * CHECK constraint's values.
+   *
+   * The transition rule itself lives ONLY in `validateMovementTransition` (R3-103, review R3 on
+   * `4de3c5c`) — this method does not reimplement the "no double checkout" / "no checkin without
+   * an open checkout" logic, so the rule and its error strings cannot drift from the pure
+   * function `lib/__tests__/assetMovements.test.ts` already covers.
+   *
+   * This history-based check is still subject to a TOCTOU race between two concurrent requests
+   * for the same asset (R3-102): the DB-level partial unique index added in 0006
+   * (`asset_movements_one_open_checkout_idx`) is the actual guard against that race, and the
+   * `catch` below maps its 23505 violation to the same message (R3-102b).
    */
   static async recordMovement(input: AssetMovementInput): Promise<AssetMovement> {
     if (!isMovementDirection(input.direction)) {
@@ -68,13 +81,9 @@ export class AssetMovementService {
     }
 
     const history = await this.getHistoryForAsset(input.asset_id);
-    const open = hasOpenCheckout(history);
-
-    if (input.direction === 'checkout' && open) {
-      throw new Error('El equipo ya tiene un checkout abierto, debe hacer check-in primero');
-    }
-    if (input.direction === 'checkin' && !open) {
-      throw new Error('El equipo no tiene un checkout abierto para hacer check-in');
+    const transition = validateMovementTransition(input.direction, history);
+    if (!transition.valid) {
+      throw new Error(transition.error);
     }
 
     const client = this.ensureSupabaseAdmin();
@@ -91,6 +100,13 @@ export class AssetMovementService {
       .single();
 
     if (error) {
+      if ((error as { code?: string }).code === UNIQUE_VIOLATION) {
+        // R3-102b: the app-level history check above raced and lost — the DB's partial unique
+        // index caught the second concurrent checkout. Same message the synchronous path throws,
+        // so the endpoint's CLIENT_ERRORS matcher needs no second branch.
+        throw new Error(MOVEMENT_TRANSITION_ERRORS.OPEN_CHECKOUT_EXISTS);
+      }
+
       console.error('[AssetMovementService] Error al registrar el movimiento:', {
         assetId: input.asset_id,
         orderId: input.order_id,

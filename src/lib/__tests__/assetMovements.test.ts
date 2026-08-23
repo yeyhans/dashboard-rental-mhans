@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MOVEMENT_TRANSITION_ERRORS,
   availabilityFromMovements,
   hasOpenCheckout,
   validateMovementTransition,
@@ -37,7 +38,7 @@ describe('validateMovementTransition', () => {
     const history = [movement(1, 'checkout', '2026-08-01T10:00:00Z')];
     const result = validateMovementTransition('checkout', history);
     expect(result.valid).toBe(false);
-    expect(result.error).toBe('El equipo ya tiene un checkout abierto, debe hacer check-in primero');
+    expect(result.error).toBe(MOVEMENT_TRANSITION_ERRORS.OPEN_CHECKOUT_EXISTS);
   });
 
   it('accepts a checkout when the asset has no open checkout', () => {
@@ -50,13 +51,28 @@ describe('validateMovementTransition', () => {
     const history = [movement(1, 'checkin', '2026-08-01T10:00:00Z')];
     const result = validateMovementTransition('checkin', history);
     expect(result.valid).toBe(false);
-    expect(result.error).toBe('El equipo no tiene un checkout abierto para hacer check-in');
+    expect(result.error).toBe(MOVEMENT_TRANSITION_ERRORS.NO_OPEN_CHECKOUT);
   });
 
   it('accepts a checkin when the asset has an open checkout', () => {
     const history = [movement(1, 'checkout', '2026-08-01T10:00:00Z')];
     const result = validateMovementTransition('checkin', history);
     expect(result.valid).toBe(true);
+  });
+});
+
+// R3-103: error strings must be the single-sourced constants, not duplicated literals, so the
+// service and the endpoint's CLIENT_ERRORS matcher cannot drift from `validateMovementTransition`.
+describe('MOVEMENT_TRANSITION_ERRORS', () => {
+  it('is the exact string validateMovementTransition returns for a double checkout', () => {
+    const history = [movement(1, 'checkout', '2026-08-01T10:00:00Z')];
+    const result = validateMovementTransition('checkout', history);
+    expect(result.error).toBe(MOVEMENT_TRANSITION_ERRORS.OPEN_CHECKOUT_EXISTS);
+  });
+
+  it('is the exact string validateMovementTransition returns for a checkin with nothing open', () => {
+    const result = validateMovementTransition('checkin', []);
+    expect(result.error).toBe(MOVEMENT_TRANSITION_ERRORS.NO_OPEN_CHECKOUT);
   });
 });
 

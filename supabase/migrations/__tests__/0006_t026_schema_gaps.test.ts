@@ -30,6 +30,20 @@ import { describe, expect, it } from 'vitest';
  *   `admin_users(id)` ON DELETE SET NULL — the dashboard's `withAuth` already resolves the acting
  *   admin from `admin_users`, so the audit trail anchors to the same identity the rest of the app
  *   uses, rather than an unverified typed name.
+ *
+ * POST-REVIEW FIXES (R3, on commit 4de3c5c, 2026-08-23):
+ *   R3-102 — the app-level "no double checkout" check in `assetMovementService.ts` reads the
+ *   asset's movement history and then inserts in a separate step: two concurrent checkout
+ *   requests for the same asset can both read "no open checkout" before either insert commits
+ *   (TOCTOU). Closed at the DB layer, staying append-only (no UPDATE of a checkout row's own
+ *   event fields): a nullable self-referencing `closed_by_movement_id` column, set by an
+ *   AFTER INSERT trigger when the matching checkin lands, plus a partial UNIQUE index on
+ *   `(asset_id) WHERE direction = 'checkout' AND closed_by_movement_id IS NULL`. At most one
+ *   "open" checkout row can exist per asset at the index level — Postgres itself serializes and
+ *   rejects (23505) a second concurrent checkout, which is a guarantee an app-level check alone
+ *   cannot make. `assetMovementService.ts` maps that 23505 to the same
+ *   `MOVEMENT_TRANSITION_ERRORS.OPEN_CHECKOUT_EXISTS` message the synchronous path already
+ *   throws (R3-103's single-sourced constant).
  */
 function read(relativePath: string): string {
   return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8');
@@ -78,6 +92,36 @@ describe('0006_t026_schema_gaps migration', () => {
         /checked_by_admin_id\s+bigint\s+REFERENCES public\.admin_users\(id\)\s+ON DELETE SET NULL/i
       );
       expect(migrationSql).not.toMatch(/checked_by\s+text/i);
+    });
+
+    describe('R3-102 — DB-level guard against a TOCTOU double-open-checkout', () => {
+      it('adds a self-referencing closed_by_movement_id column', () => {
+        expect(migrationSql).toMatch(
+          /closed_by_movement_id\s+bigint\s+REFERENCES public\.asset_movements\(id\)\s+ON DELETE SET NULL/i
+        );
+      });
+
+      it('creates a partial unique index allowing at most one open checkout per asset', () => {
+        expect(migrationSql).toMatch(
+          /CREATE UNIQUE INDEX(?:\s+IF NOT EXISTS)?\s+asset_movements_one_open_checkout_idx\s+ON public\.asset_movements\s*\(\s*asset_id\s*\)\s*WHERE\s+direction\s*=\s*'checkout'\s+AND\s+closed_by_movement_id\s+IS\s+NULL/i
+        );
+      });
+
+      it('creates a trigger that closes the previous open checkout when a checkin is inserted', () => {
+        expect(migrationSql).toMatch(/CREATE (OR REPLACE )?FUNCTION public\.asset_movements_close_checkout/i);
+        expect(migrationSql).toMatch(
+          /CREATE TRIGGER[^;]*ON public\.asset_movements[^;]*EXECUTE FUNCTION public\.asset_movements_close_checkout/is
+        );
+        // Only fires for checkin inserts — a checkout insert must not run the closing logic.
+        expect(migrationSql).toMatch(/WHEN\s*\(\s*NEW\.direction\s*=\s*'checkin'\s*\)/i);
+      });
+
+      it('raises when a checkin has no open checkout to close, mirroring the app-level message', () => {
+        const functionBlock = migrationSql.slice(
+          migrationSql.search(/CREATE (OR REPLACE )?FUNCTION public\.asset_movements_close_checkout/i)
+        );
+        expect(functionBlock).toMatch(/RAISE EXCEPTION/i);
+      });
     });
   });
 
@@ -197,6 +241,12 @@ describe('0006_t026_schema_gaps migration', () => {
     );
     expect(rollbackSql).toMatch(
       /ALTER TABLE public\.shipping_usage[\s\S]*?DROP COLUMN IF EXISTS driver_name/i
+    );
+  });
+
+  it('rollback drops the R3-102 trigger function (the table drop cascades the trigger/index/column)', () => {
+    expect(rollbackSql).toMatch(
+      /DROP FUNCTION (IF EXISTS )?public\.asset_movements_close_checkout\s*\(\s*\)/i
     );
   });
 });

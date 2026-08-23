@@ -61,6 +61,10 @@ export const POST: APIRoute = withAuth(async ({ request, locals }) => {
   if (typeof body.expense_date !== 'string' || !body.expense_date) {
     return fail('La fecha del gasto es obligatoria', 400);
   }
+  // R3-106: reject an unparseable date instead of forwarding an opaque string to the DB.
+  if (Number.isNaN(new Date(body.expense_date).getTime())) {
+    return fail('La fecha del gasto no es una fecha válida', 400);
+  }
 
   const relatedOrderId = body.related_order_id != null ? Number(body.related_order_id) : null;
   if (relatedOrderId != null && (!Number.isInteger(relatedOrderId) || relatedOrderId <= 0)) {

@@ -10,7 +10,7 @@ const state = vi.hoisted(() => ({
   list: { data: [] as any[] | null, error: null as any, count: 0 as number | null },
   insert: { data: null as any, error: null as any },
   update: { data: null as any, error: null as any },
-  delete: { error: null as any },
+  delete: { data: [] as any[] | null, error: null as any },
 }));
 
 vi.mock('../../lib/supabase', () => ({
@@ -36,7 +36,9 @@ vi.mock('../../lib/supabase', () => ({
           }),
         }),
         delete: () => ({
-          eq: () => Promise.resolve(state.delete),
+          eq: () => ({
+            select: () => Promise.resolve(state.delete),
+          }),
         }),
       };
     },
@@ -49,7 +51,10 @@ beforeEach(() => {
   state.list = { data: [], error: null, count: 0 };
   state.insert = { data: null, error: null };
   state.update = { data: null, error: null };
-  state.delete = { error: null };
+  // R3-101: `.delete().eq(id).select()` returns the deleted rows. A non-empty array is the
+  // default "the row existed and was removed" case; individual tests override to `[]` for the
+  // nonexistent-id case.
+  state.delete = { data: [{ id: 1 }], error: null };
 });
 
 describe('ExpenseService.create', () => {
@@ -129,9 +134,21 @@ describe('ExpenseService.update', () => {
 });
 
 describe('ExpenseService.delete', () => {
-  it('deletes and returns true', async () => {
+  it('deletes and returns true when the row existed', async () => {
     const result = await ExpenseService.delete(1);
     expect(result).toBe(true);
+  });
+
+  // R3-101 (CRITICAL): Supabase's `.delete().eq('id', id)` returns error:null with 0 affected
+  // rows for a nonexistent id — a naive implementation reports success for a delete that deleted
+  // nothing. Non-tautological: this only passes if the production code actually reads the
+  // returned `data` array length instead of just checking `error`.
+  it('returns false instead of reporting success when the id does not exist', async () => {
+    state.delete.data = [];
+
+    const result = await ExpenseService.delete(999);
+
+    expect(result).toBe(false);
   });
 
   it('propagates a database error on delete', async () => {
