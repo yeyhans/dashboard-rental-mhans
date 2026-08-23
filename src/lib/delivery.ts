@@ -57,6 +57,43 @@ export function canRecordCheckout(status: string): boolean {
   return status === 'shipped';
 }
 
+/**
+ * The dispatch state machine (T-026 gap 2/4, R3-205 CRITICAL: re-review on the R3-201 fix).
+ *
+ * `canRecordCheckout` gates checkout on `status === 'shipped'`, but nothing in the repo ever
+ * wrote `shipped` into `shipping_usage.status` — `DeliveryService` only READ that column. The
+ * checkout control was unreachable in the real flow. `DeliveryService.updateShipmentStatus` is
+ * the write path this validates before it touches the database.
+ *
+ * The canonical (`MarioHans_OS_Area01_Delivery_Canonical_RC2.1.3.html`) declares no
+ * `data-action` that changes an active shipment's status — its "Delivery activos" table is
+ * read-only; the only interactive button in the whole page (`mark-paid`) changes a PAYMENT state
+ * that has no backing column anyway (see the header note in `DeliveryBoard.tsx`). The transitions
+ * below follow the real DB contract instead: `shipping_usage_status_check`
+ * (`supabase/migrations/0000_baseline.sql`) allows exactly
+ * `pending | processing | shipped | delivered | cancelled`, and the columns `shipped_at` /
+ * `delivered_at` exist specifically to be stamped on the two transitions that matter operationally.
+ */
+const SHIPMENT_TRANSITIONS: Record<ShipmentStatus, readonly ShipmentStatus[]> = {
+  pending: ['processing', 'shipped', 'cancelled'],
+  processing: ['shipped', 'cancelled'],
+  shipped: ['delivered', 'cancelled'],
+  delivered: [],
+  cancelled: [],
+};
+
+export function canTransitionShipment(from: string, to: string): boolean {
+  if (!isShipmentStatus(from) || !isShipmentStatus(to)) return false;
+  return SHIPMENT_TRANSITIONS[from].includes(to);
+}
+
+/** Single-sourced so the service and the endpoint's error matcher cannot drift (same posture as `MOVEMENT_TRANSITION_ERRORS`). */
+export const SHIPMENT_TRANSITION_ERRORS = {
+  NOT_FOUND: 'Envío no encontrado',
+  ILLEGAL: 'Ese cambio de estado no está permitido para este envío',
+  RACE: 'El estado del envío cambió mientras se procesaba la solicitud, intenta de nuevo',
+} as const;
+
 function isoDay(value: string | Date): string {
   if (typeof value === 'string') return value.slice(0, 10);
   const y = value.getFullYear();

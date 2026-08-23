@@ -2,7 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2, Pencil, Plus, Search, Trash2, Truck } from 'lucide-react';
 import { itemsFromLineItems } from '../../lib/checkIn';
-import { SHIPMENT_STATUSES, canRecordCheckout, formatCLP, shipmentLabel } from '../../lib/delivery';
+import {
+  SHIPMENT_STATUSES,
+  canRecordCheckout,
+  formatCLP,
+  isAwaitingDispatch,
+  shipmentLabel,
+  type ShipmentStatus,
+} from '../../lib/delivery';
 import {
   shippingMethodDeleteWarning,
   shippingMethodFromRecord,
@@ -57,6 +64,20 @@ import type { DeliveryBoard as DeliveryBoardData, ShipmentRow } from '../../serv
  *   esta isla no tiene ErrorBoundary, tumbaba TODO `/delivery`, no solo esta tabla. Corregido en
  *   `lib/checkIn.ts` (descarta elementos no-objeto o sin `name`/`sku`), con tests en
  *   `checkIn.test.ts`.
+ *
+ * Re-review R3-205 (CRITICAL, introducido por el fix de R3-201, 2026-08-23): gatear el checkout a
+ * `shipped` dejó el control INALCANZABLE — un grep de todo `src/` confirmó que nada transicionaba
+ * `shipping_usage.status`; `DeliveryService` solo lo leía. El canónico de Delivery no declara
+ * ningún `data-action` para cambiar el estado de un despacho activo (su tabla "Delivery activos"
+ * es de solo lectura; el único botón interactivo, `mark-paid`, cambia el estado de PAGO, ya fuera
+ * de alcance por falta de columna — ver más arriba), así que la transición no vive en ningún otro
+ * módulo declarado por el canónico: se implementó aquí, siguiendo el CHECK real de
+ * `shipping_usage_status_check` (`pending → processing → shipped → delivered`, `cancelled` desde
+ * cualquier estado no terminal). Máquina de estados pura en `canTransitionShipment`
+ * (`lib/delivery.ts`, testeada), escritura en `DeliveryService.updateShipmentStatus` (testeada con
+ * `supabaseAdmin` mockeado), y `PUT /api/delivery/shipments/:id` como único punto de entrada — la
+ * UI de cada fila (`ShipmentTableRow`) llama a ese endpoint y actualiza el estado local para que
+ * `canRecordCheckout` reevalúe sin recargar la página.
  */
 interface DeliveryBoardProps {
   data: DeliveryBoardData;
@@ -267,6 +288,25 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
   const [statusFilter, setStatusFilter] = useState('todos');
   const [typeFilter, setTypeFilter] = useState('todos');
 
+  // R3-205: estado local de "Delivery activos" para que marcar despachado/entregado (`PUT
+  // /api/delivery/shipments/:id`) refresque `canRecordCheckout` en esa fila sin recargar la
+  // página. KPIs y "Historial de Envíos" siguen viniendo de `data` (snapshot del server): son
+  // agregados que ya son ligeramente obsoletos entre cargas normales de la página, así que
+  // recomputarlos en el cliente en cada transición es un alcance mayor que lo que este fix
+  // necesita — solo la disponibilidad del control de checkout es lo que R3-201/R3-205 exigían
+  // mantener correcto en vivo.
+  const [activeShipments, setActiveShipments] = useState<ShipmentRow[]>(data.active);
+
+  function handleShipmentStatusChanged(id: number, status: ShipmentStatus) {
+    setActiveShipments(prev =>
+      prev
+        .map(row => (row.id === id ? { ...row, status } : row))
+        // Una vez `delivered` (o `cancelled`) el envío deja de estar "activo" — mismo criterio que
+        // `DeliveryService.getBoard` usa para construir `active` en el server.
+        .filter(row => isAwaitingDispatch(row.status) || row.status === 'shipped')
+    );
+  }
+
   const [types, setTypes] = useState<StoredShippingMethod[]>(data.types);
   const [editing, setEditing] = useState<StoredShippingMethod | 'new' | null>(null);
   const [deleting, setDeleting] = useState<StoredShippingMethod | null>(null);
@@ -442,10 +482,10 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
         <div className="flex items-baseline justify-between border-b border-[var(--color-border)] p-4">
           <h2 className="text-sm font-semibold">Delivery activos</h2>
           <span className="rounded-full bg-[var(--color-surface-2)] px-2 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
-            {data.active.length} {data.active.length === 1 ? 'activo' : 'activos'}
+            {activeShipments.length} {activeShipments.length === 1 ? 'activo' : 'activos'}
           </span>
         </div>
-        {data.active.length === 0 ? (
+        {activeShipments.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-8 text-center">
             <Truck className="h-7 w-7 text-[var(--color-text-faint)]" aria-hidden="true" />
             <p className="text-xs text-[var(--color-text-secondary)]">
@@ -467,8 +507,8 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
                 </tr>
               </thead>
               <tbody>
-                {data.active.map(row => (
-                  <ShipmentTableRow key={row.id} row={row} />
+                {activeShipments.map(row => (
+                  <ShipmentTableRow key={row.id} row={row} onStatusChanged={handleShipmentStatusChanged} />
                 ))}
               </tbody>
             </table>
@@ -744,10 +784,54 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
  * corrompería `hasOpenCheckout` para esa unidad. Las filas no elegibles muestran el motivo en
  * español en vez del control.
  */
-function ShipmentTableRow({ row }: { row: ShipmentRow }) {
+/**
+ * Siguiente transición de despacho disponible desde el estado actual, según
+ * `canTransitionShipment` (`lib/delivery.ts`). Solo se ofrecen `shipped` y `delivered` en la UI —
+ * son las dos que importan operacionalmente (la segunda es la que apaga el checkout de vuelta) —
+ * aunque la máquina de estados también permite `cancelled` desde cualquier estado no terminal.
+ */
+function nextDispatchAction(status: string): { to: ShipmentStatus; label: string } | null {
+  if (isAwaitingDispatch(status)) return { to: 'shipped', label: 'Marcar despachado' };
+  if (status === 'shipped') return { to: 'delivered', label: 'Marcar entregado' };
+  return null;
+}
+
+function ShipmentTableRow({
+  row,
+  onStatusChanged,
+}: {
+  row: ShipmentRow;
+  onStatusChanged: (id: number, status: ShipmentStatus) => void;
+}) {
   const items = useMemo(() => itemsFromLineItems(row.lineItems), [row.lineItems]);
   const serialisableItems = items.filter(item => item.productId !== null);
   const eligible = canRecordCheckout(row.status);
+  const action = nextDispatchAction(row.status);
+
+  const [updating, setUpdating] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+
+  const handleTransition = async () => {
+    if (!action) return;
+    setUpdating(true);
+    setStatusError(null);
+    try {
+      const response = await apiClient.put(`/api/delivery/shipments/${row.id}`, { status: action.to });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        setStatusError(payload.error || 'No se pudo actualizar el estado del envío');
+        return;
+      }
+      onStatusChanged(row.id, payload.data.status);
+      toast.success(
+        action.to === 'shipped' ? 'Envío marcado como despachado' : 'Envío marcado como entregado'
+      );
+    } catch (error) {
+      setStatusError(error instanceof Error ? error.message : 'Error de conexión');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   return (
     <tr className="border-b border-[var(--color-border-soft)]">
@@ -764,6 +848,23 @@ function ShipmentTableRow({ row }: { row: ShipmentRow }) {
         <span className={`rounded-full px-2 py-0.5 text-[10px] ${statusPill(row.status)}`}>
           {shipmentLabel(row.status)}
         </span>
+        {action && (
+          <div className="mt-1.5">
+            <button
+              type="button"
+              onClick={handleTransition}
+              disabled={updating}
+              className="whitespace-nowrap rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
+            >
+              {updating ? 'Actualizando…' : action.label}
+            </button>
+          </div>
+        )}
+        {statusError && (
+          <div className="mt-1 text-[10px] text-[var(--color-crit)]" role="alert">
+            {statusError}
+          </div>
+        )}
       </td>
       <td className="px-4 py-2">
         {serialisableItems.length === 0 ? (

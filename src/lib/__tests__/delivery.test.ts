@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canRecordCheckout,
+  canTransitionShipment,
   deliveryKpis,
   formatCLP,
   historyTotals,
@@ -165,6 +166,62 @@ describe('canRecordCheckout', () => {
 
   it('rechaza cualquier valor fuera del CHECK de shipping_usage.status', () => {
     expect(canRecordCheckout('inventado')).toBe(false);
+  });
+});
+
+/**
+ * R3-205 (CRITICAL, re-review sobre el fix de R3-201): `canRecordCheckout` gatea el checkout a
+ * `shipped`, pero nada en el repo transicionaba `shipping_usage.status` hacia `shipped` —
+ * `deliveryService` solo LEE ese campo. El control quedaba inalcanzable en el flujo real. Esta
+ * máquina de estados pura es lo que la nueva transición del despacho (`DeliveryService.
+ * updateShipmentStatus`) valida antes de escribir, así que un salto ilegal nunca llega a la DB.
+ *
+ * El canónico Delivery (`MarioHans_OS_Area01_Delivery_Canonical_RC2.1.3.html`) no declara ningún
+ * `data-action` que cambie el estado de un despacho activo — su tabla de "Delivery activos" es de
+ * solo lectura (el único botón interactivo del historial es `mark-paid`, que es el estado de PAGO,
+ * no de despacho, y ya está documentado como fuera de alcance en el header de `DeliveryBoard.tsx`
+ * por falta de columna). La máquina de estados sigue estrictamente el CHECK real de
+ * `shipping_usage_status_check` (`supabase/migrations/0000_baseline.sql`): pending → processing →
+ * shipped → delivered, con `cancelled` alcanzable desde cualquier estado no terminal.
+ */
+describe('canTransitionShipment', () => {
+  it('permite despachar un envío pendiente o en preparación', () => {
+    expect(canTransitionShipment('pending', 'shipped')).toBe(true);
+    expect(canTransitionShipment('processing', 'shipped')).toBe(true);
+  });
+
+  it('permite entregar un envío ya despachado — esto es lo que habilita el checkout', () => {
+    expect(canTransitionShipment('shipped', 'delivered')).toBe(true);
+  });
+
+  it('permite cancelar desde cualquier estado no terminal', () => {
+    expect(canTransitionShipment('pending', 'cancelled')).toBe(true);
+    expect(canTransitionShipment('processing', 'cancelled')).toBe(true);
+    expect(canTransitionShipment('shipped', 'cancelled')).toBe(true);
+  });
+
+  it('rechaza saltarse un estado (pending directo a delivered)', () => {
+    expect(canTransitionShipment('pending', 'delivered')).toBe(false);
+  });
+
+  it('rechaza retroceder un estado', () => {
+    expect(canTransitionShipment('shipped', 'pending')).toBe(false);
+    expect(canTransitionShipment('delivered', 'shipped')).toBe(false);
+  });
+
+  it('rechaza cualquier transición desde un estado terminal', () => {
+    expect(canTransitionShipment('delivered', 'cancelled')).toBe(false);
+    expect(canTransitionShipment('cancelled', 'pending')).toBe(false);
+    expect(canTransitionShipment('cancelled', 'shipped')).toBe(false);
+  });
+
+  it('rechaza permanecer en el mismo estado', () => {
+    expect(canTransitionShipment('shipped', 'shipped')).toBe(false);
+  });
+
+  it('rechaza cualquier valor fuera del CHECK de shipping_usage.status', () => {
+    expect(canTransitionShipment('pending', 'inventado')).toBe(false);
+    expect(canTransitionShipment('inventado', 'shipped')).toBe(false);
   });
 });
 
