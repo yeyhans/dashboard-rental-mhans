@@ -1,7 +1,11 @@
 import type { APIRoute } from 'astro';
+import { withAuth } from '../../../../middleware/auth';
 import { ShippingService } from '../../../../services/shippingService';
 
-export const GET: APIRoute = async ({ request }) => {
+// Todos los handlers exigen sesión de admin: el middleware global solo resuelve CORS para /api/*,
+// no autentica. Sin `withAuth` cualquiera podía crear o borrar métodos de envío, y el DELETE
+// arrastra en cascada las filas de `shipping_usage`.
+export const GET: APIRoute = withAuth(async ({ request }) => {
   try {
     const searchParams = new URL(request.url).searchParams;
     const page = parseInt(searchParams.get('page') || '1');
@@ -25,10 +29,9 @@ export const GET: APIRoute = async ({ request }) => {
       },
     });
   } catch (error) {
-    console.error('Error fetching shipping methods:', error);
-    return new Response(JSON.stringify({ 
-      error: 'Error al obtener métodos de envío',
-      details: error instanceof Error ? error.message : 'Error desconocido'
+    console.error('[GET /api/shipping/methods] Error al obtener métodos de envío:', error);
+    return new Response(JSON.stringify({
+      error: 'Error al obtener métodos de envío'
     }), {
       status: 500,
       headers: {
@@ -36,9 +39,9 @@ export const GET: APIRoute = async ({ request }) => {
       },
     });
   }
-};
+});
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = withAuth(async ({ request }) => {
   try {
     const body = await request.json();
     
@@ -63,10 +66,9 @@ export const POST: APIRoute = async ({ request }) => {
       },
     });
   } catch (error) {
-    console.error('Error creating shipping method:', error);
-    return new Response(JSON.stringify({ 
-      error: 'Error al crear método de envío',
-      details: error instanceof Error ? error.message : 'Error desconocido'
+    console.error('[POST /api/shipping/methods] Error al crear método de envío:', error);
+    return new Response(JSON.stringify({
+      error: 'Error al crear método de envío'
     }), {
       status: 500,
       headers: {
@@ -74,4 +76,4 @@ export const POST: APIRoute = async ({ request }) => {
       },
     });
   }
-};
+});

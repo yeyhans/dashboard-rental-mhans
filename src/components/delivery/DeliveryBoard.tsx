@@ -1,6 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { Search, Truck } from 'lucide-react';
+import { Loader2, Pencil, Plus, Search, Trash2, Truck } from 'lucide-react';
 import { SHIPMENT_STATUSES, formatCLP, shipmentLabel } from '../../lib/delivery';
+import {
+  shippingMethodDeleteWarning,
+  shippingMethodFromRecord,
+  shippingMethodPayload,
+  shippingTypeLabel,
+  type ShippingMethodForm,
+  type StoredShippingMethod,
+} from '../../lib/shippingMethods';
+import { ConfirmDialog, ShippingTypeDialog } from './ShippingTypeDialog';
 import type { DeliveryBoard as DeliveryBoardData, ShipmentRow } from '../../services/deliveryService';
 
 /**
@@ -37,16 +46,150 @@ function formatDay(value: string | null): string {
   return `${d}/${m}/${y}`;
 }
 
+/** El servidor entrega los tipos ordenados por nombre; un alta local mantiene ese orden. */
+function byName(a: StoredShippingMethod, b: StoredShippingMethod): number {
+  return a.name.localeCompare(b.name, 'es');
+}
+
+async function requestJson(url: string, init: RequestInit): Promise<any> {
+  // Los endpoints exigen sesión de admin (`withAuth`), que se resuelve por cookie.
+  const response = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    ...init,
+  });
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    // El endpoint responde `{ error, details }`; `details` puede traer el mensaje crudo de
+    // Postgres, así que solo se muestra `error`.
+    throw new Error(payload?.error ?? 'No se pudo completar la operación');
+  }
+
+  return payload;
+}
+
 export default function DeliveryBoard({ data }: DeliveryBoardProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('todos');
   const [typeFilter, setTypeFilter] = useState('todos');
 
+  const [types, setTypes] = useState<StoredShippingMethod[]>(data.types);
+  const [editing, setEditing] = useState<StoredShippingMethod | 'new' | null>(null);
+  const [deleting, setDeleting] = useState<StoredShippingMethod | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: 'ok' | 'crit'; message: string } | null>(null);
+
+  /**
+   * El filtro se indexa por `id` y no por nombre: `shipping_methods.name` no tiene UNIQUE, así que
+   * dos métodos homónimos colapsarían en una sola opción y renombrar uno con el filtro activo
+   * dejaría el historial vacío sin explicar por qué.
+   */
+  function keepTypeFilterValid(next: StoredShippingMethod[]) {
+    setTypeFilter(current =>
+      current === 'todos' || next.some(type => String(type.id) === current) ? current : 'todos'
+    );
+  }
+
+  async function handleSubmitType(form: ShippingMethodForm) {
+    if (editing === null) return;
+
+    const isNew = editing === 'new';
+    setSaving(true);
+    setFeedback(null);
+
+    try {
+      const saved = shippingMethodFromRecord(
+        await requestJson(
+          isNew ? '/api/shipping/methods' : `/api/shipping/methods/${editing.id}`,
+          { method: isNew ? 'POST' : 'PUT', body: JSON.stringify(shippingMethodPayload(form)) }
+        )
+      );
+
+      setTypes(prev => {
+        const next = isNew
+          ? [...prev, saved].sort(byName)
+          : prev.map(type => (type.id === saved.id ? saved : type));
+        keepTypeFilterValid(next);
+        return next;
+      });
+
+      setEditing(null);
+      setFeedback({
+        tone: 'ok',
+        message: isNew ? 'Tipo de envío creado.' : 'Tipo de envío actualizado.',
+      });
+    } catch (error) {
+      setFeedback({
+        tone: 'crit',
+        message: error instanceof Error ? error.message : 'No se pudo guardar el tipo de envío',
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggleType(type: StoredShippingMethod) {
+    setBusyId(type.id);
+    setFeedback(null);
+
+    try {
+      // Solo viaja `enabled`: mandar el registro completo reescribiría campos que nadie tocó.
+      const saved = shippingMethodFromRecord(
+        await requestJson(`/api/shipping/methods/${type.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ enabled: !type.enabled }),
+        })
+      );
+
+      setTypes(prev => prev.map(item => (item.id === saved.id ? saved : item)));
+      setFeedback({
+        tone: 'ok',
+        message: saved.enabled ? `"${saved.name}" quedó activo.` : `"${saved.name}" quedó inactivo.`,
+      });
+    } catch (error) {
+      setFeedback({
+        tone: 'crit',
+        message: error instanceof Error ? error.message : 'No se pudo cambiar el estado',
+      });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleDeleteType() {
+    if (!deleting) return;
+
+    setBusyId(deleting.id);
+    setFeedback(null);
+
+    try {
+      await requestJson(`/api/shipping/methods/${deleting.id}`, { method: 'DELETE' });
+
+      setTypes(prev => {
+        const next = prev.filter(type => type.id !== deleting.id);
+        keepTypeFilterValid(next);
+        return next;
+      });
+
+      setFeedback({ tone: 'ok', message: `"${deleting.name}" fue eliminado.` });
+      setDeleting(null);
+    } catch (error) {
+      setFeedback({
+        tone: 'crit',
+        message: error instanceof Error ? error.message : 'No se pudo eliminar el tipo de envío',
+      });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const history = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return data.history.filter(row => {
       if (statusFilter !== 'todos' && row.status !== statusFilter) return false;
-      if (typeFilter !== 'todos' && row.methodName !== typeFilter) return false;
+      if (typeFilter !== 'todos' && String(row.methodId) !== typeFilter) return false;
       if (!needle) return true;
       return (
         row.orderReference.toLowerCase().includes(needle) ||
@@ -140,13 +283,37 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
       </section>
 
       <section className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div className="flex items-baseline justify-between border-b border-[var(--color-border)] p-4">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] p-4">
           <h2 className="text-sm font-semibold">Tipos de Envío</h2>
-          <a href="/orders/shipping" className="text-xs underline underline-offset-2">
-            Gestionar →
-          </a>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setFeedback(null);
+                setEditing('new');
+              }}
+              className="inline-flex items-center gap-1.5 rounded-[6px] border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:bg-[var(--color-surface-2)]"
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              Nuevo tipo
+            </button>
+          </div>
         </div>
-        {data.types.length === 0 ? (
+
+        {feedback && (
+          <p
+            role="status"
+            className={`border-b border-[var(--color-border)] px-4 py-2 text-[11px] ${
+              feedback.tone === 'ok'
+                ? 'bg-[var(--color-ok-bg)] text-[var(--color-ok)]'
+                : 'bg-[var(--color-crit-bg)] text-[var(--color-crit)]'
+            }`}
+          >
+            {feedback.message}
+          </p>
+        )}
+
+        {types.length === 0 ? (
           <p className="p-6 text-center text-xs text-[var(--color-text-secondary)]">
             No hay métodos de envío configurados.
           </p>
@@ -156,29 +323,69 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
               <thead>
                 <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-text-secondary)]">
                   <th scope="col" className="px-4 py-2 font-medium">Tipo de Envío</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Modalidad</th>
                   <th scope="col" className="px-4 py-2 font-medium">Descripción</th>
                   <th scope="col" className="px-4 py-2 text-right font-medium">Valor</th>
                   <th scope="col" className="px-4 py-2 font-medium">Estado</th>
+                  <th scope="col" className="px-4 py-2 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {data.types.map(type => (
+                {types.map(type => (
                   <tr key={type.id} className="border-b border-[var(--color-border-soft)]">
                     <td className="px-4 py-2 font-medium">{type.name}</td>
+                    <td className="px-4 py-2 text-[var(--color-text-secondary)]">
+                      {shippingTypeLabel(type.shippingType)}
+                    </td>
                     <td className="px-4 py-2 text-[var(--color-text-secondary)]">
                       {type.description || '—'}
                     </td>
                     <td className="px-4 py-2 text-right font-mono">{formatCLP(type.cost)}</td>
                     <td className="px-4 py-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] ${
+                      <button
+                        type="button"
+                        onClick={() => handleToggleType(type)}
+                        disabled={busyId === type.id}
+                        aria-label={
+                          type.enabled ? `Desactivar ${type.name}` : `Activar ${type.name}`
+                        }
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] disabled:opacity-60 ${
                           type.enabled
                             ? 'bg-[var(--color-ok-bg)] text-[var(--color-ok)]'
                             : 'bg-[var(--color-neutral-bg)] text-[var(--color-muted)]'
                         }`}
                       >
+                        {busyId === type.id && (
+                          <Loader2 className="h-2.5 w-2.5 animate-spin" aria-hidden="true" />
+                        )}
                         {type.enabled ? 'Activo' : 'Inactivo'}
-                      </span>
+                      </button>
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFeedback(null);
+                            setEditing(type);
+                          }}
+                          aria-label={`Editar ${type.name}`}
+                          className="rounded-[6px] p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
+                        >
+                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFeedback(null);
+                            setDeleting(type);
+                          }}
+                          aria-label={`Eliminar ${type.name}`}
+                          className="rounded-[6px] p-1.5 text-[var(--color-crit)] hover:bg-[var(--color-crit-bg)]"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -213,8 +420,8 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
               className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
             >
               <option value="todos">Todos los tipos</option>
-              {data.types.map(type => (
-                <option key={type.id} value={type.name}>
+              {types.map(type => (
+                <option key={type.id} value={String(type.id)}>
                   {type.name}
                 </option>
               ))}
@@ -304,6 +511,29 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
           todavía no existe.
         </p>
       </section>
+
+      {editing !== null && (
+        <ShippingTypeDialog
+          method={editing === 'new' ? null : editing}
+          saving={saving}
+          onSubmit={handleSubmitType}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
+      {deleting && (
+        <ConfirmDialog
+          title="Eliminar tipo de envío"
+          description={shippingMethodDeleteWarning(
+            deleting.name,
+            data.history.filter(row => row.methodId === deleting.id).length
+          )}
+          confirmLabel="Eliminar de todas formas"
+          busy={busyId === deleting.id}
+          onConfirm={handleDeleteType}
+          onClose={() => setDeleting(null)}
+        />
+      )}
     </div>
   );
 }

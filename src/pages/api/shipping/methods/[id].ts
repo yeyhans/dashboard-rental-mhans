@@ -1,7 +1,12 @@
 import type { APIRoute } from 'astro';
+import { withAuth } from '../../../../middleware/auth';
 import { ShippingService } from '../../../../services/shippingService';
 
-export const GET: APIRoute = async ({ params }) => {
+// Todos los handlers exigen sesión de admin: el middleware global solo resuelve CORS para /api/*,
+// no autentica. El DELETE es especialmente sensible porque
+// `shipping_usage_shipping_method_id_fkey` es ON DELETE CASCADE: borrar un método borra además
+// todo su historial de envíos.
+export const GET: APIRoute = withAuth(async ({ params }) => {
   try {
     const methodId = parseInt(params.id as string);
     
@@ -36,10 +41,9 @@ export const GET: APIRoute = async ({ params }) => {
       },
     });
   } catch (error) {
-    console.error('Error fetching shipping method:', error);
-    return new Response(JSON.stringify({ 
-      error: 'Error al obtener método de envío',
-      details: error instanceof Error ? error.message : 'Error desconocido'
+    console.error('[GET /api/shipping/methods/:id] Error al obtener método de envío:', error);
+    return new Response(JSON.stringify({
+      error: 'Error al obtener método de envío'
     }), {
       status: 500,
       headers: {
@@ -47,9 +51,9 @@ export const GET: APIRoute = async ({ params }) => {
       },
     });
   }
-};
+});
 
-export const PUT: APIRoute = async ({ params, request }) => {
+export const PUT: APIRoute = withAuth(async ({ params, request }) => {
   try {
     const methodId = parseInt(params.id as string);
     
@@ -74,8 +78,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
       },
     });
   } catch (error) {
-    console.error('Error updating shipping method:', error);
-    
+    console.error('[PUT /api/shipping/methods/:id] Error al actualizar método de envío:', error);
+
     if (error instanceof Error && error.message.includes('no encontrado')) {
       return new Response(JSON.stringify({ 
         error: 'Método de envío no encontrado' 
@@ -87,9 +91,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
       });
     }
 
-    return new Response(JSON.stringify({ 
-      error: 'Error al actualizar método de envío',
-      details: error instanceof Error ? error.message : 'Error desconocido'
+    return new Response(JSON.stringify({
+      error: 'Error al actualizar método de envío'
     }), {
       status: 500,
       headers: {
@@ -97,9 +100,9 @@ export const PUT: APIRoute = async ({ params, request }) => {
       },
     });
   }
-};
+});
 
-export const DELETE: APIRoute = async ({ params }) => {
+export const DELETE: APIRoute = withAuth(async ({ params }) => {
   try {
     const methodId = parseInt(params.id as string);
     
@@ -137,8 +140,8 @@ export const DELETE: APIRoute = async ({ params }) => {
       },
     });
   } catch (error) {
-    console.error('Error deleting shipping method:', error);
-    
+    console.error('[DELETE /api/shipping/methods/:id] Error al eliminar método de envío:', error);
+
     if (error instanceof Error && error.message.includes('no encontrado')) {
       return new Response(JSON.stringify({ 
         error: 'Método de envío no encontrado' 
@@ -150,9 +153,8 @@ export const DELETE: APIRoute = async ({ params }) => {
       });
     }
 
-    return new Response(JSON.stringify({ 
-      error: 'Error al eliminar método de envío',
-      details: error instanceof Error ? error.message : 'Error desconocido'
+    return new Response(JSON.stringify({
+      error: 'Error al eliminar método de envío'
     }), {
       status: 500,
       headers: {
@@ -160,4 +162,4 @@ export const DELETE: APIRoute = async ({ params }) => {
       },
     });
   }
-};
+});

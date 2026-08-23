@@ -281,7 +281,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           }
         } catch (shippingError) {
           console.error('Error loading shipping methods:', shippingError);
-          console.warn('⚠️ Using fallback shipping method - configure proper methods in /orders/shipping');
+          console.warn('⚠️ Using fallback shipping method - configure proper methods in /delivery');
           // No mostrar error crítico, usar métodos por defecto
           const defaultMethods: ShippingMethod[] = [
             {

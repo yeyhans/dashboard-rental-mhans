@@ -7,12 +7,19 @@ const { isMatch } = micromatch;
 
 // Rutas que requieren autenticación de administrador
 const protectedRoutes = [
-  "/dashboard(|/)", 
-  "/orders/**", 
-  "/users/**", 
-  "/payments-table(|/)", 
+  "/dashboard(|/)",
+  "/dashboard/**",
+  "/orders/**",
+  "/users/**",
+  "/payments-table(|/)",
   "/products/**",
-  "/analytics/**"
+  "/analytics/**",
+  "/delivery(|/)",
+  "/check-in(|/)",
+  "/finance(|/)",
+  "/profitability(|/)",
+  "/inventory(|/)",
+  "/inventory/**"
 ];
 
 // Rutas de autenticación que no requieren verificación

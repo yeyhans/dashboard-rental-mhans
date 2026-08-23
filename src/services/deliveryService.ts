@@ -6,6 +6,7 @@ import {
   type DeliveryKpis,
   type HistoryTotals,
 } from '../lib/delivery';
+import { shippingMethodFromRecord, type StoredShippingMethod } from '../lib/shippingMethods';
 
 export interface ShipmentRow {
   id: number;
@@ -13,6 +14,8 @@ export interface ShipmentRow {
   orderReference: string;
   client: string;
   project: string;
+  /** `null` si el método fue eliminado; el filtro por tipo se apoya en este id, no en el nombre. */
+  methodId: number | null;
   methodName: string;
   cost: number;
   status: string;
@@ -21,13 +24,12 @@ export interface ShipmentRow {
   deliveredAt: string | null;
 }
 
-export interface ShippingTypeRow {
-  id: number;
-  name: string;
-  description: string | null;
-  cost: number;
-  enabled: boolean;
-}
+/**
+ * Un método de envío tal como lo edita el admin. Trae todas las columnas del formulario y no solo
+ * las visibles en la tabla: abrir "Editar" con la mitad de los campos en blanco los guardaría
+ * borrados, así que el board carga el registro completo de entrada.
+ */
+export type ShippingTypeRow = StoredShippingMethod;
 
 export interface DeliveryBoard {
   kpis: DeliveryKpis;
@@ -58,7 +60,7 @@ export class DeliveryService {
       db
         .from('shipping_usage')
         .select(
-          'id, order_id, shipping_cost, status, tracking_number, created_at, delivered_at, ' +
+          'id, order_id, shipping_method_id, shipping_cost, status, tracking_number, created_at, delivered_at, ' +
             'shipping_methods (name), ' +
             'orders (order_key, order_proyecto, billing_first_name, billing_last_name, billing_company)'
         )
@@ -66,7 +68,10 @@ export class DeliveryService {
         .limit(historyLimit),
       supabaseAdmin!
         .from('shipping_methods')
-        .select('id, name, description, cost, enabled')
+        .select(
+          'id, name, description, cost, enabled, shipping_type, min_amount, max_amount, ' +
+            'estimated_days_min, estimated_days_max, requires_address, requires_phone'
+        )
         .order('name', { ascending: true }),
     ]);
 
@@ -84,6 +89,7 @@ export class DeliveryService {
         orderReference: order.order_key || `PED-${row.order_id}`,
         client: company || person || 'Sin cliente',
         project: order.order_proyecto || 'Sin proyecto',
+        methodId: row.shipping_method_id ?? null,
         methodName: row.shipping_methods?.name || 'Sin método',
         cost: Number(row.shipping_cost) || 0,
         status: row.status || 'pending',
@@ -107,13 +113,7 @@ export class DeliveryService {
       // atascado desde ayer es justamente el que hay que ver.
       active: rows.filter(r => isAwaitingDispatch(r.status) || r.status === 'shipped'),
       history: rows,
-      types: (methods ?? []).map(m => ({
-        id: m.id,
-        name: m.name,
-        description: m.description,
-        cost: Number(m.cost) || 0,
-        enabled: m.enabled ?? true,
-      })),
+      types: (methods ?? []).map(shippingMethodFromRecord),
     };
   }
 }
