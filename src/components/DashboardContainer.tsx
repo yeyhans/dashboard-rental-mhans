@@ -8,6 +8,24 @@ import FinancialSummary from './FinancialSummary';
 import { Separator } from './ui/separator';
 import { Alert, AlertDescription } from './ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
+import { collectedAmount, reserveAmount, type FinanceOrderLike } from '../lib/finance';
+
+/**
+ * Adapta una fila de `/api/dashboard/filtered` al contrato de `lib/finance`, que es la única
+ * fuente de la reserva y del dinero cobrado. El endpoint entrega snake_case; el módulo de
+ * finanzas trabaja en camelCase y tolera el `numeric` que PostgREST serializa como string.
+ */
+function toFinanceOrder(order: any): FinanceOrderLike {
+  return {
+    status: order.status,
+    total: Number(order.calculated_total) || 0,
+    reservePaid: !!order.pago_reserva,
+    fullyPaid: !!order.pago_completo,
+    endDate: order.order_fecha_termino ?? null,
+    reserveType: order.reserve_type,
+    reserveValue: order.reserve_value,
+  };
+}
 
 interface FilterState {
   dateRange: {
@@ -188,14 +206,19 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
 
       // Actualizar resumen financiero basado en datos filtrados
       const completedOrders = filteredData.orders.filter((order: any) => order.status === 'completed');
-      const totalPaidActual = completedOrders.reduce((sum: number, order: any) => {
-        const total = order.calculated_total || 0;
-        return sum + (order.pago_completo ? total : total * 0.25);
-      }, 0);
+
+      // Las tres cifras salen de `lib/finance`, que es la única fuente de la reserva: respeta
+      // `reserve_type`/`reserve_value` por orden y distingue los TRES estados de cobro. Antes se
+      // calculaba aquí con un `0.25` propio y sin mirar `pago_reserva`, así que toda orden impaga
+      // se contaba como si hubiera pagado la reserva — caja inventada en el Centro de Control.
+      const totalPaidActual = completedOrders.reduce(
+        (sum: number, order: any) => sum + collectedAmount(toFinanceOrder(order)),
+        0
+      );
 
       const reservationPayments = completedOrders
-        .filter((order: any) => !order.pago_completo)
-        .reduce((sum: number, order: any) => sum + (order.calculated_total || 0) * 0.25, 0);
+        .filter((order: any) => !order.pago_completo && order.pago_reserva)
+        .reduce((sum: number, order: any) => sum + reserveAmount(toFinanceOrder(order)), 0);
 
       const finalPayments = completedOrders
         .filter((order: any) => order.pago_completo)

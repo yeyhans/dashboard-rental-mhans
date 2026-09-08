@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../lib/supabase';
+import { reserveAmount } from '../lib/finance';
 import {
   ORDER_STATUSES,
   bookingStatusFilter,
@@ -372,7 +373,9 @@ export class DashboardService {
           status,
           calculated_total,
           pago_reserva,
-          pago_completo
+          pago_completo,
+          reserve_type,
+          reserve_value
         `)
         .in('status', bookingStatusFilter());
 
@@ -390,18 +393,25 @@ export class DashboardService {
         const total = order.calculated_total || 0;
         summary.totalSales += total;
 
+        // La reserva de ESTE pedido, no un 25% fijo: `lib/finance` respeta reserve_type/
+        // reserve_value, así que un pedido negociado reparte reserva y saldo como se acordó.
+        const reservationAmount = reserveAmount({
+          total,
+          reserveType: (order as any).reserve_type,
+          reserveValue: (order as any).reserve_value,
+        });
+
         if (order.status === 'completed') {
           if (order.pago_completo) {
-            // Pago completo (25% + 75%)
+            // Pago completo (reserva + saldo)
             summary.totalPaid += total;
-            summary.finalPayments += total * 0.75;
-            summary.reservationPayments += total * 0.25;
+            summary.finalPayments += total - reservationAmount;
+            summary.reservationPayments += reservationAmount;
           } else if (order.pago_reserva) {
-            // Solo reserva pagada (25%)
-            const reservationAmount = total * 0.25;
+            // Solo reserva pagada
             summary.totalPaid += reservationAmount;
             summary.reservationPayments += reservationAmount;
-            summary.totalPending += total * 0.75;
+            summary.totalPending += total - reservationAmount;
           } else {
             // Nada pagado — todo pendiente
             summary.totalPending += total;

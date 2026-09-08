@@ -29,7 +29,7 @@ export class ClientStatusService {
           .limit(2000),
         supabaseAdmin!
           .from('orders')
-          .select('customer_id, status, calculated_total, pago_reserva, pago_completo, order_fecha_termino')
+          .select('customer_id, status, calculated_total, pago_reserva, pago_completo, reserve_type, reserve_value, order_fecha_termino')
           .in('status', bookingStatusFilter())
           .limit(2000),
       ]);

@@ -19,8 +19,7 @@ export class AlertService {
 
     const { data, error } = await supabaseAdmin!
       .from('orders')
-      .select(
-        'id, order_key, status, calculated_total, pago_reserva, pago_completo, ' +
+      .select('id, order_key, status, calculated_total, pago_reserva, pago_completo, reserve_type, reserve_value, ' +
           'order_fecha_inicio, order_fecha_termino, ' +
           'billing_first_name, billing_last_name, billing_company, ' +
           'user_profiles (url_user_contrato)'

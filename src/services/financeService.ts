@@ -60,7 +60,8 @@ export class FinanceService {
       .from('orders')
       .select(
         'id, order_key, status, order_proyecto, order_fecha_termino, date_paid, ' +
-          'calculated_total, pago_reserva, pago_completo, orden_compra, numero_factura, ' +
+          'calculated_total, pago_reserva, pago_completo, reserve_type, reserve_value, ' +
+          'orden_compra, numero_factura, ' +
           'billing_first_name, billing_last_name, billing_company'
       )
       .in('status', bookingStatusFilter())
@@ -78,6 +79,8 @@ export class FinanceService {
         reservePaid: !!row.pago_reserva,
         fullyPaid: !!row.pago_completo,
         endDate: row.order_fecha_termino,
+        reserveType: row.reserve_type,
+        reserveValue: row.reserve_value,
       };
 
       return {
@@ -87,7 +90,7 @@ export class FinanceService {
         project: row.order_proyecto || 'Sin proyecto',
         status: canonicalStatus(row.status) ?? row.status,
         total: like.total,
-        reserve: reserveAmount(like.total),
+        reserve: reserveAmount(like),
         outstanding: outstandingAmount(like),
         collected: collectedAmount(like),
         reservePaid: like.reservePaid,

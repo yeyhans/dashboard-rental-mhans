@@ -13,6 +13,10 @@ interface BudgetData {
   date_completed?: string;
   date_paid?: string;
   customer_id: string;
+  /** `orders.reserve_type` — 'percent' o 'fixed'. Lo interpreta `lib/finance:reserveAmount`. */
+  reserve_type?: string | null;
+  /** `orders.reserve_value` — porcentaje 0-100 o monto CLP, segun `reserve_type`. */
+  reserve_value?: number | string | null;
   
   // Calculated totals
   calculated_subtotal?: string;

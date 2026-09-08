@@ -14,18 +14,48 @@
 
 import { canonicalStatus } from './orderStatus';
 
-/** Reserve share charged when the order is confirmed. */
+/**
+ * Reserve share charged when the order is confirmed, when the order does not say otherwise.
+ *
+ * This is the DEFAULT, not the rule: `orders.reserve_type` / `orders.reserve_value` (migration
+ * 0008) carry the share actually agreed for each order. It stays exported because the value is
+ * also the business default in `.claude/rules/01-business-context.md` and the fallback both
+ * dashboard components already applied before the columns existed.
+ */
 export const RESERVE_RATE = 0.25;
+
+/** `orders.reserve_type`. */
+export type ReserveType = 'percent' | 'fixed';
+
+export const DEFAULT_RESERVE_TYPE: ReserveType = 'percent';
+export const DEFAULT_RESERVE_VALUE = 25;
 
 export interface FinanceOrderLike {
   readonly status: string;
   readonly total: number;
-  /** `orders.pago_reserva` — the 25% is in. */
+  /** `orders.pago_reserva` — the reserve is in. */
   readonly reservePaid: boolean;
   /** `orders.pago_completo` — the whole amount is in. */
   readonly fullyPaid: boolean;
   /** `orders.order_fecha_termino`, the day the rental ends. */
   readonly endDate: string | null;
+  /** `orders.reserve_type`. Absent or unrecognised falls back to a percentage. */
+  readonly reserveType?: string | null;
+  /**
+   * `orders.reserve_value` — a share (0-100) or a CLP amount, per `reserveType`.
+   *
+   * Typed to accept `string` because PostgREST serialises `numeric` as a string: a
+   * `numeric(12,2)` of 50 arrives as `"50.00"`, and treating that as a number without conversion
+   * is how a NaN reaches the customer's screen.
+   */
+  readonly reserveValue?: number | string | null;
+}
+
+/** Postgres `numeric` arrives as a string through PostgREST; anything unusable becomes null. */
+function toFiniteNumber(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const parsed = typeof value === 'string' ? Number(value) : value;
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function isoDay(value: string | Date): string {
@@ -36,9 +66,33 @@ function isoDay(value: string | Date): string {
   return `${y}-${m}-${d}`;
 }
 
-/** The 25% due on confirmation. */
-export function reserveAmount(total: number): number {
-  return Math.round((Number.isFinite(total) ? total : 0) * RESERVE_RATE);
+/**
+ * What confirms the order — the single place the reserve is derived.
+ *
+ * Every surface that shows a reserve must call this: the customer portal, the budget and contract
+ * PDFs, the payments table and the collection KPIs. Before migration 0008 each of them multiplied
+ * by its own `0.25`, so an order negotiated away from the default would have quoted a different
+ * figure in each place.
+ *
+ * The result is clamped to `[0, total]`. The database CHECK caps a percentage at 100 but cannot
+ * bound a `fixed` amount against `calculated_total` — the total moves as items are edited, so the
+ * constraint would reject legitimate edits depending on the order the two were saved in. The cap
+ * therefore lives here, where both values are known at once.
+ */
+export function reserveAmount(
+  order: Pick<FinanceOrderLike, 'total' | 'reserveType' | 'reserveValue'>
+): number {
+  const total = Number.isFinite(order.total) ? order.total : 0;
+  if (total <= 0) return 0;
+
+  const configured = toFiniteNumber(order.reserveValue);
+  const value = configured === null ? DEFAULT_RESERVE_VALUE : configured;
+
+  // Anything that is not the literal 'fixed' is treated as a percentage: that is the historical
+  // behaviour and the fallback both dashboard components already applied.
+  const raw = order.reserveType === 'fixed' ? value : total * (value / 100);
+
+  return Math.min(total, Math.max(0, Math.round(raw)));
 }
 
 /**
@@ -50,7 +104,7 @@ export function reserveAmount(total: number): number {
 export function outstandingAmount(order: FinanceOrderLike): number {
   const total = Number.isFinite(order.total) ? order.total : 0;
   if (order.fullyPaid) return 0;
-  if (order.reservePaid) return Math.max(0, total - reserveAmount(total));
+  if (order.reservePaid) return Math.max(0, total - reserveAmount(order));
   return Math.max(0, total);
 }
 
@@ -58,7 +112,7 @@ export function outstandingAmount(order: FinanceOrderLike): number {
 export function collectedAmount(order: FinanceOrderLike): number {
   const total = Number.isFinite(order.total) ? order.total : 0;
   if (order.fullyPaid) return total;
-  if (order.reservePaid) return reserveAmount(total);
+  if (order.reservePaid) return reserveAmount(order);
   return 0;
 }
 
@@ -120,7 +174,7 @@ export function pendingKpis(orders: readonly FinanceOrderLike[], now: Date): Pen
 
     if (!order.reservePaid) {
       kpis.reservasPendientes++;
-      kpis.montoReservasPendientes += reserveAmount(order.total);
+      kpis.montoReservasPendientes += reserveAmount(order);
     }
 
     if (isOverdue(order, now)) {

@@ -74,8 +74,84 @@ describe('collectedAmount', () => {
 
 describe('reserveAmount', () => {
   it('calcula el 25% redondeado, porque el peso chileno no lleva decimales', () => {
-    expect(reserveAmount(1_000_000)).toBe(250_000);
-    expect(reserveAmount(333_333)).toBe(83_333);
+    expect(reserveAmount(order({ total: 1_000_000 }))).toBe(250_000);
+    expect(reserveAmount(order({ total: 333_333 }))).toBe(83_333);
+  });
+
+  /**
+   * La reserva es configurable por orden (`orders.reserve_type` / `orders.reserve_value`, 0008).
+   * El panel ya ofrecía ese ajuste desde ProcessOrder y PaymentsTable; lo que faltaba era dónde
+   * guardarlo y un único lugar donde interpretarlo. Este es ese lugar: el portal del cliente, los
+   * PDF y las tablas de cobranza derivan de aquí en vez de multiplicar por 0.25 cada uno.
+   */
+  describe('configuración por orden', () => {
+    it('sin configuración cae al 25%, que es lo que se cotizó históricamente', () => {
+      expect(reserveAmount(order({ reserveType: null, reserveValue: null }))).toBe(250_000);
+    });
+
+    it('respeta un porcentaje distinto', () => {
+      expect(reserveAmount(order({ reserveType: 'percent', reserveValue: 50 }))).toBe(500_000);
+      expect(reserveAmount(order({ reserveType: 'percent', reserveValue: 0 }))).toBe(0);
+    });
+
+    it('respeta un monto fijo en CLP', () => {
+      expect(reserveAmount(order({ reserveType: 'fixed', reserveValue: 180_000 }))).toBe(180_000);
+    });
+
+    it('acepta el numeric de Postgres, que llega como string por PostgREST', () => {
+      // `numeric(12,2)` se serializa como "50.00". Number("50.00") es 50, pero el campo llega
+      // como string y una multiplicación directa daría NaN si alguien usara parseInt mal.
+      expect(reserveAmount(order({ reserveType: 'percent', reserveValue: '50.00' }))).toBe(500_000);
+    });
+
+    it('nunca cobra más que el total, ni siquiera con un monto fijo excedido', () => {
+      // La CHECK de 0008 no puede validar un `fixed` contra `calculated_total` (el total cambia
+      // al editar ítems), así que el tope se aplica aquí.
+      expect(reserveAmount(order({ total: 100_000, reserveType: 'fixed', reserveValue: 500_000 })))
+        .toBe(100_000);
+    });
+
+    it('nunca devuelve un monto negativo', () => {
+      expect(reserveAmount(order({ reserveType: 'fixed', reserveValue: -50_000 }))).toBe(0);
+      expect(reserveAmount(order({ total: -1000, reserveType: 'percent', reserveValue: 25 }))).toBe(0);
+    });
+
+    it('trata un valor no numérico como el 25% por defecto en vez de propagar NaN', () => {
+      // Un NaN aquí llega hasta la tarjeta del cliente y se lee como "$NaN".
+      expect(reserveAmount(order({ reserveType: 'percent', reserveValue: 'abc' }))).toBe(250_000);
+    });
+
+    it('ignora un reserve_type desconocido y trata el valor como porcentaje', () => {
+      // La CHECK de 0008 impide que esto llegue de la base, pero el tipo de TS no lo garantiza
+      // en un payload de API: degradar al comportamiento histórico es preferible a un NaN.
+      expect(reserveAmount(order({ reserveType: 'cuotas', reserveValue: 40 }))).toBe(400_000);
+    });
+  });
+});
+
+/**
+ * El saldo y lo cobrado tienen que salir de la MISMA configuración que la reserva. Antes cada
+ * superficie multiplicaba por 0.25 por su cuenta, así que un pedido con reserva negociada mostraba
+ * una cifra en el portal, otra en el PDF y otra en cobranza.
+ */
+describe('coherencia entre reserva, saldo y cobrado', () => {
+  it('el saldo es el complemento exacto de la reserva configurada', () => {
+    const negotiated = order({ reserveType: 'percent', reserveValue: 40, reservePaid: true });
+    expect(reserveAmount(negotiated)).toBe(400_000);
+    expect(outstandingAmount(negotiated)).toBe(600_000);
+    expect(collectedAmount(negotiated)).toBe(400_000);
+  });
+
+  it('reserva más saldo siempre suman el total, con cualquier configuración', () => {
+    for (const value of [0, 10, 25, 33.33, 50, 99, 100]) {
+      const o = order({ total: 777_777, reserveType: 'percent', reserveValue: value, reservePaid: true });
+      expect(collectedAmount(o) + outstandingAmount(o)).toBe(777_777);
+    }
+  });
+
+  it('con monto fijo también suman el total', () => {
+    const o = order({ total: 777_777, reserveType: 'fixed', reserveValue: 200_000, reservePaid: true });
+    expect(collectedAmount(o) + outstandingAmount(o)).toBe(777_777);
   });
 });
 

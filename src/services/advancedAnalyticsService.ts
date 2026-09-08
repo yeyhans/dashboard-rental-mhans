@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../lib/supabase';
 import { canonicalStatus } from '../lib/orderStatus';
 import type { Database } from '../types/database';
+import { reserveAmount } from '../lib/finance';
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 type Order = Database['public']['Tables']['orders']['Row'];
@@ -1112,7 +1113,7 @@ export class AdvancedAnalyticsService {
     try {
       const { data: orders, error } = await supabaseAdmin!
         .from('orders')
-        .select('id, status, calculated_total, pago_reserva, pago_completo, date_created')
+        .select('id, status, calculated_total, pago_reserva, pago_completo, reserve_type, reserve_value, date_created')
         .gte('date_created', startDate.toISOString())
         .lte('date_created', endDate.toISOString());
 
@@ -1145,7 +1146,12 @@ export class AdvancedAnalyticsService {
           if (o.pago_completo) {
             totalCollected += total;
           } else if (o.pago_reserva) {
-            totalCollected += total * 0.25;
+            // La reserva de este pedido, no un 25% fijo.
+            totalCollected += reserveAmount({
+              total,
+              reserveType: (o as any).reserve_type,
+              reserveValue: (o as any).reserve_value,
+            });
           }
         }
       });
@@ -1185,8 +1191,13 @@ export class AdvancedAnalyticsService {
             if (o.pago_completo) {
               collected += total;
             } else if (o.pago_reserva) {
-              collected += total * 0.25;
-              pending += total * 0.75;
+              const reserva = reserveAmount({
+                total,
+                reserveType: (o as any).reserve_type,
+                reserveValue: (o as any).reserve_value,
+              });
+              collected += reserva;
+              pending += total - reserva;
             } else {
               pending += total;
             }
@@ -1207,8 +1218,13 @@ export class AdvancedAnalyticsService {
           if (o.pago_completo) {
             fullyPaid += total;
           } else if (o.pago_reserva) {
-            reservesPaid += total * 0.25;
-            finalPaymentsPending += total * 0.75;
+            const reserva = reserveAmount({
+              total,
+              reserveType: (o as any).reserve_type,
+              reserveValue: (o as any).reserve_value,
+            });
+            reservesPaid += reserva;
+            finalPaymentsPending += total - reserva;
           }
         });
         return {
