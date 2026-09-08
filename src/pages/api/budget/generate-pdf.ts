@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { reserveAmount } from '../../../lib/finance';
 import { sendBudgetGeneratedEmail } from '../../../lib/emailService';
 import React from 'react';
 import { BudgetDocument } from '../../../lib/pdf/components/budget/BudgetDocument';
@@ -11,6 +12,10 @@ import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 interface BudgetData {
   order_id: number;
   customer_id: string;
+  /** `orders.reserve_type` — 'percent' o 'fixed'. Lo interpreta `lib/finance:reserveAmount`. */
+  reserve_type?: string | null;
+  /** `orders.reserve_value` — porcentaje 0-100 o monto CLP, segun `reserve_type`. */
+  reserve_value?: number | string | null;
   status: string;
   billing: {
     first_name: string;
@@ -267,11 +272,17 @@ function generateBudgetHTML(orderData: BudgetData): string {
   const discount = parseFloat(metadata.calculated_discount || '0');
   const iva = parseFloat(metadata.calculated_iva || '0');
   const total = parseFloat(metadata.calculated_total || '0');
-  const reserve = total * 0.25;
+  // La reserva sale de `lib/finance`, la unica fuente: respeta el reserve_type/reserve_value
+  // del pedido para que el PDF cite la misma cifra que el portal del cliente.
+  const reserve = reserveAmount({
+    total,
+    reserveType: orderData.reserve_type,
+    reserveValue: orderData.reserve_value,
+  });
 
   // Additional order information
   const orderIdNum = orderData.order_id;
-  const orderStatus = orderData.status || 'on-hold';
+  const orderStatus = orderData.status || 'request';
   const paymentMethod = 'Por definir';
 
   // Format currency
@@ -733,10 +744,14 @@ async function generateBudgetPDFWithReactPDF(orderData: BudgetData): Promise<{
         discount: parseFloat(orderData.metadata?.calculated_discount || '0'),
         iva: parseFloat(orderData.metadata?.calculated_iva || '0'),
         total: parseFloat(orderData.metadata?.calculated_total || '0'),
-        reserve: parseFloat(orderData.metadata?.calculated_total || '0') * 0.25,
+        reserve: reserveAmount({
+          total: parseFloat(orderData.metadata?.calculated_total || '0'),
+          reserveType: orderData.reserve_type,
+          reserveValue: orderData.reserve_value,
+        }),
       },
       couponCode: orderData.coupon_code,
-      status: getOrderStatusInSpanish(orderData.status || 'on-hold'),
+      status: getOrderStatusInSpanish(orderData.status || 'request'),
       shippingInfo: orderData.shipping_lines && orderData.shipping_lines.length > 0 ? {
         method: orderData.shipping_lines[0].method_title || 'Delivery',
         total: parseFloat(orderData.shipping_lines[0].total || '0'),

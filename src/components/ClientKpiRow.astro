@@ -1,0 +1,50 @@
+---
+import type { ClientKpis } from "../lib/clientStatus";
+
+/**
+ * Fila de indicadores del canónico de Clientes & Documentos, cuyos filtros son Validados /
+ * Pendientes / Incompletos / Con deuda.
+ *
+ * Los estados documentales y el financiero son EJES DISTINTOS y por eso la deuda va aparte: un
+ * cliente validado también puede deber, y tratarlos como una sola escala escondería el segundo
+ * problema que aparezca.
+ *
+ * "Incompleto" es el número que importa antes de un retiro: sin contrato no hay retiro, y verlo
+ * el día anterior es la diferencia entre resolverlo y descubrirlo en el mesón.
+ */
+interface Props {
+  kpis: ClientKpis;
+}
+
+const { kpis } = Astro.props;
+---
+
+<div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+  <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <div class="text-xs text-[var(--color-text-secondary)]">Clientes</div>
+    <div class="mt-1 font-mono text-2xl font-semibold">{kpis.total}</div>
+    <div class="mt-1 text-[11px] text-[var(--color-text-faint)]">Registrados</div>
+  </div>
+
+  <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <div class="text-xs text-[var(--color-text-secondary)]">Validados</div>
+    <div class="mt-1 font-mono text-2xl font-semibold text-[var(--color-ok)]">{kpis.validados}</div>
+    <div class="mt-1 text-[11px] text-[var(--color-text-faint)]">Pueden retirar</div>
+  </div>
+
+  <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <div class="text-xs text-[var(--color-text-secondary)]">Documentación incompleta</div>
+    <div class="mt-1 font-mono text-2xl font-semibold text-[var(--color-warn)]">
+      {kpis.pendientes + kpis.incompletos}
+    </div>
+    <div class="mt-1 text-[11px] text-[var(--color-text-faint)]">
+      {kpis.pendientes} por firmar · {kpis.incompletos} con documentos faltantes
+    </div>
+  </div>
+
+  <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <div class="text-xs text-[var(--color-text-secondary)]">Con deuda</div>
+    <div class="mt-1 font-mono text-2xl font-semibold text-[var(--color-crit)]">{kpis.conDeuda}</div>
+    <div class="mt-1 text-[11px] text-[var(--color-text-faint)]">Saldo vencido</div>
+  </div>
+</div>

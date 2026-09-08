@@ -2,6 +2,8 @@
 import Base from "../layout/Base.astro";
 import UsersDashboardWithToaster from "../components/UsersDashboardWithToaster";
 import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
+import { ClientStatusService } from "../services/clientStatusService";
+import ClientKpiRow from "../components/ClientKpiRow.astro";
 
 export const prerender = false;
 
@@ -35,11 +37,34 @@ const usersData = {
   }
 };
 
-const title = `Gestión de Usuarios | ${adminSession.admin.email}`;
+/**
+ * Estado documental y financiero de la cartera. Con su propio `catch`: si falla, el listado sigue
+ * usable con los indicadores en cero en vez de dejar la pantalla en blanco.
+ */
+let clientKpis = { total: 0, validados: 0, pendientes: 0, incompletos: 0, conDeuda: 0 };
+try {
+  clientKpis = await ClientStatusService.getKpis();
+} catch (error) {
+  console.error('[users] Error al calcular el estado de los clientes:', {
+    admin: adminSession.admin.email,
+    error,
+  });
+}
+
+const title = `Clientes & Documentos | ${adminSession.admin.email}`;
 ---
 
 <Base title={title}>
   <div class="container py-6">
+    <header class="mb-5">
+      <h1 class="text-xl font-semibold tracking-tight">Clientes &amp; Documentos</h1>
+      <p class="mt-1 text-sm text-[var(--color-text-secondary)]">
+        Gestión de clientes, verificación documental e historial operacional
+      </p>
+    </header>
+
+    <ClientKpiRow kpis={clientKpis} />
+
     <UsersDashboardWithToaster 
       client:load
       initialUsers={usersData.users}

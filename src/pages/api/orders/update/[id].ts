@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { canonicalStatus } from '../../../../lib/orderStatus';
 import { OrderService } from '../../../../services/orderService';
 import { supabaseAdmin } from '../../../../lib/supabase';
 import { createInternalApiHeaders } from '../../../../lib/serverApiAuth';
@@ -112,18 +113,57 @@ export const PUT: APIRoute = withAuth(async ({ params, request }) => {
         : JSON.parse(updateData.line_items);
     }
     
-    // Reserve configuration
-    if (updateData.reserve_type !== undefined) {
-      const validTypes = ['percent', 'fixed'];
-      if (validTypes.includes(updateData.reserve_type)) {
-        sanitizedData.reserve_type = updateData.reserve_type;
-      }
+    // Reserve configuration (`orders.reserve_type` / `reserve_value`, migración 0008).
+    //
+    // Se valida el PAR completo y se rechaza con 400 en español. Antes, un valor fuera de rango
+    // se descartaba en silencio —el admin creía haber guardado— y un porcentaje mayor a 100 se
+    // enviaba tal cual a la base, donde la CHECK de 0008 lo rechaza con un error interno que
+    // llegaba al panel como un 500. `ProcessOrder.tsx:579` ya topaba el 100 en el cliente, pero
+    // esa validación es sólo UX: la del servidor es la que manda.
+    const wantsReserveType = updateData.reserve_type !== undefined;
+    const wantsReserveValue = updateData.reserve_value !== undefined;
+
+    if (wantsReserveType !== wantsReserveValue) {
+      // Sin el tipo no se sabe si "500" son 500% (inválido) o $500 (válido). Ambos call sites del
+      // panel mandan los dos campos juntos.
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Para cambiar la reserva hay que enviar el tipo y el valor juntos',
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
     }
-    if (updateData.reserve_value !== undefined) {
-      const numValue = Number(updateData.reserve_value);
-      if (!isNaN(numValue) && numValue >= 0) {
-        sanitizedData.reserve_value = numValue;
+
+    if (wantsReserveType && wantsReserveValue) {
+      const validTypes = ['percent', 'fixed'];
+      if (!validTypes.includes(updateData.reserve_type)) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'El tipo de reserva debe ser "percent" (porcentaje) o "fixed" (monto fijo)',
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
       }
+
+      const numValue = Number(updateData.reserve_value);
+      if (!Number.isFinite(numValue) || numValue < 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'El valor de la reserva debe ser un número positivo' }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (updateData.reserve_type === 'percent' && numValue > 100) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'El porcentaje de reserva no puede ser mayor a 100' }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      sanitizedData.reserve_type = updateData.reserve_type;
+      sanitizedData.reserve_value = numValue;
     }
 
     // Document URLs
@@ -134,13 +174,18 @@ export const PUT: APIRoute = withAuth(async ({ params, request }) => {
     sanitizedData.date_modified = new Date().toISOString();
     
     // If status is being changed to completed, set completion date
-    if (updateData.status === 'completed' && !sanitizedData.date_completed) {
+    if (canonicalStatus(updateData.status) === 'completed' && !sanitizedData.date_completed) {
       sanitizedData.date_completed = new Date().toISOString();
     }
 
-    const notificationTarget = newStatus === 'completed' && previousStatus !== 'completed'
+    // Se compara el estado normalizado, no el literal. `failed` desaparece en 0003 plegado sobre
+    // `cancelled`: comparar contra `'failed'` haria que el correo de disculpas dejara de salir
+    // justo cuando el pedido no prospera, que es cuando mas importa.
+    const nuevoCanonico = canonicalStatus(newStatus);
+    const anteriorCanonico = canonicalStatus(previousStatus);
+    const notificationTarget = nuevoCanonico === 'completed' && anteriorCanonico !== 'completed'
       ? { path: '/api/emails/send-order-completed-notification', emailType: 'order_completed' }
-      : newStatus === 'failed' && previousStatus !== 'failed'
+      : nuevoCanonico === 'cancelled' && anteriorCanonico !== 'cancelled'
         ? { path: '/api/emails/send-order-failed-notification', emailType: 'order_failed' }
         : null;
 

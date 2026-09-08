@@ -1,60 +1,61 @@
 #!/usr/bin/env bash
-# Crea el rol de SOLO LECTURA hermes_ro en el Supabase del rental y carga
-# DATABASE_URL en /opt/hermes-mhans/.env. Idempotente. NUNCA imprime secretos.
+# Verifica el rol de SOLO LECTURA hermes_ro en el Supabase del rental. NO EMITE DDL.
+#
+# Inversión de contrato (CONSOLIDADO WEB 2027, ADR-D5): el rol y sus grants ahora se
+# crean EXCLUSIVAMENTE por dashboard/supabase/migrations/0000_baseline.sql (rol) y
+# 0002_hermes_least_privilege.sql (ADR-D8, allowlist explícito — hasta que esa
+# migración aterrice, hermes_ro sigue con el default privilege amplio capturado en
+# el baseline). Este script pasa de "apply" a "verify": solo consulta pg_roles /
+# information_schema.role_table_grants / pg_default_acl y sale con código != 0 si
+# algo diverge. NO rota passwords ni escribe DATABASE_URL — la provisión de
+# passwords out-of-band vive en dashboard/supabase/migrations/RESTORE_RUNBOOK.md.
+# El nombre del archivo NO cambia (referenciado por GUIA.md y runbooks de deploy).
 set -euo pipefail
 
-DB_CONTAINER=supabase-9cd8-db
-DB_NET=rental-pre0225supabase-sssmcr
-DB_PORT=5434
-ENV_FILE=/opt/agents/mhans/.env
+# Objetivo por defecto: producción (los runbooks referencian estos valores). Sobreescribible por
+# entorno para apuntar a staging o a un restore de rehearsal sin parchear el script con sed.
+DB_CONTAINER=${DB_CONTAINER:-supabase-9cd8-db}
+DB_NET=${DB_NET:-rental-pre0225supabase-sssmcr}
+DB_PORT=${DB_PORT:-5434}
 
 PGPW=$(docker inspect "$DB_CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -oP '^POSTGRES_PASSWORD=\K.*')
-ROPW=$(openssl rand -hex 24)
 
-# Rol read-only: idempotente (si existe, solo rota la password).
-# La password entra como variable psql (-v) y se interpola con \gexec —
-# nunca queda en el texto del script ni en logs.
+echo "[setup-db-role] Verificando rol hermes_ro (solo lectura) ..."
+
 docker run --rm -i --network "$DB_NET" -e PGPASSWORD="$PGPW" postgres:16-alpine \
   psql -h "$DB_CONTAINER" -p "$DB_PORT" -U postgres -d postgres \
-  -v ON_ERROR_STOP=1 -v ropw="$ROPW" --quiet <<'SQL'
-SELECT format('CREATE ROLE hermes_ro LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT', :'ropw')
-WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hermes_ro') \gexec
-SELECT format('ALTER ROLE hermes_ro WITH LOGIN PASSWORD %L', :'ropw')
-WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = 'hermes_ro') \gexec
-GRANT CONNECT ON DATABASE postgres TO hermes_ro;
+  -v ON_ERROR_STOP=1 <<'SQL'
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_roles
+        WHERE rolname = 'hermes_ro'
+          AND rolcanlogin = true
+          AND rolsuper = false
+          AND rolcreatedb = false
+          AND rolcreaterole = false
+          AND rolinherit = false
+    ) THEN
+        RAISE EXCEPTION 'FALLO: rol hermes_ro no existe o sus atributos divergen de 0000_baseline.sql (LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT)';
+    END IF;
+
+    IF NOT has_schema_privilege('hermes_ro', 'public', 'USAGE') THEN
+        RAISE EXCEPTION 'FALLO: hermes_ro no tiene USAGE en schema public';
+    END IF;
+
+    -- Mientras 0002_hermes_least_privilege.sql no aterrice, hermes_ro sigue con
+    -- SELECT amplio vía el default privilege capturado en el baseline (ADR-D8).
+    -- Se verifica el caso concreto que los MCP tools usan hoy (products); T-016
+    -- extiende este check a la allowlist explícita una vez 0002 aterrice.
+    IF NOT has_table_privilege('hermes_ro', 'public.products', 'SELECT') THEN
+        RAISE EXCEPTION 'FALLO: hermes_ro no tiene SELECT en products';
+    END IF;
+
+    RAISE NOTICE 'check duro OK: rol hermes_ro presente con atributos y grants esperados';
+END
+$$;
 SQL
 
-# Los GRANTs sobre las tablas van como supabase_admin: en Supabase self-hosted
-# el owner de public.* es supabase_admin, NO postgres (que no es superuser real
-# — como postgres salen "WARNING: no privileges were granted").
-docker run --rm --network "$DB_NET" -e PGPASSWORD="$PGPW" postgres:16-alpine \
-  psql -h "$DB_CONTAINER" -p "$DB_PORT" -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -c \
-  'GRANT USAGE ON SCHEMA public TO hermes_ro;
-   GRANT SELECT ON ALL TABLES IN SCHEMA public TO hermes_ro;
-   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO hermes_ro;'
-
-echo "[setup] hermes_ro creado/actualizado"
-
-# DATABASE_URL al .env del Hermes de mhans (reemplaza si ya existe).
-URL="postgresql://hermes_ro:${ROPW}@${DB_CONTAINER}:${DB_PORT}/postgres"
-grep -q '^DATABASE_URL=' "$ENV_FILE" \
-  && sed -i "s|^DATABASE_URL=.*|DATABASE_URL=${URL}|" "$ENV_FILE" \
-  || printf '\n# Supabase del rental (solo lectura, red interna docker)\nDATABASE_URL=%s\n' "$URL" >> "$ENV_FILE"
-chmod 600 "$ENV_FILE"
-echo "[setup] DATABASE_URL cargada en $ENV_FILE"
-
-# Smoke test con el rol nuevo: cuenta de productos (dato no sensible).
-docker run --rm --network "$DB_NET" -e PGPASSWORD="$ROPW" postgres:16-alpine \
-  psql -h "$DB_CONTAINER" -p "$DB_PORT" -U hermes_ro -d postgres -tAc \
-  "select 'hermes_ro OK — products: ' || count(*) from products"
-
-# Verificar que NO puede escribir (debe fallar).
-# OJO: grep SIN -q — con pipefail, grep -q corta el pipe al primer match,
-# psql muere por SIGPIPE y el pipeline "falla" aunque el match existió.
-WRITE_OUT=$(docker run --rm --network "$DB_NET" -e PGPASSWORD="$ROPW" postgres:16-alpine \
-  psql -h "$DB_CONTAINER" -p "$DB_PORT" -U hermes_ro -d postgres -tAc \
-  "create table _hermes_write_test(id int)" 2>&1 || true)
-case "$WRITE_OUT" in
-  *"permission denied"*) echo '[setup] write denegado: OK (solo lectura confirmado)' ;;
-  *) echo "[setup] ATENCION: write no denegado — revisar: $WRITE_OUT" ;;
-esac
+echo "[setup-db-role] check duro OK: rol hermes_ro correcto"
+echo "[setup-db-role] Nota: las passwords se provisionan out-of-band (ver RESTORE_RUNBOOK.md), este script no las rota ni las lee."
+echo "[setup-db-role] listo (solo verificación, sin DDL)."

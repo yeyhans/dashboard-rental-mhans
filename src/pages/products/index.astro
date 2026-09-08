@@ -4,6 +4,8 @@ import ProductsDashboard from "../../components/ProductsDashboard";
 import { getServerAdmin, clearAuthCookies } from "../../lib/supabase";
 import { ProductService } from "../../services/productService";
 import { CategoryService } from "../../services/categoryService";
+import { CatalogService } from "../../services/catalogService";
+import CatalogKpiRow from "../../components/CatalogKpiRow.astro";
 
 export const prerender = false;
 
@@ -41,11 +43,37 @@ const categoriesData = {
   categories: categories || []
 };
 
-const title = `Gestión de Productos | ${adminSession.admin.email}`;
+/**
+ * Disponibilidad en vivo. Se carga con su propio `catch`: si el cruce falla, el catalogo sigue
+ * usable con los indicadores en cero en vez de dejar la pantalla en blanco.
+ */
+let availability = {
+  modelosPublicados: 0, disponiblesHoy: 0, porcentajeDisponible: 0,
+  modelosEnArriendo: 0, unidadesEnArriendo: 0, bloqueados: 0,
+};
+try {
+  availability = await CatalogService.getAvailabilityKpis();
+} catch (error) {
+  console.error('[products] Error al calcular la disponibilidad:', {
+    admin: adminSession.admin.email,
+    error,
+  });
+}
+
+const title = `Catálogo de Equipos | ${adminSession.admin.email}`;
 ---
 
 <Base title={title}>
   <div class="container py-6">
+    <header class="mb-5">
+      <h1 class="text-xl font-semibold tracking-tight">Catálogo de Equipos</h1>
+      <p class="mt-1 text-sm text-[var(--color-text-secondary)]">
+        Inventario de activos físicos con disponibilidad en tiempo real
+      </p>
+    </header>
+
+    <CatalogKpiRow kpis={availability} />
+
     <ProductsDashboard 
       client:load
       initialProducts={productsData.products as any}

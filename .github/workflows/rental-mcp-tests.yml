@@ -1,19 +1,44 @@
-# Golden tests del rental-mcp (G8 del blueprint): la fórmula de cotización
-# vive replicada en Python (rental-mcp) y TypeScript (dashboard). Estos tests
-# anclan la réplica — si alguien cambia una tasa en el dashboard, DEBE
-# actualizar rental_mcp/domain/pricing.py y estos tests gritan si diverge.
+# Tests del rental-mcp (G8 del blueprint + T-022 del consolidado): la fórmula
+# de cotización vive replicada en Python (rental-mcp) y TypeScript (dashboard).
+# Estos tests anclan la réplica — si alguien cambia una tasa en el dashboard,
+# DEBE actualizar rental_mcp/domain/pricing.py y estos tests gritan si diverge.
+#
+# T-022: este workflow es REQUIRED CHECK para PRs que tocan migraciones,
+# hermes-mhans o los services de órdenes del dashboard. La suite (220 tests)
+# es DB-mocked (fake pools vía monkeypatch — no existe ningún test que abra una
+# conexión real), así que el valor del DSN de staging aquí es doble:
+#   1. Probar que el DSN secreto apunta a un Postgres de staging VIVO
+#      (step "Assert staging DB reachable") — el log imprime host/db/user, nunca
+#      la password.
+#   2. Ejecutar la suite completa con el env de staging exportado, en vocabulario
+#      'legacy' (staging es pre-migración 0003 → CHECK constraint legacy).
+# Un segundo pase puro-unit corre con ORDER_STATUS_VOCABULARY=v12 y SIN DSN,
+# para que las dos tablas de vocabulario queden ancladas en cada PR.
+#
+# El Postgres de staging (contenedor supabase-stg-db) escucha SOLO en
+# 127.0.0.1:5435 del VPS (ops/staging-standup-2026-08-18.md) — NO es alcanzable
+# directo desde un runner de GitHub. Por eso el job abre un túnel SSH
+# (secrets STAGING_SSH_*) y el DSN secreto apunta a 127.0.0.1:5435 local.
 name: rental-mcp golden tests
 
 on:
   push:
     paths:
-      - 'hermes-mhans/rental-mcp/**'
+      - 'hermes-mhans/**'
+      - 'supabase/migrations/**'
+      - 'src/services/orderService.ts'
+      - 'src/services/orderItemService.ts'
+      - 'src/services/orderNotificationService.ts'
       - '.github/workflows/rental-mcp-tests.yml'
+  # Sin path filters en pull_request A PROPÓSITO: `pytest` es required check, y
+  # un required check con paths deja en "Expected" eterno (merge bloqueado) a
+  # cualquier PR que no toque esos paths. La suite corre en <1s; el costo de
+  # correrla siempre es menor que ese deadlock.
   pull_request:
-    paths:
-      - 'hermes-mhans/rental-mcp/**'
 
 jobs:
+  # NOTE: job id `pytest` is the required-check name pinned in branch
+  # protection. Do NOT rename without updating the ruleset.
   pytest:
     runs-on: ubuntu-latest
     defaults:
@@ -21,10 +46,82 @@ jobs:
         working-directory: hermes-mhans/rental-mcp
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: '3.12'
-      - name: Install deps
-        run: pip install "mcp>=1.2" "psycopg[binary]>=3.1" "pydantic>=2" "httpx>=0.27" "pytest>=8"
-      - name: Golden tests (pricing + availability)
-        run: python -m pytest tests/ -q
+
+      - name: Assert STAGING_DB_DSN is configured
+        env:
+          STAGING_DB_DSN: ${{ secrets.STAGING_DB_DSN }}
+        run: |
+          if [ -z "$STAGING_DB_DSN" ]; then
+            echo "::error::secrets.STAGING_DB_DSN no está configurado — este check es requerido y debe correr contra staging."
+            exit 1
+          fi
+
+      # supabase-stg-db binds 127.0.0.1:5435 on the VPS only, so the job needs
+      # an SSH tunnel. Tunnel, connectivity gate and staging suite live in ONE
+      # step on purpose: a backgrounded `ssh -f` from a previous step does not
+      # reliably survive the step boundary on GitHub runners (first live run
+      # timed out exactly that way), and a trap cleans the tunnel up at the end.
+      # The connectivity gate proves the DSN points at a LIVE staging Postgres
+      # and logs host/port/db/user — NEVER the password.
+      - name: Staging suite via SSH tunnel (connectivity gate + legacy vocabulary)
+        env:
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          STAGING_DB_DSN: ${{ secrets.STAGING_DB_DSN }}
+          # Staging DB is pre-0003, so the DB-facing vocabulary MUST be legacy
+          # (matches its CHECK constraint).
+          DATABASE_URL: ${{ secrets.STAGING_DB_DSN }}
+          ORDER_STATUS_VOCABULARY: legacy
+        run: |
+          if [ -z "$STAGING_SSH_KEY" ] || [ -z "$STAGING_SSH_HOST" ]; then
+            echo "::error::secrets STAGING_SSH_KEY/STAGING_SSH_HOST faltantes — el Postgres de staging es loopback-only en el VPS y requiere túnel."
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$STAGING_SSH_KEY" > ~/.ssh/staging_key
+          chmod 600 ~/.ssh/staging_key
+          ssh-keyscan -H "$STAGING_SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -f -N -i ~/.ssh/staging_key \
+            -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
+            -L 5435:127.0.0.1:5435 \
+            "${STAGING_SSH_USER:-root}@$STAGING_SSH_HOST"
+          trap 'pkill -f "ssh -f -N -i $HOME/.ssh/staging_key" || true' EXIT
+          echo "Túnel SSH abierto: 127.0.0.1:5435 -> $STAGING_SSH_HOST:127.0.0.1:5435"
+
+          uv run --extra dev python - <<'EOF'
+          import os, sys
+          import psycopg
+          from psycopg.conninfo import conninfo_to_dict
+
+          dsn = os.environ["STAGING_DB_DSN"]
+          info = conninfo_to_dict(dsn)
+          safe = {k: info.get(k) for k in ("host", "port", "dbname", "user")}
+          print(f"[connectivity] target: {safe}")
+          try:
+              with psycopg.connect(dsn, connect_timeout=10) as conn:
+                  with conn.cursor() as cur:
+                      cur.execute(
+                          "SELECT current_database(), current_user, inet_server_addr()::text, version()"
+                      )
+                      db, usr, addr, ver = cur.fetchone()
+              print(f"[connectivity] OK — db={db} user={usr} server_addr={addr}")
+              print(f"[connectivity] {ver.splitlines()[0]}")
+          except Exception as exc:
+              print(f"::error::Staging Postgres inalcanzable via {safe}: {exc}", file=sys.stderr)
+              sys.exit(1)
+          EOF
+
+          uv run --extra dev python -m pytest tests/ -q
+
+      # Second pass WITHOUT any DSN: proves the suite stays green offline and
+      # pins the v12 vocabulary table (validators.py reads the env at import).
+      - name: Pure-unit suite, no DSN (ORDER_STATUS_VOCABULARY=v12)
+        env:
+          ORDER_STATUS_VOCABULARY: v12
+        run: uv run --extra dev python -m pytest tests/ -q

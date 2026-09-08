@@ -22,6 +22,7 @@ import { createEventFromOrder, openGoogleCalendar } from '@/lib/simpleCalendar';
 import { sendManualEmail, validateManualEmailData, type ManualEmailData } from '@/services/manualEmailService';
 import { AdminCommunications } from './AdminCommunications';
 import { useOrderNotifications } from '../../hooks/useOrderNotifications';
+import { statusBadgeClass, statusLabel } from '../../lib/orderStatus';
 
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
@@ -437,25 +438,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   }, [orderData.pago_completo]);
 
   // Status translations and colors
-  const statusTranslations: { [key: string]: string } = {
-    'pending': 'Pendiente',
-    'processing': 'En proceso',
-    'on-hold': 'En espera',
-    'completed': 'Completado',
-    'cancelled': 'Cancelado',
-    'refunded': 'Reembolsado',
-    'failed': 'Fallido'
-  };
 
-  const statusColors: { [key: string]: string } = {
-    'pending': 'bg-yellow-100 text-yellow-800',
-    'processing': 'bg-blue-100 text-blue-800',
-    'on-hold': 'bg-gray-100 text-gray-800',
-    'completed': 'bg-green-100 text-green-800',
-    'cancelled': 'bg-red-100 text-red-800',
-    'refunded': 'bg-purple-100 text-purple-800',
-    'failed': 'bg-red-100 text-red-800'
-  };
 
   const handleSaveOrder = async (updatedOrder: any) => {
     try {
@@ -1700,8 +1683,20 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     const oldStatus = orderData.status || 'unknown';
 
     try {
-      // Aquí iría la lógica para actualizar el estado en la base de datos
-      // Por ahora solo notificamos el cambio
+      // Antes esto solo notificaba: el comentario decía "aquí iría la lógica para actualizar el
+      // estado" y el toast anunciaba un cambio que nunca ocurría. Al recargar, el admin veía el
+      // estado anterior y volvía a intentarlo. El endpoint valida además la transición contra la
+      // cadena del canónico, así que un salto ilegal se rechaza con un mensaje en español.
+      const response = await fetch(`/api/orders/${orderData.id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus, reason }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'No se pudo actualizar el estado de la orden');
+      }
 
       await notifyStatusChange(
         oldStatus,
@@ -1710,7 +1705,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         `Cambio realizado desde el panel administrativo por ${sessionData?.user?.name || 'Administrador'}`
       );
 
-      toast.success(`Estado cambiado de ${oldStatus} a ${newStatus}`);
+      toast.success(`Estado cambiado de ${statusLabel(oldStatus)} a ${statusLabel(newStatus)}`);
 
       // Recargar la página para mostrar el nuevo estado
       setTimeout(() => {
@@ -1718,8 +1713,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       }, 1500);
 
     } catch (error) {
-      console.error('Error changing order status:', error);
-      toast.error('Error al cambiar el estado de la orden');
+      console.error('[ProcessOrder] Error al cambiar el estado de la orden:', {
+        orderId: orderData.id, oldStatus, newStatus, error,
+      });
+      toast.error(error instanceof Error ? error.message : 'Error al cambiar el estado de la orden');
     }
   };
 
@@ -1734,7 +1731,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   const handleMarkAsFailed = async () => {
     const reason = prompt('Ingresa el motivo por el cual la orden falló:');
     if (reason) {
-      await handleStatusChange('failed', reason);
+      // `failed` sale del CHECK con 0003; la salida terminal por fallo es `cancelled`.
+      await handleStatusChange('cancelled', reason);
     }
   };
 
@@ -1945,8 +1943,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             <CardTitle>Estado del Pedido</CardTitle>
           </CardHeader>
           <CardContent>
-            <Badge className={statusColors[orderData.status] || 'bg-gray-100 text-gray-800'}>
-              {statusTranslations[orderData.status] || orderData.status}
+            <Badge className={statusBadgeClass(orderData.status)}>
+              {statusLabel(orderData.status)}
             </Badge>
           </CardContent>
         </Card>
@@ -2902,8 +2900,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                                         <a href={`/orders/${conflict.orderId}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-700 font-medium font-bold mr-1">
                                           Orden #{conflict.orderId}
                                         </a>
-                                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 leading-none uppercase align-middle ${statusColors[conflict.status] || ''}`}>
-                                          {statusTranslations[conflict.status] || conflict.status}
+                                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 leading-none uppercase align-middle ${statusBadgeClass(conflict.status)}`}>
+                                          {statusLabel(conflict.status)}
                                         </Badge>
                                         ) entre las fechas {formatConflictDate(conflict.startDate)} y {formatConflictDate(conflict.endDate)}.
                                       </div>

@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { reserveAmount } from '../../../lib/finance';
 import React from 'react';
 import { ContractDocument } from '../../../lib/pdf/components/contract/ContractDocument';
 import type { BudgetDocumentData } from '../../../lib/pdf/core/types';
@@ -134,10 +135,17 @@ export const POST: APIRoute = async ({ request }) => {
           discount: parseFloat(orderData.metadata?.calculated_discount || orderData.calculated_discount?.toString() || '0'),
           iva: parseFloat(orderData.metadata?.calculated_iva || orderData.calculated_iva?.toString() || '0'),
           total: parseFloat(orderData.metadata?.calculated_total || orderData.calculated_total?.toString() || '0'),
-          reserve: parseFloat(orderData.metadata?.calculated_total || orderData.calculated_total?.toString() || '0') * 0.25,
+          // La reserva sale de `lib/finance`, la unica fuente: respeta el reserve_type/
+          // reserve_value del pedido, de modo que el PDF, el portal del cliente y las
+          // tablas de cobranza citen siempre la misma cifra.
+          reserve: reserveAmount({
+            total: parseFloat(orderData.metadata?.calculated_total || orderData.calculated_total?.toString() || '0'),
+            reserveType: orderData.reserve_type,
+            reserveValue: orderData.reserve_value,
+          }),
         },
         couponCode: orderData.coupon_code,
-        status: getOrderStatusInSpanish(orderData.status || 'on-hold'),
+        status: getOrderStatusInSpanish(orderData.status || 'request'),
         ...(shippingInfoData && { shippingInfo: shippingInfoData }),
         userSignatureUrl: userSignatureUrl || undefined,
       };

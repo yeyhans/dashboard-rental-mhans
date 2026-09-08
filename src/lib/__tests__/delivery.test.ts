@@ -1,0 +1,237 @@
+import { describe, expect, it } from 'vitest';
+import {
+  canRecordCheckout,
+  canTransitionShipment,
+  deliveryKpis,
+  formatCLP,
+  historyTotals,
+  isAwaitingDispatch,
+  shipmentLabel,
+  type ShipmentLike,
+} from '../delivery';
+
+const now = new Date('2026-06-15T10:00');
+
+function shipment(partial: Partial<ShipmentLike>): ShipmentLike {
+  return { status: 'delivered', cost: 0, createdAt: '2026-06-15', deliveredAt: null, ...partial };
+}
+
+describe('shipmentLabel', () => {
+  it('traduce los cinco estados del CHECK', () => {
+    expect(shipmentLabel('pending')).toBe('Pendiente');
+    expect(shipmentLabel('shipped')).toBe('En ruta');
+    expect(shipmentLabel('delivered')).toBe('Entregado');
+  });
+
+  it('devuelve el valor crudo si la DB trae algo fuera del CHECK', () => {
+    expect(shipmentLabel('inventado')).toBe('inventado');
+  });
+});
+
+describe('isAwaitingDispatch', () => {
+  it('cuenta lo registrado que aún no sale', () => {
+    expect(isAwaitingDispatch('pending')).toBe(true);
+    expect(isAwaitingDispatch('processing')).toBe(true);
+  });
+
+  it('no cuenta lo que ya salió ni lo cerrado', () => {
+    // `shipped` ya está en la calle: incluirlo inflaría la cola de bodega.
+    expect(isAwaitingDispatch('shipped')).toBe(false);
+    expect(isAwaitingDispatch('delivered')).toBe(false);
+    expect(isAwaitingDispatch('cancelled')).toBe(false);
+  });
+});
+
+describe('deliveryKpis', () => {
+  it('cuenta los envíos creados hoy', () => {
+    const k = deliveryKpis([shipment({ createdAt: '2026-06-15' }), shipment({ createdAt: '2026-06-14' })], now);
+    expect(k.enviosHoy).toBe(1);
+    expect(k.enviosAyer).toBe(1);
+  });
+
+  it('calcula la variación contra ayer', () => {
+    const items = [
+      ...Array(6).fill(null).map(() => shipment({ createdAt: '2026-06-15' })),
+      ...Array(5).fill(null).map(() => shipment({ createdAt: '2026-06-14' })),
+    ];
+    expect(deliveryKpis(items, now).variacionDiaria).toBe(20);
+  });
+
+  it('devuelve null y no Infinity cuando ayer no hubo envíos', () => {
+    // Dividir por cero imprimiría "Infinity%", y reportar "+100%" por un envío tras un día en
+    // blanco disfraza de tendencia lo que es ruido. La vista muestra "sin referencia".
+    const k = deliveryKpis([shipment({ createdAt: '2026-06-15' })], now);
+    expect(k.variacionDiaria).toBeNull();
+  });
+
+  it('cuenta como entregado hoy por delivered_at, no por created_at', () => {
+    // Un envío creado el lunes y entregado hoy es una entrega de HOY.
+    const k = deliveryKpis(
+      [shipment({ status: 'delivered', createdAt: '2026-06-10', deliveredAt: '2026-06-15' })],
+      now
+    );
+    expect(k.entregadosHoy).toBe(1);
+    expect(k.enviosHoy).toBe(0);
+  });
+
+  it('excluye los cancelados del volumen y del costo', () => {
+    // Nunca salieron: sumarlos infla la cifra con la que se liquida al courier.
+    const k = deliveryKpis(
+      [shipment({ status: 'cancelled', cost: 50000, createdAt: '2026-06-15' })],
+      now
+    );
+    expect(k.enviosHoy).toBe(0);
+    expect(k.costoHoy).toBe(0);
+  });
+
+  it('acumula el costo en las tres ventanas', () => {
+    const k = deliveryKpis(
+      [
+        shipment({ cost: 10000, createdAt: '2026-06-15' }),
+        shipment({ cost: 20000, createdAt: '2026-06-12' }),
+        shipment({ cost: 30000, createdAt: '2026-06-02' }),
+      ],
+      now
+    );
+    expect(k.costoHoy).toBe(10000);
+    expect(k.costoSemana).toBe(30000); // hoy + el del 12, dentro de los últimos 7 días
+    expect(k.costoMes).toBe(60000);
+  });
+
+  it('no cuenta en el mes un envío del mes anterior', () => {
+    const k = deliveryKpis([shipment({ cost: 99000, createdAt: '2026-05-31' })], now);
+    expect(k.costoMes).toBe(0);
+  });
+
+  it('no cuenta en el mes un envío con fecha futura', () => {
+    // Una fecha adelantada sumaría a un mes que aún no termina y descuadraría la liquidación.
+    const k = deliveryKpis([shipment({ cost: 99000, createdAt: '2026-06-28' })], now);
+    expect(k.costoMes).toBe(0);
+  });
+
+  it('trata un costo no numérico como cero en vez de propagar NaN', () => {
+    const k = deliveryKpis([shipment({ cost: NaN, createdAt: '2026-06-15' })], now);
+    expect(k.costoHoy).toBe(0);
+  });
+
+  it('devuelve ceros sin envíos', () => {
+    const k = deliveryKpis([], now);
+    expect(k.enviosHoy).toBe(0);
+    expect(k.variacionDiaria).toBeNull();
+    expect(k.costoMes).toBe(0);
+  });
+});
+
+describe('historyTotals', () => {
+  it('promedia sobre los envíos contados', () => {
+    const t = historyTotals([shipment({ cost: 10000 }), shipment({ cost: 20000 })]);
+    expect(t.totalEnvios).toBe(2);
+    expect(t.costoTotal).toBe(30000);
+    expect(t.promedioPorEnvio).toBe(15000);
+  });
+
+  it('devuelve cero y no NaN con el historial vacío', () => {
+    // Un NaN aquí se renderiza como "NaN" en la tarjeta, sin ningún error en ninguna parte.
+    expect(historyTotals([])).toEqual({ totalEnvios: 0, costoTotal: 0, promedioPorEnvio: 0 });
+  });
+
+  it('excluye los cancelados también del promedio', () => {
+    const t = historyTotals([shipment({ cost: 10000 }), shipment({ status: 'cancelled', cost: 90000 })]);
+    expect(t.totalEnvios).toBe(1);
+    expect(t.promedioPorEnvio).toBe(10000);
+  });
+});
+
+/**
+ * R3-201 (CRITICAL, review sobre e1a5b23+05c83cf): el equipo solo sale físicamente cuando el
+ * despacho ya está `shipped` — `pending`/`processing` es "todavía en la repisa". Registrar un
+ * checkout ahí corrompe `hasOpenCheckout` y bloquea la unidad para la orden que sí la necesita.
+ * `delivered` tampoco es elegible: ese despacho ya se completó (y en la práctica ya no aparece en
+ * `data.active`, pero la función no debe asumirlo).
+ */
+describe('canRecordCheckout', () => {
+  it('solo permite registrar la salida cuando el despacho ya está en ruta', () => {
+    expect(canRecordCheckout('shipped')).toBe(true);
+  });
+
+  it('rechaza un despacho que todavía no sale de bodega', () => {
+    expect(canRecordCheckout('pending')).toBe(false);
+    expect(canRecordCheckout('processing')).toBe(false);
+  });
+
+  it('rechaza un despacho ya entregado o cancelado', () => {
+    expect(canRecordCheckout('delivered')).toBe(false);
+    expect(canRecordCheckout('cancelled')).toBe(false);
+  });
+
+  it('rechaza cualquier valor fuera del CHECK de shipping_usage.status', () => {
+    expect(canRecordCheckout('inventado')).toBe(false);
+  });
+});
+
+/**
+ * R3-205 (CRITICAL, re-review sobre el fix de R3-201): `canRecordCheckout` gatea el checkout a
+ * `shipped`, pero nada en el repo transicionaba `shipping_usage.status` hacia `shipped` —
+ * `deliveryService` solo LEE ese campo. El control quedaba inalcanzable en el flujo real. Esta
+ * máquina de estados pura es lo que la nueva transición del despacho (`DeliveryService.
+ * updateShipmentStatus`) valida antes de escribir, así que un salto ilegal nunca llega a la DB.
+ *
+ * El canónico Delivery (`MarioHans_OS_Area01_Delivery_Canonical_RC2.1.3.html`) no declara ningún
+ * `data-action` que cambie el estado de un despacho activo — su tabla de "Delivery activos" es de
+ * solo lectura (el único botón interactivo del historial es `mark-paid`, que es el estado de PAGO,
+ * no de despacho, y ya está documentado como fuera de alcance en el header de `DeliveryBoard.tsx`
+ * por falta de columna). La máquina de estados sigue estrictamente el CHECK real de
+ * `shipping_usage_status_check` (`supabase/migrations/0000_baseline.sql`): pending → processing →
+ * shipped → delivered, con `cancelled` alcanzable desde cualquier estado no terminal.
+ */
+describe('canTransitionShipment', () => {
+  it('permite despachar un envío pendiente o en preparación', () => {
+    expect(canTransitionShipment('pending', 'shipped')).toBe(true);
+    expect(canTransitionShipment('processing', 'shipped')).toBe(true);
+  });
+
+  it('permite entregar un envío ya despachado — esto es lo que habilita el checkout', () => {
+    expect(canTransitionShipment('shipped', 'delivered')).toBe(true);
+  });
+
+  it('permite cancelar desde cualquier estado no terminal', () => {
+    expect(canTransitionShipment('pending', 'cancelled')).toBe(true);
+    expect(canTransitionShipment('processing', 'cancelled')).toBe(true);
+    expect(canTransitionShipment('shipped', 'cancelled')).toBe(true);
+  });
+
+  it('rechaza saltarse un estado (pending directo a delivered)', () => {
+    expect(canTransitionShipment('pending', 'delivered')).toBe(false);
+  });
+
+  it('rechaza retroceder un estado', () => {
+    expect(canTransitionShipment('shipped', 'pending')).toBe(false);
+    expect(canTransitionShipment('delivered', 'shipped')).toBe(false);
+  });
+
+  it('rechaza cualquier transición desde un estado terminal', () => {
+    expect(canTransitionShipment('delivered', 'cancelled')).toBe(false);
+    expect(canTransitionShipment('cancelled', 'pending')).toBe(false);
+    expect(canTransitionShipment('cancelled', 'shipped')).toBe(false);
+  });
+
+  it('rechaza permanecer en el mismo estado', () => {
+    expect(canTransitionShipment('shipped', 'shipped')).toBe(false);
+  });
+
+  it('rechaza cualquier valor fuera del CHECK de shipping_usage.status', () => {
+    expect(canTransitionShipment('pending', 'inventado')).toBe(false);
+    expect(canTransitionShipment('inventado', 'shipped')).toBe(false);
+  });
+});
+
+describe('formatCLP', () => {
+  it('formatea sin decimales, que es como se usa el peso chileno', () => {
+    expect(formatCLP(45000)).toBe('$45.000');
+    expect(formatCLP(1287500)).toBe('$1.287.500');
+  });
+
+  it('redondea en vez de mostrar centavos', () => {
+    expect(formatCLP(15147.4)).toBe('$15.147');
+  });
+});

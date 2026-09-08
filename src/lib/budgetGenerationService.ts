@@ -1,4 +1,5 @@
 import { sendBudgetGeneratedEmail, type BudgetEmailData } from './emailService';
+import { isBudgetStatus, STATUS_LABELS, statusLabel } from './orderStatus';
 
 // Complete Order/Budget Data Interface with all required columns
 interface BudgetData {
@@ -12,6 +13,10 @@ interface BudgetData {
   date_completed?: string;
   date_paid?: string;
   customer_id: string;
+  /** `orders.reserve_type` — 'percent' o 'fixed'. Lo interpreta `lib/finance:reserveAmount`. */
+  reserve_type?: string | null;
+  /** `orders.reserve_value` — porcentaje 0-100 o monto CLP, segun `reserve_type`. */
+  reserve_value?: number | string | null;
   
   // Calculated totals
   calculated_subtotal?: string;
@@ -407,9 +412,15 @@ export const canGenerateBudget = async (orderId: number): Promise<{
 
     const missingRequirements: string[] = [];
 
-    // Check order status - budget generation is typically for 'on-hold' status
-    if (order.status !== 'on-hold') {
-      missingRequirements.push(`Estado de orden debe ser 'En Espera' (actual: ${order.status})`);
+    // El presupuesto corresponde a la etapa inicial del pedido. Antes esto comparaba contra el
+    // literal `'on-hold'`: despues de 0003 ninguna orden vuelve a tener ese valor, asi que la
+    // condicion seria siempre verdadera y el sistema dejaria de generar presupuestos sin lanzar
+    // ni registrar nada — solo un boton que no hace nada.
+    if (!isBudgetStatus(order.status)) {
+      missingRequirements.push(
+        `El pedido debe estar en "${STATUS_LABELS.request}" o "${STATUS_LABELS.evaluation}" ` +
+          `(actual: ${statusLabel(order.status)})`
+      );
     }
 
     // Check billing information
@@ -469,7 +480,7 @@ export const canGenerateBudget = async (orderId: number): Promise<{
  */
 export const processOrderForBudget = async (
   orderId: number,
-  newStatus: string = 'on-hold'
+  newStatus: string = 'request'
 ): Promise<{
   success: boolean;
   message: string;

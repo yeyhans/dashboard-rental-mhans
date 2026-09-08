@@ -1,5 +1,11 @@
 ---
 import { getServerUser, getServerUserProfile } from "../../lib/supabase";
+import { getSessionSupabaseClient } from "../../lib/sessionSupabase";
+import {
+  authorizeOrderPdfAccess,
+  normalizeOrderId,
+  pdfAccessDenialResponse,
+} from "../../lib/pdfPageAuth";
 
 let { orderId } = Astro.params;
 
@@ -7,128 +13,61 @@ if (!orderId) {
   return new Response("Order ID is required", { status: 400 });
 }
 
-// Remove .pdf extension if present
-if (orderId.endsWith(".pdf")) {
-  orderId = orderId.replace(".pdf", "");
+orderId = normalizeOrderId(orderId);
+
+// Authorization is session-only. This page used to accept an `X-Internal-Request` header plus a
+// matching `X-Requested-Order-Id` in place of a session and then read the order with the
+// service-role key — both values are attacker-controlled, so any caller could render any
+// customer's budget. See lib/pdfPageAuth.ts for the full finding.
+const user = await getServerUser(Astro);
+
+if (!user) {
+  console.log("No authenticated user found");
+  return Astro.redirect("/login");
 }
 
-// Check if it's an internal API request
-const isInternalRequest =
-  Astro.request.headers.get("X-Internal-Request") === "true";
-const requestedOrderIdFromHeader = Astro.request.headers.get(
-  "X-Requested-Order-Id",
-);
+const currentUserProfile = await getServerUserProfile(Astro);
 
-if (isInternalRequest) {
-  // Validate internal request
-  if (requestedOrderIdFromHeader !== orderId) {
-    console.error(
-      `Internal request orderId mismatch: header=${requestedOrderIdFromHeader}, param=${orderId}`,
-    );
-    return new Response("Internal request validation failed", { status: 400 });
-  }
-  console.log("✅ Internal request validated for orderId:", orderId);
-} else {
-  // For direct requests, verify authentication using server-side method
-  const user = await getServerUser(Astro);
+// Get order data. Read through the caller's session (anon key + their JWT), never the
+// service-role key. `orders` has no RLS in production today, so authorization here rests
+// entirely on the `authorizeOrderPdfAccess` check below; once migration 0001 enables RLS with
+// identity-keyed policies, this client is also the only one those policies can match — a
+// JWT-less anon client would read zero rows and 404 the owner out of their own document.
+let orderData;
+try {
+  const supabase = getSessionSupabaseClient(Astro);
 
-  if (!user) {
-    console.log("No authenticated user found");
+  if (!supabase) {
+    console.warn("[budget-pdf] Sesión sin token de acceso; se requiere login");
     return Astro.redirect("/login");
   }
 
-  // Get current user profile for authorization
-  console.log("🔍 Getting current user profile for authorization...");
-  console.log("🔍 Current user from getServerUser:", {
-    id: user.id,
-    email: user.email,
-  });
-  console.log("🔍 Requested orderId:", orderId);
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("id", parseInt(orderId))
+    .single();
 
-  const currentUserProfile = await getServerUserProfile(Astro);
-  console.log("🔍 Current user profile result:", {
-    hasProfile: !!currentUserProfile,
-    hasProfileData: !!currentUserProfile?.profile,
-    profileUserId: currentUserProfile?.profile?.user_id,
-    profileAuthUid: currentUserProfile?.profile?.auth_uid,
-  });
-
-  if (!currentUserProfile || !currentUserProfile.profile) {
-    console.error("❌ No user profile found for current user");
-    return new Response("User profile not found", { status: 404 });
+  if (error || !order) {
+    console.error("Error fetching order data:", error);
+    return new Response("Order not found", { status: 404 });
   }
-}
 
-// Get order data
-let orderData;
-try {
-  if (isInternalRequest) {
-    // For internal requests, use service role key to get order data directly
-    console.log(
-      "🔧 Internal request: fetching order data with service role key",
+  const decision = authorizeOrderPdfAccess({
+    request: Astro.request,
+    orderCustomerId: order.customer_id,
+    user,
+    profileResult: currentUserProfile,
+  });
+
+  if (!decision.allowed) {
+    console.warn(
+      `[budget-pdf] Acceso denegado a la orden ${orderId} para el usuario ${user.id} (${decision.status})`,
     );
-    const { createClient } = await import("@supabase/supabase-js");
-    const serviceSupabase = createClient(
-      import.meta.env.PUBLIC_SUPABASE_URL!,
-      import.meta.env.SUPABASE_SERVICE_ROLE_KEY ||
-        import.meta.env.PUBLIC_SUPABASE_ANON_KEY!,
-    );
-
-    const { data: order, error } = await serviceSupabase
-      .from("orders")
-      .select("*")
-      .eq("id", parseInt(orderId))
-      .single();
-
-    if (error || !order) {
-      console.error("Error fetching order data for internal request:", error);
-      return new Response("Order not found", { status: 404 });
-    }
-
-    orderData = order;
-    console.log("✅ Internal request: order data fetched successfully");
-  } else {
-    // For regular requests, use the server method with authorization check
-    const { createClient } = await import("@supabase/supabase-js");
-    const supabase = createClient(
-      import.meta.env.PUBLIC_SUPABASE_URL!,
-      import.meta.env.PUBLIC_SUPABASE_ANON_KEY!,
-    );
-
-    const { data: order, error } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("id", parseInt(orderId))
-      .single();
-
-    if (error || !order) {
-      console.error("Error fetching order data:", error);
-      return new Response("Order not found", { status: 404 });
-    }
-
-    // Verify user can only access their own orders
-    const currentUserProfile = await getServerUserProfile(Astro);
-    if (!currentUserProfile?.profile) {
-      return new Response("User profile not found", { status: 404 });
-    }
-
-    // Note: customerRut will be fetched from user_profiles table using customer_id
-
-    // Check if the order belongs to the current user
-    const userMatches =
-      order.customer_id === currentUserProfile.profile.user_id?.toString() ||
-      order.customer_id === currentUserProfile.profile.auth_uid ||
-      order.customer_id === currentUserProfile.auth?.id;
-
-    if (!userMatches) {
-      console.warn(
-        `❌ Unauthorized access attempt to order ${orderId} by user ${currentUserProfile.profile.user_id}`,
-      );
-      return Astro.redirect("/404");
-    }
-
-    orderData = order;
+    return pdfAccessDenialResponse(decision);
   }
+
+  orderData = order;
 } catch (error) {
   console.error("Error fetching order data:", error);
   return new Response("Error fetching order data", { status: 500 });
@@ -144,11 +83,13 @@ try {
       orderData.customer_id,
     );
 
+    // Service role, and no anon fallback: `user_profiles` has RLS, so an anon client without a
+    // JWT reads zero rows and silently drops the RUT from the document. Safe here only because
+    // the ownership check above has already passed.
     const { createClient } = await import("@supabase/supabase-js");
     const supabase = createClient(
       import.meta.env.PUBLIC_SUPABASE_URL!,
-      import.meta.env.SUPABASE_SERVICE_ROLE_KEY ||
-        import.meta.env.PUBLIC_SUPABASE_ANON_KEY!,
+      import.meta.env.SUPABASE_SERVICE_ROLE_KEY!,
     );
 
     // Try to find user by different possible customer_id formats

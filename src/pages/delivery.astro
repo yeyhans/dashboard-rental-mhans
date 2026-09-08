@@ -1,0 +1,66 @@
+---
+import Base from "../layout/Base.astro";
+import DeliveryBoard from "../components/delivery/DeliveryBoard";
+import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
+import { DeliveryService } from "../services/deliveryService";
+
+export const prerender = false;
+
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+
+// El reloj vive en el servidor: los KPIs deciden "hoy", "semana" y "mes", y resolverlos en el
+// navegador los dejaria a merced de la zona horaria del equipo del admin.
+const now = new Date();
+
+let board = {
+  kpis: {
+    enviosHoy: 0, enviosAyer: 0, variacionDiaria: null,
+    porDespachar: 0, entregadosHoy: 0,
+    costoHoy: 0, costoSemana: 0, costoMes: 0,
+  },
+  totals: { totalEnvios: 0, costoTotal: 0, promedioPorEnvio: 0 },
+  active: [],
+  history: [],
+  types: [],
+};
+let loadError: string | null = null;
+
+try {
+  board = await DeliveryService.getBoard(now);
+} catch (error) {
+  console.error('[delivery] Error al cargar el tablero de envios:', {
+    admin: adminSession.admin.email,
+    error,
+  });
+  loadError = 'No se pudieron cargar los envios. Recarga la pagina o intentalo en unos minutos.';
+}
+
+const title = `Delivery | ${adminSession.admin.email}`;
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    <header class="mb-5 border-b border-[var(--color-border)] pb-4">
+      <h1 class="text-xl font-semibold tracking-tight">Delivery</h1>
+      <p class="mt-1 text-sm text-[var(--color-text-secondary)]">
+        Coordinación de entregas y retiros realizados por servicios externos
+      </p>
+    </header>
+
+    {loadError ? (
+      <div
+        role="alert"
+        class="rounded-[10px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-4 text-sm text-[var(--color-crit)]"
+      >
+        {loadError}
+      </div>
+    ) : (
+      <DeliveryBoard client:load data={board} />
+    )}
+  </div>
+</Base>

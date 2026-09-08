@@ -29,6 +29,7 @@ import type { Order } from '../../types/order';
 import { ChevronRight, RefreshCw, Search, FileText, FileCheck } from 'lucide-react';
 import CreateOrderForm from './CreateOrderForm';
 import ProcessOrder from "./ProcessOrder";
+import { statusBadgeClass, statusLabel } from '../../lib/orderStatus';
 
 // Helper function to format currency with thousands separator
 const formatCurrency = (value: string | number) => {
@@ -37,29 +38,7 @@ const formatCurrency = (value: string | number) => {
 };
 
 // Status translations and colors based on WooCommerce
-const statusTranslations: { [key: string]: string } = {
-  'pending': 'Pendiente',
-  'processing': 'En proceso',
-  'on-hold': 'En espera',
-  'completed': 'Completado',
-  'cancelled': 'Cancelado',
-  'refunded': 'Reembolsado',
-  'failed': 'Fallido',
-  'trash': 'Papelera',
-  'auto-draft': 'Borrador'
-};
 
-const statusColors: { [key: string]: string } = {
-  'pending': 'bg-[#f8dda7] text-[#94660c]',
-  'processing': 'bg-[#c6e1c6] text-[#5b841b]',
-  'on-hold': 'bg-[#e5e5e5] text-[#777777]',
-  'completed': 'bg-[#c8d7e1] text-[#2e4453]',
-  'cancelled': 'bg-[#eba3a3] text-[#761919]',
-  'refunded': 'bg-[#e5e5e5] text-[#777777]',
-  'failed': 'bg-[#eba3a3] text-[#761919]',
-  'trash': 'bg-[#e5e5e5] text-[#777777]',
-  'auto-draft': 'bg-[#e5e5e5] text-[#777777]'
-};
 
 // Payment status colors and text
 const paymentStatusColors: { [key: string]: string } = {
@@ -429,8 +408,8 @@ const OrdersDashboard = ({
             <Card key={`${order.customer_id}-${order.date_created}`} className="overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex justify-between items-start mb-3">
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
-                    {statusTranslations[order.status] || order.status}
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusBadgeClass(order.status)}`}>
+                    {statusLabel(order.status)}
                   </span>
                   <div className="text-right">
                     {order.order_fecha_inicio && order.order_fecha_termino ? (
@@ -553,9 +532,9 @@ const OrdersDashboard = ({
                         onClick={() => setSelectedOrder(order)}
                         variant="ghost"
                         size="sm"
-                        className={`${statusColors[order.status] || 'bg-gray-100 text-gray-800'} hover:opacity-80`}
+                        className={`${statusBadgeClass(order.status)} hover:opacity-80`}
                       >
-                        {statusTranslations[order.status] || order.status}
+                        {statusLabel(order.status)}
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
@@ -702,7 +681,7 @@ const OrdersDashboard = ({
                 >
                   <option value="">Todos los estados</option>
                   {uniqueStatuses.map(status => (
-                    <option key={status} value={status}>{statusTranslations[status] || status}</option>
+                    <option key={status} value={status}>{statusLabel(status)}</option>
                   ))}
                 </select>
               </div>

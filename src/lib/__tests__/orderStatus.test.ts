@@ -1,0 +1,661 @@
+import { describe, expect, it } from 'vitest';
+import {
+  ORDER_STATUSES,
+  LEGACY_ORDER_STATUSES,
+  STATUS_LABELS,
+  TERMINAL_STATUSES,
+  STATUS_TONES,
+  STATUS_OPTIONS,
+  statusTone,
+  statusBadgeClass,
+  statusChartColor,
+  bookingStatusFilter,
+  isBookingStatus,
+  activeStatusFilter,
+  canonicalStatus,
+  emptyStatusBuckets,
+  ORDER_LIST_TABS,
+  statusesForTab,
+  EMAIL_ON_ENTER,
+  isOrderStatus,
+  isLegacyOrderStatus,
+  isTerminalStatus,
+  migrateLegacyStatus,
+  nextStatus,
+  canTransition,
+  statusLabel,
+  type OrderStatus,
+} from '../orderStatus';
+
+/**
+ * T-019. The v1.2 status vocabulary as a single source of truth (`order-state-machine/spec.md`,
+ * "Canonical eight-value status vocabulary" — consumer side).
+ *
+ * Why this module exists at all: before it, the vocabulary was written out by hand in 29 files
+ * under `src/`, each with its own list and its own Spanish labels. A status migration against that
+ * shape is not a rename, it is 29 independent chances to miss one — and the ones that get missed
+ * are the least-visited screens, which is exactly where a wrong status is noticed last.
+ *
+ * The mapping mirrors `supabase/migrations/0003_m4_status_portal_v12.sql`. If the two ever
+ * disagree the database wins and this module is wrong, so the mapping is asserted value-by-value
+ * here rather than trusted.
+ */
+
+describe('ORDER_STATUSES', () => {
+  it('is exactly the eight Portal Cliente v1.2 values', () => {
+    expect([...ORDER_STATUSES]).toEqual([
+      'request',
+      'evaluation',
+      'confirmed',
+      'preparation',
+      'in-rental',
+      'return',
+      'completed',
+      'cancelled',
+    ]);
+  });
+
+  it('carries a Spanish label for every value, with none left blank', () => {
+    // UI copy is Spanish by project convention; a missing entry renders the raw enum to the admin.
+    for (const status of ORDER_STATUSES) {
+      expect(STATUS_LABELS[status]).toBeTruthy();
+      expect(STATUS_LABELS[status].trim()).not.toBe('');
+    }
+    expect(Object.keys(STATUS_LABELS).sort()).toEqual([...ORDER_STATUSES].sort());
+  });
+
+  it('uses the client-canonical labels verbatim, not paraphrases of them', () => {
+    // Source: `CONSOLIDADO WEB YEYSON/Area 02 - portal Cliente/
+    // MarioHans_OS_Client_Portal_Canonical_Visual_v2.0.html`, the <option> values of the Pedidos
+    // filter. These are the strings the customer already sees in the approved design.
+    //
+    // The first draft of this module invented them and got six of eight wrong: it wrote
+    // "Confirmada"/"Completada"/"Cancelada" (feminine, agreeing with "orden") where the client
+    // writes "Confirmado"/"Completado"/"Cancelado" (masculine, agreeing with "pedido"), and
+    // padded two more into "En evaluación"/"En devolución". Wrong copy is not cosmetic here: the
+    // customer portal and the admin dashboard would name the same state differently, which is
+    // exactly the confusion the consolidation exists to remove.
+    expect(STATUS_LABELS).toEqual({
+      request: 'Solicitud',
+      evaluation: 'Evaluación',
+      confirmed: 'Confirmado',
+      preparation: 'Preparación',
+      'in-rental': 'En arriendo',
+      return: 'Devolución',
+      completed: 'Completado',
+      cancelled: 'Cancelado',
+    });
+  });
+});
+
+describe('isOrderStatus', () => {
+  it.each(ORDER_STATUSES)('accepts %s', (status) => {
+    expect(isOrderStatus(status)).toBe(true);
+  });
+
+  it.each(['on-hold', 'processing', 'pending', 'refunded', 'failed'])(
+    'rejects the legacy value %s',
+    (legacy) => {
+      // Post-migration the database CHECK rejects these. The API must reject them first, with a
+      // 400 the caller can act on, rather than passing them through to a 500 from Postgres.
+      expect(isOrderStatus(legacy)).toBe(false);
+    }
+  );
+
+  it.each(['', ' ', 'REQUEST', 'trash', 'auto-draft', 'reviewing', 'preparing', 'delivering', 'paid'])(
+    'rejects %s',
+    (bogus) => {
+      // `reviewing`, `preparing`, `delivering` and `paid` appear in the workflow documentation but
+      // were never database values — see `.claude/rules/01-business-context.md`.
+      expect(isOrderStatus(bogus)).toBe(false);
+    }
+  );
+
+  it('rejects non-strings without throwing', () => {
+    for (const value of [null, undefined, 42, {}, [], true]) {
+      expect(isOrderStatus(value)).toBe(false);
+    }
+  });
+});
+
+describe('migrateLegacyStatus', () => {
+  const expected: Record<string, OrderStatus> = {
+    completed: 'completed',
+    cancelled: 'cancelled',
+    failed: 'cancelled',
+    'on-hold': 'request',
+    processing: 'confirmed',
+    pending: 'request',
+    refunded: 'cancelled',
+  };
+
+  it.each(Object.entries(expected))('maps %s to %s', (legacy, target) => {
+    expect(migrateLegacyStatus(legacy)).toBe(target);
+  });
+
+  it('covers every value the pre-migration CHECK constraint permitted', () => {
+    // An uncovered permitted value is what aborts the SQL migration mid-window. The same
+    // completeness has to hold here, or the app disagrees with the database about one status.
+    expect([...LEGACY_ORDER_STATUSES].sort()).toEqual(Object.keys(expected).sort());
+    for (const legacy of LEGACY_ORDER_STATUSES) {
+      expect(isOrderStatus(migrateLegacyStatus(legacy) as string)).toBe(true);
+    }
+  });
+
+  it('returns null for a value that is not a legacy status', () => {
+    // Deliberately not a passthrough: silently returning the input would let an unknown value
+    // travel as if it had been migrated.
+    expect(migrateLegacyStatus('reviewing')).toBeNull();
+    expect(migrateLegacyStatus('request')).toBeNull();
+    expect(migrateLegacyStatus('')).toBeNull();
+  });
+});
+
+describe('isLegacyOrderStatus', () => {
+  it('separates the two vocabularies, overlap included', () => {
+    // `completed` and `cancelled` belong to both. The predicates answer different questions and
+    // must both say yes, otherwise a migration report miscounts the rows that did not move.
+    expect(isLegacyOrderStatus('completed')).toBe(true);
+    expect(isOrderStatus('completed')).toBe(true);
+    expect(isLegacyOrderStatus('on-hold')).toBe(true);
+    expect(isOrderStatus('on-hold')).toBe(false);
+    expect(isLegacyOrderStatus('preparation')).toBe(false);
+    expect(isOrderStatus('preparation')).toBe(true);
+  });
+});
+
+describe('statusLabel', () => {
+  it('returns the Spanish label for a known status', () => {
+    expect(statusLabel('in-rental')).toBe(STATUS_LABELS['in-rental']);
+  });
+
+  it('returns the raw value for an unknown status instead of throwing or rendering undefined', () => {
+    // A dashboard row must still render if the database somehow holds an unexpected value; the
+    // admin seeing the raw string is far better than a blank cell or a crashed island.
+    // `on-hold` is NOT an example of this: it is a legacy status with a canonical stage, and
+    // `statusLabel` translates it — see `statusLabelLegacy.test.ts`.
+    expect(statusLabel('paid')).toBe('paid');
+    expect(statusLabel('')).toBe('');
+  });
+});
+
+/**
+ * State machine. Source: `CONSOLIDADO WEB YEYSON/Área 01 · Rental Técnico/
+ * MarioHans_OS_Area01_Final_Architecture_Module_Consolidation_v1.1.html`, §5 — the only entity in
+ * the whole system modelled as an explicit machine, with a `TRANSICIONES_VALIDAS` table mapping
+ * each stage to exactly ONE successor. The document is emphatic: "ninguna vista permite saltar un
+ * estado".
+ *
+ * Área 01 names its stages in Spanish (Solicitud, En evaluación, Confirmada, Preparación, En
+ * Arriendo, Devolución, Completado); they map one-to-one onto the v1.2 enum, which is what let the
+ * four ambiguous email triggers be resolved from the sources instead of guessed.
+ */
+describe('order state machine', () => {
+  it('advances along the single linear chain from Área 01 §5', () => {
+    expect(nextStatus('request')).toBe('evaluation');
+    expect(nextStatus('evaluation')).toBe('confirmed');
+    expect(nextStatus('confirmed')).toBe('preparation');
+    expect(nextStatus('preparation')).toBe('in-rental');
+    expect(nextStatus('in-rental')).toBe('return');
+    expect(nextStatus('return')).toBe('completed');
+  });
+
+  it('has no successor for the terminal states', () => {
+    expect(nextStatus('completed')).toBeNull();
+    expect(nextStatus('cancelled')).toBeNull();
+    expect([...TERMINAL_STATUSES].sort()).toEqual(['cancelled', 'completed']);
+    expect(isTerminalStatus('completed')).toBe(true);
+    expect(isTerminalStatus('in-rental')).toBe(false);
+  });
+
+  it('refuses to skip a stage', () => {
+    // Skipping is how an order reaches "En Arriendo" without anyone having assigned units by
+    // serial number in Preparación.
+    expect(canTransition('request', 'evaluation')).toBe(true);
+    expect(canTransition('request', 'confirmed')).toBe(false);
+    expect(canTransition('confirmed', 'in-rental')).toBe(false);
+    expect(canTransition('request', 'completed')).toBe(false);
+  });
+
+  it('refuses to move backwards', () => {
+    expect(canTransition('in-rental', 'preparation')).toBe(false);
+    expect(canTransition('completed', 'return')).toBe(false);
+  });
+
+  it('allows cancellation from any non-terminal stage', () => {
+    // Not in the Área 01 table, which maps only the ADVANCE action. That early termination exists
+    // is established by email 06 "Equipos no disponibles", which fires when staff finds no
+    // availability for an order still awaiting review.
+    for (const status of ORDER_STATUSES) {
+      expect(canTransition(status, 'cancelled')).toBe(!isTerminalStatus(status));
+    }
+  });
+
+  it('never leaves a terminal state', () => {
+    for (const terminal of TERMINAL_STATUSES) {
+      for (const target of ORDER_STATUSES) {
+        expect(canTransition(terminal, target)).toBe(false);
+      }
+    }
+  });
+
+  it('rejects a transition to or from a value outside the vocabulary', () => {
+    expect(canTransition('on-hold' as OrderStatus, 'request')).toBe(false);
+    expect(canTransition('request', 'processing' as OrderStatus)).toBe(false);
+  });
+});
+
+/**
+ * Email trigger matrix, resolved against the two sources rather than guessed.
+ *
+ * `correos/MarioHans_OS_Rental_Email_Flow_Developer_Handoff_v1.0.html` names its states in the
+ * operational Spanish of the flow diagram ("En espera", "Disponibilidad confirmada", "Arriendo en
+ * curso"), which does not map onto the v1.2 enum on its own — four of eight triggers were
+ * ambiguous. Joining each one to the Área 01 §5 stage that produces it resolves all four.
+ */
+describe('EMAIL_ON_ENTER', () => {
+  it('fires 03 Solicitud recibida when the order is created', () => {
+    // Handoff: "Cuenta activa → En espera", trigger = pedido creado desde el carro.
+    // Área 01 §5: that is the Solicitud stage.
+    expect(EMAIL_ON_ENTER.request).toBe('solicitud-recibida');
+  });
+
+  it('fires 04 Equipos disponibles on evaluation, not on confirmed', () => {
+    // The handoff warns explicitly: "Disponibilidad confirmada ≠ reserva confirmada". The email
+    // ASKS for the 25% deposit, so the reservation is not yet confirmed when it goes out. Área 01
+    // §5 puts the matching action — "Confirmar y crear pedido", which generates the versioned
+    // presupuesto — on the move into En evaluación.
+    expect(EMAIL_ON_ENTER.evaluation).toBe('equipos-disponibles');
+    expect(EMAIL_ON_ENTER.confirmed).toBeUndefined();
+  });
+
+  it('fires 07 Equipos entregados on in-rental', () => {
+    // Handoff: "Procesando → Entregado → Arriendo en curso".
+    // Área 01 §5: Preparación --("Registrar entrega")--> En Arriendo.
+    expect(EMAIL_ON_ENTER['in-rental']).toBe('equipos-entregados');
+  });
+
+  it('fires 08 Pedido completado on completed, after check-in', () => {
+    // The handoff is explicit that it must not go out before the return has been inspected and
+    // found conforme, which is precisely the Devolución --> Completado edge.
+    expect(EMAIL_ON_ENTER.completed).toBe('pedido-completado');
+  });
+
+  it('fires 06 Equipos no disponibles on cancelled', () => {
+    // The handoff left this "Por definir (posible correspondencia con Fallido)". Área 01 §5
+    // settles it: the machine is linear "con dos salidas terminales", and the non-success terminal
+    // is Rechazada/Cancelada — both of which the v1.2 vocabulary collapses into `cancelled`. The
+    // distinction Área 01 keeps between the two survives in the `cancellation_reason` column that
+    // migration 0003 adds.
+    expect(EMAIL_ON_ENTER.cancelled).toBe('equipos-no-disponibles');
+  });
+
+  it('sends nothing on preparation or return, and that is deliberate', () => {
+    // Both are internal operational stages — bodega assigns units by serial number, check-in
+    // verifies equipment. Nothing is required of the customer, so no email exists for either
+    // among the eight approved templates. Asserted so a future reader does not read the gap as an
+    // oversight and invent a ninth email.
+    expect(EMAIL_ON_ENTER.preparation).toBeUndefined();
+    expect(EMAIL_ON_ENTER.return).toBeUndefined();
+  });
+
+  it('is not the whole email set: two are account-scoped and one is an event', () => {
+    // 01 Registro and 02 Contrato hang off the ACCOUNT lifecycle, not off orders.status.
+    // 05 Pedido actualizado is marked "Evento, no estado" in the handoff — it fires on a new
+    // presupuesto version, so it cannot live in a status-keyed map at all.
+    const mapped = Object.values(EMAIL_ON_ENTER);
+    expect(mapped).not.toContain('registro');
+    expect(mapped).not.toContain('contrato');
+    expect(mapped).not.toContain('pedido-actualizado');
+    expect(mapped).toHaveLength(5);
+  });
+
+  it('only keys on real statuses', () => {
+    for (const status of Object.keys(EMAIL_ON_ENTER)) {
+      expect(isOrderStatus(status)).toBe(true);
+    }
+  });
+});
+
+/* ---------------------------------------------------------------------------------------------
+ * Presentation layer
+ * ------------------------------------------------------------------------------------------ */
+
+describe('STATUS_TONES', () => {
+  it('assigns every status exactly one design-system tone', () => {
+    for (const status of ORDER_STATUSES) {
+      expect(STATUS_TONES[status]).toMatch(/^(ok|warn|crit|info|neutral|muted)$/);
+    }
+    expect(Object.keys(STATUS_TONES)).toHaveLength(ORDER_STATUSES.length);
+  });
+
+  /**
+   * Read off the client's canonical dashboard screen, not chosen.
+   *
+   * Source: `Área 01 · Rental Técnico/OFF/MarioHans_OS_Area01_Pedidos_Canonical_RC2.1.2.html`,
+   * whose `.badge-*` rules bind each stage to a state variable:
+   *
+   *   badge-solicitud   → --s-sol   → --color-neutral    badge-arriendo   → --h-rodaje → --color-info
+   *   badge-evaluacion  → --s-eval  → --color-warn       badge-devolucion → --h-dev    → --color-neutral
+   *   badge-confirmada  → --s-conf  → --color-ok         badge-completado → --paper-2 / --text-muted
+   *   badge-preparacion → --h-prep  → --color-warn       badge-cancelada  → --paper-2 / --text-faint
+   *
+   * An earlier version of this map derived the tones from the design system's generic
+   * `StatusBadge.jsx` instead, and got two of the eight wrong: `evaluation` came out info where
+   * the dashboard paints it warn, and `return` came out warning where the dashboard paints it
+   * neutral. `StatusBadge.jsx` is a cross-product component with a 13-key superset; for Área 01
+   * the canonical screen is the more specific authority and wins.
+   */
+  it('matches the tone the canonical Pedidos screen paints on each badge', () => {
+    expect(STATUS_TONES).toEqual({
+      request: 'neutral',
+      evaluation: 'warn',
+      confirmed: 'ok',
+      preparation: 'warn',
+      'in-rental': 'info',
+      return: 'neutral',
+      completed: 'neutral',
+      cancelled: 'muted',
+    });
+  });
+
+  it('never paints an order in the critical tone', () => {
+    // The canonical reserves `--color-crit` for `badge-rechazada`, and v1.2 folds Rechazada into
+    // `cancelled`, whose own canonical class `badge-cancelada` is muted grey. An operations
+    // console shows these badges all day; a cancelled order is a closed matter, not an alarm, and
+    // painting it red trains the admin to stop seeing red.
+    for (const status of ORDER_STATUSES) {
+      expect(STATUS_TONES[status]).not.toBe('crit');
+    }
+  });
+});
+
+describe('statusTone', () => {
+  it('returns the mapped tone for a known status', () => {
+    expect(statusTone('in-rental')).toBe('info');
+  });
+
+  it('falls back to neutral for an unknown value rather than throwing', () => {
+    // Legacy rows survive between the code deploy and the 0003 apply, and exports carry them
+    // forever. A badge that crashes the island is far worse than a gray badge.
+    expect(statusTone('on-hold')).toBe('neutral');
+    expect(statusTone('')).toBe('neutral');
+  });
+});
+
+describe('STATUS_OPTIONS', () => {
+  it('lists the eight statuses in chain order with their canonical labels', () => {
+    // The `<select>` in OrderEstado.tsx hand-wrote nine options including `trash` and
+    // `auto-draft`, which the constraint never accepted — picking one was a guaranteed 500.
+    expect(STATUS_OPTIONS).toEqual(
+      ORDER_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }))
+    );
+  });
+});
+
+describe('statusBadgeClass', () => {
+  it('renders every status through design-system custom properties, never palette utilities', () => {
+    // The rule the design system's own oxlint config enforces: "referenciar siempre custom
+    // properties, nunca hexadecimales crudos". `bg-yellow-100` is a Tailwind palette colour that
+    // exists in no token file — it is exactly what the five duplicated maps were made of.
+    for (const status of ORDER_STATUSES) {
+      const cls = statusBadgeClass(status);
+      expect(cls).toMatch(/bg-\[var\(--color-[a-z]+-bg\)\]/);
+      expect(cls).toMatch(/text-\[var\(--color-[a-z]+\)\]/);
+      expect(cls).not.toMatch(/(bg|text|border)-(red|green|blue|yellow|amber|emerald|gray|slate|zinc)-\d/);
+    }
+  });
+
+  it('uses one tone consistently across all three properties of a badge', () => {
+    // A badge with a success tint and a warning border is not a style slip, it is two signals.
+    for (const status of ORDER_STATUSES) {
+      const tones = [...statusBadgeClass(status).matchAll(/--color-([a-z]+)(?:-bg)?\)/g)]
+        .map((m) => m[1]);
+      expect(tones).toHaveLength(2);
+      expect(new Set(tones).size).toBe(1);
+    }
+  });
+
+  it('falls back to the neutral badge for a legacy or unknown value', () => {
+    expect(statusBadgeClass('on-hold')).toBe(statusBadgeClass('completed'));
+  });
+});
+
+describe('statusChartColor', () => {
+  it('returns the tone base as a custom-property reference, usable as an SVG fill', () => {
+    // Recharts needs a colour value, not a class, so this is the one place a badge class will not
+    // do. It still must not be a literal: `FinancialAnalyticsCard` had a nine-entry table of raw
+    // `hsl(...)` triples that shared no value with any token file.
+    for (const status of ORDER_STATUSES) {
+      expect(statusChartColor(status)).toBe(`var(--color-${STATUS_TONES[status]})`);
+    }
+  });
+
+  it('falls back to the neutral base for legacy and never-existing values', () => {
+    // That same table keyed on `reviewing`, `preparing` and `delivering` — statuses the CHECK
+    // constraint never admitted, so those three colours could never have been painted.
+    for (const bogus of ['on-hold', 'reviewing', 'preparing', 'delivering', 'paid']) {
+      expect(statusChartColor(bogus)).toBe('var(--color-neutral)');
+    }
+  });
+});
+
+/**
+ * Query filter sets.
+ *
+ * These exist because of a failure mode that leaves no trace. `orderService` and
+ * `dashboardService` filtered availability and dashboard buckets with hard-coded
+ * `.in('status', ['processing','completed','on-hold'])`. After 0003 those three strings match
+ * only `completed` rows — Postgres returns a smaller result set with no error, PostgREST returns
+ * 200, and equipment conflict detection quietly stops seeing the orders that hold the gear. The
+ * first symptom is double-booked equipment on a shoot day.
+ */
+describe('bookingStatusFilter', () => {
+  it('covers every status that still holds equipment', () => {
+    // An order holds its gear for its date range unless it was cancelled. `completed` is included
+    // on purpose: it is a past rental whose dates still occupied the equipment.
+    for (const status of ORDER_STATUSES) {
+      expect(bookingStatusFilter().includes(status)).toBe(status !== 'cancelled');
+    }
+  });
+
+  it('spans BOTH vocabularies, because the window has rows in each', () => {
+    // Between the code deploy and the 0003 apply, live rows still hold legacy values. A filter
+    // listing only the v1.2 eight would match zero rows for the whole window — the exact silent
+    // emptiness this helper exists to prevent.
+    for (const legacy of ['on-hold', 'processing', 'pending'] as const) {
+      expect(bookingStatusFilter()).toContain(legacy);
+    }
+  });
+
+  it('excludes every value that releases the equipment, old and new', () => {
+    for (const released of ['cancelled', 'failed', 'refunded']) {
+      expect(bookingStatusFilter()).not.toContain(released);
+    }
+  });
+
+  it('has no duplicates, so the generated IN list stays minimal', () => {
+    const filter = bookingStatusFilter();
+    expect(new Set(filter).size).toBe(filter.length);
+  });
+});
+
+describe('activeStatusFilter', () => {
+  it('is the in-flight set: everything that is not a terminal', () => {
+    for (const status of ORDER_STATUSES) {
+      expect(activeStatusFilter().includes(status)).toBe(!isTerminalStatus(status));
+    }
+  });
+
+  it('carries the legacy values that map onto a non-terminal status', () => {
+    // `on-hold` → request and `processing` → confirmed are both in flight; `pending` → request too.
+    expect(activeStatusFilter()).toEqual(
+      expect.arrayContaining(['on-hold', 'processing', 'pending'])
+    );
+    expect(activeStatusFilter()).not.toContain('completed');
+    expect(activeStatusFilter()).not.toContain('failed');
+  });
+});
+
+describe('canonicalStatus', () => {
+  /**
+   * The normaliser every bucketing loop needs. `dashboardService` grouped orders with a four-case
+   * `switch` on `on-hold | pending | processing | completed`, and anything else fell through with
+   * no default — so after 0003, orders in `evaluation`, `preparation`, `in-rental`, `return` and
+   * `cancelled` would simply not appear on the dashboard. No error, no empty state: five of the
+   * eight stages just gone.
+   */
+  it('passes a v1.2 status through unchanged', () => {
+    for (const status of ORDER_STATUSES) {
+      expect(canonicalStatus(status)).toBe(status);
+    }
+  });
+
+  it('folds a legacy value onto its v1.2 equivalent', () => {
+    expect(canonicalStatus('on-hold')).toBe('request');
+    expect(canonicalStatus('processing')).toBe('confirmed');
+    expect(canonicalStatus('failed')).toBe('cancelled');
+  });
+
+  it('returns null for anything it cannot place, rather than guessing a bucket', () => {
+    // A silent wrong bucket is worse than a visibly unplaced order: the count still adds up.
+    expect(canonicalStatus('reviewing')).toBeNull();
+    expect(canonicalStatus('')).toBeNull();
+    expect(canonicalStatus(null)).toBeNull();
+  });
+
+  it('places every value either vocabulary can hold', () => {
+    for (const value of [...ORDER_STATUSES, ...LEGACY_ORDER_STATUSES]) {
+      expect(canonicalStatus(value)).not.toBeNull();
+    }
+  });
+});
+
+describe('emptyStatusBuckets', () => {
+  it('starts every one of the eight statuses at an empty array', () => {
+    const buckets = emptyStatusBuckets<number>();
+    expect(Object.keys(buckets).sort()).toEqual([...ORDER_STATUSES].sort());
+    for (const status of ORDER_STATUSES) {
+      expect(buckets[status]).toEqual([]);
+    }
+  });
+
+  it('returns independent arrays, not one shared reference', () => {
+    // A single shared array is the classic `Object.fromEntries(keys.map(k => [k, ARR]))` bug: one
+    // push lands in all eight buckets and the dashboard shows every order in every column.
+    const buckets = emptyStatusBuckets<number>();
+    buckets.request.push(1);
+    expect(buckets.completed).toEqual([]);
+  });
+});
+
+/* ---------------------------------------------------------------------------------------------
+ * Pedidos list tabs
+ * ------------------------------------------------------------------------------------------ */
+
+/**
+ * Source: `CONSOLIDADO WEB YEYSON/Área 01 · Rental Técnico/OFF/
+ * MarioHans_OS_Area01_Pedidos_Canonical_RC2.1.2.html`, the `#list-tabs` block.
+ *
+ * This is the structure the v1.1 architecture document did not carry, and the reason the dashboard
+ * bucketing was left blocked: with eight statuses and a four-tab UI, someone had to decide the
+ * grouping. The canonical answers it — ONE TAB PER STATUS, no grouping at all.
+ */
+describe('ORDER_LIST_TABS', () => {
+  it('is Todos plus one tab per non-cancelled status, in chain order', () => {
+    expect(ORDER_LIST_TABS.map((t) => t.value)).toEqual([
+      'todos',
+      'request',
+      'evaluation',
+      'confirmed',
+      'preparation',
+      'in-rental',
+      'return',
+      'completed',
+    ]);
+  });
+
+  it('uses the canonical labels verbatim, irregular capitalisation included', () => {
+    // "En evaluación" lowercase, "En Arriendo" capitalised. Copying the inconsistency is the
+    // point: DOCUMENT, DON'T REDESIGN. Normalising it here is a redesign nobody approved.
+    expect(ORDER_LIST_TABS.map((t) => t.label)).toEqual([
+      'Todos',
+      'Solicitudes',
+      'En evaluación',
+      'Confirmados',
+      'Preparación',
+      'En Arriendo',
+      'Devolución',
+      'Completados',
+    ]);
+  });
+
+  it('has no tab for cancelled', () => {
+    // The canonical counts sum exactly to the Todos count (5+3+8+7+12+2+1 = 38), so "Todos" is
+    // the non-cancelled set — the same definition as bookingStatusFilter().
+    expect(ORDER_LIST_TABS.map((t) => t.value)).not.toContain('cancelled');
+  });
+
+  it('labels collections in the plural, unlike the singular badge labels', () => {
+    // Two label sets with two different sources, on purpose. A tab names a group of pedidos;
+    // a badge names one. Collapsing them would put "Completado" on a tab counting 12 orders.
+    expect(STATUS_LABELS.request).toBe('Solicitud');
+    expect(ORDER_LIST_TABS.find((t) => t.value === 'request')?.label).toBe('Solicitudes');
+  });
+});
+
+describe('statusesForTab', () => {
+  it('returns the single status behind a status tab', () => {
+    expect(statusesForTab('in-rental')).toEqual(['in-rental']);
+  });
+
+  it('returns the whole non-cancelled set for Todos', () => {
+    expect(statusesForTab('todos')).toEqual(
+      ORDER_STATUSES.filter((s) => s !== 'cancelled')
+    );
+  });
+
+  it('returns an empty list for an unknown tab rather than silently meaning Todos', () => {
+    // Falling back to Todos would make a typo in a tab id look like a working filter.
+    expect(statusesForTab('preparing')).toEqual([]);
+  });
+});
+
+describe('isBookingStatus', () => {
+  /**
+   * Versión predicado de `bookingStatusFilter()`, para filtrar en memoria lo que ya está cargado.
+   * `OrderStatsEquip` y `advancedAnalyticsService` usaban `['completed','processing'].includes(...)`
+   * para decidir qué pedido consumió equipo: después de 0003 eso deja fuera las cuatro etapas
+   * operacionales, y las estadísticas de uso de equipo quedan cortas sin ningún error.
+   */
+  it('acepta todo pedido que retuvo el equipo, incluidos los completados', () => {
+    for (const status of ORDER_STATUSES) {
+      expect(isBookingStatus(status)).toBe(status !== 'cancelled');
+    }
+  });
+
+  it('acepta el vocabulario legado que no libera el equipo', () => {
+    expect(isBookingStatus('on-hold')).toBe(true);
+    expect(isBookingStatus('processing')).toBe(true);
+    expect(isBookingStatus('pending')).toBe(true);
+  });
+
+  it('rechaza todo lo que libera el equipo, viejo y nuevo', () => {
+    for (const released of ['cancelled', 'failed', 'refunded']) {
+      expect(isBookingStatus(released)).toBe(false);
+    }
+  });
+
+  it('rechaza lo que no puede ubicar', () => {
+    expect(isBookingStatus('paid')).toBe(false);
+    expect(isBookingStatus(null)).toBe(false);
+  });
+
+  it('coincide exactamente con bookingStatusFilter()', () => {
+    // Dos formas de la misma regla; si divergen, una consulta y un filtro en memoria darían
+    // conjuntos distintos sobre los mismos datos.
+    for (const value of [...ORDER_STATUSES, ...LEGACY_ORDER_STATUSES]) {
+      expect(isBookingStatus(value)).toBe(bookingStatusFilter().includes(value));
+    }
+  });
+});

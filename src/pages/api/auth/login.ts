@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { withCors } from '../../../middleware/auth';
 import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
+import { ADMIN_ROLES, INACTIVE_ACCOUNT_ERROR, homeFor } from '../../../lib/accessControl';
 
 interface LoginRequest {
   email: string;
@@ -123,18 +124,34 @@ export const POST: APIRoute = withCors(async (context) => {
     // Login exitoso — resetear contador de intentos fallidos para este email
     resetLockout(normalizedEmail);
 
-    // Verify admin user exists in admin_users table
+    // Verify admin user exists in admin_users table.
+    // .in() en vez de .eq('role', 'admin'): los super_admin quedaban excluidos
+    // (misma regresión ya corregida en lib/supabase.ts). `ADMIN_ROLES` incluye `operator`
+    // (0011): el operario de bodega inicia sesión aquí mismo y el middleware lo lleva a /bodega.
     const { data: adminUser, error: adminError } = await supabaseAdmin
       .from('admin_users')
       .select('*')
       .eq('user_id', authData.user.id)
-      .eq('role', 'admin')
+      .in('role', [...ADMIN_ROLES])
       .single();
 
     if (adminError || !adminUser) {
       return new Response(JSON.stringify({
         success: false,
         error: 'Acceso denegado. Permisos de administrador requeridos.'
+      }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Cuenta desactivada (0011): las credenciales son correctas, pero la cuenta está cerrada.
+    // Se rechaza ANTES de emitir cookies para que no quede ninguna sesión que el middleware
+    // tenga que expulsar después.
+    if (adminUser.is_active === false) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: INACTIVE_ACCOUNT_ERROR
       }), {
         status: 403,
         headers: { 'Content-Type': 'application/json' }
@@ -201,7 +218,9 @@ export const POST: APIRoute = withCors(async (context) => {
           verified: true,
           role: adminUser.role,
           email: adminUser.email
-        }
+        },
+        // Where the form sends the browser next: /bodega for operators, /dashboard otherwise.
+        redirect_to: homeFor(adminUser.role)
       },
       message: `✅ Bienvenido ${adminUser.email} - Sesión configurada hasta ${sessionExpiry.toLocaleDateString('es-ES')}`
     }), {

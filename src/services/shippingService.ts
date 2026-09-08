@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../lib/supabase';
+import { shippingStats } from '../lib/shippingStats';
 
 // Servicio de envíos usando la tabla shipping_methods de Supabase
 
@@ -342,31 +343,34 @@ export class ShippingService {
         throw new Error('Database connection not available');
       }
 
-      // Obtener estadísticas de métodos de envío
-      const { data: allMethods, error: methodsError } = await supabaseAdmin
-        .from('shipping_methods')
-        .select('enabled');
+      const [
+        { data: allMethods, error: methodsError },
+        { data: usage, error: usageError }
+      ] = await Promise.all([
+        supabaseAdmin.from('shipping_methods').select('enabled'),
+        supabaseAdmin.from('shipping_usage').select('status, shipping_cost')
+      ]);
 
       if (methodsError) {
         console.error('❌ Error fetching shipping methods for stats:', methodsError);
         throw methodsError;
       }
 
-      const totalMethods = allMethods?.length || 0;
-      const activeMethods = allMethods?.filter(m => m.enabled).length || 0;
-      
-      // TODO: Implementar estadísticas reales de envíos cuando esté disponible la tabla shipping_usage
-      const mockStats = {
-        totalMethods,
-        activeMethods,
-        totalShipments: 156,
-        pendingShipments: 23,
-        deliveredShipments: 128,
-        totalRevenue: '2450000.00',
-        deliveryRate: '82.1'
-      };
+      if (usageError) {
+        console.error('❌ Error fetching shipping usage for stats:', usageError);
+        throw usageError;
+      }
 
-      return mockStats;
+      return shippingStats(
+        (usage ?? []).map((row: { status: string | null; shipping_cost: number | string | null }) => ({
+          status: row.status ?? 'pending',
+          cost: Number(row.shipping_cost) || 0
+        })),
+        {
+          totalMethods: allMethods?.length || 0,
+          activeMethods: allMethods?.filter(m => m.enabled).length || 0
+        }
+      );
     } catch (error) {
       console.error('Error fetching shipping stats:', error);
       throw error;
@@ -486,17 +490,6 @@ export const getShippingTypeLabel = (type: string): string => {
     express: 'Express'
   };
   return labels[type] || type;
-};
-
-export const getShippingStatusLabel = (status: string): string => {
-  const labels: Record<string, string> = {
-    pending: 'Pendiente',
-    processing: 'Procesando',
-    shipped: 'Enviado',
-    delivered: 'Entregado',
-    cancelled: 'Cancelado'
-  };
-  return labels[status] || status;
 };
 
 export default ShippingService;

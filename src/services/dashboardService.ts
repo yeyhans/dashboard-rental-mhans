@@ -1,23 +1,60 @@
 import { supabaseAdmin } from '../lib/supabase';
+import { reserveAmount } from '../lib/finance';
+import {
+  ORDER_STATUSES,
+  bookingStatusFilter,
+  expandStatusFilter,
+  canonicalStatus,
+  emptyStatusBuckets,
+  isTerminalStatus,
+  type OrderStatus,
+} from '../lib/orderStatus';
 import type { Database } from '../types/database';
 
 type Order = Database['public']['Tables']['orders']['Row'];
 
+/** Los cuatro contadores de la `.kpi-row` del canónico de Pedidos. */
+export interface OperationalKpis {
+  retirosHoy: number;
+  entregasHoy: number;
+  devolucionesHoy: number;
+  pedidosActivos: number;
+}
+
+/**
+ * Día calendario en `YYYY-MM-DD`.
+ *
+ * Las columnas `order_fecha_inicio`/`order_fecha_termino` son `date`, no `timestamptz`, así que
+ * llegan como `'2026-06-12'`. Pasarlas por `new Date()` las interpretaría como medianoche UTC y
+ * en Chile (UTC-4) restaría un día — el mismo error que `formatDate` ya evita usando métodos UTC.
+ * Por eso se recorta la cadena en vez de parsearla.
+ */
+function toIsoDay(value: string | Date): string {
+  if (typeof value === 'string') return value.slice(0, 10);
+  const y = value.getFullYear();
+  const m = String(value.getMonth() + 1).padStart(2, '0');
+  const d = String(value.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export interface MonthlyOrderStats {
+  totalOrders: number;
+  createdOrders: number;
+  /**
+   * Conteo por estado v1.2. Reemplaza a los cuatro contadores fijos
+   * (`completedOrders`/`pendingOrders`/`processingOrders`/`onHoldOrders`), que nombraban estados
+   * que despues de 0003 dejan de existir y dejaban sin contar a las cuatro etapas operacionales
+   * mas cargadas del canonico.
+   */
+  byStatus: Record<OrderStatus, number>;
+}
+
 export interface DashboardStats {
-  monthlyOrderStats: {
-    totalOrders: number;
-    completedOrders: number;
-    createdOrders: number;
-    pendingOrders: number;
-    processingOrders: number;
-    onHoldOrders: number;
-  };
-  ordersByStatus: {
-    onHold: Order[];
-    pending: Order[];
-    processing: Order[];
-    completed: Order[];
-  };
+  monthlyOrderStats: MonthlyOrderStats;
+  /** Contadores de la `.kpi-row` del canónico de Pedidos. */
+  operationalKpis: OperationalKpis;
+  /** Un bucket por estado v1.2; siempre estan las ocho claves, aunque vengan vacias. */
+  ordersByStatus: Record<OrderStatus, Order[]>;
   rentedEquipment: Array<{
     productName: string;
     productImage: string;
@@ -65,8 +102,12 @@ export class DashboardService {
       // Obtener resumen financiero
       const financialSummary = await this.getFinancialSummary();
 
+      // Contadores operacionales del dia (fila de KPIs del canonico)
+      const operationalKpis = await this.getOperationalKpis();
+
       return {
         monthlyOrderStats: monthlyStats,
+        operationalKpis,
         ordersByStatus,
         rentedEquipment,
         financialSummary
@@ -94,35 +135,84 @@ export class DashboardService {
 
       if (error) throw error;
 
-      const stats = {
+      const stats: MonthlyOrderStats = {
         totalOrders: monthlyOrders?.length || 0,
-        completedOrders: 0,
         createdOrders: monthlyOrders?.length || 0,
-        pendingOrders: 0,
-        processingOrders: 0,
-        onHoldOrders: 0
+        byStatus: Object.fromEntries(ORDER_STATUSES.map(s => [s, 0])) as Record<OrderStatus, number>,
       };
 
       monthlyOrders?.forEach(order => {
-        switch (order.status) {
-          case 'completed':
-            stats.completedOrders++;
-            break;
-          case 'pending':
-            stats.pendingOrders++;
-            break;
-          case 'processing':
-            stats.processingOrders++;
-            break;
-          case 'on-hold':
-            stats.onHoldOrders++;
-            break;
-        }
+        const bucket = canonicalStatus(order.status);
+        if (bucket) stats.byStatus[bucket]++;
       });
 
       return stats;
     } catch (error) {
       console.error('Error fetching monthly order stats:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fila de KPIs de la pantalla canónica de Pedidos (`.kpi-row`).
+   *
+   * El canónico fija los cuatro rótulos y la pestaña a la que enlaza cada tarjeta, pero sus
+   * valores son mock estático y no trae cómputo. La semántica sale de las reglas operacionales
+   * de `.claude/rules/01-business-context.md`, que son la autoridad de negocio:
+   *
+   *   · "Retiro: día anterior al inicio del arriendo, 15:00–20:00"
+   *   · "Devolución: hasta las 13:00 del día siguiente al término"
+   *
+   * De ahí, y de la pestaña destino de cada tarjeta:
+   *
+   *   Retiros Hoy      → en `preparation` y con inicio MAÑANA  → pestaña preparacion
+   *   Entregas Hoy     → inicio HOY                            → pestaña arriendo
+   *   Devoluciones Hoy → término HOY                           → pestaña devolucion
+   *   Pedidos Activos  → todo lo no terminal                   → pestaña todos
+   *
+   * `today` se inyecta para que el cálculo sea determinista: un KPI atado al reloj del proceso
+   * produce un test que falla a medianoche y pasa el resto del día.
+   */
+  static async getOperationalKpis(today: Date = new Date()): Promise<OperationalKpis> {
+    const kpis: OperationalKpis = {
+      retirosHoy: 0,
+      entregasHoy: 0,
+      devolucionesHoy: 0,
+      pedidosActivos: 0,
+    };
+
+    try {
+      if (!supabaseAdmin) {
+        throw new Error('Supabase admin client is not initialized');
+      }
+
+      const { data: orders, error } = await supabaseAdmin
+        .from('orders')
+        .select('id, status, order_fecha_inicio, order_fecha_termino')
+        .in('status', bookingStatusFilter());
+
+      if (error) throw error;
+
+      const hoy = toIsoDay(today);
+      const manana = toIsoDay(new Date(today.getTime() + 24 * 60 * 60 * 1000));
+
+      orders?.forEach(order => {
+        const status = canonicalStatus(order.status);
+        if (!status || isTerminalStatus(status)) return;
+
+        kpis.pedidosActivos++;
+
+        const inicio = order.order_fecha_inicio ? toIsoDay(order.order_fecha_inicio) : null;
+        const termino = order.order_fecha_termino ? toIsoDay(order.order_fecha_termino) : null;
+
+        if (status === 'preparation' && inicio === manana) kpis.retirosHoy++;
+        if (inicio === hoy) kpis.entregasHoy++;
+        if (termino === hoy) kpis.devolucionesHoy++;
+      });
+
+      return kpis;
+    } catch (error) {
+      console.error('[DashboardService] Error calculando los KPIs operacionales:', error);
       throw error;
     }
   }
@@ -147,18 +237,18 @@ export class DashboardService {
           ),
           line_items
         `)
-        .in('status', ['on-hold', 'pending', 'processing', 'completed'])
+        .in('status', bookingStatusFilter())
         .order('order_fecha_inicio', { ascending: false, nullsFirst: false })
         .limit(1000); // Aumentar límite significativamente para mostrar todas las órdenes
 
       if (error) throw error;
 
-      const ordersByStatus = {
-        onHold: [] as Order[],
-        pending: [] as Order[],
-        processing: [] as Order[],
-        completed: [] as Order[]
-      };
+      // Un bucket por estado del vocabulario v1.2. Antes eran cuatro casos fijos
+      // (`on-hold | pending | processing | completed`) sin `default`: despues de 0003 las cuatro
+      // etapas operacionales mas cargadas del canonico — evaluacion, preparacion, arriendo y
+      // devolucion — caian por el hueco del switch y desaparecian del tablero. Sin error, sin
+      // estado vacio, sin linea de log: el pedido no aparece y el equipo esta fuera de bodega.
+      const ordersByStatus = emptyStatusBuckets<Order>();
 
       orders?.forEach(order => {
         // Ensure calculated fields
@@ -172,19 +262,16 @@ export class DashboardService {
           shipping_total: order.shipping_total || 0
         };
 
-        switch (order.status) {
-          case 'on-hold':
-            ordersByStatus.onHold.push(orderWithCalculatedFields);
-            break;
-          case 'pending':
-            ordersByStatus.pending.push(orderWithCalculatedFields);
-            break;
-          case 'processing':
-            ordersByStatus.processing.push(orderWithCalculatedFields);
-            break;
-          case 'completed':
-            ordersByStatus.completed.push(orderWithCalculatedFields);
-            break;
+        // Durante la ventana conviven ambos vocabularios; `canonicalStatus` pliega el valor
+        // legado sobre su equivalente v1.2 en lugar de descartar la fila.
+        const bucket = canonicalStatus(order.status);
+        if (bucket) {
+          ordersByStatus[bucket].push(orderWithCalculatedFields);
+        } else {
+          console.warn('[DashboardService] Pedido con estado no reconocido, sin agrupar:', {
+            orderId: order.id,
+            status: order.status,
+          });
         }
       });
 
@@ -216,7 +303,7 @@ export class DashboardService {
           status,
           line_items
         `)
-        .in('status', ['processing', 'completed', 'on-hold'])
+        .in('status', bookingStatusFilter())
         .not('order_fecha_termino', 'is', null)
         .gte('order_fecha_termino', currentDate.toISOString());
 
@@ -286,9 +373,11 @@ export class DashboardService {
           status,
           calculated_total,
           pago_reserva,
-          pago_completo
+          pago_completo,
+          reserve_type,
+          reserve_value
         `)
-        .in('status', ['completed', 'processing', 'on-hold', 'pending']);
+        .in('status', bookingStatusFilter());
 
       if (error) throw error;
 
@@ -304,18 +393,25 @@ export class DashboardService {
         const total = order.calculated_total || 0;
         summary.totalSales += total;
 
+        // La reserva de ESTE pedido, no un 25% fijo: `lib/finance` respeta reserve_type/
+        // reserve_value, así que un pedido negociado reparte reserva y saldo como se acordó.
+        const reservationAmount = reserveAmount({
+          total,
+          reserveType: (order as any).reserve_type,
+          reserveValue: (order as any).reserve_value,
+        });
+
         if (order.status === 'completed') {
           if (order.pago_completo) {
-            // Pago completo (25% + 75%)
+            // Pago completo (reserva + saldo)
             summary.totalPaid += total;
-            summary.finalPayments += total * 0.75;
-            summary.reservationPayments += total * 0.25;
+            summary.finalPayments += total - reservationAmount;
+            summary.reservationPayments += reservationAmount;
           } else if (order.pago_reserva) {
-            // Solo reserva pagada (25%)
-            const reservationAmount = total * 0.25;
+            // Solo reserva pagada
             summary.totalPaid += reservationAmount;
             summary.reservationPayments += reservationAmount;
-            summary.totalPending += total * 0.75;
+            summary.totalPending += total - reservationAmount;
           } else {
             // Nada pagado — todo pendiente
             summary.totalPending += total;
@@ -342,7 +438,7 @@ export class DashboardService {
   /**
    * Obtener órdenes filtradas por rango de fechas
    */
-  static async getOrdersByDateRange(startDate: string, endDate: string, status?: string) {
+  static async getOrdersByDateRange(startDate: string, endDate: string, status?: readonly string[]) {
     try {
       if (!supabaseAdmin) {
         throw new Error('Supabase admin client is not initialized');
@@ -370,8 +466,11 @@ export class DashboardService {
         .order('date_created', { ascending: false })
         .limit(1000); // Agregar límite alto para asegurar que se obtengan todas las órdenes
 
-      if (status) {
-        query = query.eq('status', status);
+      // El filtro llega como la selección del admin y puede traer varios estados. Se expande a
+      // los equivalentes legados para que la ventana de migración no devuelva cero filas.
+      const statusFilter = expandStatusFilter(status);
+      if (statusFilter) {
+        query = query.in('status', statusFilter);
       }
 
       const { data, error } = await query;

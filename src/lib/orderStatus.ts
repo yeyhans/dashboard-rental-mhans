@@ -1,0 +1,522 @@
+/**
+ * Canonical `orders.status` vocabulary — Portal Cliente v1.2 (ADR-001).
+ *
+ * Single source of truth for the dashboard. Before this module the eight (previously seven)
+ * values were spelled out by hand in 29 files under `src/`, each with its own list and its own
+ * Spanish labels. That duplication is what makes a status migration dangerous: it turns one
+ * rename into 29 independent chances to miss one, and the ones that get missed are the rarely
+ * opened screens, where a wrong status is noticed last.
+ *
+ * Mirrors `supabase/migrations/0003_m4_status_portal_v12.sql`. The database CHECK constraint is
+ * the real authority — if the two ever disagree, this file is the one that is wrong.
+ */
+
+/** The eight values the migrated `orders_status_check` constraint admits. */
+export const ORDER_STATUSES = [
+  'request',
+  'evaluation',
+  'confirmed',
+  'preparation',
+  'in-rental',
+  'return',
+  'completed',
+  'cancelled',
+] as const;
+
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+/**
+ * Every value the PRE-migration constraint permitted.
+ *
+ * Kept after the migration on purpose: order archives, exported reports and the rollback snapshot
+ * still carry these, and `migrateLegacyStatus` needs a definition of "legacy" to answer against.
+ * `pending` and `refunded` hold zero rows in production but were constraint-permitted, so they
+ * are covered here for the same reason the SQL `CASE` covers them.
+ *
+ * Note this is NOT the workflow documented in `.claude/rules/01-business-context.md`, which lists
+ * `reviewing`, `preparing`, `delivering` and `paid`. Those four were never database values.
+ */
+export const LEGACY_ORDER_STATUSES = [
+  'pending',
+  'processing',
+  'on-hold',
+  'completed',
+  'cancelled',
+  'refunded',
+  'failed',
+] as const;
+
+export type LegacyOrderStatus = (typeof LEGACY_ORDER_STATUSES)[number];
+
+/**
+ * Spanish labels, taken verbatim from the client's approved design.
+ *
+ * Source: `CONSOLIDADO WEB YEYSON/Area 02 - portal Cliente/
+ * MarioHans_OS_Client_Portal_Canonical_Visual_v2.0.html` — the `<option>` values of the Pedidos
+ * filter. Do not paraphrase them here: the customer portal renders these exact strings, and the
+ * dashboard naming the same state differently is precisely the inconsistency this consolidation
+ * is meant to remove.
+ *
+ * Note the grammatical gender. The client writes "pedido" (masculine), so the labels are
+ * `Confirmado` / `Completado` / `Cancelado`, not the `Confirmada` / `Completada` / `Cancelada`
+ * that "orden" would take. An earlier draft of this file invented the labels and got six of the
+ * eight wrong for that reason.
+ */
+export const STATUS_LABELS: Record<OrderStatus, string> = {
+  request: 'Solicitud',
+  evaluation: 'Evaluación',
+  confirmed: 'Confirmado',
+  preparation: 'Preparación',
+  'in-rental': 'En arriendo',
+  return: 'Devolución',
+  completed: 'Completado',
+  cancelled: 'Cancelado',
+};
+
+/**
+ * The forward mapping, identical to the `CASE` in `0003_m4_status_portal_v12.sql`.
+ *
+ * Three source values collapse into `cancelled`, which is why there is no inverse here: the
+ * rollback reads the `(id, status)` snapshot instead. Anything that needs to tell a migrated
+ * `failed` from a migrated `cancelled` must read `orders.cancellation_reason`.
+ */
+const LEGACY_TO_V12: Record<LegacyOrderStatus, OrderStatus> = {
+  completed: 'completed',
+  cancelled: 'cancelled',
+  failed: 'cancelled',
+  'on-hold': 'request',
+  processing: 'confirmed',
+  pending: 'request',
+  refunded: 'cancelled',
+};
+
+/** Narrows an untrusted value to `OrderStatus`. Accepts non-strings without throwing. */
+export function isOrderStatus(value: unknown): value is OrderStatus {
+  return typeof value === 'string' && (ORDER_STATUSES as readonly string[]).includes(value);
+}
+
+/** Narrows an untrusted value to `LegacyOrderStatus`. `completed` and `cancelled` are both. */
+export function isLegacyOrderStatus(value: unknown): value is LegacyOrderStatus {
+  return typeof value === 'string' && (LEGACY_ORDER_STATUSES as readonly string[]).includes(value);
+}
+
+/**
+ * Maps a pre-migration value to its v1.2 equivalent.
+ *
+ * Returns `null` — not the input — for anything that is not a legacy status. A passthrough would
+ * let an unknown value travel onward looking as though it had been migrated, which is the failure
+ * this whole module exists to prevent.
+ */
+export function migrateLegacyStatus(value: unknown): OrderStatus | null {
+  return isLegacyOrderStatus(value) ? LEGACY_TO_V12[value] : null;
+}
+
+/**
+ * Spanish label for display. Falls back to the raw value rather than throwing or rendering
+ * `undefined`: if the database somehow holds an unexpected status, an admin reading the raw
+ * string is far more useful than a blank cell or a crashed React island.
+ */
+export function statusLabel(status: string): string {
+  // Se normaliza antes de rotular: durante la ventana una fila sin migrar seguiría mostrando su
+  // slug en inglés en pantalla y en los PDF. Su etapa es la canónica, aunque la columna no lo diga.
+  const canonical = canonicalStatus(status);
+  return canonical ? STATUS_LABELS[canonical] : status;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * State machine
+ * ------------------------------------------------------------------------------------------ */
+
+/**
+ * The single linear chain, from `TRANSICIONES_VALIDAS` in Área 01 §5
+ * (`CONSOLIDADO WEB YEYSON/Área 01 · Rental Técnico/
+ * MarioHans_OS_Area01_Final_Architecture_Module_Consolidation_v1.1.html`).
+ *
+ * The order is the only entity in the system modelled as an explicit state machine, and the
+ * document is emphatic that no view may skip a stage. Each stage has exactly one successor, and
+ * the action that advances it is an operational fact, not a UI affordance:
+ *
+ *   Solicitud     --("Confirmar y crear pedido", genera presupuesto versionado)--> En evaluación
+ *   En evaluación --("Registrar preparación")------------------------------------> Confirmada
+ *   Confirmada    --(asignación de unidades por N° de serie)---------------------> Preparación
+ *   Preparación   --("Registrar entrega")---------------------------------------> En Arriendo
+ *   En Arriendo   --("Registrar devolución")------------------------------------> Devolución
+ *   Devolución    --("Completar pedido")----------------------------------------> Completado
+ */
+const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
+  request: 'evaluation',
+  evaluation: 'confirmed',
+  confirmed: 'preparation',
+  preparation: 'in-rental',
+  'in-rental': 'return',
+  return: 'completed',
+};
+
+/**
+ * The two exits. Área 01 describes the machine as "lineal con dos salidas terminales".
+ *
+ * That document actually keeps three terminals — Completado, Rechazada and Cancelada — where the
+ * v1.2 vocabulary has two, collapsing Rechazada and Cancelada into `cancelled`. The distinction is
+ * not lost: it lives in `orders.cancellation_reason`, added by migration 0003 for exactly this.
+ */
+export const TERMINAL_STATUSES = ['completed', 'cancelled'] as const;
+
+export function isTerminalStatus(status: unknown): boolean {
+  return typeof status === 'string' && (TERMINAL_STATUSES as readonly string[]).includes(status);
+}
+
+/** The one stage an order may advance to, or `null` at a terminal. */
+export function nextStatus(status: OrderStatus): OrderStatus | null {
+  return NEXT_STATUS[status] ?? null;
+}
+
+/**
+ * Whether a status change is legal.
+ *
+ * Two rules, and no third:
+ *  1. Advance exactly one stage along the chain. Skipping is how an order reaches `in-rental`
+ *     without anyone having assigned units by serial number during `preparation`.
+ *  2. Cancel from any non-terminal stage. This is NOT in the Área 01 table, which maps only the
+ *     advance action — but email 06 "Equipos no disponibles" fires when staff finds no
+ *     availability for an order still awaiting review, so early termination demonstrably exists.
+ *
+ * Going backwards is never allowed. Neither is leaving a terminal state.
+ */
+export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
+  if (!isOrderStatus(from) || !isOrderStatus(to)) return false;
+  if (isTerminalStatus(from)) return false;
+  if (to === 'cancelled') return true;
+  return NEXT_STATUS[from] === to;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Query filters
+ * ------------------------------------------------------------------------------------------ */
+
+/**
+ * The legacy values that map onto each v1.2 status, derived from `LEGACY_TO_V12`.
+ *
+ * Every `.in('status', ...)` filter has to span BOTH vocabularies. Between the code deploy and the
+ * 0003 apply the table still holds legacy values, so a filter listing only the new eight matches
+ * zero rows — and it does so silently: Postgres returns an empty set, PostgREST returns 200, and
+ * the caller renders "no hay órdenes" as though that were the answer.
+ */
+function legacyEquivalents(statuses: readonly OrderStatus[]): LegacyOrderStatus[] {
+  return LEGACY_ORDER_STATUSES.filter(
+    (legacy) => statuses.includes(LEGACY_TO_V12[legacy]) && !statuses.includes(legacy as OrderStatus)
+  );
+}
+
+/**
+ * Normalises any value either vocabulary can hold to its v1.2 status, or `null`.
+ *
+ * The helper every bucketing loop needs. `dashboardService` grouped orders with a four-case
+ * `switch` on `on-hold | pending | processing | completed` and no `default`, so after 0003 orders
+ * in `evaluation`, `preparation`, `in-rental`, `return` and `cancelled` fall through and are
+ * dropped — five of the eight stages missing from the dashboard, with no error and no empty state
+ * to hint at it.
+ *
+ * `null` rather than a guess: an order placed in the wrong bucket still makes the totals add up,
+ * which is a harder problem to notice than one that visibly refuses to be placed.
+ */
+export function canonicalStatus(value: unknown): OrderStatus | null {
+  if (isOrderStatus(value)) return value;
+  return migrateLegacyStatus(value);
+}
+
+/** One empty array per status, each a distinct reference. */
+export function emptyStatusBuckets<T>(): Record<OrderStatus, T[]> {
+  return Object.fromEntries(ORDER_STATUSES.map((status) => [status, [] as T[]])) as Record<
+    OrderStatus,
+    T[]
+  >;
+}
+
+/**
+ * Statuses whose order still occupies its equipment for its date range — everything but
+ * `cancelled`.
+ *
+ * `completed` belongs here: a finished rental is a past booking, and its dates were genuinely
+ * unavailable. Conflict detection asks "was this gear spoken for on these days", not "is this
+ * order open".
+ *
+ * Replaces the hard-coded `['processing','completed','on-hold']` in `orderService` and
+ * `dashboardService`. Post-0003 that literal matched `completed` alone, so availability checking
+ * would have stopped seeing the orders that hold the gear — and the first visible symptom is
+ * double-booked equipment on a shoot day, not an error in a log.
+ */
+export function bookingStatusFilter(): string[] {
+  const current = ORDER_STATUSES.filter((s) => s !== 'cancelled');
+  return [...current, ...legacyEquivalents(current)];
+}
+
+/**
+ * Versión predicado de `bookingStatusFilter()`, para filtrar en memoria lo ya cargado.
+ *
+ * `OrderStatsEquip` y `advancedAnalyticsService` decidían con `['completed','processing']` qué
+ * pedido había consumido equipo. Después de 0003 eso excluye las cuatro etapas operacionales, y
+ * las estadísticas de uso salen cortas sin que nada falle.
+ */
+export function isBookingStatus(status: unknown): boolean {
+  const canonical = canonicalStatus(status);
+  return canonical !== null && canonical !== 'cancelled';
+}
+
+/**
+ * Statuses of an order still in flight — the six non-terminal stages, plus their legacy
+ * equivalents. Use for "en curso" dashboard buckets, not for availability.
+ */
+export function activeStatusFilter(): string[] {
+  const current = ORDER_STATUSES.filter((s) => !isTerminalStatus(s));
+  return [...current, ...legacyEquivalents(current)];
+}
+
+/**
+ * Expands an admin's status selection into every slug the table may actually hold.
+ *
+ * `/api/dashboard/filtered` kept only `status[0]` and fed it to a literal `.eq()`. Two silent
+ * failures in one line: the rest of the selection was dropped, and a v1.2 value matched nothing
+ * while the migration window still has legacy rows. Returns `null` when nothing usable was
+ * selected, which the caller must read as "no status filter" rather than "match nothing".
+ */
+export function expandStatusFilter(selection: readonly string[] | undefined): string[] | null {
+  if (!selection || selection.length === 0) return null;
+
+  const canonical: OrderStatus[] = [];
+  for (const value of selection) {
+    const status = canonicalStatus(value);
+    if (status && !canonical.includes(status)) canonical.push(status);
+  }
+  if (canonical.length === 0) return null;
+
+  return [...canonical, ...legacyEquivalents(canonical)];
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Presentation
+ * ------------------------------------------------------------------------------------------ */
+
+/**
+ * The state tones of the Área 01 canonical, whose `:root` declares itself "CANONICAL DESIGN
+ * TOKENS (System Alignment RC1) — Single source of truth shared by all Área 01 modules".
+ *
+ * These are NOT the design system's `success/warning/danger/info` values, and the difference is
+ * deliberate rather than a drift: the customer-facing products (portal Área 02 and the public web
+ * RC1) both carry the bright set (`#16A34A` / `#DCFCE7`), while the operational console carries a
+ * muted, desaturated one (`#256B44` / `#E7F2EC`). An admin stares at these badges all day.
+ * `muted` is the extra one — the canonical's `badge-cancelada` is greyer still than `neutral`.
+ */
+export const STATUS_TONES_VALUES = ['ok', 'warn', 'crit', 'info', 'neutral', 'muted'] as const;
+
+export type StatusTone = (typeof STATUS_TONES_VALUES)[number];
+
+/**
+ * Tone per status — derived, not chosen.
+ *
+ * `Diseño/MarioHans OS Design System/components/data/StatusBadge.jsx` carries a `STATES` table
+ * that names each operational stage in Spanish and fixes its tone. Its key set is not the v1.2
+ * enum (it is a 13-entry superset that also covers equipment states), but every v1.2 status lands
+ * on exactly one named stage, so the tone comes from the design system rather than from taste:
+ *
+ *   request → solicitud · evaluation → evaluacion · confirmed → confirmado
+ *   preparation → preparacion · in-rental → activo · return → retorno
+ *   completed → finalizado · cancelled → rechazado
+ *
+ * Before this map, five components each kept their own `bg-yellow-100 text-yellow-800`-style
+ * table, and they disagreed: the same order read "En Espera" amber on one screen and gray on
+ * another. Colour here is information, so a disagreement is a wrong reading, not a style nit.
+ */
+export const STATUS_TONES: Record<OrderStatus, StatusTone> = {
+  request: 'neutral',
+  evaluation: 'warn',
+  confirmed: 'ok',
+  preparation: 'warn',
+  'in-rental': 'info',
+  return: 'neutral',
+  completed: 'neutral',
+  cancelled: 'muted',
+};
+
+/**
+ * Tone for display, `neutral` for anything unrecognised.
+ *
+ * The fallback is deliberate and matches `statusLabel`: legacy rows exist between the code deploy
+ * and the 0003 apply, and exported archives carry them forever. A gray badge on an unexpected
+ * value is a far better outcome than a thrown error inside a React island.
+ */
+export function statusTone(status: string): StatusTone {
+  return isOrderStatus(status) ? STATUS_TONES[status] : 'neutral';
+}
+
+/**
+ * Tailwind classes for a status badge, one tone across tint, text and border.
+ *
+ * Returned as data rather than as a React component on purpose: the project has no jsdom or
+ * testing-library, so a component would ship untested, while a pure string is covered here.
+ *
+ * The arbitrary-value syntax is not a shortcut around Tailwind's palette — it IS the design
+ * system's rule, whose bundled oxlint config enforces "referenciar siempre custom properties,
+ * nunca hexadecimales crudos". The five duplicated maps this replaces were built from
+ * `bg-yellow-100 text-yellow-800`, Tailwind palette colours that appear in no token file and
+ * drifted apart between components.
+ */
+const TONE_BADGE_CLASSES: Record<StatusTone, string> = {
+  ok: 'bg-[var(--color-ok-bg)] text-[var(--color-ok)]',
+  warn: 'bg-[var(--color-warn-bg)] text-[var(--color-warn)]',
+  crit: 'bg-[var(--color-crit-bg)] text-[var(--color-crit)]',
+  info: 'bg-[var(--color-info-bg)] text-[var(--color-info)]',
+  neutral: 'bg-[var(--color-neutral-bg)] text-[var(--color-neutral)]',
+  muted: 'bg-[var(--color-muted-bg)] text-[var(--color-muted)]',
+};
+
+export function statusBadgeClass(status: string): string {
+  return TONE_BADGE_CLASSES[statusTone(status)];
+}
+
+/**
+ * Colour for a chart series, as a custom-property reference.
+ *
+ * Recharts fills an SVG and needs a value, not a class, so this is the one place a badge class
+ * will not do. It is still not a literal: `FinancialAnalyticsCard` kept a nine-entry table of raw
+ * `hsl(...)` triples that matched nothing in any token file, and three of its keys — `reviewing`,
+ * `preparing`, `delivering` — are statuses the CHECK constraint never admitted, so those slices
+ * could never be drawn at all.
+ */
+export function statusChartColor(status: string): string {
+  return `var(--color-${statusTone(status)})`;
+}
+
+/**
+ * Ready-made `<select>` options, in chain order.
+ *
+ * `OrderEstado.tsx` hand-wrote nine of these, including `trash` and `auto-draft` — values the
+ * `orders_status_check` constraint never admitted, so choosing one produced a constraint
+ * violation surfaced as a 500. Chain order matters too: the machine only advances one stage, so
+ * the option immediately below the current one is the only ordinary move.
+ */
+export const STATUS_OPTIONS: ReadonlyArray<{ value: OrderStatus; label: string }> =
+  ORDER_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }));
+
+/**
+ * Si en esta etapa corresponde generar o regenerar el presupuesto.
+ *
+ * Reemplaza al literal `order.status !== 'on-hold'` que tenía `budgetGenerationService`. Después
+ * de 0003 ninguna orden vuelve a estar en `on-hold`, así que esa condición pasa a ser siempre
+ * verdadera y el sistema deja de generar presupuestos — sin excepción ni log, solo un botón que
+ * no hace nada.
+ *
+ * `request` es la traducción directa de `on-hold`, y `evaluation` es donde Área 01 §5 sitúa la
+ * acción que "genera presupuesto versionado". Acepta además el vocabulario legado porque durante
+ * la ventana entre el despliegue y el apply hay filas de los dos.
+ */
+export function isBudgetStatus(status: unknown): boolean {
+  const canonical = canonicalStatus(status);
+  return canonical === 'request' || canonical === 'evaluation';
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Pedidos list tabs
+ * ------------------------------------------------------------------------------------------ */
+
+/** `todos` plus the seven status tabs. `cancelled` has no tab in the canonical. */
+export type OrderListTab = 'todos' | Exclude<OrderStatus, 'cancelled'>;
+
+/**
+ * The Pedidos list tabs, verbatim from the client's canonical screen.
+ *
+ * Source: `CONSOLIDADO WEB YEYSON/Área 01 · Rental Técnico/OFF/
+ * MarioHans_OS_Area01_Pedidos_Canonical_RC2.1.2.html`, the `#list-tabs` block.
+ *
+ * This settles the question the v1.1 architecture document left open, and that blocked the
+ * dashboard bucketing: with eight statuses and a four-tab UI, someone had to choose a grouping.
+ * The canonical chooses none — one tab per status, plus Todos.
+ *
+ * `cancelled` deliberately has no tab, and the canonical's own counts prove Todos excludes it:
+ * 5+3+8+7+12+2+1 = 38, the exact Todos count. That is the same set as `bookingStatusFilter()`.
+ *
+ * The labels are PLURAL because a tab names a collection, where `STATUS_LABELS` is singular
+ * because a badge names one pedido. Two label sets, two sources; merging them would put
+ * "Completado" on a tab counting twelve orders. The irregular capitalisation ("En evaluación"
+ * against "En Arriendo") is copied as found — normalising it is a redesign nobody approved.
+ */
+export const ORDER_LIST_TABS: ReadonlyArray<{ value: OrderListTab; label: string }> = [
+  { value: 'todos', label: 'Todos' },
+  { value: 'request', label: 'Solicitudes' },
+  { value: 'evaluation', label: 'En evaluación' },
+  { value: 'confirmed', label: 'Confirmados' },
+  { value: 'preparation', label: 'Preparación' },
+  { value: 'in-rental', label: 'En Arriendo' },
+  { value: 'return', label: 'Devolución' },
+  { value: 'completed', label: 'Completados' },
+];
+
+/**
+ * The statuses a tab shows. Empty for an unrecognised tab id — falling back to Todos would make
+ * a typo in a tab id look like a working filter that just happens to show everything.
+ */
+export function statusesForTab(tab: string): OrderStatus[] {
+  if (tab === 'todos') return ORDER_STATUSES.filter((s) => s !== 'cancelled');
+  return isOrderStatus(tab) && tab !== 'cancelled' ? [tab] : [];
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Email trigger matrix
+ * ------------------------------------------------------------------------------------------ */
+
+/**
+ * Which of the eight approved transactional emails fires on ENTERING a status.
+ *
+ * Resolved by joining two sources, not by reading either alone. The email handoff
+ * (`correos/MarioHans_OS_Rental_Email_Flow_Developer_Handoff_v1.0.html`) names states in the
+ * operational Spanish of the flow diagram — "En espera", "Disponibilidad confirmada", "Arriendo en
+ * curso" — which does not map onto the v1.2 enum by itself; four of its eight rows were ambiguous
+ * or explicitly "Por definir". Área 01 §5 supplies the missing half.
+ *
+ * The two resolutions worth knowing:
+ *
+ *  · **04 Equipos disponibles fires on `evaluation`, not `confirmed`.** The handoff warns
+ *    "Disponibilidad confirmada ≠ reserva confirmada", and the email is the one that ASKS for the
+ *    25% deposit — so the reservation cannot already be confirmed when it goes out.
+ *  · **06 Equipos no disponibles fires on `cancelled`.** The handoff left it "Por definir (posible
+ *    correspondencia con Fallido)"; Área 01's "dos salidas terminales" settles it.
+ *
+ * Three of the eight emails are absent here on purpose:
+ *  · 01 Registro and 02 Contrato hang off the ACCOUNT lifecycle, not off `orders.status`.
+ *  · 05 Pedido actualizado is marked "Evento, no estado" — it fires on a new presupuesto version,
+ *    so it cannot be keyed on a status at all.
+ *
+ * `preparation` and `return` send nothing, and that is deliberate: both are internal operational
+ * stages (bodega assigns units, check-in verifies equipment) where nothing is asked of the
+ * customer. There is no ninth template to write.
+ */
+export const EMAIL_ON_ENTER: Partial<Record<OrderStatus, string>> = {
+  request: 'solicitud-recibida', //      03
+  evaluation: 'equipos-disponibles', //  04
+  'in-rental': 'equipos-entregados', //  07
+  completed: 'pedido-completado', //     08
+  cancelled: 'equipos-no-disponibles', //06
+};
+
+/**
+ * Whether saving moves the order INTO `target`, comparing canonical stages on both sides.
+ *
+ * Callers wrote this as `order.status !== 'failed' && form.status === 'failed'`. Post-0003 the
+ * right-hand side never holds, so the side effect — an email, a PDF — silently stops. Comparing
+ * canonical stages also stops a legacy row being rewritten in the new vocabulary from counting
+ * as a transition: `on-hold` → `request` is the same stage, and must not re-send.
+ */
+export function enteredStatus(previous: unknown, next: unknown, target: OrderStatus): boolean {
+  const to = canonicalStatus(next);
+  if (to !== target) return false;
+  return canonicalStatus(previous) !== target;
+}
+
+/**
+ * The template key a status change should send, or `null`. Single decision point for the eight
+ * emails of the handoff, replacing one hard-coded `if` per endpoint.
+ */
+export function emailOnTransition(previous: unknown, next: unknown): string | null {
+  const to = canonicalStatus(next);
+  if (!to || canonicalStatus(previous) === to) return null;
+  return EMAIL_ON_ENTER[to] ?? null;
+}

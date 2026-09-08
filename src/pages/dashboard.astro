@@ -2,7 +2,10 @@
 import Base from "../layout/Base.astro";
 import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
 import { DashboardService } from "../services/dashboardService";
+import { ORDER_STATUSES, emptyStatusBuckets } from "../lib/orderStatus";
 import DashboardContainer from "../components/DashboardContainer";
+import OperationalAgenda from "../components/OperationalAgenda.astro";
+import { AgendaService } from "../services/agendaService";
 
 export const prerender = false;
 
@@ -16,6 +19,20 @@ if (!adminSession) {
 }
 
 console.log("✅ Admin autenticado en dashboard:", adminSession.admin.email);
+
+/**
+ * La agenda se carga aparte y con su propio `catch`. Si falla, el resto del Centro de Control
+ * sigue en pie con la agenda vacia: un error en un panel no debe dejar la pantalla en blanco.
+ */
+let agenda: Awaited<ReturnType<typeof AgendaService.getAgenda>> = [];
+try {
+  agenda = await AgendaService.getAgenda();
+} catch (error) {
+  console.error("[dashboard] Error al cargar la agenda operacional:", {
+    admin: adminSession.admin.email,
+    error,
+  });
+}
 
 // Cargar datos del dashboard con manejo de errores mejorado
 let dashboardStats;
@@ -36,18 +53,16 @@ try {
   dashboardStats = {
     monthlyOrderStats: {
       totalOrders: 0,
-      completedOrders: 0,
       createdOrders: 0,
-      pendingOrders: 0,
-      processingOrders: 0,
-      onHoldOrders: 0,
+      byStatus: Object.fromEntries(ORDER_STATUSES.map((s) => [s, 0])),
     },
-    ordersByStatus: {
-      onHold: [],
-      pending: [],
-      processing: [],
-      completed: [],
+    operationalKpis: {
+      retirosHoy: 0,
+      entregasHoy: 0,
+      devolucionesHoy: 0,
+      pedidosActivos: 0,
     },
+    ordersByStatus: emptyStatusBuckets(),
     rentedEquipment: [],
     financialSummary: {
       totalSales: 0,
@@ -201,6 +216,14 @@ const title = `Dashboard - Rental Mario Hans | ${adminSession.admin.email}`;
           </div>
         </div>
       </div>
+    </div>
+
+    <!--
+      Agenda Operacional del canonico. Va antes del tablero de filtros porque responde la pregunta
+      con la que el admin abre la pantalla: que hay que mover hoy y en los proximos cuatro dias.
+    -->
+    <div class="mb-6">
+      <OperationalAgenda agenda={agenda} />
     </div>
 
     <!-- Dashboard Integrado con Filtros -->

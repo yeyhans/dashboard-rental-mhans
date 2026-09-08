@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createEmailWorkerHeaders, getEmailWorkerUrl } from '../../../lib/emailWorkerService';
 import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
+import { statusLabel } from '../../../lib/orderStatus';
 
 // Complete Order/Budget Data Interface with all required columns
 interface BudgetEmailData {
@@ -602,7 +603,7 @@ function generateAdminBackupEmail(
               </div>
               <div class="info-item">
                 <div class="info-label">Estado:</div>
-                <div>${data.status || 'on-hold'}</div>
+                <div>${statusLabel(data.status || 'request')}</div>
               </div>
               <div class="info-item">
                 <div class="info-label">Fecha Inicio:</div>

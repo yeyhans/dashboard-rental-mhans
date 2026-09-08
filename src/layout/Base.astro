@@ -3,23 +3,30 @@ import "../styles/globals.css";
 import { getServerAdmin } from "../lib/supabase";
 import { ModeToggle } from "../components/ModeToggle";
 import {
+  ArrowLeftRight,
+  Bell,
+  Boxes,
   ChevronLeft,
   ChevronRight,
-  Home,
-  ShoppingBag,
-  Users,
-  Package,
-  ClipboardList,
-  Tag,
+  CircleCheck,
+  Coins,
   CreditCard,
-  LogOut,
   Grid3X3,
-  Truck,
-  BarChart3,
+  LogOut,
+  Package,
   PanelLeftClose,
   PanelLeftOpen,
-  X
+  Paperclip,
+  RadioTower,
+  Tag,
+  TrendingUp,
+  Truck,
+  UserCog,
+  Users,
+  X,
 } from "lucide-react";
+import { activeModule, visibleNavGroups } from "../lib/navigation";
+import { AlertService } from "../services/alertService";
 
 interface Props {
   title: string;
@@ -33,6 +40,63 @@ const canonicalURL = new URL(Astro.url).href;
 const adminSession = await getServerAdmin(Astro);
 const isAuthenticated = !!adminSession;
 const currentPath = Astro.url.pathname;
+
+/**
+ * Iconos de la barra lateral. `navigation.ts` guarda el NOMBRE del icono, no el componente, para
+ * seguir siendo un modulo de datos testeable sin depender del renderizador.
+ */
+const NAV_ICONS: Record<string, any> = {
+  Tower: RadioTower,
+  Bell,
+  Paperclip,
+  CircleCheck,
+  Truck,
+  Package,
+  Users,
+  Coins,
+  TrendingUp,
+  UserCog,
+};
+
+// La barra se filtra por rol (lote 3): Operarios solo para super_admin. Lo que decide
+// `visibleNavGroups` esta cubierto por tests; aqui solo se renderiza.
+const navGroups = visibleNavGroups(adminSession?.admin.role);
+
+/**
+ * Subenlaces que el canonico no lista como modulos de primer nivel. Se conservan dentro de su
+ * modulo padre: sacarlos de la barra sin darles otra entrada los volveria inalcanzables.
+ */
+const NAV_SUBLINKS: Record<string, ReadonlyArray<{ label: string; href: string; icon: any }>> = {
+  '/orders': [
+    { label: 'Cupones', href: '/orders/coupons', icon: Tag },
+  ],
+  '/products': [
+    { label: 'Categorias', href: '/products/categories', icon: Grid3X3 },
+    { label: 'Inventario', href: '/inventory', icon: Boxes },
+    { label: 'Movimientos', href: '/inventory/movements', icon: ArrowLeftRight },
+  ],
+  '/finance': [
+    { label: 'Pagos', href: '/payments-table', icon: CreditCard },
+  ],
+};
+
+const activeNav = activeModule(currentPath);
+
+// Un subenlace se marca activo en su ruta exacta o en una subruta con separador. `/inventory`
+// no debe encenderse en `/inventory/movements`, que es otro subenlace: el mas largo que calce gana.
+const allSublinkHrefs = Object.values(NAV_SUBLINKS).flat().map((sub) => sub.href);
+const isSublinkActive = (href: string): boolean => {
+  const matches = (candidate: string) => currentPath === candidate || currentPath.startsWith(`${candidate}/`);
+  if (!matches(href)) return false;
+  return !allSublinkHrefs.some((other) => other !== href && other.length > href.length && matches(other));
+};
+
+/**
+ * Contador de la campana. El canonico lo muestra en los ocho modulos, asi que se resuelve en el
+ * shell. `getAlertCount` traga sus propios errores y devuelve 0: una campana rota no puede tumbar
+ * todas las paginas que renderizan la barra lateral.
+ */
+const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
 ---
 
 <html lang="es" class="h-full w-full">
@@ -54,9 +118,7 @@ const currentPath = Astro.url.pathname;
 
     <style is:inline>
       /* ── Theme base ── */
-      .dark { background-color: hsl(0 0% 3.9%); color: hsl(0 0% 98%); }
       body { background-color: hsl(0 0% 100%); color: hsl(0 0% 3.9%); }
-      html.dark body { background-color: hsl(0 0% 3.9%); color: hsl(0 0% 98%); }
 
       /* ── Sidebar ── */
       #sidebar {
@@ -68,10 +130,6 @@ const currentPath = Astro.url.pathname;
       #sidebar .sidebar-inner {
         background-color: hsl(0 0% 100%);
         border-right: 1px solid hsl(0 0% 89.8%);
-      }
-      html.dark #sidebar .sidebar-inner {
-        background-color: hsl(0 0% 3.9%);
-        border-right-color: hsl(0 0% 14.9%);
       }
 
       /* ── Sidebar text fade ── */
@@ -126,22 +184,13 @@ const currentPath = Astro.url.pathname;
         position: relative;
         white-space: nowrap;
       }
-      html.dark .sidebar-nav-item { color: hsl(0 0% 63.9%); }
       .sidebar-nav-item:hover {
         color: hsl(0 0% 9%);
         background-color: hsl(0 0% 95.1%);
       }
-      html.dark .sidebar-nav-item:hover {
-        color: hsl(0 0% 98%);
-        background-color: hsl(0 0% 14.9%);
-      }
       .sidebar-nav-item.active {
         color: hsl(0 0% 9%);
         background-color: hsl(0 0% 95.1%);
-      }
-      html.dark .sidebar-nav-item.active {
-        color: hsl(0 0% 98%);
-        background-color: hsl(0 0% 14.9%);
       }
       .sidebar-nav-item .nav-icon {
         flex-shrink: 0;
@@ -178,10 +227,6 @@ const currentPath = Astro.url.pathname;
         z-index: 50;
         box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
       }
-      html.dark .sidebar-nav-item .nav-tooltip {
-        background-color: hsl(0 0% 98%);
-        color: hsl(0 0% 9%);
-      }
       .sidebar-collapsed .sidebar-nav-item:hover .nav-tooltip {
         opacity: 1;
       }
@@ -203,11 +248,6 @@ const currentPath = Astro.url.pathname;
       .sidebar-toggle:hover {
         color: hsl(0 0% 9%);
         background-color: hsl(0 0% 95.1%);
-      }
-      html.dark .sidebar-toggle { color: hsl(0 0% 63.9%); }
-      html.dark .sidebar-toggle:hover {
-        color: hsl(0 0% 98%);
-        background-color: hsl(0 0% 14.9%);
       }
 
       /* ── Admin badge (collapsed) ── */
@@ -237,14 +277,9 @@ const currentPath = Astro.url.pathname;
         color: hsl(0 62.8% 30.6%);
         transition: color 150ms ease, background-color 150ms ease;
       }
-      html.dark .sidebar-logout { color: hsl(0 62.8% 60.6%); }
       .sidebar-logout:hover {
         background-color: hsl(0 100% 97.1%);
         color: hsl(0 72.2% 50.6%);
-      }
-      html.dark .sidebar-logout:hover {
-        background-color: hsl(0 62.8% 10%);
-        color: hsl(0 62.8% 70%);
       }
       .sidebar-collapsed .sidebar-logout { justify-content: center; padding: 0.625rem; }
 
@@ -259,11 +294,6 @@ const currentPath = Astro.url.pathname;
         background-color: hsl(0 0% 100%);
         color: hsl(0 0% 45.1%);
         border-top: 1px solid hsl(0 0% 89.8%);
-      }
-      html.dark #footer {
-        background-color: hsl(0 0% 3.9%);
-        color: hsl(0 0% 63.9%);
-        border-top-color: hsl(0 0% 14.9%);
       }
       #footer a { color: inherit; }
       #footer a:hover { text-decoration: underline; }
@@ -352,7 +382,6 @@ const currentPath = Astro.url.pathname;
         white-space: nowrap;
         transition: opacity 200ms ease;
       }
-      html.dark .sidebar-section-label { color: hsl(0 0% 45.1%); }
       .sidebar-collapsed .sidebar-section-label { opacity: 0; height: 0; padding: 0; }
     </style>
   </head>
@@ -435,75 +464,57 @@ const currentPath = Astro.url.pathname;
             </div>
           )}
 
-          <!-- Navigation -->
-          <nav class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-1">
-            <a href="/dashboard" class={`sidebar-nav-item ${currentPath === '/dashboard' || currentPath === '/dashboard/' ? 'active' : ''}`}>
-              <Home className="nav-icon" />
-              <span class="sidebar-label">Dashboard</span>
-              <span class="nav-tooltip">Dashboard</span>
-            </a>
-
-            <div class="sidebar-section-label">Gestión</div>
-
-            <!-- Pedidos group -->
-            <button onclick="toggleSubmenu('orders')" class="sidebar-nav-item w-full text-left">
-              <ShoppingBag className="nav-icon" />
-              <span class="sidebar-label flex-1">Pedidos</span>
-              <ChevronRight className="h-3.5 w-3.5 submenu-arrow sidebar-label" />
-              <span class="nav-tooltip">Pedidos</span>
-            </button>
-            <div class="sidebar-submenu pl-9 space-y-0.5" id="orders-submenu">
-              <a href="/orders" class={`sidebar-nav-item text-[0.8125rem] ${currentPath === '/orders' || currentPath === '/orders/' ? 'active' : ''}`}>
-                <ClipboardList className="nav-icon" />
-                <span class="sidebar-label">Todos los Pedidos</span>
-              </a>
-              <a href="/orders/coupons" class={`sidebar-nav-item text-[0.8125rem] ${currentPath.startsWith('/orders/coupons') ? 'active' : ''}`}>
-                <Tag className="nav-icon" />
-                <span class="sidebar-label">Cupones</span>
-              </a>
-              <a href="/orders/shipping" class={`sidebar-nav-item text-[0.8125rem] ${currentPath.startsWith('/orders/shipping') ? 'active' : ''}`}>
-                <Truck className="nav-icon" />
-                <span class="sidebar-label">Envios</span>
-              </a>
-            </div>
-
-            <a href="/users" class={`sidebar-nav-item ${currentPath.startsWith('/users') ? 'active' : ''}`}>
-              <Users className="nav-icon" />
-              <span class="sidebar-label">Usuarios</span>
-              <span class="nav-tooltip">Usuarios</span>
-            </a>
-
-            <!-- Productos group -->
-            <button onclick="toggleSubmenu('products')" class="sidebar-nav-item w-full text-left">
-              <Package className="nav-icon" />
-              <span class="sidebar-label flex-1">Productos</span>
-              <ChevronRight className="h-3.5 w-3.5 submenu-arrow sidebar-label" />
-              <span class="nav-tooltip">Productos</span>
-            </button>
-            <div class="sidebar-submenu pl-9 space-y-0.5" id="products-submenu">
-              <a href="/products" class={`sidebar-nav-item text-[0.8125rem] ${currentPath === '/products' || currentPath === '/products/' ? 'active' : ''}`}>
-                <Package className="nav-icon" />
-                <span class="sidebar-label">Todos los Productos</span>
-              </a>
-              <a href="/products/categories" class={`sidebar-nav-item text-[0.8125rem] ${currentPath.startsWith('/products/categories') ? 'active' : ''}`}>
-                <Grid3X3 className="nav-icon" />
-                <span class="sidebar-label">Categorías</span>
-              </a>
-            </div>
-
-            <div class="sidebar-section-label">Finanzas</div>
-
-            <a href="/payments-table" class={`sidebar-nav-item ${currentPath.startsWith('/payments') ? 'active' : ''}`}>
-              <CreditCard className="nav-icon" />
-              <span class="sidebar-label">Pagos</span>
-              <span class="nav-tooltip">Pagos</span>
-            </a>
-
-            <a href="/analytics" class={`sidebar-nav-item ${currentPath.startsWith('/analytics') ? 'active' : ''}`}>
-              <BarChart3 className="nav-icon" />
-              <span class="sidebar-label">Analytics</span>
-              <span class="nav-tooltip">Analytics</span>
-            </a>
+          <!--
+            Navegacion. Tres grupos rotulados y ocho modulos, del `<aside class="side">` del
+            canonico de Area 01, que es identico en los ocho documentos entregados. La estructura
+            vive en `lib/navigation.ts` y esta cubierta por tests; aqui solo se renderiza.
+          -->
+          <nav class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-4" aria-label="Navegacion principal">
+            {navGroups.map((group) => (
+              <div class="space-y-0.5">
+                <div class="sidebar-section-label">{group.label}</div>
+                {group.items.map((item) => {
+                  const Icon = NAV_ICONS[item.icon];
+                  const isActive = activeNav?.href === item.href;
+                  const sublinks = NAV_SUBLINKS[item.href] ?? [];
+                  return (
+                    <>
+                      <a
+                        href={item.href}
+                        class={`sidebar-nav-item ${isActive ? 'active' : ''}`}
+                        aria-current={isActive ? 'page' : undefined}
+                      >
+                        <Icon className="nav-icon" />
+                        <span class="sidebar-label flex-1">{item.label}</span>
+                        {item.badgeKey === 'alerts' && alertCount > 0 && (
+                          <span
+                            class="sidebar-label ml-auto rounded-full bg-[var(--color-crit)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+                            aria-label={`${alertCount} alertas`}
+                          >
+                            {alertCount}
+                          </span>
+                        )}
+                        <span class="nav-tooltip">{item.label}</span>
+                      </a>
+                      {sublinks.length > 0 && (
+                        <div class="pl-9 space-y-0.5">
+                          {sublinks.map((sub) => (
+                            <a
+                              href={sub.href}
+                              class={`sidebar-nav-item text-[0.8125rem] ${isSublinkActive(sub.href) ? 'active' : ''}`}
+                              aria-current={isSublinkActive(sub.href) ? 'page' : undefined}
+                            >
+                              <sub.icon className="nav-icon" />
+                              <span class="sidebar-label">{sub.label}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })}
+              </div>
+            ))}
           </nav>
 
           <!-- Logout + admin email -->
@@ -700,13 +711,17 @@ const currentPath = Astro.url.pathname;
       }, 100);
     });
 
-    // Logo images
+    // Logo images.
+    //
+    // Un solo tema, así que siempre la variante para fondo claro. Ojo con el nombre de los
+    // archivos, que se lee al revés de lo que parece: `logo-white.png` NO es un logo blanco, es
+    // el logo negro *para fondo blanco*. Es el que corresponde a la superficie del panel.
+    // `data-dark-src` se conserva en el markup porque describe un asset que existe, pero ya no
+    // hay condición que lo seleccione.
     window.updateLogoImages = function() {
-      var isDark = document.documentElement.classList.contains('dark');
       document.querySelectorAll('.logo-image').forEach(function(img) {
-        var ds = img.getAttribute('data-dark-src');
         var ls = img.getAttribute('data-light-src');
-        if (ds && ls) img.src = isDark ? ds : ls;
+        if (ls) img.src = ls;
       });
     };
 
@@ -725,23 +740,18 @@ const currentPath = Astro.url.pathname;
 </script>
 
 <script>
-  const getThemePreference = () => {
-    if (typeof localStorage !== 'undefined' && localStorage.getItem('theme')) {
-      return localStorage.getItem('theme');
-    }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  };
-  const isDark = getThemePreference() === 'dark';
-  document.documentElement.classList[isDark ? 'add' : 'remove']('dark');
-
+  // El selector de tema se eliminó: el sistema de diseño del cliente fija "white-first" como
+  // regla no negociable, así que el panel tiene un solo tema.
+  //
+  // Lo que había aquí no era código muerto, aunque lo pareciera: leía
+  // `prefers-color-scheme` y añadía la clase `dark` al <html>, de modo que cualquier admin con
+  // el sistema operativo en oscuro veía el panel en oscuro sin haberlo pedido. Se arrastraba
+  // además una preferencia persistida en localStorage, que seguiría forzando el tema oscuro
+  // aunque el script desapareciera — de ahí la limpieza explícita de abajo.
   if (typeof localStorage !== 'undefined') {
-    const observer = new MutationObserver(() => {
-      const isDark = document.documentElement.classList.contains('dark');
-      localStorage.setItem('theme', isDark ? 'dark' : 'light');
-      if (typeof updateLogoImages === 'function') updateLogoImages();
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    localStorage.removeItem('theme');
   }
+  document.documentElement.classList.remove('dark');
 
   document.addEventListener('DOMContentLoaded', function() {
     if (typeof updateLogoImages === 'function') updateLogoImages();

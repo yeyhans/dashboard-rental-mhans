@@ -9,7 +9,7 @@ Ver contexto general del sistema en `../CLAUDE.md`.
 - **UI**: Tailwind CSS 3 + shadcn/ui (new-york, zinc) + Radix UI + Lucide icons
 - **Database**: Supabase (PostgreSQL) via `supabaseAdmin` (service role, bypassa RLS)
 - **Auth**: Supabase Auth + tabla `admin_users` + cookies HTTP-only (30 días)
-- **PDFs**: `@react-pdf/renderer` (componentes React) + templates Astro para Puppeteer
+- **PDFs**: `@react-pdf/renderer` (componentes React, render in-process). Sin Puppeteer ni Chromium
 - **Email**: Resend API (`mail.mariohans.cl`)
 - **Charts**: Recharts
 - **Deploy**: Vercel (serverless) — `@astrojs/vercel`
@@ -50,9 +50,9 @@ src/
     payments/     # Tabla de pagos
   pages/
     api/          # 50+ endpoints REST agrupados por dominio
-    budget-pdf/   # Template Astro → PDF presupuesto
-    order-pdf/    # Template Astro → PDF orden
-    contract-pdf/ # Template Astro → PDF contrato
+    budget-pdf/   # Vista HTML del presupuesto (humanos, requiere sesión)
+    order-pdf/    # Vista HTML de la orden (humanos, requiere sesión)
+    contract-pdf/ # Vista HTML del contrato (humanos, requiere sesión)
   services/       # 18 service classes (orderService, productService, etc.)
   lib/
     supabase.ts   # Clientes Supabase (admin + anon)
@@ -115,18 +115,20 @@ El notifier de hermes-mhans recibe notificaciones de órdenes nuevas vía trigge
 
 ## Sistema de PDFs
 
-**Dos sistemas distintos**:
+**Un solo sistema**: `@react-pdf/renderer`, renderizado en proceso. No hay Puppeteer,
+`@sparticuz/chromium` ni Playwright en `package.json`, y **no existe `src/lib/pdfService.ts`**.
 
-1. **`@react-pdf/renderer`** — Componentes React que generan PDF directamente
-   - Ubicación: `src/lib/pdf/` (core, components, utils)
-   - Documentos: Budget (presupuesto), Contract (contrato), Processing (orden)
+- Componentes: `src/lib/pdf/components/` — Budget (presupuesto), Contract (contrato),
+  UserContract (contrato de usuario), Processing (orden)
+- Render: `src/lib/pdf/core/pdfService.ts` → `generatePdfBuffer()`, que usa `renderToBuffer`
+- Workflow: datos → componente React → PDF Buffer → R2 (`/upload-pdf-only`) → URL en DB → email
 
-2. **Templates Astro + Puppeteer** — HTML → PDF via headless Chrome
-   - Templates: `src/pages/{budget-pdf,order-pdf,contract-pdf}/[id].astro`
-   - Servicio: `src/lib/pdfService.ts`
-   - Workflow: datos → template Astro → HTML → Puppeteer → PDF → R2 → URL en DB → email
+Las páginas Astro `src/pages/{budget-pdf,order-pdf,contract-pdf}/[id].astro` **no son un destino
+de render interno**: son vistas para humanos, autenticadas por sesión, que se abren desde el
+enlace incluido en el email al cliente. Ningún proceso las visita para generar un PDF.
+Ver `src/lib/pdfPageAuth.ts`.
 
-**No modificar sin revisión**: `src/lib/pdfService.ts`, `src/lib/budgetGenerationService.ts`
+**No modificar sin revisión**: `src/lib/pdf/core/pdfService.ts`, `src/lib/budgetGenerationService.ts`
 
 ---
 
@@ -147,7 +149,7 @@ Servicios: `src/lib/emailService.ts`, `src/lib/emailTemplateService.ts`
 
 | Archivo | Razón |
 |---------|-------|
-| `src/lib/pdfService.ts` | PDF optimizado para Vercel (timeouts 7-8s) |
+| `src/lib/pdf/core/pdfService.ts` | Render de PDFs con `@react-pdf/renderer` |
 | `src/lib/budgetGenerationService.ts` | Workflow completo de presupuestos |
 | `src/lib/emailService.ts` | Sistema de emails con fallback |
 | `src/middleware/index.ts` | Autenticación y CORS global |
@@ -192,5 +194,5 @@ npm run preview  # preview del build
 - `.claude/rules/01-api-patterns.md` — Estructura API, responses, status codes, middleware
 - `.claude/rules/02-services-and-data.md` — Service layer, Supabase queries, tipos
 - `.claude/rules/03-components-and-ui.md` — React 18, shadcn/ui, state, forms
-- `.claude/rules/04-pdf-and-email.md` — PDFs (Puppeteer + react-pdf), emails, warranty photos
+- `.claude/rules/04-pdf-and-email.md` — PDFs (`@react-pdf/renderer`), emails, warranty photos
 - `.claude/rules/05-deployment.md` — Vercel, build, env vars
