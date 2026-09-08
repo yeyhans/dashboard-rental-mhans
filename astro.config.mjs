@@ -32,6 +32,12 @@ export default defineConfig({
         exposedHeaders: ['Set-Cookie'],
         maxAge: 86400,
       },
+      // node_modules es symlink a ../../dashboard/node_modules (worktree git):
+      // Vite resuelve el symlink al path real, que queda fuera del fs.allow por defecto
+      // (root del worktree). Sin esto, cualquier import de node_modules 403-ea en dev.
+      fs: {
+        allow: ['..', '../../dashboard'],
+      },
     } : {},
   },
 
