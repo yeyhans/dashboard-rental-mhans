@@ -42,7 +42,7 @@ export default function BodegaBoard({ initialBoard, todayLabel }: BodegaBoardPro
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold capitalize">{todayLabel}</h1>
+          <h1 className="text-lg font-semibold">{todayLabel}</h1>
           <p className="text-sm text-[var(--color-text-secondary)]">Toca una orden para escanear</p>
         </div>
         <button

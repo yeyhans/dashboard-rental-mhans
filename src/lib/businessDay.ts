@@ -139,3 +139,20 @@ export function formatBusinessDate(iso: string, timeZone: string = BUSINESS_TIME
   const wall = wallClock(iso, timeZone);
   return wall ? `${wall.day}-${wall.month}-${wall.year}` : EMPTY_TIME;
 }
+
+const dayLabelFormatter = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * The /bodega heading: "Martes, 8 de septiembre" for the business day of `instant`. Only the
+ * first character is capitalised — Spanish keeps "de" and month names lower-case, so a CSS
+ * `capitalize` (which title-cases every word) is wrong here.
+ */
+export function formatBusinessDayLabel(instant: Date, timeZone: string = BUSINESS_TIME_ZONE): string {
+  let formatter = dayLabelFormatter.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('es-CL', { timeZone, weekday: 'long', day: 'numeric', month: 'long' });
+    dayLabelFormatter.set(timeZone, formatter);
+  }
+  const label = formatter.format(instant);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}

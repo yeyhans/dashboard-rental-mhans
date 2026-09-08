@@ -5,6 +5,7 @@ import {
   businessDay,
   formatBusinessDate,
   formatBusinessDateTime,
+  formatBusinessDayLabel,
   formatBusinessTime,
   startOfBusinessDay,
 } from '../businessDay';
@@ -98,5 +99,18 @@ describe('formatBusinessTime / formatBusinessDateTime / formatBusinessDate', () 
     expect(formatBusinessTime('ayer')).toBe('—');
     expect(formatBusinessDateTime('')).toBe('—');
     expect(formatBusinessDate('nope')).toBe('—');
+  });
+});
+
+describe('formatBusinessDayLabel', () => {
+  it('is the Spanish long date with only the first character capitalised', () => {
+    // Not "Martes, 8 De Septiembre": Spanish keeps "de" and month names lower-case.
+    expect(formatBusinessDayLabel(new Date('2026-09-08T16:58:00Z'))).toBe('Martes, 8 de septiembre');
+  });
+
+  it('names the Santiago day, not the UTC one', () => {
+    // 23:30 -03 on Tuesday 8 Sep; UTC is already Wednesday.
+    expect(formatBusinessDayLabel(new Date('2026-09-09T02:30:00Z'))).toBe('Martes, 8 de septiembre');
+    expect(formatBusinessDayLabel(new Date('2026-09-09T03:00:00Z'))).toBe('Miércoles, 9 de septiembre');
   });
 });
