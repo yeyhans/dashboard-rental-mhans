@@ -93,3 +93,49 @@ export function startOfBusinessDay(instant: Date, timeZone: string = BUSINESS_TI
 
   return new Date(candidates[0] ?? firstCandidate).toISOString();
 }
+
+const EMPTY_TIME = '—';
+
+/**
+ * Wall-clock fields of an instant in the business zone, zero-padded, or `null` when the input
+ * does not parse. Every rendered time goes through here so the server (UTC on Vercel) and the
+ * browser (wherever the operator is) print byte-identical strings — a `toLocaleString` without
+ * `timeZone` hydrated "13:58" against "10:58 a. m." on /inventory/movements. The pieces are
+ * assembled by hand rather than taken from `format()` so ICU punctuation differences between
+ * Node and Chrome cannot leak into the markup either.
+ */
+function wallClock(iso: string, timeZone: string): Record<'year' | 'month' | 'day' | 'hour' | 'minute', string> | null {
+  const instant = new Date(iso);
+  if (Number.isNaN(instant.getTime())) return null;
+  const parts = Object.fromEntries(
+    partsFormatterFor(timeZone)
+      .formatToParts(instant)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value])
+  ) as Record<string, string>;
+  return {
+    year: parts.year ?? '',
+    month: parts.month ?? '',
+    day: parts.day ?? '',
+    hour: parts.hour ?? '',
+    minute: parts.minute ?? '',
+  };
+}
+
+/** `HH:mm` in the business zone, 24-hour clock; `—` when `iso` does not parse. */
+export function formatBusinessTime(iso: string, timeZone: string = BUSINESS_TIME_ZONE): string {
+  const wall = wallClock(iso, timeZone);
+  return wall ? `${wall.hour}:${wall.minute}` : EMPTY_TIME;
+}
+
+/** `dd-mm HH:mm` in the business zone; `—` when `iso` does not parse. */
+export function formatBusinessDateTime(iso: string, timeZone: string = BUSINESS_TIME_ZONE): string {
+  const wall = wallClock(iso, timeZone);
+  return wall ? `${wall.day}-${wall.month} ${wall.hour}:${wall.minute}` : EMPTY_TIME;
+}
+
+/** `dd-mm-yyyy` in the business zone; `—` when `iso` does not parse. */
+export function formatBusinessDate(iso: string, timeZone: string = BUSINESS_TIME_ZONE): string {
+  const wall = wallClock(iso, timeZone);
+  return wall ? `${wall.day}-${wall.month}-${wall.year}` : EMPTY_TIME;
+}

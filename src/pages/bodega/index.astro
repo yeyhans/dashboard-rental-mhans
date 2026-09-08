@@ -3,6 +3,7 @@ import Bodega from "../../layout/Bodega.astro";
 import BodegaBoard from "../../components/bodega/BodegaBoard";
 import { clearAuthCookies, getServerAdmin } from "../../lib/supabase";
 import { BodegaService } from "../../services/bodegaService";
+import { BUSINESS_TIME_ZONE } from '../../lib/businessDay';
 import type { BodegaBoard as BodegaBoardData } from "../../lib/bodega";
 
 export const prerender = false;
@@ -29,7 +30,7 @@ try {
   loadError = 'No se pudo cargar el tablero. Revisa la conexión y vuelve a intentarlo.';
 }
 
-const todayLabel = new Intl.DateTimeFormat('es-CL', { weekday: 'long', day: 'numeric', month: 'long' }).format(now);
+const todayLabel = new Intl.DateTimeFormat('es-CL', { timeZone: BUSINESS_TIME_ZONE, weekday: 'long', day: 'numeric', month: 'long' }).format(now);
 ---
 
 <Bodega title="Bodega | Mario Hans Rental" email={adminSession.admin.email} showBoardLink={false}>

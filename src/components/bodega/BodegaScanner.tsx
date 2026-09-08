@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useReducer, useRef, useState } from 'rea
 import { Camera, Check, Loader2, X } from 'lucide-react';
 import { ASSET_TAG_FORMAT_ERROR, isValidAssetTag, normalizeAssetTag } from '../../lib/assetTag';
 import { formatDay } from '../../lib/bodega';
+import { formatBusinessTime } from '../../lib/businessDay';
 import { createBarcodeDetector, pickDetectedTag, supportsBarcodeDetector } from '../../lib/bodegaCamera';
 import {
   SCAN_ERRORS,
@@ -274,7 +275,7 @@ export default function BodegaScanner({ sheet }: BodegaScannerProps) {
                   {unit.modelName} · <span className="text-[var(--color-text-secondary)]">{unit.serialNumber}</span>
                 </span>
                 <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
-                  {new Date(unit.at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
+                  {formatBusinessTime(unit.at)}
                 </span>
               </li>
             ))}

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeftRight, Loader2, RefreshCw } from 'lucide-react';
 import { DIRECTION_LABELS, hasActiveFilters, isLatestRequest } from '../../lib/movementsFeed';
+import { formatBusinessDateTime } from '../../lib/businessDay';
 import { apiClient } from '../../services/apiClient';
 import type { FeedMovement, MovementsFeed as MovementsFeedData } from '../../services/assetMovementService';
 import type { MovementDirection } from '../../types/assetMovements';
@@ -59,12 +60,6 @@ function buildQuery(filters: Filters): string {
   if (until) params.set('until', until);
   const query = params.toString();
   return query ? `?${query}` : '';
-}
-
-function formatTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function MovementsFeed({ initialFeed }: MovementsFeedProps) {
@@ -229,7 +224,7 @@ export default function MovementsFeed({ initialFeed }: MovementsFeedProps) {
       )}
 
       <p className="text-xs text-muted-foreground">
-        Actualizado {formatTime(feed.generatedAt)} · se refresca cada {POLL_INTERVAL_MS / 1000} s
+        Actualizado {formatBusinessDateTime(feed.generatedAt)} · se refresca cada {POLL_INTERVAL_MS / 1000} s
       </p>
     </div>
   );
@@ -238,7 +233,7 @@ export default function MovementsFeed({ initialFeed }: MovementsFeedProps) {
 function FeedRow({ movement }: { movement: FeedMovement }) {
   return (
     <TableRow>
-      <TableCell className="whitespace-nowrap tabular-nums">{formatTime(movement.checked_at)}</TableCell>
+      <TableCell className="whitespace-nowrap tabular-nums">{formatBusinessDateTime(movement.checked_at)}</TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
           <Badge className={DIRECTION_BADGE[movement.direction]}>{DIRECTION_LABELS[movement.direction]}</Badge>

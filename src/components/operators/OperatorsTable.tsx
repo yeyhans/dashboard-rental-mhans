@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Loader2, Plus, UserCog } from 'lucide-react';
 import { toast } from 'sonner';
 import { MIN_PASSWORD_LENGTH, OPERATOR_ERRORS, operatorStatusLabel, parseOperatorInput } from '../../lib/operators';
+import { formatBusinessDate } from '../../lib/businessDay';
 import { apiClient } from '../../services/apiClient';
 import type { Operator } from '../../services/operatorService';
 import { Badge } from '../ui/badge';
@@ -38,11 +39,6 @@ const STATUS_BADGE: Record<'active' | 'inactive', string> = {
   active: 'border-transparent bg-[var(--color-ok-bg)] text-[var(--color-ok)]',
   inactive: 'border-transparent bg-[var(--color-neutral-bg)] text-[var(--color-neutral)]',
 };
-
-function formatDate(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('es-CL');
-}
 
 export default function OperatorsTable({ initialOperators }: OperatorsTableProps) {
   const [operators, setOperators] = useState<Operator[]>(initialOperators);
@@ -111,7 +107,7 @@ export default function OperatorsTable({ initialOperators }: OperatorsTableProps
                       {operatorStatusLabel(operator.is_active)}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{formatDate(operator.created_at)}</TableCell>
+                  <TableCell className="text-muted-foreground">{formatBusinessDate(operator.created_at)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       {togglingId === operator.id && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}

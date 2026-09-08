@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { BUSINESS_TIME_ZONE, businessDay, startOfBusinessDay } from '../businessDay';
+import {
+  BUSINESS_TIME_ZONE,
+  businessDay,
+  formatBusinessDate,
+  formatBusinessDateTime,
+  formatBusinessTime,
+  startOfBusinessDay,
+} from '../businessDay';
 
 /**
  * R3-104: the business day is Santiago's. The server (Vercel) is UTC, so every case below is
@@ -63,5 +70,33 @@ describe('startOfBusinessDay', () => {
   it('is idempotent — the start of the start is itself', () => {
     const start = startOfBusinessDay(new Date('2026-09-08T20:00:00Z'));
     expect(startOfBusinessDay(new Date(start))).toBe(start);
+  });
+});
+
+// Hydration (live defect on dash-consolidado): the server renders on UTC, the browser in Chile.
+// Rendered times must be the same string on both, so the formatters take the zone from
+// BUSINESS_TIME_ZONE and never from the process, and assemble the string from parts so ICU
+// punctuation differences between Node and Chrome cannot leak in either.
+describe('formatBusinessTime / formatBusinessDateTime / formatBusinessDate', () => {
+  it('formats a September instant (UTC-3) in Santiago, 24-hour clock', () => {
+    expect(formatBusinessTime('2026-09-08T16:58:00Z')).toBe('13:58');
+    expect(formatBusinessDateTime('2026-09-08T16:58:00Z')).toBe('08-09 13:58');
+    expect(formatBusinessDate('2026-09-08T16:58:00Z')).toBe('08-09-2026');
+  });
+
+  it('formats a June instant (UTC-4) and rolls the day back when Santiago is still on the 9th', () => {
+    expect(formatBusinessTime('2026-06-10T03:30:00Z')).toBe('23:30');
+    expect(formatBusinessDateTime('2026-06-10T03:30:00Z')).toBe('09-06 23:30');
+    expect(formatBusinessDate('2026-06-10T03:30:00Z')).toBe('09-06-2026');
+  });
+
+  it('prints midnight as 00, never 24 or 12 a. m.', () => {
+    expect(formatBusinessTime('2026-09-09T03:00:00Z')).toBe('00:00');
+  });
+
+  it('returns an em dash for an unparseable instant', () => {
+    expect(formatBusinessTime('ayer')).toBe('—');
+    expect(formatBusinessDateTime('')).toBe('—');
+    expect(formatBusinessDate('nope')).toBe('—');
   });
 });
