@@ -360,6 +360,8 @@ export type Database = {
           order_retire_rut: string | null
           pago_completo: boolean | null
           pago_reserva: boolean
+          reserve_type: string
+          reserve_value: number
           payment_method: string | null
           payment_method_title: string | null
           refunds: Json | null
@@ -419,6 +421,8 @@ export type Database = {
           order_retire_rut?: string | null
           pago_completo?: boolean | null
           pago_reserva?: boolean
+          reserve_type?: string
+          reserve_value?: number
           payment_method?: string | null
           payment_method_title?: string | null
           refunds?: Json | null
@@ -478,6 +482,8 @@ export type Database = {
           order_retire_rut?: string | null
           pago_completo?: boolean | null
           pago_reserva?: boolean
+          reserve_type?: string
+          reserve_value?: number
           payment_method?: string | null
           payment_method_title?: string | null
           refunds?: Json | null
