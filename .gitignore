@@ -28,3 +28,6 @@ supabase/migrations/_raw/
 .env.local.produccion.bak
 .vercel
 .env*
+
+# Logs del dev server lanzado en segundo plano durante auditorias
+.dev.*.log
