@@ -53,6 +53,11 @@ export type Product = {
   categories_name: string | null;
   tags: any | null;
   collage_image_url: string | null;
+  // Client's count spreadsheet (0010): declared quantity and per-unit values in CLP. The total is
+  // derived in `src/lib/productValuation.ts`, never stored.
+  declared_quantity: number | null;
+  market_value_clp: number | null;
+  used_value_clp: number | null;
   created_at: string;
   updated_at: string;
 };
