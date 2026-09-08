@@ -10,10 +10,13 @@ export type Database = {
   public: {
     Tables: {
       admin_users: {
+        // HAND-EDITED (batch 3, migration 0011): `is_active` added. Regenerate with
+        // `npx supabase gen types typescript` once 0011 is applied and this block will match.
         Row: {
           created_at: string
           email: string
           id: number
+          is_active: boolean
           role: string
           user_id: string | null
         }
@@ -21,6 +24,7 @@ export type Database = {
           created_at?: string
           email: string
           id?: never
+          is_active?: boolean
           role?: string
           user_id?: string | null
         }
@@ -28,6 +32,7 @@ export type Database = {
           created_at?: string
           email?: string
           id?: never
+          is_active?: boolean
           role?: string
           user_id?: string | null
         }
@@ -506,6 +511,7 @@ export type Database = {
         ]
       }
       products: {
+        // MANUAL (0010): regenerate with `supabase gen types` after the migration is applied
         Row: {
           brands: string | null
           catalog_visibility: string | null
@@ -513,6 +519,7 @@ export type Database = {
           categories_name: string | null
           collage_image_url: string | null
           created_at: string | null
+          declared_quantity: number | null
           description: string | null
           dimensions_height: number | null
           dimensions_length: number | null
@@ -520,6 +527,7 @@ export type Database = {
           featured: boolean | null
           id: number
           images: Json | null
+          market_value_clp: number | null
           name: string | null
           on_sale: boolean | null
           price: number | null
@@ -540,7 +548,9 @@ export type Database = {
           total_sales: number | null
           type: string | null
           updated_at: string | null
+          used_value_clp: number | null
         }
+        // MANUAL (0010): regenerate with `supabase gen types` after the migration is applied
         Insert: {
           brands?: string | null
           catalog_visibility?: string | null
@@ -548,6 +558,7 @@ export type Database = {
           categories_name?: string | null
           collage_image_url?: string | null
           created_at?: string | null
+          declared_quantity?: number | null
           description?: string | null
           dimensions_height?: number | null
           dimensions_length?: number | null
@@ -555,6 +566,7 @@ export type Database = {
           featured?: boolean | null
           id?: number
           images?: Json | null
+          market_value_clp?: number | null
           name?: string | null
           on_sale?: boolean | null
           price?: number | null
@@ -575,7 +587,9 @@ export type Database = {
           total_sales?: number | null
           type?: string | null
           updated_at?: string | null
+          used_value_clp?: number | null
         }
+        // MANUAL (0010): regenerate with `supabase gen types` after the migration is applied
         Update: {
           brands?: string | null
           catalog_visibility?: string | null
@@ -583,6 +597,7 @@ export type Database = {
           categories_name?: string | null
           collage_image_url?: string | null
           created_at?: string | null
+          declared_quantity?: number | null
           description?: string | null
           dimensions_height?: number | null
           dimensions_length?: number | null
@@ -590,6 +605,7 @@ export type Database = {
           featured?: boolean | null
           id?: number
           images?: Json | null
+          market_value_clp?: number | null
           name?: string | null
           on_sale?: boolean | null
           price?: number | null
@@ -610,9 +626,11 @@ export type Database = {
           total_sales?: number | null
           type?: string | null
           updated_at?: string | null
+          used_value_clp?: number | null
         }
         Relationships: []
       }
+      // MANUAL (0004): regenerate with `supabase gen types` after the migration is applied
       serialised_assets: {
         Row: {
           condition: string
@@ -879,6 +897,17 @@ export type Database = {
       }
     }
     Views: {
+      // MANUAL (0012): regenerate with `supabase gen types` after the migration is applied
+      asset_current_state: {
+        Row: {
+          asset_id: number | null
+          checked_at: string | null
+          checked_by_admin_id: number | null
+          direction: string | null
+          order_id: number | null
+        }
+        Relationships: []
+      }
       order_summary: {
         Row: {
           billing_company: string | null

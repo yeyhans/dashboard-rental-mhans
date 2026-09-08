@@ -2,6 +2,7 @@
 import Base from "../../layout/Base.astro";
 import InventoryIntakeDashboard from "../../components/inventory/InventoryIntakeDashboard";
 import { clearAuthCookies, getServerAdmin } from "../../lib/supabase";
+import { loadIntakeSidecars } from "../../lib/inventory/intakePage";
 import { ProductService } from "../../services/productService";
 import { SerialisedAssetService } from "../../services/serialisedAssetService";
 import type { IntakeProduct } from "../../types/inventory";
@@ -20,11 +21,18 @@ if (!adminSession) {
 
 // Server-side fetch, props to the island — the pattern the products and orders pages use. The
 // catalogue is ~145 rows, so the picker gets the whole list and filters client-side.
-const [{ products }, progress, report] = await Promise.all([
-  ProductService.getAllProducts(1, 1000),
-  SerialisedAssetService.getIntakeProgress(),
-  SerialisedAssetService.getDataQualityReport(),
-]);
+//
+// Products first and on their own: without them there is no form. The two side panels are
+// settled individually (R4-001/R4-002) — the report reads the 0010 columns, and on an instance
+// where that migration is not applied yet it must degrade to a message, not 500 the page.
+const { products } = await ProductService.getAllProducts(1, 1000);
+const { progress, progressError, report, reportError } = await loadIntakeSidecars(
+  {
+    progress: () => SerialisedAssetService.getIntakeProgress(),
+    report: () => SerialisedAssetService.getDataQualityReport(),
+  },
+  { page: '/inventory', admin: adminSession.admin.email }
+);
 
 // Only the fields the intake UI needs. All nullable on purpose: the picker must render a product
 // whose sku, brands, type or stock_status are missing.
@@ -37,6 +45,9 @@ const intakeProducts: IntakeProduct[] = (products || []).map((product: any) => (
   type: product.type ?? null,
   status: product.status ?? null,
   stock_status: product.stock_status ?? null,
+  declared_quantity: product.declared_quantity ?? null,
+  market_value_clp: product.market_value_clp ?? null,
+  used_value_clp: product.used_value_clp ?? null,
 }));
 
 const title = `Inventario serializado | ${adminSession.admin.email}`;
@@ -49,6 +60,8 @@ const title = `Inventario serializado | ${adminSession.admin.email}`;
       products={intakeProducts}
       initialProgress={progress}
       initialReport={report}
+      progressError={progressError}
+      reportError={reportError}
     />
   </div>
 </Base>

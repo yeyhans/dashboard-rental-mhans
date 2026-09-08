@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Loader2, PackageSearch, RefreshCw } from 'lucide-react';
+import { Loader2, PackageSearch, Printer, RefreshCw, Tags } from 'lucide-react';
 import { Toaster } from 'sonner';
 
 import { Badge } from '../ui/badge';
@@ -22,6 +22,9 @@ interface InventoryIntakeDashboardProps {
   products: IntakeProduct[];
   initialProgress: IntakeProgress;
   initialReport: DataQualityReport;
+  /** Server-side load failures of the side panels (R4-001); the form renders regardless. */
+  progressError?: string | null;
+  reportError?: string | null;
 }
 
 /**
@@ -36,6 +39,8 @@ export function InventoryIntakeDashboard({
   products,
   initialProgress,
   initialReport,
+  progressError = null,
+  reportError = null,
 }: InventoryIntakeDashboardProps) {
   const [progress, setProgress] = useState<IntakeProgress>(initialProgress);
   const [report, setReport] = useState<DataQualityReport>(initialReport);
@@ -76,6 +81,12 @@ export function InventoryIntakeDashboard({
     setProgress((previous) => ({ ...previous, total_assets: previous.total_assets + 1 }));
   }, []);
 
+  // Reprint for one unit — a torn sticker, or a unit registered before the roll existed. New tab
+  // so the count sheet keeps its state and its focus.
+  const printLabel = useCallback((assetTag: string) => {
+    window.open(`/inventory/labels?tags=${encodeURIComponent(assetTag)}`, '_blank', 'noopener');
+  }, []);
+
   return (
     <div className="space-y-6">
       <Toaster position="top-right" richColors />
@@ -87,14 +98,22 @@ export function InventoryIntakeDashboard({
             Registro de equipos unidad por unidad para el conteo físico.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={refresh} disabled={refreshing}>
-          {refreshing ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
-          )}
-          Actualizar
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <a href="/inventory/labels">
+              <Tags className="mr-2 h-4 w-4" aria-hidden="true" />
+              Etiquetas
+            </a>
+          </Button>
+          <Button variant="outline" size="sm" onClick={refresh} disabled={refreshing}>
+            {refreshing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+            )}
+            Actualizar
+          </Button>
+        </div>
       </div>
 
       {refreshError && (
@@ -105,7 +124,14 @@ export function InventoryIntakeDashboard({
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <SerialisedAssetForm products={products} onAssetCreated={handleAssetCreated} />
-        <IntakeProgressCard progress={progress} />
+        <div className="space-y-3">
+          {progressError && (
+            <div role="alert" className="border-destructive/50 text-destructive rounded-md border p-3 text-sm">
+              {progressError}
+            </div>
+          )}
+          <IntakeProgressCard progress={progress} />
+        </div>
       </div>
 
       <Tabs defaultValue="recent">
@@ -140,16 +166,19 @@ export function InventoryIntakeDashboard({
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Asset tag</TableHead>
                         <TableHead>Número de serie</TableHead>
                         <TableHead>Producto</TableHead>
                         <TableHead>Condición</TableHead>
                         <TableHead>Ubicación</TableHead>
                         <TableHead>Kit</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {recentAssets.map((asset) => (
                         <TableRow key={asset.id}>
+                          <TableCell className="font-mono font-medium">{asset.asset_tag}</TableCell>
                           <TableCell className="font-medium">{asset.serial_number}</TableCell>
                           <TableCell>
                             {productNames.get(asset.product_id) || `Producto #${asset.product_id}`}
@@ -158,6 +187,17 @@ export function InventoryIntakeDashboard({
                           <TableCell className="text-muted-foreground">{asset.location}</TableCell>
                           <TableCell className="text-muted-foreground">
                             {asset.kit_code || '—'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => printLabel(asset.asset_tag)}
+                              aria-label={`Imprimir etiqueta ${asset.asset_tag}`}
+                            >
+                              <Printer className="mr-2 h-4 w-4" aria-hidden="true" />
+                              Imprimir etiqueta
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -169,8 +209,13 @@ export function InventoryIntakeDashboard({
           </Card>
         </TabsContent>
 
-        <TabsContent value="quality" className="mt-4">
-          <DataQualityTable report={report} />
+        <TabsContent value="quality" className="mt-4 space-y-3">
+          {reportError && (
+            <div role="alert" className="border-destructive/50 text-destructive rounded-md border p-3 text-sm">
+              {reportError}
+            </div>
+          )}
+          <DataQualityTable report={report} onValuationSaved={refresh} />
         </TabsContent>
       </Tabs>
     </div>

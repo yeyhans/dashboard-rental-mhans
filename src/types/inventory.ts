@@ -1,3 +1,5 @@
+import type { QuantityDiscrepancy } from '../lib/productValuation';
+
 /**
  * Serialised inventory (M6). Types live here rather than in `src/types/database.ts` because that
  * file is generated from the live schema and is currently stale; regenerating it is out of scope
@@ -32,6 +34,12 @@ export const ASSET_CONDITION_LABELS: Record<AssetCondition, string> = {
 export interface SerialisedAsset {
   id: number;
   product_id: number;
+  /**
+   * Internal tag `MH-00001`, pre-printed on the label roll and encoded in the label's QR and
+   * Code 128 (`0009_asset_tags.sql`). Unique, never reused. Canonical form only — see
+   * `src/lib/assetTag.ts`.
+   */
+  asset_tag: string;
   serial_number: string;
   condition: AssetCondition;
   location: string;
@@ -43,6 +51,8 @@ export interface SerialisedAsset {
 
 export interface SerialisedAssetInput {
   product_id: number;
+  /** As scanned or typed; the service normalises and validates it. */
+  asset_tag: string;
   serial_number: string;
   condition: AssetCondition;
   location: string;
@@ -63,17 +73,34 @@ export const AUDITED_PRODUCT_FIELD_LABELS: Record<AuditedProductField, string> =
   stock_status: 'Stock',
 };
 
+/**
+ * One row of the data-quality list. A product lands here for either of two findings: an audited
+ * field is blank (`missing_fields` non-empty) or its counted units disagree with — or were never
+ * declared against — the client's spreadsheet (`discrepancy !== 'match'`).
+ */
 export interface IncompleteProduct {
   id: number;
   name: string | null;
   slug: string | null;
+  /** "Numero serie" in the client's spreadsheet: the model code, not a per-unit serial. */
+  sku: string | null;
   status: string | null;
   missing_fields: AuditedProductField[];
+  /** "Cantidad": what the client declares owning. Null until entered. */
+  declared_quantity: number | null;
+  /** `count(serialised_assets)` for this product. */
+  counted_quantity: number;
+  market_value_clp: number | null;
+  used_value_clp: number | null;
+  /** Derived (`src/lib/productValuation.ts`), never stored. Null while a factor is unknown. */
+  total_value_clp: number | null;
+  discrepancy: QuantityDiscrepancy;
 }
 
 export interface DataQualityReport {
   /** Products examined. */
   total: number;
+  /** Products with at least one finding (missing field or quantity discrepancy). */
   incomplete: number;
   products: IncompleteProduct[];
 }
@@ -100,4 +127,8 @@ export interface IntakeProduct {
   type: string | null;
   status: string | null;
   stock_status: string | null;
+  /** Client's count spreadsheet (0010). Null until entered. */
+  declared_quantity: number | null;
+  market_value_clp: number | null;
+  used_value_clp: number | null;
 }

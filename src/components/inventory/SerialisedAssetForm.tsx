@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertTriangle, Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, ChevronsUpDown, Loader2, ScanLine } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '../ui/badge';
@@ -35,6 +35,9 @@ import {
   conditionLabel,
   describeMissingFields,
   intakeFormSchema,
+  isScannerSubmitKey,
+  normaliseTagField,
+  valuesAfterSubmit,
   type IntakeFormValues,
 } from './intakeForm';
 
@@ -45,6 +48,11 @@ interface SerialisedAssetFormProps {
 
 /**
  * Intake form for one physical unit (T-035).
+ *
+ * The asset tag comes first and takes focus on mount: the count runs label → scan → serial, and
+ * the scan is done with a phone or a HID (keyboard-wedge) barcode gun. A gun types the tag and
+ * sends Enter, which in a form submits; here Enter in the tag field moves focus to the serial
+ * instead, so one scan lands the operator exactly where the next keystroke belongs.
  *
  * Incomplete source products are flagged next to the selector and never block submission — the
  * client's count runs against exactly those rows. See `serialised-inventory-operations/spec.md`,
@@ -58,6 +66,7 @@ export function SerialisedAssetForm({ products, onAssetCreated }: SerialisedAsse
     handleSubmit,
     register,
     reset,
+    setFocus,
     setValue,
     watch,
     formState: { errors },
@@ -65,6 +74,7 @@ export function SerialisedAssetForm({ products, onAssetCreated }: SerialisedAsse
     resolver: zodResolver(intakeFormSchema),
     defaultValues: {
       product_id: 0,
+      asset_tag: '',
       serial_number: '',
       condition: 'operational',
       location: '',
@@ -84,40 +94,53 @@ export function SerialisedAssetForm({ products, onAssetCreated }: SerialisedAsse
     [selectedProduct]
   );
 
+  // Canonical form as soon as the field is left, so the operator sees what will be stored (a gun
+  // in lower-case mode, a phone keyboard) before the resolver reports on it. The decisions live
+  // in `intakeForm.ts` (R3-001) and are tested there; this only wires them to the form.
+  const applyTagNormalisation = () => {
+    setValue('asset_tag', normaliseTagField(watch('asset_tag')), { shouldValidate: true });
+  };
+
+  const handleTagKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (!isScannerSubmitKey(event)) return;
+    // The scanner's Enter is a field terminator, not a submit.
+    event.preventDefault();
+    applyTagNormalisation();
+    setFocus('serial_number');
+  };
+
   const onSubmit = async (values: IntakeFormValues) => {
     setSubmitting(true);
     try {
+      const payload = buildIntakePayload(values);
       const response = await fetch('/api/inventory/assets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildIntakePayload(values)),
+        body: JSON.stringify(payload),
       });
-      const payload = await response.json();
+      const result = await response.json();
 
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.error || 'Error al registrar el equipo');
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Error al registrar el equipo');
       }
 
       toast.success('Equipo registrado', {
-        description: `${values.serial_number.trim()} quedó asociado a ${selectedProduct?.name || 'el producto'}.`,
+        description: `${payload.asset_tag} · ${payload.serial_number} quedó asociado a ${selectedProduct?.name || 'el producto'}.`,
       });
-      onAssetCreated(payload.data as SerialisedAsset);
+      onAssetCreated(result.data as SerialisedAsset);
 
       // Keep the product, condition and location: a count runs unit after unit in the same place.
-      reset({
-        product_id: values.product_id,
-        serial_number: '',
-        condition: values.condition,
-        location: values.location,
-        kit_code: values.kit_code,
-        notes: '',
-      });
+      // The tag and serial are per unit and start blank; focus returns to the tag for the next scan.
+      reset(valuesAfterSubmit(values));
+      setFocus('asset_tag');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error al registrar el equipo');
     } finally {
       setSubmitting(false);
     }
   };
+
+  const assetTagField = register('asset_tag', { onBlur: applyTagNormalisation });
 
   return (
     <Card>
@@ -129,6 +152,36 @@ export function SerialisedAssetForm({ products, onAssetCreated }: SerialisedAsse
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+          <div className="space-y-2">
+            <Label htmlFor="asset_tag">Asset tag</Label>
+            <div className="relative">
+              <ScanLine
+                className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
+                aria-hidden="true"
+              />
+              <Input
+                id="asset_tag"
+                className="pl-9 font-mono uppercase"
+                autoFocus
+                autoComplete="off"
+                autoCapitalize="characters"
+                inputMode="text"
+                spellCheck={false}
+                placeholder="MH-00001"
+                aria-describedby="asset_tag-hint"
+                {...assetTagField}
+                onKeyDown={handleTagKeyDown}
+              />
+            </div>
+            {errors.asset_tag ? (
+              <p className="text-destructive text-sm">{errors.asset_tag.message}</p>
+            ) : (
+              <p id="asset_tag-hint" className="text-muted-foreground text-sm">
+                Escanea la etiqueta o escribe el código
+              </p>
+            )}
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="product-picker">Producto</Label>
             <Popover open={productPickerOpen} onOpenChange={setProductPickerOpen}>

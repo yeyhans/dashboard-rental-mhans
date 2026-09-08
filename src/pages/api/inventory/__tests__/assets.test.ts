@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const createAsset = vi.fn();
 const getAssetBySerial = vi.fn();
+const getByAssetTag = vi.fn();
 const listAssetsByProduct = vi.fn();
 
 vi.mock('../../../../middleware/auth', () => ({
@@ -14,7 +15,7 @@ vi.mock('../../../../middleware/auth', () => ({
 }));
 
 vi.mock('../../../../services/serialisedAssetService', () => ({
-  SerialisedAssetService: { createAsset, getAssetBySerial, listAssetsByProduct },
+  SerialisedAssetService: { createAsset, getAssetBySerial, getByAssetTag, listAssetsByProduct },
 }));
 
 const admin = { locals: { user: { id: 'admin-1', email: 'admin@x.cl', role: 'admin' } } };
@@ -46,9 +47,10 @@ describe('POST /api/inventory/assets', () => {
   });
 
   it('creates an asset for an authenticated admin and answers 201 with the envelope', async () => {
-    createAsset.mockResolvedValue({ id: 7, product_id: 42, serial_number: 'PROFOTO-B10-0007' });
+    createAsset.mockResolvedValue({ id: 7, product_id: 42, asset_tag: 'MH-00007', serial_number: 'PROFOTO-B10-0007' });
     const request = postRequest({
       product_id: 42,
+      asset_tag: 'MH-00007',
       serial_number: 'PROFOTO-B10-0007',
       condition: 'operational',
       location: 'Bodega Purísima',
@@ -60,9 +62,13 @@ describe('POST /api/inventory/assets', () => {
     const payload = await response.json();
 
     expect(response.status).toBe(201);
-    expect(payload).toEqual({ success: true, data: { id: 7, product_id: 42, serial_number: 'PROFOTO-B10-0007' } });
+    expect(payload).toEqual({
+      success: true,
+      data: { id: 7, product_id: 42, asset_tag: 'MH-00007', serial_number: 'PROFOTO-B10-0007' },
+    });
     expect(createAsset).toHaveBeenCalledWith({
       product_id: 42,
+      asset_tag: 'MH-00007',
       serial_number: 'PROFOTO-B10-0007',
       condition: 'operational',
       location: 'Bodega Purísima',
@@ -71,10 +77,27 @@ describe('POST /api/inventory/assets', () => {
     });
   });
 
+  it('forwards the asset tag as scanned — normalisation is the service\'s job, not the route\'s', async () => {
+    createAsset.mockResolvedValue({ id: 9 });
+    const request = postRequest({
+      product_id: 42,
+      asset_tag: 'mh-00009\n',
+      serial_number: 'S-9',
+      condition: 'operational',
+      location: 'Bodega',
+    });
+    const { POST } = await import('../assets');
+
+    await POST({ request, ...admin } as never);
+
+    expect(createAsset).toHaveBeenCalledWith(expect.objectContaining({ asset_tag: 'mh-00009\n' }));
+  });
+
   it('treats an omitted kit as absent membership rather than an empty kit code', async () => {
     createAsset.mockResolvedValue({ id: 8 });
     const request = postRequest({
       product_id: 42,
+      asset_tag: 'MH-00008',
       serial_number: 'S-2',
       condition: 'operational',
       location: 'Bodega',
@@ -87,8 +110,26 @@ describe('POST /api/inventory/assets', () => {
     expect(createAsset).toHaveBeenCalledWith(expect.objectContaining({ kit_code: null }));
   });
 
+  it('rejects a missing asset tag with a Spanish 400 and no service call', async () => {
+    const request = postRequest({
+      product_id: 42,
+      serial_number: 'S-1',
+      condition: 'operational',
+      location: 'Bodega',
+    });
+    const { POST } = await import('../assets');
+
+    const response = await POST({ request, ...admin } as never);
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.success).toBe(false);
+    expect(payload.error).toBe('El asset tag no tiene el formato MH-00000');
+    expect(createAsset).not.toHaveBeenCalled();
+  });
+
   it('rejects a missing serial number with a Spanish 400 and no service call', async () => {
-    const request = postRequest({ product_id: 42, condition: 'operational', location: 'Bodega' });
+    const request = postRequest({ product_id: 42, asset_tag: 'MH-00001', condition: 'operational', location: 'Bodega' });
     const { POST } = await import('../assets');
 
     const response = await POST({ request, ...admin } as never);
@@ -103,6 +144,7 @@ describe('POST /api/inventory/assets', () => {
   it('rejects a non-numeric product_id', async () => {
     const request = postRequest({
       product_id: 'profoto',
+      asset_tag: 'MH-00001',
       serial_number: 'S-3',
       condition: 'operational',
       location: 'Bodega',
@@ -115,10 +157,47 @@ describe('POST /api/inventory/assets', () => {
     expect(createAsset).not.toHaveBeenCalled();
   });
 
+  it('answers 400 when the service refuses the tag format', async () => {
+    createAsset.mockRejectedValue(new Error('El asset tag no tiene el formato MH-00000'));
+    const request = postRequest({
+      product_id: 42,
+      asset_tag: 'MH-7',
+      serial_number: 'S-7',
+      condition: 'operational',
+      location: 'Bodega',
+    });
+    const { POST } = await import('../assets');
+
+    const response = await POST({ request, ...admin } as never);
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.error).toBe('El asset tag no tiene el formato MH-00000');
+  });
+
+  it('answers 409 when the asset tag is already assigned to another unit', async () => {
+    createAsset.mockRejectedValue(new Error('El asset tag ya está asignado a otra unidad'));
+    const request = postRequest({
+      product_id: 42,
+      asset_tag: 'MH-00001',
+      serial_number: 'S-NEW',
+      condition: 'operational',
+      location: 'Bodega',
+    });
+    const { POST } = await import('../assets');
+
+    const response = await POST({ request, ...admin } as never);
+    const payload = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(payload.error).toBe('El asset tag ya está asignado a otra unidad');
+  });
+
   it('answers 409 when the serial is already registered', async () => {
     createAsset.mockRejectedValue(new Error('Ya existe un equipo registrado con ese número de serie'));
     const request = postRequest({
       product_id: 42,
+      asset_tag: 'MH-00002',
       serial_number: 'PROFOTO-B10-0007',
       condition: 'operational',
       location: 'Bodega',
@@ -136,6 +215,7 @@ describe('POST /api/inventory/assets', () => {
     createAsset.mockRejectedValue(new Error('connection terminated unexpectedly'));
     const request = postRequest({
       product_id: 42,
+      asset_tag: 'MH-00004',
       serial_number: 'S-4',
       condition: 'operational',
       location: 'Bodega',
@@ -188,6 +268,92 @@ describe('GET /api/inventory/assets', () => {
     const response = await GET({ request, ...admin } as never);
 
     expect(response.status).toBe(404);
+  });
+
+  it('looks an asset up by asset tag when the tag query param is present', async () => {
+    getByAssetTag.mockResolvedValue({ id: 7, asset_tag: 'MH-00007', product_id: 42 });
+    const request = new Request('https://dashboard.mariohans.cl/api/inventory/assets?tag=MH-00007');
+    const { GET } = await import('../assets');
+
+    const response = await GET({ request, ...admin } as never);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toEqual({ success: true, data: { id: 7, asset_tag: 'MH-00007', product_id: 42 } });
+    expect(getByAssetTag).toHaveBeenCalledWith('MH-00007');
+    expect(getAssetBySerial).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 with a Spanish message for an unassigned or malformed tag', async () => {
+    getByAssetTag.mockResolvedValue(null);
+    const request = new Request('https://dashboard.mariohans.cl/api/inventory/assets?tag=MH-99998');
+    const { GET } = await import('../assets');
+
+    const response = await GET({ request, ...admin } as never);
+    const payload = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(payload).toEqual({ success: false, error: 'No existe una unidad con ese asset tag' });
+  });
+
+  it('hides a tag-lookup failure behind a generic Spanish 500', async () => {
+    getByAssetTag.mockRejectedValue(new Error('connection terminated unexpectedly'));
+    const request = new Request('https://dashboard.mariohans.cl/api/inventory/assets?tag=MH-00007');
+    const { GET } = await import('../assets');
+
+    const response = await GET({ request, ...admin } as never);
+    const payload = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(payload.error).not.toContain('connection terminated');
+  });
+
+  // R1-101: an operator may resolve the label in their hand, never enumerate the inventory.
+  describe('operator scope', () => {
+    const operator = { locals: { user: { id: 'op-1', email: 'bodega@x.cl', role: 'operator' } } };
+
+    it('operator + ?tag= → 200', async () => {
+      getByAssetTag.mockResolvedValue({ id: 7, asset_tag: 'MH-00007' });
+      const request = new Request('https://dashboard.mariohans.cl/api/inventory/assets?tag=MH-00007');
+      const { GET } = await import('../assets');
+
+      const response = await GET({ request, ...operator } as never);
+
+      expect(response.status).toBe(200);
+      expect(getByAssetTag).toHaveBeenCalledWith('MH-00007');
+    });
+
+    it('operator + ?product_id= → 403, service untouched', async () => {
+      const request = new Request('https://dashboard.mariohans.cl/api/inventory/assets?product_id=42');
+      const { GET } = await import('../assets');
+
+      const response = await GET({ request, ...operator } as never);
+      const payload = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(payload.error).toBe('Permisos insuficientes para esta operación');
+      expect(listAssetsByProduct).not.toHaveBeenCalled();
+    });
+
+    it('operator + ?serial= → 403', async () => {
+      const request = new Request('https://dashboard.mariohans.cl/api/inventory/assets?serial=X');
+      const { GET } = await import('../assets');
+
+      const response = await GET({ request, ...operator } as never);
+
+      expect(response.status).toBe(403);
+      expect(getAssetBySerial).not.toHaveBeenCalled();
+    });
+
+    it('admin + ?product_id= → 200 (unchanged)', async () => {
+      listAssetsByProduct.mockResolvedValue([{ id: 7 }]);
+      const request = new Request('https://dashboard.mariohans.cl/api/inventory/assets?product_id=42');
+      const { GET } = await import('../assets');
+
+      const response = await GET({ request, ...admin } as never);
+
+      expect(response.status).toBe(200);
+    });
   });
 
   it('lists the assets of a product when product_id is given', async () => {

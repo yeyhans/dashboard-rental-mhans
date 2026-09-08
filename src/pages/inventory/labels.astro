@@ -1,0 +1,181 @@
+---
+import Base from "../../layout/Base.astro";
+import AssetLabelSheet from "../../components/inventory/AssetLabelSheet";
+import { MAX_LABELS_PER_SHEET, resolveLabelSheetRequest } from "../../components/inventory/labelSheet";
+import { buildAssetLabel, type AssetLabel } from "../../lib/assetLabel";
+import { LABEL_MM } from "../../lib/labelGeometry";
+import { nextAssetTag } from "../../lib/assetTag";
+import { clearAuthCookies, getServerAdmin } from "../../lib/supabase";
+import { ProductService } from "../../services/productService";
+import { SerialisedAssetService } from "../../services/serialisedAssetService";
+
+export const prerender = false;
+
+// Asset labels for the physical count. Admin-only, same session gate as the intake page: a label
+// sheet enumerates the inventory. Two modes (see `labelSheet.ts`): a roll printed ahead of the
+// count (`from` + `count`, model unknown) or reprints of registered units (`tags`).
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  console.log('🚫 Acceso denegado a inventory/labels - Usuario no es administrador');
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+
+const request = resolveLabelSheetRequest(Astro.url.searchParams);
+
+let labels: AssetLabel[] = [];
+let description = '';
+let notFound: string[] = [];
+let suggestedFrom = '';
+let sequenceExhausted = false;
+let loadError: string | null = null;
+
+try {
+  if (request.mode === 'roll') {
+    // The roll carries no model: it is stuck on whatever unit comes next during the count.
+    labels = request.tags.map((tag) => buildAssetLabel({ tag, modelName: '' }));
+    description = `Rollo de ${labels.length} etiquetas, de ${request.tags[0]} a ${request.tags[request.tags.length - 1]}.`;
+  } else if (request.mode === 'tags') {
+    // Reprints resolve each tag to its unit so the label carries the model name. Unknown tags are
+    // reported, not silently skipped — a reprint that prints nothing is a missed unit.
+    const assets = await Promise.all(request.tags.map((tag) => SerialisedAssetService.getByAssetTag(tag)));
+    const productIds = new Set(assets.flatMap((asset) => (asset ? [asset.product_id] : [])));
+    const products = await Promise.all(
+      Array.from(productIds).map((id) => ProductService.getProductById(id))
+    );
+    const productNames = new Map<number, string>();
+    for (const product of products) {
+      if (product) productNames.set(product.id, product.name || '');
+    }
+
+    labels = assets.flatMap((asset) =>
+      asset ? [buildAssetLabel({ tag: asset.asset_tag, modelName: productNames.get(asset.product_id) || '' })] : []
+    );
+    notFound = request.tags.filter((tag, index) => assets[index] === null);
+    description =
+      labels.length === 1
+        ? `Reimpresión de la etiqueta ${labels[0]?.tag}.`
+        : `Reimpresión de ${labels.length} etiquetas.`;
+  } else if (request.mode === 'form') {
+    const highest = await SerialisedAssetService.getHighestAssetTag();
+    try {
+      suggestedFrom = nextAssetTag(highest);
+    } catch {
+      sequenceExhausted = true;
+    }
+  }
+} catch (error) {
+  console.error('[inventory/labels] Error al preparar las etiquetas:', {
+    mode: request.mode,
+    tags: request.tags.length,
+    error,
+    userId: adminSession.admin.email,
+  });
+  loadError = 'No se pudieron preparar las etiquetas. Intenta de nuevo.';
+}
+
+const title = `Etiquetas de inventario | ${adminSession.admin.email}`;
+const showSheet = !loadError && (request.mode === 'roll' || request.mode === 'tags');
+---
+
+<Base title={title}>
+  <div class="container space-y-6 py-6">
+    <div class="flex flex-wrap items-start justify-between gap-3 print:hidden">
+      <div>
+        <h1 class="text-2xl font-semibold">Etiquetas de inventario</h1>
+        <p class="text-muted-foreground text-sm">
+          Cada etiqueta lleva el asset tag en QR y en código de barras. Tamaño {LABEL_MM.width} × {LABEL_MM.height} mm (Brother QL, DK-11209).
+        </p>
+      </div>
+      <a
+        href="/inventory"
+        class="border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium shadow-sm transition-colors"
+      >
+        Volver al registro
+      </a>
+    </div>
+
+    {loadError && (
+      <div class="border-destructive/50 text-destructive rounded-md border p-3 text-sm print:hidden">
+        {loadError}
+      </div>
+    )}
+
+    {request.mode === 'error' && (
+      <div class="border-destructive/50 text-destructive rounded-md border p-3 text-sm print:hidden">
+        {request.error}
+        <a href="/inventory/labels" class="ml-2 underline underline-offset-4">Volver a empezar</a>
+      </div>
+    )}
+
+    {notFound.length > 0 && (
+      <div class="bg-muted/50 rounded-md border p-3 text-sm print:hidden">
+        <span class="font-medium">Sin unidad registrada:</span>
+        <span class="text-muted-foreground"> {notFound.join(', ')}. Esas etiquetas no se incluyen.</span>
+      </div>
+    )}
+
+    {request.mode === 'form' && !loadError && (
+      <form method="get" action="/inventory/labels" class="rounded-lg border bg-card p-6 text-card-foreground shadow-sm print:hidden">
+        <h2 class="text-base font-semibold">Imprimir un rollo</h2>
+        <p class="text-muted-foreground mt-1 text-sm">
+          Las etiquetas se imprimen antes del conteo y se pegan en cada unidad al registrarla.
+          {suggestedFrom && (
+            <span> El siguiente asset tag libre es <span class="font-mono font-medium text-foreground">{suggestedFrom}</span>.</span>
+          )}
+        </p>
+
+        {sequenceExhausted ? (
+          <p class="text-destructive mt-4 text-sm">
+            Se alcanzó el último asset tag posible (MH-99999); no quedan etiquetas por asignar.
+          </p>
+        ) : (
+          <div class="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+            <div class="space-y-2">
+              <label for="from" class="text-sm font-medium leading-none">Desde</label>
+              <input
+                id="from"
+                name="from"
+                value={suggestedFrom}
+                required
+                pattern="[Mm][Hh]-[0-9]{5}"
+                autocomplete="off"
+                autocapitalize="characters"
+                spellcheck="false"
+                placeholder="MH-00001"
+                class="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 font-mono text-sm uppercase shadow-sm focus-visible:outline-none focus-visible:ring-1"
+              />
+            </div>
+            <div class="space-y-2">
+              <label for="count" class="text-sm font-medium leading-none">Cantidad</label>
+              <input
+                id="count"
+                name="count"
+                type="number"
+                min="1"
+                max={MAX_LABELS_PER_SHEET}
+                value="50"
+                required
+                inputmode="numeric"
+                class="border-input bg-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
+              />
+            </div>
+            <button
+              type="submit"
+              class="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 items-center justify-center rounded-md px-4 text-sm font-medium shadow transition-colors"
+            >
+              Generar etiquetas
+            </button>
+          </div>
+        )}
+        <p class="text-muted-foreground mt-3 text-xs">
+          Máximo {MAX_LABELS_PER_SHEET} etiquetas por hoja. Para reimprimir una etiqueta existente, usa
+          «Imprimir etiqueta» en la tabla de registro.
+        </p>
+      </form>
+    )}
+
+    {showSheet && <AssetLabelSheet client:load labels={labels} description={description} />}
+  </div>
+</Base>
