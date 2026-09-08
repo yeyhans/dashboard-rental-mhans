@@ -1,4 +1,5 @@
-import { getServerAdmin } from "../lib/supabase";
+import { resolveAdminSession } from "../lib/supabase";
+import { FORBIDDEN_ROLE_ERROR, INACTIVE_ACCOUNT_ERROR, resolveAccess } from "../lib/accessControl";
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -6,6 +7,16 @@ export interface AuthenticatedRequest extends Request {
     email: string;
     role?: string;
   };
+}
+
+/** `context.url` en Astro; en tests y llamadas manuales se deriva de `request.url`. */
+function requestPathname(context: any): string | null {
+  if (context.url?.pathname) return context.url.pathname;
+  try {
+    return context.request?.url ? new URL(context.request.url).pathname : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -38,13 +49,45 @@ export const withAuth = (handler: (context: any) => Promise<Response>) => {
       };
 
       // Verificar autenticación usando el nuevo sistema
-      const adminSession = await getServerAdmin(astroLike as any);
+      const { session: adminSession, inactive } = await resolveAdminSession(astroLike as any);
+
+      if (inactive) {
+        // Cuenta desactivada (0011): mismo 401 que "sin sesión", con el motivo real para que el
+        // operario sepa que no es un problema de red ni de contraseña.
+        return new Response(
+          JSON.stringify({ success: false, error: INACTIVE_ACCOUNT_ERROR }),
+          {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      }
 
       if (!adminSession) {
         return new Response(
-          JSON.stringify({ error: 'Acceso denegado - Usuario no es administrador' }), 
-          { 
+          JSON.stringify({ error: 'Acceso denegado - Usuario no es administrador' }),
+          {
             status: 401,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      }
+
+      // Gating por rol (lib/accessControl.ts): un `operator` solo alcanza los endpoints del
+      // escaneo de bodega. La ruta se resuelve desde el contexto; sin ruta conocida se deja
+      // pasar solo a los roles de acceso completo.
+      const pathname = requestPathname(context);
+      const verdict = resolveAccess(adminSession.admin.role, pathname ?? '/api/', context.request?.method ?? 'GET');
+      if (verdict !== 'allow') {
+        console.log('🚫 Ruta API fuera del alcance del rol:', {
+          role: adminSession.admin.role,
+          method: context.request?.method,
+          url: pathname
+        });
+        return new Response(
+          JSON.stringify({ success: false, error: FORBIDDEN_ROLE_ERROR }),
+          {
+            status: 403,
             headers: { 'Content-Type': 'application/json' }
           }
         );
@@ -67,6 +110,14 @@ export const withAuth = (handler: (context: any) => Promise<Response>) => {
       };
       
       context.adminSession = adminSession;
+
+      // Also on `locals`: that is where the API routes read `user` and `adminSession` from
+      // (`checked_by_admin_id` in `/api/inventory/movements` comes from `locals.adminSession`).
+      // The global middleware only fills `locals` for page routes, never for `/api/*`.
+      if (context.locals && typeof context.locals === 'object') {
+        context.locals.user = context.user;
+        context.locals.adminSession = adminSession;
+      }
 
       return handler(context);
     } catch (error) {
@@ -96,7 +147,7 @@ export const requireRole = (...roles: string[]) => (handler: (context: any) => P
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Permisos insuficientes para esta operación'
+          error: FORBIDDEN_ROLE_ERROR
         }),
         {
           status: 403,

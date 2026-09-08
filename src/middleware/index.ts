@@ -1,6 +1,7 @@
 import { defineMiddleware } from "astro:middleware";
 import { getServerAdmin } from "../lib/supabase";
 import { getAllowedOrigin } from "../middleware/auth";
+import { homeFor, resolveAccess } from "../lib/accessControl";
 import micromatch from "micromatch";
 
 const { isMatch } = micromatch;
@@ -19,7 +20,10 @@ const protectedRoutes = [
   "/finance(|/)",
   "/profitability(|/)",
   "/inventory(|/)",
-  "/inventory/**"
+  "/inventory/**",
+  "/operators(|/)",
+  "/bodega(|/)",
+  "/bodega/**"
 ];
 
 // Rutas de autenticación que no requieren verificación
@@ -79,7 +83,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (url.pathname === homeRoute) {
     const adminSession = await getServerAdmin(context);
     if (adminSession) {
-      return redirect(dashboardRoute);
+      // Un `operator` aterriza en /bodega; el resto en el Centro de Control.
+      return redirect(homeFor(adminSession.admin.role) || dashboardRoute);
     }
     return next();
   }
@@ -100,6 +105,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // Las cookies se limpian solo en logout explícito o refresh confirmado inválido.
     console.log('🚫 Acceso denegado al dashboard - Usuario no es administrador');
     return redirect(homeRoute);
+  }
+
+  // Gating por rol (lib/accessControl.ts, cubierto por tests): un `operator` solo ve /bodega.
+  // Cualquier otra página protegida lo devuelve a su inicio en vez de mostrarle el panel.
+  if (resolveAccess(adminSession.admin.role, url.pathname, request.method) !== 'allow') {
+    console.log('🚫 Página fuera del alcance del rol:', { role: adminSession.admin.role, path: url.pathname });
+    return redirect(homeFor(adminSession.admin.role));
   }
 
   // Configurar datos del usuario en locals para uso en páginas

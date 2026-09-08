@@ -10,6 +10,8 @@
  * itself active looks exactly like a dead link.
  */
 
+import { hasFullAccess, type AdminRole } from './accessControl';
+
 /** Lucide icon name. Resolved by the shell; kept as a string so this module stays renderer-free. */
 export interface NavModule {
   readonly label: string;
@@ -17,6 +19,11 @@ export interface NavModule {
   readonly icon: string;
   /** Badge count slot, e.g. open alerts. Resolved at render time, never hard-coded here. */
   readonly badgeKey?: 'alerts';
+  /**
+   * Roles that see this entry. Omitted = every full-access role. This only hides the link; the
+   * route itself is guarded server-side (`accessControl.ts`, the page's own role check).
+   */
+  readonly roles?: readonly AdminRole[];
 }
 
 export interface NavGroup {
@@ -59,12 +66,30 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { label: 'Finanzas & Cobranza', href: '/finance', icon: 'Coins' },
       { label: 'Rentabilidad', href: '/profitability', icon: 'TrendingUp' },
+      // Not in the canonical: operator accounts arrived with batch 3 (0011). Minting logins is
+      // the one thing a plain admin must not do, so only super_admin sees the entry.
+      { label: 'Operarios', href: '/operators', icon: 'UserCog', roles: ['super_admin'] },
     ],
   },
 ];
 
 /** Flat view of every module, in sidebar order. */
 export const NAV_MODULES: readonly NavModule[] = NAV_GROUPS.flatMap(group => group.items);
+
+/**
+ * The groups one role gets to see. Operators get nothing — their shell (`/bodega`) has no
+ * sidebar. A group whose every item is hidden disappears with them: an empty heading reads as
+ * a broken menu.
+ */
+export function visibleNavGroups(role: string | null | undefined): readonly NavGroup[] {
+  if (!role || !hasFullAccess(role)) return [];
+  return NAV_GROUPS
+    .map(group => ({
+      label: group.label,
+      items: group.items.filter(item => !item.roles || (item.roles as readonly string[]).includes(role)),
+    }))
+    .filter(group => group.items.length > 0);
+}
 
 /** Exact-path lookup. Returns `null` for a subroute — see `activeModule` for that. */
 export function moduleByPath(pathname: string): NavModule | null {

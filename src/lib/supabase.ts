@@ -3,6 +3,7 @@ import type { Database } from '../types/database';
 import type { APIContext } from 'astro';
 import type { AstroGlobal } from 'astro';
 import type { User } from '@supabase/supabase-js';
+import { ADMIN_ROLES } from './accessControl';
 
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -47,7 +48,18 @@ export interface AdminUser {
   user_id: string;
   email: string;
   role: string;
+  /** Migration 0011. `false` = deactivated: rejected at login and on every request. */
+  is_active: boolean;
   created_at: string;
+}
+
+/**
+ * What `resolveAdminSession` learned. `inactive` is reported separately from "no session" so
+ * `withAuth` can tell a deactivated worker WHY instead of a generic 401.
+ */
+export interface AdminResolution {
+  session: ExtendedSession | null;
+  inactive: boolean;
 }
 
 export interface ExtendedSession {
@@ -188,53 +200,87 @@ export const getServerUser = async (context: APIContext | AstroGlobal) => {
 const adminCache = new Map<string, { admin: AdminUser | null, timestamp: number }>();
 const ADMIN_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
-export const getServerAdmin = async (context: APIContext | AstroGlobal): Promise<ExtendedSession | null> => {
+/**
+ * Drops one user's cached `admin_users` row so the next request re-reads it. Called when a row
+ * changes (`OperatorService.setActive`), so a deactivation takes effect on the next request on
+ * THIS instance instead of after the TTL. Other serverless instances keep their own cache — which
+ * is why operator rows are never trusted from cache at all (see `resolveAdminSession`).
+ */
+export const invalidateAdminCache = (userId: string): void => {
+  adminCache.delete(userId);
+};
+
+const isDeactivated = (admin: AdminUser | null): boolean => !!admin && admin.is_active === false;
+
+const extendedSession = (user: User, admin: AdminUser): ExtendedSession => ({
+  user,
+  admin,
+  expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
+  isExtended: true
+});
+
+/**
+ * Resolves the session AND says why it was refused. `getServerAdmin` below is the boolean view
+ * most callers want; `withAuth` uses this one to answer a deactivated account with its own message.
+ *
+ * Operators are re-verified on every request — their cache entry is ignored on purpose. A worker
+ * who is let go must be locked out on their next scan, and `invalidateAdminCache` only reaches the
+ * instance that ran the deactivation. Admin rows keep the 5-minute cache: there are a handful of
+ * them, they are deactivated rarely, and the cache is what keeps the dashboard's per-request
+ * cost down.
+ */
+export const resolveAdminSession = async (context: APIContext | AstroGlobal): Promise<AdminResolution> => {
+  const refused: AdminResolution = { session: null, inactive: false };
   try {
     const user = await getServerUser(context);
     if (!user) {
       console.log('🔒 No user found in session');
-      return null;
+      return refused;
     }
 
     // Check admin cache first
     const cached = adminCache.get(user.id);
-    if (cached && (Date.now() - cached.timestamp) < ADMIN_CACHE_TTL) {
+    const cacheUsable = cached && (Date.now() - cached.timestamp) < ADMIN_CACHE_TTL && cached.admin?.role !== 'operator';
+    if (cached && cacheUsable) {
+      if (isDeactivated(cached.admin)) {
+        console.log('🔒 Account deactivated (cached)');
+        return { session: null, inactive: true };
+      }
       if (!cached.admin) {
         console.log('🔒 User not admin (cached)');
-        return null;
+        return refused;
       }
-      
-      return {
-        user,
-        admin: cached.admin,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
-        isExtended: true
-      };
+
+      return { session: extendedSession(user, cached.admin), inactive: false };
     }
 
     if (!supabaseAdmin) {
       console.error('❌ Supabase admin client not available');
-      return null;
+      return refused;
     }
 
     // Verify admin user exists in admin_users table
     // .in() en vez de .eq('role', 'admin'): los super_admin quedaban excluidos
-    // y se cacheaban como "no admin" 5 min → loop de login constante
-    const { data: adminUser, error: adminError } = await supabaseAdmin
+    // y se cacheaban como "no admin" 5 min → loop de login constante.
+    // `ADMIN_ROLES` incluye `operator` (0011); lo que cada rol puede abrir lo decide
+    // `resolveAccess`, no esta consulta.
+    const { data: adminRow, error: adminError } = await supabaseAdmin
       .from('admin_users')
       .select('*')
       .eq('user_id', user.id)
-      .in('role', ['admin', 'super_admin'])
+      .in('role', [...ADMIN_ROLES])
       .single();
+    // `user_id` is nullable in the generated Row; the `.eq('user_id', ...)` filter guarantees it here.
+    const adminUser = adminRow as AdminUser | null;
 
     if (adminError && adminError.code !== 'PGRST116') {
       // Error transitorio (red, timeout) — NO cachear como "no admin",
       // de lo contrario el admin queda expulsado 5 minutos por un fallo pasajero
       console.error('❌ Error verificando admin (transitorio, no cacheado):', adminError.message);
-      return null;
+      return refused;
     }
 
-    // Cache the result (solo resultados definitivos: admin encontrado o PGRST116 = no existe)
+    // Cache the result (solo resultados definitivos: admin encontrado, desactivado, o PGRST116 = no existe)
     adminCache.set(user.id, {
       admin: adminUser,
       timestamp: Date.now()
@@ -242,20 +288,25 @@ export const getServerAdmin = async (context: APIContext | AstroGlobal): Promise
 
     if (!adminUser) {
       console.log('🔒 User is not admin:', user.email);
-      return null;
+      return refused;
+    }
+
+    if (isDeactivated(adminUser)) {
+      console.log('🔒 Account deactivated:', adminUser.email);
+      return { session: null, inactive: true };
     }
 
     console.log('✅ Admin verified:', adminUser.email);
-    return {
-      user,
-      admin: adminUser,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
-      isExtended: true
-    };
+    return { session: extendedSession(user, adminUser), inactive: false };
   } catch (error) {
-    console.error('❌ Error in getServerAdmin:', error);
-    return null;
+    console.error('❌ Error in resolveAdminSession:', error);
+    return refused;
   }
+};
+
+export const getServerAdmin = async (context: APIContext | AstroGlobal): Promise<ExtendedSession | null> => {
+  const { session } = await resolveAdminSession(context);
+  return session;
 };
 
 // Función para limpiar cookies de sesión

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_GROUPS, NAV_MODULES, activeModule, moduleByPath } from '../navigation';
+import { NAV_GROUPS, NAV_MODULES, activeModule, moduleByPath, visibleNavGroups } from '../navigation';
 
 /**
  * La navegación de Área 01.
@@ -31,7 +31,8 @@ describe('NAV_GROUPS', () => {
       'Catálogo Equipos',
       'Clientes & Documentos',
     ]);
-    expect(NAV_GROUPS[2]?.items.map(i => i.label)).toEqual(['Finanzas & Cobranza', 'Rentabilidad']);
+    // Operarios (lote 3) es la única entrada fuera del canónico; sólo la ve super_admin.
+    expect(NAV_GROUPS[2]?.items.map(i => i.label)).toEqual(['Finanzas & Cobranza', 'Rentabilidad', 'Operarios']);
   });
 
   it('no deja ningún módulo sin ruta ni con ruta duplicada', () => {
@@ -75,6 +76,34 @@ describe('activeModule', () => {
   it('no marca la raíz como activa desde cualquier parte', () => {
     // Un `href` de `/` con match por prefijo marcaría TODOS los módulos a la vez.
     expect(NAV_MODULES.some(m => m.href === '/')).toBe(false);
+  });
+});
+
+/**
+ * Visibilidad por rol (lote 3). Esconder el enlace no protege la ruta — eso lo hace
+ * `accessControl.ts` — pero un admin que ve "Operarios" y recibe 403 al abrirlo lee un bug.
+ */
+describe('visibleNavGroups', () => {
+  it('un admin ve el canónico exacto: los ocho módulos, sin Operarios', () => {
+    const groups = visibleNavGroups('admin');
+    expect(groups.map(g => g.label)).toEqual(['Torre de Control', 'Operaciones Rental', 'Gestión del Negocio']);
+    expect(groups[2]?.items.map(i => i.label)).toEqual(['Finanzas & Cobranza', 'Rentabilidad']);
+    expect(groups.flatMap(g => g.items)).toHaveLength(9);
+  });
+
+  it('un super_admin ve además Operarios', () => {
+    const groups = visibleNavGroups('super_admin');
+    expect(groups[2]?.items.map(i => i.label)).toContain('Operarios');
+  });
+
+  it('un operator no ve ningún grupo: su shell no tiene barra lateral', () => {
+    expect(visibleNavGroups('operator')).toEqual([]);
+    expect(visibleNavGroups(null)).toEqual([]);
+    expect(visibleNavGroups(undefined)).toEqual([]);
+  });
+
+  it('no devuelve grupos vacíos', () => {
+    expect(visibleNavGroups('admin').every(g => g.items.length > 0)).toBe(true);
   });
 });
 

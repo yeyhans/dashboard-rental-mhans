@@ -1,8 +1,9 @@
 import type { APIRoute } from 'astro';
 import { MOVEMENT_TRANSITION_ERRORS } from '../../../lib/assetMovements';
+import { parseInstant } from '../../../lib/movementsFeed';
 import { withAuth } from '../../../middleware/auth';
-import { AssetMovementService } from '../../../services/assetMovementService';
-import type { MovementDirection } from '../../../types/assetMovements';
+import { AssetMovementService, FEED_DEFAULT_LIMIT, FEED_MAX_LIMIT } from '../../../services/assetMovementService';
+import { isMovementDirection, type MovementDirection } from '../../../types/assetMovements';
 
 // Asset movements (T-026 gap 1/4, Check-In audit trail). Admin-only, same posture as
 // `/api/inventory/assets`: `asset_movements` has no grant beyond `service_role` (see the
@@ -86,13 +87,59 @@ export const POST: APIRoute = withAuth(async ({ request, locals }) => {
   }
 });
 
+/**
+ * GET without `asset_id`/`order_id` is the central feed (batch 3): `?since=&until=` (ISO
+ * instants), `?direction=checkout|checkin`, `?admin_id=`, `?limit=`. The two original lookups
+ * keep their contract and their callers untouched. Operators never reach this handler — the
+ * `withAuth` role gate answers 403 for `GET /api/inventory/movements` before it runs.
+ */
+function feedHandler(url: URL, locals: unknown): Promise<Response> {
+  const since = parseInstant(url.searchParams.get('since'));
+  if (since === undefined) return Promise.resolve(fail('El parámetro since debe ser una fecha válida', 400));
+  const until = parseInstant(url.searchParams.get('until'));
+  if (until === undefined) return Promise.resolve(fail('El parámetro until debe ser una fecha válida', 400));
+
+  const directionParam = url.searchParams.get('direction');
+  if (directionParam && !isMovementDirection(directionParam)) {
+    return Promise.resolve(fail('Dirección inválida. Debe ser "checkout" o "checkin"', 400));
+  }
+
+  const adminIdParam = url.searchParams.get('admin_id');
+  const adminId = adminIdParam ? Number(adminIdParam) : null;
+  if (adminIdParam && (!Number.isInteger(adminId) || (adminId as number) <= 0)) {
+    return Promise.resolve(fail('ID de operario inválido', 400));
+  }
+
+  const limitParam = url.searchParams.get('limit');
+  const limit = limitParam ? Number(limitParam) : FEED_DEFAULT_LIMIT;
+  if (!Number.isInteger(limit) || limit <= 0 || limit > FEED_MAX_LIMIT) {
+    return Promise.resolve(fail(`El parámetro limit debe estar entre 1 y ${FEED_MAX_LIMIT}`, 400));
+  }
+
+  return AssetMovementService.listFeed({
+    since,
+    until,
+    direction: (directionParam as MovementDirection | null) || null,
+    adminId,
+    limit,
+  })
+    .then((feed) => json({ success: true, data: feed }, 200))
+    .catch((error) => {
+      console.error('[GET /api/inventory/movements] Error al cargar el feed:', {
+        error,
+        userId: (locals as { user?: { id: string } })?.user?.id,
+      });
+      return fail('Error al consultar los movimientos', 500);
+    });
+}
+
 export const GET: APIRoute = withAuth(async ({ request, locals }) => {
   const url = new URL(request.url);
   const assetIdParam = url.searchParams.get('asset_id');
   const orderIdParam = url.searchParams.get('order_id');
 
   if (!assetIdParam && !orderIdParam) {
-    return fail('Debes indicar un equipo o una orden', 400);
+    return feedHandler(url, locals);
   }
 
   try {

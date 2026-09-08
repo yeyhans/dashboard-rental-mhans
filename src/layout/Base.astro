@@ -3,6 +3,7 @@ import "../styles/globals.css";
 import { getServerAdmin } from "../lib/supabase";
 import { ModeToggle } from "../components/ModeToggle";
 import {
+  ArrowLeftRight,
   Bell,
   Boxes,
   ChevronLeft,
@@ -20,10 +21,11 @@ import {
   Tag,
   TrendingUp,
   Truck,
+  UserCog,
   Users,
   X,
 } from "lucide-react";
-import { NAV_GROUPS, activeModule } from "../lib/navigation";
+import { activeModule, visibleNavGroups } from "../lib/navigation";
 import { AlertService } from "../services/alertService";
 
 interface Props {
@@ -53,7 +55,12 @@ const NAV_ICONS: Record<string, any> = {
   Users,
   Coins,
   TrendingUp,
+  UserCog,
 };
+
+// La barra se filtra por rol (lote 3): Operarios solo para super_admin. Lo que decide
+// `visibleNavGroups` esta cubierto por tests; aqui solo se renderiza.
+const navGroups = visibleNavGroups(adminSession?.admin.role);
 
 /**
  * Subenlaces que el canonico no lista como modulos de primer nivel. Se conservan dentro de su
@@ -66,6 +73,7 @@ const NAV_SUBLINKS: Record<string, ReadonlyArray<{ label: string; href: string; 
   '/products': [
     { label: 'Categorias', href: '/products/categories', icon: Grid3X3 },
     { label: 'Inventario', href: '/inventory', icon: Boxes },
+    { label: 'Movimientos', href: '/inventory/movements', icon: ArrowLeftRight },
   ],
   '/finance': [
     { label: 'Pagos', href: '/payments-table', icon: CreditCard },
@@ -73,6 +81,15 @@ const NAV_SUBLINKS: Record<string, ReadonlyArray<{ label: string; href: string; 
 };
 
 const activeNav = activeModule(currentPath);
+
+// Un subenlace se marca activo en su ruta exacta o en una subruta con separador. `/inventory`
+// no debe encenderse en `/inventory/movements`, que es otro subenlace: el mas largo que calce gana.
+const allSublinkHrefs = Object.values(NAV_SUBLINKS).flat().map((sub) => sub.href);
+const isSublinkActive = (href: string): boolean => {
+  const matches = (candidate: string) => currentPath === candidate || currentPath.startsWith(`${candidate}/`);
+  if (!matches(href)) return false;
+  return !allSublinkHrefs.some((other) => other !== href && other.length > href.length && matches(other));
+};
 
 /**
  * Contador de la campana. El canonico lo muestra en los ocho modulos, asi que se resuelve en el
@@ -453,7 +470,7 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
             vive en `lib/navigation.ts` y esta cubierta por tests; aqui solo se renderiza.
           -->
           <nav class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-4" aria-label="Navegacion principal">
-            {NAV_GROUPS.map((group) => (
+            {navGroups.map((group) => (
               <div class="space-y-0.5">
                 <div class="sidebar-section-label">{group.label}</div>
                 {group.items.map((item) => {
@@ -484,8 +501,8 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
                           {sublinks.map((sub) => (
                             <a
                               href={sub.href}
-                              class={`sidebar-nav-item text-[0.8125rem] ${currentPath.startsWith(sub.href) ? 'active' : ''}`}
-                              aria-current={currentPath.startsWith(sub.href) ? 'page' : undefined}
+                              class={`sidebar-nav-item text-[0.8125rem] ${isSublinkActive(sub.href) ? 'active' : ''}`}
+                              aria-current={isSublinkActive(sub.href) ? 'page' : undefined}
                             >
                               <sub.icon className="nav-icon" />
                               <span class="sidebar-label">{sub.label}</span>

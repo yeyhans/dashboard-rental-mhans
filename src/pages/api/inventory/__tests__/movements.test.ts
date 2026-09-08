@@ -9,6 +9,7 @@ import { MOVEMENT_TRANSITION_ERRORS } from '../../../../lib/assetMovements';
 const recordMovement = vi.fn();
 const getHistoryForAsset = vi.fn();
 const listByOrder = vi.fn();
+const listFeed = vi.fn();
 
 vi.mock('../../../../middleware/auth', () => ({
   withAuth: (handler: (context: any) => Promise<Response>) => async (context: any) => {
@@ -20,7 +21,9 @@ vi.mock('../../../../middleware/auth', () => ({
 }));
 
 vi.mock('../../../../services/assetMovementService', () => ({
-  AssetMovementService: { recordMovement, getHistoryForAsset, listByOrder },
+  AssetMovementService: { recordMovement, getHistoryForAsset, listByOrder, listFeed },
+  FEED_DEFAULT_LIMIT: 200,
+  FEED_MAX_LIMIT: 500,
 }));
 
 const admin = {
@@ -117,5 +120,94 @@ describe('POST /api/inventory/movements', () => {
 
     expect(response.status).toBe(500);
     expect(payload.error).not.toContain('connection terminated');
+  });
+});
+
+/**
+ * Batch 3: GET without `asset_id`/`order_id` is the central feed. The two original lookups keep
+ * their contract; these tests pin the new branch's parameter validation and pass-through.
+ */
+describe('GET /api/inventory/movements — feed', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function getRequest(query = '') {
+    return new Request(`https://dashboard.mariohans.cl/api/inventory/movements${query}`);
+  }
+
+  it('requires authentication', async () => {
+    const { GET } = await import('../movements');
+    const response = await GET({ request: getRequest(), locals: {} } as never);
+    expect(response.status).toBe(401);
+    expect(listFeed).not.toHaveBeenCalled();
+  });
+
+  it('returns the feed with defaults when no params are given', async () => {
+    const feed = { movements: [], kpis: { unitsOutNow: 0, unitsOverdue: 0, movementsToday: 0 }, operators: [], generatedAt: 'x' };
+    listFeed.mockResolvedValue(feed);
+    const { GET } = await import('../movements');
+
+    const response = await GET({ request: getRequest(), ...admin } as never);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({ success: true, data: feed });
+    expect(listFeed).toHaveBeenCalledWith({ since: null, until: null, direction: null, adminId: null, limit: 200 });
+  });
+
+  it('forwards since/until (normalised), direction, admin_id and limit', async () => {
+    listFeed.mockResolvedValue({ movements: [] });
+    const { GET } = await import('../movements');
+
+    await GET({
+      request: getRequest('?since=2026-09-08T00:00:00Z&until=2026-09-09T00:00:00Z&direction=checkin&admin_id=7&limit=50'),
+      ...admin,
+    } as never);
+
+    expect(listFeed).toHaveBeenCalledWith({
+      since: '2026-09-08T00:00:00.000Z',
+      until: '2026-09-09T00:00:00.000Z',
+      direction: 'checkin',
+      adminId: 7,
+      limit: 50,
+    });
+  });
+
+  it.each([
+    ['?since=ayer', 'since'],
+    ['?until=nunca', 'until'],
+    ['?direction=sideways', 'Dirección inválida'],
+    ['?admin_id=abc', 'operario'],
+    ['?limit=0', 'limit'],
+    ['?limit=9999', 'limit'],
+  ])('400 on %s', async (query, fragment) => {
+    const { GET } = await import('../movements');
+    const response = await GET({ request: getRequest(query), ...admin } as never);
+    const body = await response.json();
+    expect(response.status).toBe(400);
+    expect(body.error).toContain(fragment);
+    expect(listFeed).not.toHaveBeenCalled();
+  });
+
+  it('still serves the per-asset and per-order lookups unchanged', async () => {
+    getHistoryForAsset.mockResolvedValue([{ id: 1 }]);
+    listByOrder.mockResolvedValue([{ id: 2 }, { id: 3 }]);
+    const { GET } = await import('../movements');
+
+    const byAsset = await (await GET({ request: getRequest('?asset_id=5'), ...admin } as never)).json();
+    const byOrder = await (await GET({ request: getRequest('?order_id=9'), ...admin } as never)).json();
+
+    expect(byAsset).toEqual({ success: true, data: { movements: [{ id: 1 }], total: 1 } });
+    expect(byOrder).toEqual({ success: true, data: { movements: [{ id: 2 }, { id: 3 }], total: 2 } });
+    expect(listFeed).not.toHaveBeenCalled();
+  });
+
+  it('hides a feed failure behind the generic Spanish 500', async () => {
+    listFeed.mockRejectedValue(new Error('db'));
+    const { GET } = await import('../movements');
+    const response = await GET({ request: getRequest(), ...admin } as never);
+    expect(response.status).toBe(500);
+    expect((await response.json()).error).toBe('Error al consultar los movimientos');
   });
 });

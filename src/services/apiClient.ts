@@ -174,6 +174,17 @@ class ApiClient {
   }
 
   /**
+   * PATCH request
+   */
+  async patch(endpoint: string, data?: any, options: RequestInit = {}): Promise<Response> {
+    return this.request(endpoint, {
+      ...options,
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : null,
+    });
+  }
+
+  /**
    * DELETE request
    */
   async delete(endpoint: string, options: RequestInit = {}): Promise<Response> {

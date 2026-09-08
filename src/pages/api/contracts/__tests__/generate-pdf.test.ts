@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../../lib/supabase', () => ({
   getServerAdmin: vi.fn(async () => null),
+  // `withAuth` asks for the reason a session was refused (batch 3, `is_active`).
+  resolveAdminSession: vi.fn(async () => ({ session: null, inactive: false })),
 }));
 
 /**

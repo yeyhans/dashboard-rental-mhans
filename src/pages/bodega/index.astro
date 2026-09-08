@@ -1,0 +1,47 @@
+---
+import Bodega from "../../layout/Bodega.astro";
+import BodegaBoard from "../../components/bodega/BodegaBoard";
+import { clearAuthCookies, getServerAdmin } from "../../lib/supabase";
+import { BodegaService } from "../../services/bodegaService";
+import type { BodegaBoard as BodegaBoardData } from "../../lib/bodega";
+
+export const prerender = false;
+
+// The garage board (batch 3). Reachable by operator, admin and super_admin — the global
+// middleware already redirected anyone else; this is the session gate every page repeats.
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+
+// Server clock: the board decides "today" and "tomorrow", and the phone's timezone must not.
+const now = new Date();
+
+let board: BodegaBoardData = { pickups: [], returns: [] };
+let loadError: string | null = null;
+
+try {
+  board = await BodegaService.getBoard(now);
+} catch (error) {
+  console.error('[bodega] Error al cargar el tablero:', { admin: adminSession.admin.email, error });
+  loadError = 'No se pudo cargar el tablero. Revisa la conexión y vuelve a intentarlo.';
+}
+
+const todayLabel = new Intl.DateTimeFormat('es-CL', { weekday: 'long', day: 'numeric', month: 'long' }).format(now);
+---
+
+<Bodega title="Bodega | Mario Hans Rental" email={adminSession.admin.email} showBoardLink={false}>
+  {loadError ? (
+    <div
+      role="alert"
+      class="rounded-[10px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-4 text-sm text-[var(--color-crit)]"
+    >
+      {loadError}
+      <a href="/bodega" class="mt-3 block underline">Reintentar</a>
+    </div>
+  ) : (
+    <BodegaBoard client:load initialBoard={board} todayLabel={todayLabel} />
+  )}
+</Bodega>

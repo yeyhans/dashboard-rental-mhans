@@ -10,18 +10,18 @@ const signInWithPassword = vi.fn();
 
 // Fila que existe en admin_users. El test de regresión usa super_admin porque
 // el bug histórico era un `.eq('role', 'admin')` que lo excluía.
-let adminRows: Array<{ user_id: string; role: string; email: string }> = [];
+let adminRows: Array<{ user_id: string; role: string; email: string; is_active?: boolean }> = [];
 
 function queryBuilder() {
   let rows = [...adminRows];
   const builder = {
     select: () => builder,
     eq: (col: string, val: string) => {
-      rows = rows.filter((r) => (r as Record<string, string>)[col] === val);
+      rows = rows.filter((r) => (r as unknown as Record<string, unknown>)[col] === val);
       return builder;
     },
     in: (col: string, vals: string[]) => {
-      rows = rows.filter((r) => vals.includes((r as Record<string, string>)[col]));
+      rows = rows.filter((r) => vals.includes(String((r as unknown as Record<string, unknown>)[col])));
       return builder;
     },
     single: async () =>
@@ -100,5 +100,40 @@ describe('POST /api/auth/login — admin_users role gate', () => {
     const body = await res.json();
     expect(res.status).toBe(403);
     expect(body.error).toMatch(/administrador/i);
+  });
+
+  // Batch 3 (0011): operators log in through the same door and are sent to the garage.
+  it('accepts an operator and points the browser at /bodega', async () => {
+    adminRows = [{ user_id: 'uid-1', role: 'operator', email: 'bodega@test.cl', is_active: true }];
+    const res = await postLogin('bodega@test.cl');
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.data.redirect_to).toBe('/bodega');
+    expect(body.data.user.role).toBe('operator');
+  });
+
+  it('sends admins to /dashboard', async () => {
+    adminRows = [{ user_id: 'uid-1', role: 'admin', email: 'admin@test.cl', is_active: true }];
+    const res = await postLogin('admin@test.cl');
+    const body = await res.json();
+    expect(body.data.redirect_to).toBe('/dashboard');
+  });
+
+  it('rejects a deactivated account with its own message and sets no cookies', async () => {
+    adminRows = [{ user_id: 'uid-1', role: 'operator', email: 'ex@test.cl', is_active: false }];
+    vi.resetModules();
+    const { POST } = await import('../login');
+    const context = contextFor(loginRequest('ex@test.cl'));
+    const res = await POST(context);
+    const body = await res.json();
+    expect(res.status).toBe(403);
+    expect(body.error).toBe('Tu cuenta está desactivada');
+    expect((context as { cookies: { set: ReturnType<typeof vi.fn> } }).cookies.set).not.toHaveBeenCalled();
+  });
+
+  it('treats a row without the flag (pre-0011 database) as active', async () => {
+    adminRows = [{ user_id: 'uid-1', role: 'admin', email: 'admin@test.cl' }];
+    const res = await postLogin('admin@test.cl');
+    expect(res.status).toBe(200);
   });
 });
