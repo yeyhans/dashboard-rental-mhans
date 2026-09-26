@@ -70,7 +70,7 @@ const collectionChartConfig: ChartConfig = {
 
 const reservesChartConfig: ChartConfig = {
   fullyPaid: { label: 'Pago Completo', color: 'hsl(142, 71%, 45%)' },
-  reservesPaid: { label: 'Reserva (25%)', color: 'hsl(271, 91%, 65%)' },
+  reservesPaid: { label: 'Reserva', color: 'hsl(271, 91%, 65%)' },
   finalPaymentsPending: { label: 'Saldo Pendiente', color: 'hsl(25, 95%, 53%)' },
 };
 

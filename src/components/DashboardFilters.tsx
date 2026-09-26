@@ -63,7 +63,7 @@ export default function DashboardFilters({ onFiltersChange, isLoading = false }:
   const financialStatusOptions = [
     { value: 'all', label: 'Todos los Estados' },
     { value: 'paid', label: 'Completamente Pagado' },
-    { value: 'partial', label: 'Parcialmente Pagado (25%)' },
+    { value: 'partial', label: 'Reserva pagada' },
     { value: 'pending', label: 'Pendiente de Pago' }
   ];
 
@@ -374,7 +374,7 @@ export default function DashboardFilters({ onFiltersChange, isLoading = false }:
                   parseInt(e.target.value), 
                   filters.dateRange.selectedYear ?? new Date().getFullYear()
                 )}
-                className="w-full px-3 py-2 border border-blue-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-black"
+                className="w-full px-3 py-2 border border-blue-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 {monthOptions.map(month => (
                   <option key={month.value} value={month.value}>
@@ -391,7 +391,7 @@ export default function DashboardFilters({ onFiltersChange, isLoading = false }:
                   filters.dateRange.selectedMonth ?? new Date().getMonth(),
                   parseInt(e.target.value)
                 )}
-                className="w-full px-3 py-2 border border-blue-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-black"
+                className="w-full px-3 py-2 border border-blue-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 {yearOptions.map(year => (
                   <option key={year.value} value={year.value}>

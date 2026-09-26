@@ -1,5 +1,8 @@
 ---
 import { getServerUser, getServerUserProfile } from "../../lib/supabase";
+import { reserveAmount } from "../../lib/finance";
+import { reserveLabel } from "../../lib/pricing";
+import { orderBreakdown } from "../../lib/orderBreakdown";
 import { getSessionSupabaseClient } from "../../lib/sessionSupabase";
 import {
   authorizeOrderPdfAccess,
@@ -222,16 +225,13 @@ const originalTotal = parseFloat(
   metadata.calculated_total || orderData.calculated_total || "0",
 );
 
-// Calculate products-only totals (excluding shipping and discounts)
-const productsSubtotal = lineItems.reduce((sum: number, item: any) => {
-  return sum + item.price * item.quantity * numJornadas;
-}, 0);
-const productsIva = productsSubtotal * 0.19;
-const productsTotal = productsSubtotal * 1.19;
-
-// Use products-only totals for the subtotal row
-
-const reserve = originalTotal * 0.25;
+// Reserva acordada para esta orden (orders.reserve_type / reserve_value), no un 25% fijo.
+const reserve = reserveAmount({
+  total: originalTotal,
+  reserveType: orderData.reserve_type ?? null,
+  reserveValue: orderData.reserve_value ?? null,
+});
+const reserveTitle = reserveLabel(orderData.reserve_type ?? null, orderData.reserve_value ?? null).toUpperCase();
 
 // Additional order information
 const orderIdNum = orderData.id || orderData.order_id;
@@ -251,6 +251,20 @@ if (shippingLines && shippingLines.length > 0) {
     tracking_number: shippingMetadata.tracking_number || null,
   };
 }
+
+// Net / IVA / gross columns. Derived by the canonical breakdown so each column adds up to the
+// stored calculated_* printed in the footer, instead of each cell recomputing IVA with floats.
+const breakdown = orderBreakdown({
+  lineItems,
+  jornadas: numJornadas,
+  discount,
+  shippingTotal: shippingInfo ? shippingInfo.total : 0,
+  calculatedSubtotal: originalSubtotal,
+  calculatedIva: originalIva,
+});
+const productsSubtotal = breakdown.products.net;
+const productsIva = breakdown.products.iva;
+const productsTotal = breakdown.products.gross;
 
 // Format currency
 const formatCLP = (amount: number) => {
@@ -649,8 +663,7 @@ const page2Offset = -1553;
       {
         lineItems.map((item: any, index: number) => {
           const yPosition = 559 + index * 33;
-          const netValue =
-            (item.price || 0) * (item.quantity || 0) * numJornadas;
+          const netValue = breakdown.lines[index]?.net ?? 0;
           return (
             <text
               id={`item-net-${index}`}
@@ -686,7 +699,7 @@ const page2Offset = -1553;
             font-family="Calibri"
           >
             <tspan x="0" y="0">
-              {formatCLP(discount)}
+              {formatCLP(breakdown.discount.net)}
             </tspan>
           </text>
         )
@@ -703,7 +716,7 @@ const page2Offset = -1553;
             font-family="Calibri"
           >
             <tspan x="0" y="0">
-              {shippingInfo ? formatCLP(shippingInfo.total) : "$0"}
+              {formatCLP(breakdown.shipping.net)}
             </tspan>
           </text>
         )
@@ -712,8 +725,7 @@ const page2Offset = -1553;
       {
         lineItems.map((item: any, index: number) => {
           const yPosition = 559 + index * 33;
-          const ivaValue =
-            (item.price || 0) * (item.quantity || 0) * numJornadas * 0.19;
+          const ivaValue = breakdown.lines[index]?.iva ?? 0;
           return (
             <text
               id={`item-iva-${index}`}
@@ -748,7 +760,7 @@ const page2Offset = -1553;
             font-family="Calibri"
           >
             <tspan x="0" y="0">
-              {formatCLP(discount * 0.19)}
+              {formatCLP(breakdown.discount.iva)}
             </tspan>
           </text>
         )
@@ -765,7 +777,7 @@ const page2Offset = -1553;
             font-family="Calibri"
           >
             <tspan x="0" y="0">
-              {shippingInfo ? formatCLP(shippingInfo.total * 0.19) : "$0"}
+              {formatCLP(breakdown.shipping.iva)}
             </tspan>
           </text>
         )
@@ -774,8 +786,7 @@ const page2Offset = -1553;
       {
         lineItems.map((item: any, index: number) => {
           const yPosition = 559 + index * 33;
-          const totalValue =
-            (item.price || 0) * (item.quantity || 0) * numJornadas * 1.19;
+          const totalValue = breakdown.lines[index]?.gross ?? 0;
           return (
             <text
               id={`item-total-${index}`}
@@ -826,7 +837,7 @@ const page2Offset = -1553;
             font-family="Calibri"
           >
             <tspan x="0" y="0">
-              {formatCLP(discount * 1.19)}
+              {formatCLP(breakdown.discount.gross)}
             </tspan>
           </text>
         )
@@ -852,7 +863,7 @@ const page2Offset = -1553;
             font-family="Calibri"
           >
             <tspan x="0" y="0">
-              {shippingInfo ? formatCLP(shippingInfo.total * 1.19) : "$0"}
+              {formatCLP(breakdown.shipping.gross)}
             </tspan>
           </text>
         )
@@ -980,7 +991,7 @@ const page2Offset = -1553;
         transform="translate(832 1196)"
         font-size="20"
         font-family="Calibri-Bold, Calibri"
-        font-weight="700"><tspan x="0" y="0">RESERVA 25%</tspan></text
+        font-weight="700"><tspan x="0" y="0">{reserveTitle}</tspan></text
       >
       <text
         id="Valor_Diario"

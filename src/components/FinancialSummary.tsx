@@ -18,8 +18,8 @@ interface FinancialSummary {
   totalSales: number;
   totalPaid: number;
   totalPending: number;
-  reservationPayments: number; // 25% payments
-  finalPayments: number; // 75% payments
+  reservationPayments: number; // reserve payments (per-order reserve)
+  finalPayments: number; // balance payments
 }
 
 interface FinancialSummaryProps {
@@ -101,7 +101,7 @@ export default function FinancialSummary({
     {
       title: 'Pagos de Reserva',
       value: financialSummary.reservationPayments,
-      description: '25% del total de órdenes',
+      description: 'Reserva acordada en cada orden',
       percentage: formatPercentage(financialSummary.reservationPayments, financialSummary.totalPaid),
       color: 'text-purple-600',
       bgColor: 'bg-purple-50'
@@ -109,7 +109,7 @@ export default function FinancialSummary({
     {
       title: 'Pagos Finales',
       value: financialSummary.finalPayments,
-      description: '75% del total de órdenes',
+      description: 'Saldo de cada orden',
       percentage: formatPercentage(financialSummary.finalPayments, financialSummary.totalPaid),
       bgColor: 'bg-indigo-50'
     }
@@ -267,7 +267,7 @@ export default function FinancialSummary({
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                     <div>
-                      <p className="text-sm font-medium dark:text-black">Tasa de Cobranza</p>
+                      <p className="text-sm font-medium">Tasa de Cobranza</p>
                       <p className="text-xs text-muted-foreground">Dinero cobrado vs ventas</p>
                     </div>
                     <div className="text-right">
@@ -279,7 +279,7 @@ export default function FinancialSummary({
 
                   <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
                     <div>
-                      <p className="text-sm font-medium dark:text-black">Promedio por Venta</p>
+                      <p className="text-sm font-medium">Promedio por Venta</p>
                       <p className="text-xs text-muted-foreground">Valor promedio de órdenes</p>
                     </div>
                     <div className="text-right">
@@ -325,16 +325,16 @@ export default function FinancialSummary({
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div className="p-4 bg-purple-50 rounded-lg">
-                  <h4 className="font-semibold text-purple-800 mb-2">Pagos de Reserva (25%)</h4>
+                  <h4 className="font-semibold text-purple-800 mb-2">Pagos de Reserva</h4>
                   <p className="text-purple-700">
-                    Órdenes completadas donde el cliente ha pagado solo el 25% del total para reservar el equipo.
-                    El 75% restante queda pendiente de pago.
+                    Órdenes completadas donde el cliente ha pagado solo la reserva acordada para el equipo.
+                    El saldo restante queda pendiente de pago.
                   </p>
                 </div>
                 <div className="p-4 bg-indigo-50 rounded-lg">
-                  <h4 className="font-semibold text-indigo-800 mb-2">Pagos Finales (75%)</h4>
+                  <h4 className="font-semibold text-indigo-800 mb-2">Pagos Finales (Saldo)</h4>
                   <p className="text-indigo-700">
-                    Órdenes completadas donde el cliente ha pagado el 75% final, completando el 100% del valor total.
+                    Órdenes completadas donde el cliente ha pagado el saldo, completando el 100% del valor total.
                     Estas órdenes están completamente pagadas.
                   </p>
                 </div>

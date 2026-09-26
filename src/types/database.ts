@@ -1027,6 +1027,27 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      record_coupon_usage_for_order: {
+        Args: {
+          p_coupon_code: string
+          p_discount_amount: number
+          p_order_id: number
+          p_user_id: number
+        }
+        Returns: {
+          message: string
+          success: boolean
+          usage_id: number | null
+        }[]
+      }
+      release_coupon_usage_for_order: {
+        Args: {
+          p_order_id: number
+        }
+        Returns: {
+          released: number
+        }[]
+      }
       apply_coupon: {
         Args: {
           p_coupon_code: string

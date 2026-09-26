@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { reserveAmount } from '../../../lib/finance';
+import { reserveLabel } from '../../../lib/pricing';
 import { sendBudgetGeneratedEmail } from '../../../lib/emailService';
 import React from 'react';
 import { BudgetDocument } from '../../../lib/pdf/components/budget/BudgetDocument';
@@ -640,7 +641,7 @@ function generateBudgetHTML(orderData: BudgetData): string {
                 <td class="summary-value currency">${formatCLP(total)}</td>
             </tr>
             <tr class="reserve-row">
-                <td class="summary-label">Reserva (25%)</td>
+                <td class="summary-label">${reserveLabel(orderData.reserve_type, orderData.reserve_value)}</td>
                 <td class="summary-value currency">${formatCLP(reserve)}</td>
             </tr>
         </table>
@@ -749,6 +750,7 @@ async function generateBudgetPDFWithReactPDF(orderData: BudgetData): Promise<{
           reserveType: orderData.reserve_type,
           reserveValue: orderData.reserve_value,
         }),
+        reserveLabel: reserveLabel(orderData.reserve_type, orderData.reserve_value),
       },
       couponCode: orderData.coupon_code,
       status: getOrderStatusInSpanish(orderData.status || 'request'),

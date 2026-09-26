@@ -26,6 +26,7 @@ import {
   TooltipTrigger,
 } from '../ui/tooltip';
 import type { Database } from '../../types/database';
+import { computeSelectorPricing } from './productSelectorPricing';
 
 // Database types
 type DatabaseProduct = Database['public']['Tables']['products']['Row'];
@@ -322,17 +323,16 @@ export const ProductSelector = ({
     return filtered;
   }, [products, searchQuery, stockFilter, statusFilter, enableStockFilter, enableStatusFilter]);
 
-  const totals = useMemo(() => {
-    const subtotal = lineItems.reduce((sum, item) => sum + (item.total || 0), 0);
-    const totalWithDays = subtotal * numDays;
-    const itemCount = lineItems.reduce((sum, item) => sum + item.quantity, 0);
-    
-    return {
-      subtotal: Math.round(subtotal * 100) / 100,
-      totalWithDays: Math.round(totalWithDays * 100) / 100,
-      itemCount
-    };
-  }, [lineItems, numDays]);
+  // Priced through the shared pricing module so the preview matches, to the peso, what the server
+  // stores for this order. Never multiply by `numDays` here.
+  const totals = useMemo(
+    () =>
+      computeSelectorPricing(
+        lineItems.map(item => ({ price: item.product_price, quantity: item.quantity })),
+        numDays,
+      ),
+    [lineItems, numDays],
+  );
 
   useEffect(() => {
     if (mode === 'view') {
@@ -719,11 +719,11 @@ export const ProductSelector = ({
                       <TableCell className="text-right">
                         <div className="flex flex-col items-end gap-1">
                           <span className="font-semibold">
-                            {formatCurrency(item.total, currency)}
+                            {formatCurrency(totals.baseLineAmounts[index] ?? 0, currency)}
                           </span>
                           {numDays > 1 && (
                             <span className="text-xs text-muted-foreground">
-                              × {numDays} días = {formatCurrency(item.total * numDays, currency)}
+                              × {numDays} días = {formatCurrency(totals.lineAmounts[index] ?? 0, currency)}
                             </span>
                           )}
                         </div>

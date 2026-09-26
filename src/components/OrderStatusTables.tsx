@@ -302,7 +302,7 @@ export default function OrderStatusTables({
 
                       {/* Fila expandible con el acordeon de productos, solo si la orden tiene items */}
                       {hasItems && (
-                        <TableRow className="bg-muted/30 hover:bg-muted/30 dark:bg-muted/10 dark:hover:bg-muted/10 border-t-0">
+                        <TableRow className="bg-muted/30 hover:bg-muted/30 border-t-0">
                           <TableCell colSpan={6} className="p-0 border-b">
                             <Accordion
                               type="single"
@@ -320,7 +320,7 @@ export default function OrderStatusTables({
                                     <Package className="h-3.5 w-3.5" />
                                     <span>{parsedItems.length} producto{parsedItems.length !== 1 ? 's' : ''} en la orden</span>
                                     {hasConflicts && (
-                                      <Badge variant="outline" className="ml-2 h-4 px-1.5 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-900 text-[10px]">
+                                      <Badge variant="outline" className="ml-2 h-4 px-1.5 bg-amber-50 text-amber-700 border-amber-200 text-[10px]">
                                         <AlertTriangle className="h-3 w-3 mr-1" />
                                         1+ Conflicto
                                       </Badge>
@@ -350,7 +350,7 @@ export default function OrderStatusTables({
                                                 <p className="font-medium text-[13px] leading-tight flex items-center gap-2">
                                                   {item.name}
                                                   {hasItemConflict && (
-                                                    <span className="flex items-center text-[10px] bg-red-50 text-red-600 border border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-900 px-1.5 py-0.5 rounded-full shrink-0">
+                                                    <span className="flex items-center text-[10px] bg-red-50 text-red-600 border border-red-200 px-1.5 py-0.5 rounded-full shrink-0">
                                                       <span className="relative flex h-1.5 w-1.5 mr-1">
                                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                                                         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
@@ -364,8 +364,8 @@ export default function OrderStatusTables({
                                             </div>
 
                                             {hasItemConflict && (
-                                              <div className="bg-red-50/80 border border-red-100 dark:bg-red-950/30 dark:border-red-900/50 rounded p-2 sm:max-w-[300px] w-full mt-2 sm:mt-0">
-                                                <p className="text-[10px] text-red-800 dark:text-red-400 font-medium flex items-center mb-1">
+                                              <div className="bg-red-50/80 border border-red-100 rounded p-2 sm:max-w-[300px] w-full mt-2 sm:mt-0">
+                                                <p className="text-[10px] text-red-800 font-medium flex items-center mb-1">
                                                   <AlertTriangle className="h-3 w-3 mr-1 shrink-0" />
                                                   Ocupado en otras órdenes:
                                                 </p>
@@ -375,13 +375,13 @@ export default function OrderStatusTables({
                                                     return (
                                                       <div key={i} className="flex flex-wrap items-center gap-1.5">
                                                         <a href={`/orders/${c.orderId}`} target="_blank" rel="noreferrer"
-                                                          className="text-[10px] text-red-700 hover:text-red-900 dark:text-red-300 dark:hover:text-red-100 hover:underline leading-tight font-medium">
+                                                          className="text-[10px] text-red-700 hover:text-red-900 hover:underline leading-tight font-medium">
                                                           Ord. #{c.orderId}
                                                         </a>
                                                         <Badge className={`text-[9px] px-1 py-0 h-4 min-h-0 leading-none uppercase align-middle ${statusBadgeClass(c.status)}`}>
                                                           {statusLabel(c.status)}
                                                         </Badge>
-                                                        <span className="text-[10px] text-red-700/80 dark:text-red-300/80 leading-tight">
+                                                        <span className="text-[10px] text-red-700/80 leading-tight">
                                                           ({formatDate(c.startDate)} - {formatDate(c.endDate)})
                                                         </span>
                                                       </div>

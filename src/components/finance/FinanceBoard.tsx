@@ -147,7 +147,7 @@ export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
                     <th scope="col" className="px-3 py-2 font-medium">Cliente</th>
                     <th scope="col" className="px-3 py-2 font-medium">Proyecto</th>
                     <th scope="col" className="px-3 py-2 text-right font-medium">Total</th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">Reserva 25%</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">Reserva</th>
                     <th scope="col" className="px-3 py-2 text-right font-medium">Saldo Pendiente</th>
                     <th scope="col" className="px-3 py-2 font-medium">OC</th>
                     <th scope="col" className="px-3 py-2 font-medium">Factura</th>
@@ -319,9 +319,9 @@ export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
               />
             </div>
             <p className="mt-3 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
-              La reserva del 25% cuenta como cobro recibido en cuanto entra, porque es dinero en
-              caja. El saldo restante sigue en Por Cobrar hasta que el pedido queda pagado
-              completo — mezclar ambos haría desaparecer tres cuartas partes de la deuda.
+              La reserva acordada en cada pedido cuenta como cobro recibido en cuanto entra, porque
+              es dinero en caja. El saldo restante sigue en Por Cobrar hasta que el pedido queda
+              pagado completo — mezclar ambos haría desaparecer esa parte de la deuda.
             </p>
           </section>
         </div>

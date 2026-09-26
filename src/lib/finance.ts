@@ -13,6 +13,7 @@
  */
 
 import { canonicalStatus } from './orderStatus';
+import { businessDay } from './businessDay';
 
 /**
  * Reserve share charged when the order is confirmed, when the order does not say otherwise.
@@ -26,6 +27,43 @@ export const RESERVE_RATE = 0.25;
 
 /** `orders.reserve_type`. */
 export type ReserveType = 'percent' | 'fixed';
+
+/**
+ * Validates an incoming `reserve_type` / `reserve_value` pair, in Spanish, for the API layer.
+ *
+ * Returns the message to answer with a 400, or `null` when there is nothing to change. Both
+ * order-update endpoints share it so they cannot drift: the migration 0008 CHECK would otherwise
+ * reject an out-of-range share and surface as a raw 500 in the panel.
+ */
+export function validateReserveInput(input: {
+  reserve_type?: unknown;
+  reserve_value?: unknown;
+}): string | null {
+  const wantsType = input.reserve_type !== undefined;
+  const wantsValue = input.reserve_value !== undefined;
+
+  if (!wantsType && !wantsValue) return null;
+
+  // Sin el tipo no se sabe si "500" son 500% (inválido) o $500 (válido).
+  if (wantsType !== wantsValue) {
+    return 'Para cambiar la reserva hay que enviar el tipo y el valor juntos';
+  }
+
+  if (input.reserve_type !== 'percent' && input.reserve_type !== 'fixed') {
+    return 'El tipo de reserva debe ser "percent" (porcentaje) o "fixed" (monto fijo)';
+  }
+
+  const numValue = Number(input.reserve_value);
+  if (!Number.isFinite(numValue) || numValue < 0) {
+    return 'El valor de la reserva debe ser un número positivo';
+  }
+
+  if (input.reserve_type === 'percent' && numValue > 100) {
+    return 'El porcentaje de reserva no puede ser mayor a 100';
+  }
+
+  return null;
+}
 
 export const DEFAULT_RESERVE_TYPE: ReserveType = 'percent';
 export const DEFAULT_RESERVE_VALUE = 25;
@@ -58,12 +96,13 @@ function toFiniteNumber(value: number | string | null | undefined): number | nul
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * A `date` column is sliced as-is (already a calendar day); a `Date` instant (`now`) is read in
+ * the business zone, not the server's — see `businessDay.ts` (R3-105).
+ */
 function isoDay(value: string | Date): string {
   if (typeof value === 'string') return value.slice(0, 10);
-  const y = value.getFullYear();
-  const m = String(value.getMonth() + 1).padStart(2, '0');
-  const d = String(value.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return businessDay(value);
 }
 
 /**

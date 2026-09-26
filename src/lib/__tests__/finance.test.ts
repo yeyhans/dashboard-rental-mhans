@@ -188,6 +188,12 @@ describe('isOverdue', () => {
   it('sin fecha de término no inventa un vencimiento', () => {
     expect(isOverdue(order({ endDate: null }), now)).toBe(false);
   });
+
+  it('usa "hoy" de Chile, no el del reloj UTC del servidor (R3-105)', () => {
+    // 23:30 del 8 de septiembre en Santiago; un servidor en UTC (Vercel) leería ya el 9 y marcaría
+    // vencido un pedido que en Chile todavía está en su día de término.
+    expect(isOverdue(order({ endDate: '2026-09-08' }), new Date('2026-09-09T02:30:00Z'))).toBe(false);
+  });
 });
 
 describe('isPending', () => {

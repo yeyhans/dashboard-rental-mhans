@@ -17,6 +17,7 @@ import {
 } from '../ui/command';
 import { DialogTitle } from '../ui/dialog';
 import type { Database } from '../../types/database';
+import { computeDiscount } from '../../lib/pricing';
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
 
@@ -132,32 +133,9 @@ export const CouponSelector = ({
     }
   };
 
-  // Calculate discount amount based on coupon type
-  const calculateDiscountAmount = (coupon: Coupon, cartTotal: number): number => {
-    let discount = 0;
-
-    switch (coupon.discount_type) {
-      case 'percent':
-        discount = (cartTotal * coupon.amount) / 100;
-        break;
-      case 'fixed_cart':
-        discount = coupon.amount;
-        break;
-      case 'fixed_product':
-        discount = coupon.amount; // Se aplicaría por producto
-        break;
-      default:
-        discount = 0;
-    }
-
-    // Aplicar límite máximo si existe
-    if (coupon.maximum_amount && discount > coupon.maximum_amount) {
-      discount = coupon.maximum_amount;
-    }
-
-    // No puede ser mayor al total del carrito
-    return Math.min(discount, cartTotal);
-  };
+  // Discount over the products subtotal, with the shared pricing rules (src/lib/pricing.ts).
+  const calculateDiscountAmount = (coupon: Coupon, cartTotal: number): number =>
+    computeDiscount(coupon, cartTotal);
 
   // Validate coupon code
   const validateCoupon = async (code: string) => {

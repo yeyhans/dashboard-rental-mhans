@@ -4,6 +4,9 @@ import type { ProcessingDocumentData } from '../../core/types';
 import { commonStyles, budgetStyles } from '../../utils/styles';
 import { formatCLP, getCurrentDateFormatted } from '../../utils/formatters';
 import { CompanyInfo } from '../common/CompanyInfo';
+import { orderBreakdown } from '../../../orderBreakdown';
+import { reserveLabel } from '../../../pricing';
+import { DEFAULT_RESERVE_VALUE } from '../../../finance';
 
 /**
  * Processing PDF Document Component
@@ -11,13 +14,20 @@ import { CompanyInfo } from '../common/CompanyInfo';
  * Matches BudgetDocument design
  */
 export const ProcessingDocument: React.FC<{ data: ProcessingDocumentData }> = ({ data }) => {
-  // Calculate PRODUCTS SUBTOTAL
-  const productsSubtotal = data.lineItems.reduce((sum, item) => {
-    return sum + (item.price * item.quantity * data.numJornadas);
-  }, 0);
+  // Net / IVA / gross columns come from the canonical breakdown, so they reconcile with the
+  // stored calculated_* the footer prints instead of being recomputed with raw floats.
+  const breakdown = orderBreakdown({
+    lineItems: data.lineItems,
+    jornadas: data.numJornadas,
+    discount: data.totals.discount,
+    shippingTotal: data.shippingInfo?.total ?? 0,
+    calculatedSubtotal: data.totals.subtotal,
+    calculatedIva: data.totals.iva,
+  });
 
-  // Calculate subtotal after discount
-  const subtotalAfterDiscount = productsSubtotal - data.totals.discount;
+  const productsSubtotal = breakdown.products.net;
+  const subtotalAfterDiscount = productsSubtotal - breakdown.discount.net;
+  const defaultReserveLabel = reserveLabel(null, DEFAULT_RESERVE_VALUE);
 
   return (
     <Document>
@@ -206,9 +216,10 @@ export const ProcessingDocument: React.FC<{ data: ProcessingDocumentData }> = ({
 
           {/* Table Rows */}
           {data.lineItems.map((item, index) => {
-            const neto = item.price * item.quantity * data.numJornadas;
-            const iva = neto * 0.19;
-            const totalBruto = neto + iva;
+            const line = breakdown.lines[index];
+            const neto = line?.net ?? 0;
+            const iva = line?.iva ?? 0;
+            const totalBruto = line?.gross ?? 0;
 
             return (
               <View
@@ -336,7 +347,7 @@ export const ProcessingDocument: React.FC<{ data: ProcessingDocumentData }> = ({
             </Text>
           </View>
 
-          {/* RESERVA 25% */}
+          {/* Reserva acordada por orden */}
           <View style={{
             flexDirection: 'row',
             justifyContent: 'space-between',
@@ -345,7 +356,7 @@ export const ProcessingDocument: React.FC<{ data: ProcessingDocumentData }> = ({
             marginTop: 4,
           }}>
             <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#ffffff' }}>
-              RESERVA 25% (Anticipo)
+              {(data.totals.reserveLabel ?? defaultReserveLabel).toUpperCase()} (Anticipo)
             </Text>
             <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#ffffff' }}>
               {formatCLP(data.totals.reserve)}
@@ -361,7 +372,7 @@ export const ProcessingDocument: React.FC<{ data: ProcessingDocumentData }> = ({
             borderBottom: '1pt solid #cccccc',
           }}>
             <Text style={{ fontSize: 10, color: '#000000' }}>
-              Saldo Pendiente (75%)
+              Saldo Pendiente
             </Text>
             <Text style={{ fontSize: 10, color: '#000000' }}>
               {formatCLP(data.totals.total - data.totals.reserve)}

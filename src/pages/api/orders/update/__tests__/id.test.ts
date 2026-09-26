@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const updateOrder = vi.fn();
 const from = vi.fn();
+const priceOrderUpdate = vi.hoisted(() => vi.fn(async (): Promise<unknown> => null));
+
+vi.mock('../../../../../services/orderPricingService', () => ({
+  OrderPricingService: { priceOrderUpdate },
+}));
 
 vi.mock('../../../../../middleware/auth', () => ({
   withAuth: (handler: (context: any) => Promise<Response>) => async (context: any) => {
@@ -192,5 +197,99 @@ describe('admin order update relay boundary', () => {
         expect.objectContaining({ reserve_type: 'fixed', reserve_value: 180000 })
       );
     });
+  });
+  describe('recálculo de montos en el servidor', () => {
+    const ctx = (body: unknown) =>
+      ({
+        params: { id: '123' },
+        request: new Request('https://dashboard.mariohans.cl/api/orders/update/123', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+        locals: { user: { id: 'admin-1' } },
+      }) as never;
+
+    const currentOrder = { id: 123, status: 'confirmed', shipping_total: 0, calculated_total: 96390 };
+
+    function stubCurrentOrder() {
+      from.mockReturnValue({
+        select: () => ({ eq: () => ({ single: async () => ({ data: currentOrder, error: null }) }) }),
+      });
+      updateOrder.mockResolvedValue(currentOrder);
+    }
+
+    it('persists the server figures and ignores the totals the client sent', async () => {
+      stubCurrentOrder();
+      const priced = {
+        num_jornadas: 3,
+        shipping_total: 15000,
+        calculated_subtotal: 96000,
+        calculated_discount: 0,
+        calculated_iva: 18240,
+        calculated_total: 114240,
+        total: 114240,
+      };
+      priceOrderUpdate.mockResolvedValueOnce(priced);
+      const { PUT } = await import('../[id]');
+
+      const body = { shipping_total: 15000, calculated_total: 96390, calculated_iva: 15390, coupon_lines: [] };
+      const response = await PUT(ctx(body));
+
+      expect(response.status).toBe(200);
+      expect(priceOrderUpdate).toHaveBeenCalledWith(currentOrder, body);
+      expect(updateOrder).toHaveBeenCalledWith(123, expect.objectContaining({ ...priced, coupon_lines: [] }));
+    });
+
+    it('answers 400 when the order cannot be priced and does not write', async () => {
+      stubCurrentOrder();
+      const { PricingError } = await import('../../../../../lib/pricing');
+      priceOrderUpdate.mockRejectedValueOnce(new PricingError('Número de jornadas inválido'));
+      const { PUT } = await import('../[id]');
+
+      const response = await PUT(ctx({ num_jornadas: 0 }));
+
+      expect(response.status).toBe(400);
+      expect(updateOrder).not.toHaveBeenCalled();
+      await expect(response.json()).resolves.toEqual({ success: false, error: 'Número de jornadas inválido' });
+    });
+  });
+
+  /**
+   * El 500 devolvía `error.message` tal cual, filtrando detalle interno (nombres de columna,
+   * mensajes de Postgres) al panel. La regla del proyecto: mensaje genérico en español al cliente
+   * y el error completo sólo en el log del servidor.
+   */
+  it('hides internal error detail on a 500 and logs it with context', async () => {
+    const currentOrder = { id: 123, status: 'processing', billing_email: 'cliente@example.com' };
+    from.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          single: async () => ({ data: currentOrder, error: null }),
+        }),
+      }),
+    });
+    updateOrder.mockRejectedValue(
+      new Error('null value in column "calculated_total" violates not-null constraint')
+    );
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const request = new Request('https://dashboard.mariohans.cl/api/orders/update/123', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_proyecto: 'Sesión de catálogo' }),
+    });
+    const { PUT } = await import('../[id]');
+
+    const response = await PUT({ params: { id: '123' }, request, locals: { user: { id: 'admin-1' } } } as never);
+    const payload = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(500);
+    expect(payload).toEqual({ success: false, error: 'Error al actualizar la orden' });
+    expect(JSON.stringify(payload)).not.toContain('not-null constraint');
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[PUT /api/orders/update/:id] Error al actualizar la orden:',
+      expect.objectContaining({ orderId: '123' })
+    );
+    errorSpy.mockRestore();
   });
 });

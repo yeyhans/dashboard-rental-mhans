@@ -1,6 +1,8 @@
 import { supabaseAdmin } from '../lib/supabase';
 import { ORDER_STATUSES, bookingStatusFilter, canonicalStatus, expandStatusFilter } from '../lib/orderStatus';
 import type { Database } from '../types/database';
+import { OrderPricingService, type OrderCallerOrigin } from './orderPricingService';
+import { CouponService, type OrderCouponSnapshot } from './couponService';
 
 type Order = Database['public']['Tables']['orders']['Row'];
 type OrderInsert = Database['public']['Tables']['orders']['Insert'];
@@ -352,19 +354,65 @@ export class OrderService {
   }
 
   /**
+   * Keeps `coupon_usage` in step with an order write, and never lets that bookkeeping undo the
+   * write itself. `CouponService` already swallows its own failures; this second net catches
+   * anything unexpected (a missing RPC, a mocked module, a programming error) so that a coupon
+   * problem can never turn a created or updated order into a 500.
+   */
+  private static async syncCouponUsage(
+    order: OrderCouponSnapshot,
+    options?: { isNew?: boolean }
+  ): Promise<void> {
+    try {
+      await CouponService.syncOrderCouponUsage(order, options);
+    } catch (error) {
+      console.error('[OrderService] No se pudo sincronizar el uso del cupón de la orden:', {
+        orderId: order?.id ?? null,
+        error,
+      });
+    }
+  }
+
+  /** Same contract as `syncCouponUsage`, for the cancellation path. */
+  private static async releaseCouponUsage(orderId: number): Promise<void> {
+    try {
+      await CouponService.releaseOrderCouponUsage(orderId);
+    } catch (error) {
+      console.error('[OrderService] No se pudo liberar el uso del cupón de la orden:', {
+        orderId,
+        error,
+      });
+    }
+  }
+
+  /**
    * Crear nueva orden
    */
-  static async createOrder(orderData: OrderInsert): Promise<Order> {
+  static async createOrder(
+    orderData: OrderInsert & { apply_iva?: boolean },
+    origin: OrderCallerOrigin = 'admin'
+  ): Promise<Order> {
     try {
+      // The money is always recomputed here: client-sent calculated_* values are never persisted.
+      const pricedFields = await OrderPricingService.priceNewOrder(orderData, origin);
+      // `apply_iva` is a pricing input only; `orders` has no such column.
+      const { apply_iva: _applyIva, ...insertable } = orderData;
+
       const { data, error } = await supabaseAdmin
         .from('orders')
-        .insert([orderData])
+        .insert([{ ...insertable, ...pricedFields }])
         .select()
         .single();
 
       if (error) {
         throw error;
       }
+
+      // El uso del cupón se registra DESPUÉS de que la fila existe, y no puede deshacerla: una
+      // orden es venta, una fila de `coupon_usage` que falta es una conciliación. Se hace aquí y
+      // no en la ruta porque `POST /api/orders` sirve a los dos orígenes (panel y sitio de
+      // clientes con la API key) y ambos pasan por este método.
+      await OrderService.syncCouponUsage(data, { isNew: true });
 
       // Ensure the created order has required calculated fields
       const orderWithCalculatedFields = {
@@ -406,6 +454,13 @@ export class OrderService {
 
       if (error) {
         throw error;
+      }
+
+      // Si la edición tocó el cupón o el estado, el uso registrado tiene que seguirla: cambiar de
+      // cupón mueve la fila, quitarlo o cancelar la orden la libera. Se decide sobre la orden ya
+      // persistida (`data`), no sobre el payload, que puede traer solo parte de los campos.
+      if (updates.coupon_lines !== undefined || updates.status !== undefined) {
+        await OrderService.syncCouponUsage(data);
       }
 
       // Ensure the updated order has required calculated fields
@@ -815,6 +870,12 @@ export class OrderService {
 
       if (error) {
         throw error;
+      }
+
+      // Solo `cancelled` libera el cupón, y `failed` es su forma legada (0003 la pliega ahí). El
+      // resto de las transiciones no lo tocan: una orden en curso sigue consumiendo su uso.
+      if (canonicalStatus(status) === 'cancelled') {
+        await OrderService.releaseCouponUsage(orderId);
       }
 
       // Ensure the status updated order has required calculated fields

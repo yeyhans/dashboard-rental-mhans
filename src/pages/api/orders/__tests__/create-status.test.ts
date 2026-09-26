@@ -27,6 +27,7 @@ const unauthorizedResponse = vi.fn(
 
 vi.mock('../../../../lib/serverApiAuth', () => ({
   isFrontendApiKeyOrAdmin,
+  validateFrontendApiKey: vi.fn(() => true),
   unauthorizedResponse,
 }));
 

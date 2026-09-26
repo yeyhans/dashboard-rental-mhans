@@ -1,7 +1,8 @@
 import type { APIRoute } from 'astro';
 import { OrderService } from '../../../services/orderService';
 import { withAuth } from '../../../middleware/auth';
-import { isFrontendApiKeyOrAdmin, unauthorizedResponse } from '../../../lib/serverApiAuth';
+import { isFrontendApiKeyOrAdmin, unauthorizedResponse, validateFrontendApiKey } from '../../../lib/serverApiAuth';
+import { PricingError } from '../../../lib/pricing';
 import { ORDER_STATUSES, canonicalStatus } from '../../../lib/orderStatus';
 
 export const GET: APIRoute = withAuth(async (context) => {
@@ -123,12 +124,16 @@ export const POST: APIRoute = async (context) => {
       status: normalizedStatus
     });
 
+    // Los montos los recalcula el servicio; aquí solo se identifica quién llama. La clave de API
+    // la usa el frontend de clientes, una sesión admin no la envía.
+    const origin = validateFrontendApiKey(context.request) ? 'frontend' : 'admin';
+
     const order = await OrderService.createOrder({
       ...orderData,
       date_created: new Date().toISOString(),
       date_modified: new Date().toISOString(),
       status: normalizedStatus
-    });
+    }, origin);
 
     console.log('✅ Order created successfully:', order.id);
     console.log('📋 PDF generation will be handled by frontend via /api/orders/:id/generate-budget');
@@ -144,6 +149,16 @@ export const POST: APIRoute = async (context) => {
       }
     });
   } catch (error) {
+    if (error instanceof PricingError) {
+      console.error('[POST /api/orders] Orden con montos inválidos:', { error: error.message });
+      return new Response(JSON.stringify({
+        success: false,
+        error: error.message
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
     console.error('❌ Error in POST /api/orders:', error);
     return new Response(JSON.stringify({
       success: false,

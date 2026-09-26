@@ -1,10 +1,9 @@
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Checkbox } from '../ui/checkbox';
-import { useState, useEffect } from 'react';
 import { CouponSelector } from './CouponSelector';
 import type { Database } from '../../types/database';
-import { IVA_RATE } from '../../lib/pdf/utils/calculations';
+import { IVA_RATE } from '../../lib/pricing';
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
 
@@ -23,7 +22,9 @@ interface OrderCostSummaryProps {
   shipping?: string;
   onDiscountChange?: (value: string) => void;
   onShippingChange?: (value: string) => void;
-  onTotalChange?: (newTotal: string, newIva: string) => void;
+  /** Whether IVA applies. The parent owns the totals and recomputes them with src/lib/pricing.ts. */
+  applyIva?: boolean;
+  onApplyIvaChange?: (applyIva: boolean) => void;
   onCouponApplied?: (coupon: Coupon, discountAmount: number) => void;
   onCouponRemoved?: () => void;
   appliedCoupon?: Coupon | null | undefined;
@@ -49,7 +50,8 @@ export const OrderCostSummary = ({
   shipping = '0',
   onDiscountChange,
   onShippingChange,
-  onTotalChange,
+  applyIva: applyIvaProp,
+  onApplyIvaChange,
   onCouponApplied,
   onCouponRemoved,
   appliedCoupon,
@@ -65,13 +67,9 @@ export const OrderCostSummary = ({
   showManualDiscount = true,
   accessToken
 }: OrderCostSummaryProps) => {
-  const [applyIva, setApplyIva] = useState(parseFloat(iva) > 0);
-  
-  // Update applyIva when iva prop changes
-  useEffect(() => {
-    setApplyIva(parseFloat(iva) > 0);
-  }, [iva]);
-  
+  // This component only reports intents; every amount it shows comes from the parent, which prices
+  // the order with the shared pricing module.
+  const applyIva = applyIvaProp ?? parseFloat(iva) > 0;
   const taxRate = IVA_RATE;
 
   const formatCurrencyWithSymbol = (value: string | number) => {
@@ -80,116 +78,23 @@ export const OrderCostSummary = ({
   };
 
   const handleIvaChange = (checked: boolean) => {
-    console.log(`[OrderCostSummary] Cambiando IVA a: ${checked}`);
-    setApplyIva(checked);
-
-    if (onTotalChange) {
-      const subtotalNum = Math.round((parseFloat(subtotal) || 0) * 100) / 100;
-      const discountNum = Math.round((parseFloat(discount) || 0) * 100) / 100;
-      const shippingNum = Math.round((parseFloat(shipping) || 0) * 100) / 100;
-      const couponDiscountNum = Math.round((couponDiscountAmount || 0) * 100) / 100;
-      const manualDiscountNum = showManualDiscount ? discountNum : 0;
-
-      // Base imponible = subtotal - descuentos + shipping (shipping es afecto a IVA)
-      const baseImponible = Math.round((subtotalNum - manualDiscountNum - couponDiscountNum + shippingNum) * 100) / 100;
-      const newIva = checked ? Math.round(baseImponible * taxRate * 100) / 100 : 0;
-      const newTotal = Math.round((baseImponible + newIva) * 100) / 100;
-
-      console.log('[OrderCostSummary] Recálculo IVA:', {
-        subtotal: subtotalNum,
-        manualDiscount: manualDiscountNum,
-        couponDiscount: couponDiscountNum,
-        shipping: shippingNum,
-        baseImponible,
-        newIva,
-        newTotal,
-        checked,
-      });
-
-      onTotalChange(newTotal.toString(), newIva.toString());
-    }
+    onApplyIvaChange?.(checked);
   };
 
-  // Handle manual discount change — recalculate total with current IVA
   const handleManualDiscountChange = (value: string) => {
-    if (onDiscountChange) {
-      onDiscountChange(value);
-    }
-
-    if (onTotalChange) {
-      const subtotalNum = Math.round((parseFloat(subtotal) || 0) * 100) / 100;
-      const discountNum = Math.round((parseFloat(value) || 0) * 100) / 100;
-      const shippingNum = Math.round((parseFloat(shipping) || 0) * 100) / 100;
-      const couponDiscountNum = Math.round((couponDiscountAmount || 0) * 100) / 100;
-
-      const baseImponible = Math.round((subtotalNum - discountNum - couponDiscountNum + shippingNum) * 100) / 100;
-      const newIva = applyIva ? Math.round(baseImponible * taxRate * 100) / 100 : 0;
-      const newTotal = Math.round((baseImponible + newIva) * 100) / 100;
-
-      onTotalChange(newTotal.toString(), newIva.toString());
-    }
+    onDiscountChange?.(value);
   };
 
-  // Handle shipping change — recalculate IVA because shipping is afecto (taxed)
   const handleShippingChange = (value: string) => {
-    if (onShippingChange) {
-      onShippingChange(value);
-    }
-
-    if (onTotalChange) {
-      const subtotalNum = Math.round((parseFloat(subtotal) || 0) * 100) / 100;
-      const discountNum = Math.round((parseFloat(discount) || 0) * 100) / 100;
-      const shippingNum = Math.round((parseFloat(value) || 0) * 100) / 100;
-      const couponDiscountNum = Math.round((couponDiscountAmount || 0) * 100) / 100;
-      const manualDiscountNum = showManualDiscount ? discountNum : 0;
-
-      const baseImponible = Math.round((subtotalNum - manualDiscountNum - couponDiscountNum + shippingNum) * 100) / 100;
-      const newIva = applyIva ? Math.round(baseImponible * taxRate * 100) / 100 : 0;
-      const newTotal = Math.round((baseImponible + newIva) * 100) / 100;
-
-      onTotalChange(newTotal.toString(), newIva.toString());
-    }
+    onShippingChange?.(value);
   };
 
-  // Handle coupon applied — recalculate IVA on new base imponible
   const handleCouponApplied = (coupon: Coupon, discountAmount: number) => {
-    if (onCouponApplied) {
-      onCouponApplied(coupon, discountAmount);
-    }
-
-    if (onTotalChange) {
-      const subtotalNum = Math.round((parseFloat(subtotal) || 0) * 100) / 100;
-      const discountNum = Math.round((parseFloat(discount) || 0) * 100) / 100;
-      const shippingNum = Math.round((parseFloat(shipping) || 0) * 100) / 100;
-      const couponDiscountNum = Math.round(discountAmount * 100) / 100;
-      const manualDiscountNum = showManualDiscount ? discountNum : 0;
-
-      const baseImponible = Math.round((subtotalNum - manualDiscountNum - couponDiscountNum + shippingNum) * 100) / 100;
-      const newIva = applyIva ? Math.round(baseImponible * taxRate * 100) / 100 : 0;
-      const newTotal = Math.round((baseImponible + newIva) * 100) / 100;
-
-      onTotalChange(newTotal.toString(), newIva.toString());
-    }
+    onCouponApplied?.(coupon, discountAmount);
   };
 
-  // Handle coupon removed — recalculate IVA on new base imponible
   const handleCouponRemoved = () => {
-    if (onCouponRemoved) {
-      onCouponRemoved();
-    }
-
-    if (onTotalChange) {
-      const subtotalNum = Math.round((parseFloat(subtotal) || 0) * 100) / 100;
-      const discountNum = Math.round((parseFloat(discount) || 0) * 100) / 100;
-      const shippingNum = Math.round((parseFloat(shipping) || 0) * 100) / 100;
-      const manualDiscountNum = showManualDiscount ? discountNum : 0;
-
-      const baseImponible = Math.round((subtotalNum - manualDiscountNum + shippingNum) * 100) / 100;
-      const newIva = applyIva ? Math.round(baseImponible * taxRate * 100) / 100 : 0;
-      const newTotal = Math.round((baseImponible + newIva) * 100) / 100;
-
-      onTotalChange(newTotal.toString(), newIva.toString());
-    }
+    onCouponRemoved?.();
   };
 
   const ivaValue = parseFloat(iva) || 0;
@@ -271,7 +176,7 @@ export const OrderCostSummary = ({
             <Checkbox
               id="apply-iva"
               checked={applyIva}
-              onCheckedChange={handleIvaChange}
+              onCheckedChange={(checked) => handleIvaChange(checked === true)}
               disabled={loading || !isEditable}
               className="h-4 w-4"
             />
@@ -299,7 +204,7 @@ export const OrderCostSummary = ({
         {mode === 'view' && (
           <div className="text-xs text-muted-foreground border-t pt-2 mt-2">
             <div className="grid grid-cols-2 gap-2">
-              <span>Subtotal sin IVA: {formatCurrencyWithSymbol(parseFloat(subtotal) - (showManualDiscount ? parseFloat(discount) : 0) - couponDiscountAmount)}</span>
+              <span>Subtotal sin IVA: {formatCurrencyWithSymbol((parseFloat(total) || 0) - ivaValue)}</span>
               <span>IVA aplicado: {applyIva ? 'Sí' : 'No'}</span>
             </div>
           </div>
@@ -309,7 +214,7 @@ export const OrderCostSummary = ({
       {/* Coupon Selector */}
       {showCoupons && isEditable && (
         <CouponSelector
-          subtotal={parseFloat(subtotal) - (showManualDiscount ? parseFloat(discount) : 0)}
+          subtotal={parseFloat(subtotal) || 0}
           onCouponApplied={handleCouponApplied}
           onCouponRemoved={handleCouponRemoved}
           appliedCoupon={appliedCoupon}

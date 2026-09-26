@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { reserveAmount } from '../../../lib/finance';
+import { reserveLabel } from '../../../lib/pricing';
 import React from 'react';
 import { ContractDocument } from '../../../lib/pdf/components/contract/ContractDocument';
 import type { BudgetDocumentData } from '../../../lib/pdf/core/types';
@@ -143,6 +144,7 @@ export const POST: APIRoute = async ({ request }) => {
             reserveType: orderData.reserve_type,
             reserveValue: orderData.reserve_value,
           }),
+          reserveLabel: reserveLabel(orderData.reserve_type, orderData.reserve_value),
         },
         couponCode: orderData.coupon_code,
         status: getOrderStatusInSpanish(orderData.status || 'request'),

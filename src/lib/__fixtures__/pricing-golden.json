@@ -1,0 +1,460 @@
+{
+  "name": "mhans-order-pricing-golden",
+  "version": 1,
+  "description": "Language-neutral golden cases for the Mario Hans order money formula. Every implementation (dashboard TypeScript, customer frontend, Hermes Python) must reproduce the expected block exactly from the input block. All amounts are CLP integers.",
+  "rules": [
+    "1. line_subtotal = round(unit_daily_price * quantity * jornadas). price and quantity may arrive as strings: coerce to number; NaN or negative is an error.",
+    "2. jornadas = inclusive calendar days between date-only strings 'YYYY-MM-DD': (UTC(end) - UTC(start)) / 86400000 + 1, built from the Y-M-D parts (never local time, so DST cannot change it). end < start is an error. When no dates are given, an explicit positive integer 'jornadas' is used.",
+    "3. products_subtotal = sum of line_subtotal.",
+    "4. discount: coupon.discount_type 'percent' -> round(products_subtotal * amount / 100), capped by coupon.maximum_amount when it is set and > 0; 'fixed_cart' -> amount; 'fixed_product' -> amount (flat, pending business decision); unknown type -> 0. Without a coupon, the manual 'discount' is used (0 when absent). The result is clamped to [0, products_subtotal]. The discount never touches shipping.",
+    "5. net (stored as calculated_subtotal) = products_subtotal - discount + shipping_total. Shipping is taxed.",
+    "6. iva = apply_iva ? round(net * 0.19) : 0. total = net + iva.",
+    "7. reserve: reserve_type 'fixed' -> reserve_value; anything else -> total * reserve_value / 100 (reserve_value defaults to 25 when null). Rounded, then clamped to [0, total]. balance = total - reserve.",
+    "8. reserve_label: 'Reserva N%' for a percentage (N without trailing decimals), 'Reserva' for a fixed amount."
+  ],
+  "rounding": "round() is half-up (x.5 goes to x+1) for non-negative values. Python's built-in round() is banker's rounding and MUST NOT be used; use math.floor(x + 0.5) or Decimal ROUND_HALF_UP. IVA is computed in integer arithmetic: floor((net * 19 + 50) / 100).",
+  "cases": [
+    {
+      "name": "no_shipping",
+      "note": "Two lines over 3 days, no coupon, default 25% reserve. 22312.5 rounds up.",
+      "input": {
+        "line_items": [{ "price": 10000, "quantity": 2 }, { "price": 5000, "quantity": 1 }],
+        "start_date": "2027-03-01",
+        "end_date": "2027-03-03",
+        "shipping_total": 0,
+        "coupon": null,
+        "discount": null,
+        "apply_iva": true,
+        "reserve_type": "percent",
+        "reserve_value": 25
+      },
+      "expected": {
+        "jornadas": 3,
+        "line_subtotals": [60000, 15000],
+        "products_subtotal": 75000,
+        "discount": 0,
+        "shipping_total": 0,
+        "net": 75000,
+        "iva": 14250,
+        "total": 89250,
+        "reserve": 22313,
+        "balance": 66937,
+        "reserve_label": "Reserva 25%"
+      }
+    },
+    {
+      "name": "shipping_15000",
+      "note": "Shipping is added to the taxable base.",
+      "input": {
+        "line_items": [{ "price": 10000, "quantity": 2 }, { "price": 5000, "quantity": 1 }],
+        "start_date": "2027-03-01",
+        "end_date": "2027-03-03",
+        "shipping_total": 15000,
+        "coupon": null,
+        "discount": null,
+        "apply_iva": true,
+        "reserve_type": "percent",
+        "reserve_value": 25
+      },
+      "expected": {
+        "jornadas": 3,
+        "line_subtotals": [60000, 15000],
+        "products_subtotal": 75000,
+        "discount": 0,
+        "shipping_total": 15000,
+        "net": 90000,
+        "iva": 17100,
+        "total": 107100,
+        "reserve": 26775,
+        "balance": 80325,
+        "reserve_label": "Reserva 25%"
+      }
+    },
+    {
+      "name": "percent_coupon_without_maximum",
+      "note": "10% of the products subtotal.",
+      "input": {
+        "line_items": [{ "price": 10000, "quantity": 2 }, { "price": 5000, "quantity": 1 }],
+        "start_date": "2027-03-01",
+        "end_date": "2027-03-03",
+        "shipping_total": 0,
+        "coupon": { "discount_type": "percent", "amount": 10, "maximum_amount": null },
+        "discount": null,
+        "apply_iva": true,
+        "reserve_type": "percent",
+        "reserve_value": 25
+      },
+      "expected": {
+        "jornadas": 3,
+        "line_subtotals": [60000, 15000],
+        "products_subtotal": 75000,
+        "discount": 7500,
+        "shipping_total": 0,
+        "net": 67500,
+        "iva": 12825,
+        "total": 80325,
+        "reserve": 20081,
+        "balance": 60244,
+        "reserve_label": "Reserva 25%"
+      }
+    },
+    {
+      "name": "percent_coupon_with_maximum",
+      "note": "10% would be 7500; maximum_amount caps it at 5000.",
+      "input": {
+        "line_items": [{ "price": 10000, "quantity": 2 }, { "price": 5000, "quantity": 1 }],
+        "start_date": "2027-03-01",
+        "end_date": "2027-03-03",
+        "shipping_total": 0,
+        "coupon": { "discount_type": "percent", "amount": 10, "maximum_amount": 5000 },
+        "discount": null,
+        "apply_iva": true,
+        "reserve_type": "percent",
+        "reserve_value": 25
+      },
+      "expected": {
+        "jornadas": 3,
+        "line_subtotals": [60000, 15000],
+        "products_subtotal": 75000,
+        "discount": 5000,
+        "shipping_total": 0,
+        "net": 70000,
+        "iva": 13300,
+        "total": 83300,
+        "reserve": 20825,
+        "balance": 62475,
+        "reserve_label": "Reserva 25%"
+      }
+    },
+    {
+      "name": "fixed_cart_larger_than_subtotal",
+      "note": "A 100000 fixed coupon is clamped to the 75000 products subtotal; shipping stays taxed and undiscounted.",
+      "input": {
+        "line_items": [{ "price": 10000, "quantity": 2 }, { "price": 5000, "quantity": 1 }],
+        "start_date": "2027-03-01",
+        "end_date": "2027-03-03",
+        "shipping_total": 15000,
+        "coupon": { "discount_type": "fixed_cart", "amount": 100000, "maximum_amount": null },
+        "discount": null,
+        "apply_iva": true,
+        "reserve_type": "percent",
+        "reserve_value": 25
+      },
+      "expected": {
+        "jornadas": 3,
+        "line_subtotals": [60000, 15000],
+        "products_subtotal": 75000,
+        "discount": 75000,
+        "shipping_total": 15000,
+        "net": 15000,
+        "iva": 2850,
+        "total": 17850,
+        "reserve": 4463,
+        "balance": 13387,
+        "reserve_label": "Reserva 25%"
+      }
+    },
+    {
+      "name": "exempt_iva",
+      "note": "apply_iva false: no IVA, total equals net.",
+      "input": {
+        "line_items": [{ "price": 10000, "quantity": 2 }, { "price": 5000, "quantity": 1 }],
+        "start_date": "2027-03-01",
+        "end_date": "2027-03-03",
+        "shipping_total": 0,
+        "coupon": null,
+        "discount": null,
+        "apply_iva": false,
+        "reserve_type": "percent",
+        "reserve_value": 25
+      },
+      "expected": {
+        "jornadas": 3,
+        "line_subtotals": [60000, 15000],
+        "products_subtotal": 75000,
+        "discount": 0,
+        "shipping_total": 0,
+        "net": 75000,
+        "iva": 0,
+        "total": 75000,
+        "reserve": 18750,
+        "balance": 56250,
+        "reserve_label": "Reserva 25%"
+      }
+    },
+    {
+      "name": "reserve_percent_50",
+      "note": "Per-order reserve of 50%.",
+      "input": {
+        "line_items": [{ "price": 10000, "quantity": 2 }, { "price": 5000, "quantity": 1 }],
+        "start_date": "2027-03-01",
+        "end_date": "2027-03-03",
+        "shipping_total": 0,
+        "coupon": null,
+        "discount": null,
+        "apply_iva": true,
+        "reserve_type": "percent",
+        "reserve_value": 50
+      },
+      "expected": {
+        "jornadas": 3,
+        "line_subtotals": [60000, 15000],
+        "products_subtotal": 75000,
+        "discount": 0,
+        "shipping_total": 0,
+        "net": 75000,
+        "iva": 14250,
+        "total": 89250,
+        "reserve": 44625,
+        "balance": 44625,
+        "reserve_label": "Reserva 50%"
+      }
+    },
+    {
+      "name": "reserve_fixed_above_total",
+      "note": "A fixed reserve of 200000 is clamped to the 89250 total; nothing is left as balance.",
+      "input": {
+        "line_items": [{ "price": 10000, "quantity": 2 }, { "price": 5000, "quantity": 1 }],
+        "start_date": "2027-03-01",
+        "end_date": "2027-03-03",
+        "shipping_total": 0,
+        "coupon": null,
+        "discount": null,
+        "apply_iva": true,
+        "reserve_type": "fixed",
+        "reserve_value": 200000
+      },
+      "expected": {
+        "jornadas": 3,
+        "line_subtotals": [60000, 15000],
+        "products_subtotal": 75000,
+        "discount": 0,
+        "shipping_total": 0,
+        "net": 75000,
+        "iva": 14250,
+        "total": 89250,
+        "reserve": 89250,
+        "balance": 0,
+        "reserve_label": "Reserva"
+      }
+    },
+    {
+      "name": "dst_range_santiago",
+      "note": "Chile leaves DST on the first Sunday of April 2027 (2027-04-04). Counting with local midnights gave 5; the calendar count is 4.",
+      "input": {
+        "line_items": [{ "price": 10000, "quantity": 1 }],
+        "start_date": "2027-04-02",
+        "end_date": "2027-04-05",
+        "shipping_total": 0,
+        "coupon": null,
+        "discount": null,
+        "apply_iva": true,
+        "reserve_type": "percent",
+        "reserve_value": 25
+      },
+      "expected": {
+        "jornadas": 4,
+        "line_subtotals": [40000],
+        "products_subtotal": 40000,
+        "discount": 0,
+        "shipping_total": 0,
+        "net": 40000,
+        "iva": 7600,
+        "total": 47600,
+        "reserve": 11900,
+        "balance": 35700,
+        "reserve_label": "Reserva 25%"
+      }
+    },
+    {
+      "name": "string_prices",
+      "note": "PostgREST numeric and line_items JSON may carry strings. Same-day rental is 1 jornada.",
+      "input": {
+        "line_items": [{ "price": "12000.00", "quantity": "2" }],
+        "start_date": "2027-01-10",
+        "end_date": "2027-01-10",
+        "shipping_total": "0",
+        "coupon": null,
+        "discount": null,
+        "apply_iva": true,
+        "reserve_type": "percent",
+        "reserve_value": "25.00"
+      },
+      "expected": {
+        "jornadas": 1,
+        "line_subtotals": [24000],
+        "products_subtotal": 24000,
+        "discount": 0,
+        "shipping_total": 0,
+        "net": 24000,
+        "iva": 4560,
+        "total": 28560,
+        "reserve": 7140,
+        "balance": 21420,
+        "reserve_label": "Reserva 25%"
+      }
+    },
+    {
+      "name": "rounding_half_iva",
+      "note": "net 2650 -> IVA 503.5 rounds up to 504; reserve 788.5 rounds up to 789.",
+      "input": {
+        "line_items": [{ "price": 2650, "quantity": 1 }],
+        "start_date": "2027-02-01",
+        "end_date": "2027-02-01",
+        "shipping_total": 0,
+        "coupon": null,
+        "discount": null,
+        "apply_iva": true,
+        "reserve_type": "percent",
+        "reserve_value": 25
+      },
+      "expected": {
+        "jornadas": 1,
+        "line_subtotals": [2650],
+        "products_subtotal": 2650,
+        "discount": 0,
+        "shipping_total": 0,
+        "net": 2650,
+        "iva": 504,
+        "total": 3154,
+        "reserve": 789,
+        "balance": 2365,
+        "reserve_label": "Reserva 25%"
+      }
+    },
+    {
+      "name": "rounding_half_discount_and_line",
+      "note": "Line 1000.5 rounds to 1001 (half-up, not banker's). 15% coupon on 1001 = 150.15 -> 150; IVA on 851 = 161.69 -> 162.",
+      "input": {
+        "line_items": [{ "price": "1000.5", "quantity": 1 }],
+        "start_date": "2027-02-01",
+        "end_date": "2027-02-01",
+        "shipping_total": 0,
+        "coupon": { "discount_type": "percent", "amount": 15, "maximum_amount": null },
+        "discount": null,
+        "apply_iva": true,
+        "reserve_type": "percent",
+        "reserve_value": 25
+      },
+      "expected": {
+        "jornadas": 1,
+        "line_subtotals": [1001],
+        "products_subtotal": 1001,
+        "discount": 150,
+        "shipping_total": 0,
+        "net": 851,
+        "iva": 162,
+        "total": 1013,
+        "reserve": 253,
+        "balance": 760,
+        "reserve_label": "Reserva 25%"
+      }
+    },
+    {
+      "name": "rounding_half_percent_discount",
+      "note": "15% of 1010 = 151.5 -> 152.",
+      "input": {
+        "line_items": [{ "price": 1010, "quantity": 1 }],
+        "start_date": "2027-02-01",
+        "end_date": "2027-02-01",
+        "shipping_total": 0,
+        "coupon": { "discount_type": "percent", "amount": 15, "maximum_amount": null },
+        "discount": null,
+        "apply_iva": true,
+        "reserve_type": "percent",
+        "reserve_value": 25
+      },
+      "expected": {
+        "jornadas": 1,
+        "line_subtotals": [1010],
+        "products_subtotal": 1010,
+        "discount": 152,
+        "shipping_total": 0,
+        "net": 858,
+        "iva": 163,
+        "total": 1021,
+        "reserve": 255,
+        "balance": 766,
+        "reserve_label": "Reserva 25%"
+      }
+    },
+    {
+      "name": "order_1573_consolidado",
+      "note": "Real order #1573 (consolidado DB). Stored calculated_total 96390 = 81000 * 1.19, i.e. shipping_total 15000 was left out of the taxable base. Correct total includes shipping.",
+      "input": {
+        "line_items": [{ "price": 12000, "quantity": 1 }, { "price": 15000, "quantity": 1 }],
+        "start_date": "2026-09-20",
+        "end_date": "2026-09-22",
+        "shipping_total": 15000,
+        "coupon": null,
+        "discount": null,
+        "apply_iva": true,
+        "reserve_type": "percent",
+        "reserve_value": 25
+      },
+      "expected": {
+        "jornadas": 3,
+        "line_subtotals": [36000, 45000],
+        "products_subtotal": 81000,
+        "discount": 0,
+        "shipping_total": 15000,
+        "net": 96000,
+        "iva": 18240,
+        "total": 114240,
+        "reserve": 28560,
+        "balance": 85680,
+        "reserve_label": "Reserva 25%"
+      }
+    },
+    {
+      "name": "order_35_consolidado",
+      "note": "Real order #35 (consolidado DB), manual discount 5000 without coupon. Stored values (subtotal 640000, iva 121600, total 761600) are correct; the order detail summary showed 767550 = 645000 * 1.19 because it ignored the discount.",
+      "input": {
+        "line_items": [{ "price": 95000, "quantity": 1 }, { "price": 60000, "quantity": 2 }],
+        "start_date": "2026-12-01",
+        "end_date": "2026-12-03",
+        "shipping_total": 0,
+        "coupon": null,
+        "discount": 5000,
+        "apply_iva": true,
+        "reserve_type": "percent",
+        "reserve_value": 25
+      },
+      "expected": {
+        "jornadas": 3,
+        "line_subtotals": [285000, 360000],
+        "products_subtotal": 645000,
+        "discount": 5000,
+        "shipping_total": 0,
+        "net": 640000,
+        "iva": 121600,
+        "total": 761600,
+        "reserve": 190400,
+        "balance": 571200,
+        "reserve_label": "Reserva 25%"
+      }
+    }
+  ],
+  "error_cases": [
+    {
+      "name": "end_before_start",
+      "input": { "line_items": [{ "price": 1000, "quantity": 1 }], "start_date": "2027-03-05", "end_date": "2027-03-04" }
+    },
+    {
+      "name": "malformed_date",
+      "input": { "line_items": [{ "price": 1000, "quantity": 1 }], "start_date": "05/03/2027", "end_date": "2027-03-06" }
+    },
+    {
+      "name": "negative_price",
+      "input": { "line_items": [{ "price": -1000, "quantity": 1 }], "start_date": "2027-03-05", "end_date": "2027-03-05" }
+    },
+    {
+      "name": "non_numeric_price",
+      "input": { "line_items": [{ "price": "abc", "quantity": 1 }], "start_date": "2027-03-05", "end_date": "2027-03-05" }
+    },
+    {
+      "name": "negative_shipping",
+      "input": { "line_items": [{ "price": 1000, "quantity": 1 }], "start_date": "2027-03-05", "end_date": "2027-03-05", "shipping_total": -1 }
+    }
+  ]
+}

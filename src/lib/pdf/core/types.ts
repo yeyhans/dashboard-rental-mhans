@@ -36,6 +36,8 @@ export interface TotalsInfo {
   iva: number;
   total: number;
   reserve: number;
+  /** e.g. "Reserva 30%" or "Reserva" for a fixed amount (src/lib/pricing.ts reserveLabel). */
+  reserveLabel?: string;
 }
 
 export interface ShippingInfo {
