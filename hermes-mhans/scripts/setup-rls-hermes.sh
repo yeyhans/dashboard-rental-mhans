@@ -77,8 +77,16 @@ else
     psql "$RO_URL" -tAc "SELECT count(*) FROM public.user_profiles" 2>&1) || true
 
   case "$COUNT" in
+    *"permission denied"*)
+      # La consulta SÍ corrió y Postgres la rechazó explícitamente: es una regresión real de
+      # privilegios (GRANT retirado), no un fallo de infraestructura. Distinto de la rama de abajo,
+      # donde $COUNT no viene de una respuesta de Postgres sino de que la conexión ni siquiera se
+      # estableció (docker/psql no pudieron ejecutar la consulta).
+      echo "[setup-rls-hermes] FALLO smoke: Postgres denegó el permiso explícitamente: $COUNT"
+      exit 1
+      ;;
     ''|*[!0-9]*)
-      echo "[setup-rls-hermes] FALLO smoke: count no numérico: $COUNT"
+      echo "[setup-rls-hermes] FALLO smoke: no se pudo ejecutar la consulta (fallo de infraestructura, no de permisos): $COUNT"
       exit 1
       ;;
     0)

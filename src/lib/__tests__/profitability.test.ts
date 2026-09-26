@@ -106,6 +106,14 @@ describe('monthlyRevenueSeries', () => {
     const serie = monthlyRevenueSeries([order({ createdAt: '2026-06-10', status: 'cancelled' })], now);
     expect(serie[11]?.pedidos).toBe(0);
   });
+
+  it('usa el mes de Chile para el último balde, no el del reloj UTC del servidor (R3-105)', () => {
+    // 2026-10-01T02:30:00Z son las 23:30 del 30 de septiembre en Santiago (UTC-3): todavía
+    // septiembre. Un servidor en UTC (Vercel) leería ya el 1 de octubre y el balde final quedaría
+    // corrido un mes.
+    const serie = monthlyRevenueSeries([], new Date('2026-10-01T02:30:00Z'));
+    expect(serie[11]?.month).toBe('2026-09');
+  });
 });
 
 describe('assetRotation', () => {

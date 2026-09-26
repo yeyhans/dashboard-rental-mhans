@@ -13,6 +13,8 @@
  * and recorded instead.
  */
 
+import { businessDay } from './businessDay';
+
 /** The five shipment states of the `shipping_usage_status_check` constraint. */
 export const SHIPMENT_STATUSES = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'] as const;
 export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
@@ -94,12 +96,13 @@ export const SHIPMENT_TRANSITION_ERRORS = {
   RACE: 'El estado del envío cambió mientras se procesaba la solicitud, intenta de nuevo',
 } as const;
 
+/**
+ * A `date` column is sliced as-is (already a calendar day); a `Date` instant (`now`) is read in
+ * the business zone, not the server's — see `businessDay.ts` (R3-105).
+ */
 function isoDay(value: string | Date): string {
   if (typeof value === 'string') return value.slice(0, 10);
-  const y = value.getFullYear();
-  const m = String(value.getMonth() + 1).padStart(2, '0');
-  const d = String(value.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return businessDay(value);
 }
 
 function shiftDay(day: string, delta: number): string {

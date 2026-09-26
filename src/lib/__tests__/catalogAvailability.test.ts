@@ -84,6 +84,16 @@ describe('occupancyOn', () => {
     const occ = occupancyOn([rental({ startDate: '2026-07-01', endDate: '2026-07-05' })], now);
     expect(occ.size).toBe(0);
   });
+
+  it('usa "hoy" de Chile, no el del reloj UTC del servidor (R3-105)', () => {
+    // 23:30 del 8 de septiembre en Santiago; con los getters locales de un proceso en UTC
+    // (Vercel) "hoy" sería el 9 y un arriendo que termina el 8 dejaría de contarse como ocupado.
+    const occ = occupancyOn(
+      [rental({ startDate: '2026-09-05', endDate: '2026-09-08' })],
+      new Date('2026-09-09T02:30:00Z')
+    );
+    expect(occ.get('1')).toBe(1);
+  });
 });
 
 describe('catalogKpis', () => {

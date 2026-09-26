@@ -45,6 +45,12 @@ describe('isPickupDue', () => {
   it('sin fecha de inicio no inventa una ventana', () => {
     expect(isPickupDue(null, now)).toBe(false);
   });
+
+  it('usa "hoy" de Chile, no el del reloj UTC del servidor (R3-105)', () => {
+    // 23:30 del 8 de septiembre en Santiago; un servidor en UTC (Vercel) leería ya el 9 y cerraría
+    // la ventana un día antes de tiempo.
+    expect(isPickupDue('2026-09-08', new Date('2026-09-09T02:30:00Z'))).toBe(true);
+  });
 });
 
 describe('buildAlerts', () => {

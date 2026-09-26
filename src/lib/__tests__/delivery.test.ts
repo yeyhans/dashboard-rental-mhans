@@ -120,6 +120,16 @@ describe('deliveryKpis', () => {
     expect(k.variacionDiaria).toBeNull();
     expect(k.costoMes).toBe(0);
   });
+
+  it('usa "hoy" de Chile, no el del reloj UTC del servidor (R3-105)', () => {
+    // 23:30 del 8 de septiembre en Santiago; un servidor en UTC (Vercel) leería ya el 9 y un envío
+    // creado el 8 dejaría de contar como "hoy".
+    const k = deliveryKpis(
+      [shipment({ createdAt: '2026-09-08' })],
+      new Date('2026-09-09T02:30:00Z')
+    );
+    expect(k.enviosHoy).toBe(1);
+  });
 });
 
 describe('historyTotals', () => {

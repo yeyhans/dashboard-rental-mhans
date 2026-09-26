@@ -30,9 +30,11 @@ describe('returnUrgency', () => {
   });
 
   it('el día siguiente a partir de las 13:00 ya es atraso', () => {
-    // Exactamente a las 13:00 el plazo venció: el límite es inclusivo del incumplimiento.
-    expect(returnUrgency({ endDate: '2026-06-15', status: 'return', now: at('2026-06-16T13:00') })).toBe('late');
-    expect(returnUrgency({ endDate: '2026-06-15', status: 'return', now: at('2026-06-16T18:00') })).toBe('late');
+    // Exactamente a las 13:00 el plazo venció: el límite es inclusivo del incumplimiento. Instantes
+    // en UTC explícito (13:00 y 18:00 hora Chile, invierno UTC-4) para que el caso no dependa de la
+    // zona horaria del proceso que corre el test (R3-105).
+    expect(returnUrgency({ endDate: '2026-06-15', status: 'return', now: at('2026-06-16T17:00:00Z') })).toBe('late');
+    expect(returnUrgency({ endDate: '2026-06-15', status: 'return', now: at('2026-06-16T22:00:00Z') })).toBe('late');
   });
 
   it('sigue atrasada los días posteriores, no solo el del plazo', () => {
@@ -63,6 +65,21 @@ describe('returnUrgency', () => {
     // `new Date('2026-06-15')` es medianoche UTC; en Chile (UTC-4) eso es el 14 a las 20:00, y el
     // día del término se leería corrido. Recortar la cadena evita el desfase.
     expect(returnUrgency({ endDate: '2026-06-15T00:00:00Z', status: 'return', now: at('2026-06-15T23:00') })).toBe('soon');
+  });
+
+  it('usa "hoy" de Chile, no el del reloj UTC del servidor (R3-105)', () => {
+    // 23:30 del 8 de septiembre en Santiago; un servidor en UTC (Vercel) leería ya el 9 y
+    // adelantaría la devolución a "atrasada" un día antes de tiempo.
+    expect(returnUrgency({ endDate: '2026-09-08', status: 'in-rental', now: at('2026-09-09T02:30:00Z') })).toBe('soon');
+  });
+
+  it('usa la hora de Chile para el corte de las 13:00, no la del servidor UTC (R3-105)', () => {
+    // 16:30 UTC son las 13:30 en Santiago (UTC-3): ya pasó el corte. Con `now.getHours()` en un
+    // proceso UTC (Vercel) esa hora se leería como 16, muy por sobre el corte, sin diferencia
+    // observable aquí — el caso que sí lo distingue es el borde mismo: 15:59 UTC = 12:59 Chile,
+    // todavía "urgent", mientras que unos getters en UTC ya lo leerían pasado el mediodía.
+    expect(returnUrgency({ endDate: '2026-09-07', status: 'return', now: at('2026-09-08T15:59:00Z') })).toBe('urgent');
+    expect(returnUrgency({ endDate: '2026-09-07', status: 'return', now: at('2026-09-08T16:00:00Z') })).toBe('late');
   });
 });
 

@@ -122,6 +122,13 @@ function wallClock(iso: string, timeZone: string): Record<'year' | 'month' | 'da
   };
 }
 
+/** The wall-clock hour (0-23) of `instant` in the business zone. */
+export function businessHour(instant: Date, timeZone: string = BUSINESS_TIME_ZONE): number {
+  const parts = partsFormatterFor(timeZone).formatToParts(instant);
+  const hour = parts.find((part) => part.type === 'hour')?.value;
+  return Number(hour ?? 0);
+}
+
 /** `HH:mm` in the business zone, 24-hour clock; `—` when `iso` does not parse. */
 export function formatBusinessTime(iso: string, timeZone: string = BUSINESS_TIME_ZONE): string {
   const wall = wallClock(iso, timeZone);

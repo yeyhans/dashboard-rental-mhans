@@ -1,7 +1,6 @@
 ---
 import "../styles/globals.css";
 import { getServerAdmin } from "../lib/supabase";
-import { ModeToggle } from "../components/ModeToggle";
 import {
   ArrowLeftRight,
   Bell,
@@ -403,11 +402,6 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
         />
       </button>
     )}
-
-    <!-- Theme Toggle Button -->
-    <div class="fixed top-4 right-4 z-30">
-      <ModeToggle client:load />
-    </div>
 
     <!-- Mobile overlay -->
     <div id="sidebar-overlay"></div>

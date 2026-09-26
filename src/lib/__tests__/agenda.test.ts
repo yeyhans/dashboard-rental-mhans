@@ -82,6 +82,13 @@ describe('buildAgenda', () => {
     const board = buildAgenda([order({ startDate: '2026-06-17T00:00:00Z', endDate: null })], now);
     expect(board.find(d => d.date === '2026-06-17')?.entregas).toHaveLength(1);
   });
+
+  it('usa "hoy" de Chile para armar el tablero, no el del reloj UTC del servidor (R3-105)', () => {
+    // 2026-09-09T02:30:00Z son las 23:30 del 8 de septiembre en Santiago (UTC-3). Un cálculo con
+    // los getters locales de un proceso en UTC (Vercel) diría que "hoy" es el 9.
+    const board = buildAgenda([], new Date('2026-09-09T02:30:00Z'));
+    expect(board[0]?.date).toBe('2026-09-08');
+  });
 });
 
 describe('agendaMovementCount', () => {

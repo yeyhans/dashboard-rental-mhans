@@ -12,6 +12,7 @@
 
 import type { LineItem } from '../types/order';
 import { canonicalStatus } from './orderStatus';
+import { businessDay, businessHour } from './businessDay';
 
 /**
  * The return-slot urgency, which drives `.li-time` in the canonical (`soon` / `urgent` / `late`).
@@ -38,12 +39,13 @@ export interface ReturnSlotInput {
  * Splits an ISO-ish value into its calendar day. `order_fecha_termino` is a `date`, so parsing it
  * with `new Date()` would read midnight UTC and, at UTC-4, land on the previous day in Chile.
  */
+/**
+ * A `date` column is sliced as-is (already a calendar day); a `Date` instant (`now`) is read in
+ * the business zone, not the server's — see `businessDay.ts` (R3-105).
+ */
 function isoDay(value: string | Date): string {
   if (typeof value === 'string') return value.slice(0, 10);
-  const y = value.getFullYear();
-  const m = String(value.getMonth() + 1).padStart(2, '0');
-  const d = String(value.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return businessDay(value);
 }
 
 function addDays(day: string, delta: number): string {
@@ -61,7 +63,7 @@ export function returnUrgency({ endDate, status, now }: ReturnSlotInput): Return
   const today = isoDay(now);
 
   if (today > deadlineDay) return 'late';
-  if (today === deadlineDay) return now.getHours() >= RETURN_DEADLINE_HOUR ? 'late' : 'urgent';
+  if (today === deadlineDay) return businessHour(now) >= RETURN_DEADLINE_HOUR ? 'late' : 'urgent';
   if (today === isoDay(endDate)) return 'soon';
   return 'scheduled';
 }

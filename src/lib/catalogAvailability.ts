@@ -18,6 +18,7 @@
 
 import { canonicalStatus } from './orderStatus';
 import type { LineItem } from '../types/order';
+import { businessDay } from './businessDay';
 
 /** `products.stock_status`, by convention — the column has no CHECK constraint. */
 export const STOCK_STATUSES = ['instock', 'outofstock', 'onbackorder'] as const;
@@ -40,12 +41,13 @@ export interface RentalWindowLike {
   readonly lineItems: readonly LineItem[];
 }
 
+/**
+ * A `date` column is sliced as-is (already a calendar day); a `Date` instant (`now`) is read in
+ * the business zone, not the server's — see `businessDay.ts` (R3-105).
+ */
 function isoDay(value: string | Date): string {
   if (typeof value === 'string') return value.slice(0, 10);
-  const y = value.getFullYear();
-  const m = String(value.getMonth() + 1).padStart(2, '0');
-  const d = String(value.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return businessDay(value);
 }
 
 /**

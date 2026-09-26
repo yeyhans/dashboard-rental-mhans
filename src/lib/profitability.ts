@@ -47,6 +47,7 @@
  */
 
 import { canonicalStatus } from './orderStatus';
+import { businessDay } from './businessDay';
 import type { LineItem } from '../types/order';
 import type { ExpenseCategory, ExpenseLike } from '../types/expenses';
 
@@ -60,6 +61,12 @@ export interface RevenueOrderLike {
 
 function monthKey(value: string): string {
   return value.slice(0, 7);
+}
+
+/** The `[year, month]` (1-indexed) of `instant` in the business zone, not the server's (R3-105). */
+function businessYearMonth(instant: Date): [number, number] {
+  const [y, m] = businessDay(instant).split('-').map(Number);
+  return [y ?? 1970, m ?? 1];
 }
 
 /** Counts only orders that produced revenue: a cancellation never billed. */
@@ -122,9 +129,10 @@ export function monthlyRevenueSeries(
   months = 12
 ): MonthlyRevenue[] {
   const buckets = new Map<string, MonthlyRevenue>();
+  const [year, month] = businessYearMonth(now);
 
   for (let i = months - 1; i >= 0; i--) {
-    const date = new Date(Date.UTC(now.getFullYear(), now.getMonth() - i, 1));
+    const date = new Date(Date.UTC(year, month - 1 - i, 1));
     const key = date.toISOString().slice(0, 7);
     buckets.set(key, { month: key, ingresos: 0, pedidos: 0 });
   }

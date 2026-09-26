@@ -150,7 +150,7 @@ const RegenerateContractDialog = ({
               {hasContract ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <Badge className="bg-emerald-100 text-emerald-800">
                       <FileText className="h-3 w-3 mr-1" />
                       Contrato existente
                     </Badge>
@@ -164,15 +164,15 @@ const RegenerateContractDialog = ({
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   </div>
-                  <div className="flex items-start gap-2 rounded-md border border-yellow-200 bg-yellow-50 dark:border-yellow-900/50 dark:bg-yellow-900/10 px-3 py-2">
-                    <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                  <div className="flex items-start gap-2 rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2">
+                    <AlertTriangle className="h-4 w-4 text-yellow-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-yellow-700">
                       Se generará un nuevo PDF y reemplazará el contrato actual.
                     </p>
                   </div>
                 </div>
               ) : (
-                <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                <Badge className="bg-yellow-100 text-yellow-800">
                   Sin contrato — se generará el primero
                 </Badge>
               )}
@@ -184,17 +184,17 @@ const RegenerateContractDialog = ({
                 <p className="text-sm font-medium text-foreground">Advertencias</p>
                 <div className="space-y-1.5">
                   {missingSignature && (
-                    <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 dark:border-orange-900/50 dark:bg-orange-900/10 px-3 py-2">
+                    <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2">
                       <AlertCircle className="h-4 w-4 text-orange-500 shrink-0" />
-                      <p className="text-xs text-orange-700 dark:text-orange-400">
+                      <p className="text-xs text-orange-700">
                         No tiene firma digital registrada
                       </p>
                     </div>
                   )}
                   {missingIdDocs && (
-                    <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 dark:border-orange-900/50 dark:bg-orange-900/10 px-3 py-2">
+                    <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2">
                       <AlertCircle className="h-4 w-4 text-orange-500 shrink-0" />
-                      <p className="text-xs text-orange-700 dark:text-orange-400">
+                      <p className="text-xs text-orange-700">
                         Faltan documentos de identidad (RUT)
                       </p>
                     </div>

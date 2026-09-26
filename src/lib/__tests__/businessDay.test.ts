@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BUSINESS_TIME_ZONE,
   businessDay,
+  businessHour,
   formatBusinessDate,
   formatBusinessDateTime,
   formatBusinessDayLabel,
@@ -40,6 +41,18 @@ describe('businessDay', () => {
 
   it('honours an explicit zone', () => {
     expect(businessDay(new Date('2026-09-09T02:30:00Z'), 'UTC')).toBe('2026-09-09');
+  });
+});
+
+describe('businessHour', () => {
+  it('reads the wall-clock hour in Santiago, not UTC', () => {
+    // 16:58 UTC is 13:58 in Santiago (UTC-3, September).
+    expect(businessHour(new Date('2026-09-08T16:58:00Z'))).toBe(13);
+  });
+
+  it('crosses midnight the same way businessDay does', () => {
+    expect(businessHour(new Date('2026-09-09T02:30:00Z'))).toBe(23); // 23:30 -03, still the 8th
+    expect(businessHour(new Date('2026-09-09T03:00:00Z'))).toBe(0); // 00:00 -03, now the 9th
   });
 });
 

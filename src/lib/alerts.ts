@@ -17,6 +17,7 @@
 import { canonicalStatus } from './orderStatus';
 import { isOverdue, type FinanceOrderLike } from './finance';
 import { isLateReturn } from './checkIn';
+import { businessDay } from './businessDay';
 
 export type AlertSeverity = 'crit' | 'warn';
 
@@ -46,12 +47,13 @@ export interface AlertOrderLike extends FinanceOrderLike {
   readonly hasContract: boolean;
 }
 
+/**
+ * A `date` column is sliced as-is (already a calendar day); a `Date` instant (`now`) is read in
+ * the business zone, not the server's — see `businessDay.ts` (R3-105).
+ */
 function isoDay(value: string | Date): string {
   if (typeof value === 'string') return value.slice(0, 10);
-  const y = value.getFullYear();
-  const m = String(value.getMonth() + 1).padStart(2, '0');
-  const d = String(value.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return businessDay(value);
 }
 
 function shiftDay(day: string, delta: number): string {

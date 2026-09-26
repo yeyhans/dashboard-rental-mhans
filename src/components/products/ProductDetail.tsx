@@ -691,7 +691,7 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
                     <div>
                       <Label className="text-sm font-medium text-muted-foreground">Descripción corta</Label>
                       <div
-                        className="prose prose-sm max-w-none mt-1 text-foreground dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground [&_p]:my-1 [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_a]:text-primary [&_a]:underline"
+                        className="prose prose-sm max-w-none mt-1 text-foreground prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground [&_p]:my-1 [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_a]:text-primary [&_a]:underline"
                         dangerouslySetInnerHTML={{ __html: sanitizeHtml(product.short_description) }}
                       />
                     </div>
@@ -701,7 +701,7 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
                     <div>
                       <Label className="text-sm font-medium text-muted-foreground">Descripción completa</Label>
                       <div
-                        className="prose prose-sm max-w-none mt-1 text-foreground dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground [&_p]:my-1 [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_a]:text-primary [&_a]:underline"
+                        className="prose prose-sm max-w-none mt-1 text-foreground prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground [&_p]:my-1 [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_a]:text-primary [&_a]:underline"
                         dangerouslySetInnerHTML={{ __html: sanitizeHtml(product.description) }}
                       />
                     </div>
