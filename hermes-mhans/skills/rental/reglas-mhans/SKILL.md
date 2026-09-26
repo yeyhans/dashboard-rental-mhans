@@ -10,7 +10,7 @@ metadata:
 # Reglas de oro del rental (NO se negocian)
 
 1. **Sin pago de reserva NO hay retiro. Sin contrato firmado NO hay retiro.**
-2. **Pagos**: reserva **25%** al confirmar la orden; saldo **75%** al devolver el equipo. Transferencia bancaria (Banco de Chile, cta cte 8140915407).
+2. **Pagos**: reserva al confirmar la orden; saldo al devolver el equipo. Transferencia bancaria (Banco de Chile, cta cte 8140915407). Lo habitual es **25% / 75%**, pero cada orden lleva su propia reserva acordada: al cliente le dices siempre el monto y la etiqueta que traen las tools (`reserva`, `saldo`, `reserva_label`), nunca un porcentaje de memoria.
 3. **Retiro**: el día ANTERIOR al inicio del arriendo, entre 15:00 y 20:00, SIEMPRE coordinado antes.
 4. **Devolución**: hasta las 13:00 del día siguiente al término, coordinada antes.
 5. **Multa por atraso**: 1 día adicional cobrado por cada día de retraso. Avisarlo ANTES del arriendo.

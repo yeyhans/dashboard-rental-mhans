@@ -356,13 +356,21 @@ El mensaje del notifier incluye solo: nombre+apellido, teléfono, proyecto, fech
 # Dentro del contenedor (o en CI)
 cd /opt/rental-mcp && python -m pytest -q
 
-# Total esperado: 113 passed
+# Total esperado: 264 passed
 # Breakdown:
-#   Golden pricing tests:      22
-#   Golden availability tests: 11
-#   Notifier tests:            44
-#   Client tools tests:        36
+#   Golden pricing tests:        44
+#   Pricing fixtures (compartidos con el dashboard): 22
+#   Golden availability tests:   11
+#   Notifier tests:              46
+#   Client tools tests:          36
+#   Status transitions:          62
+#   Order insert / plan / pool / rows: 43
 ```
+
+Los 22 tests de `tests/test_pricing_fixtures.py` corren contra
+`tests/data/pricing-golden.json`, copia del archivo canónico del dashboard
+(`src/lib/__fixtures__/pricing-golden.json`). Si el dashboard cambia una regla de plata y esta
+copia no se actualiza, el test de deriva falla.
 
 CI: `.github/workflows/rental-mcp-tests.yml` corre en cada push que toque `hermes-mhans/rental-mcp/`.
 

@@ -40,7 +40,7 @@ config.yaml           plantilla → volumen (mcp_servers rental + rentaldb)
 SOUL.md               identidad (SIN fórmulas — viven en rental-mcp)
 GUIA.md               guía completa del agente (operación, troubleshooting, seguridad)
 skills/rental/        cotizar, orden, cliente v2.0.0, catalogo, reglas-mhans
-rental-mcp/           server MCP de dominio (pytest: 113 tests — golden pricing/availability + notifier + client tools)
+rental-mcp/           server MCP de dominio (pytest: 264 tests — golden pricing + fixtures compartidos con el dashboard, availability, notifier, client tools)
   rental_mcp/
     server.py         21 tools MCP
     validators.py     SAFE_CLIENT_FIELDS, validación email/RUT módulo-11

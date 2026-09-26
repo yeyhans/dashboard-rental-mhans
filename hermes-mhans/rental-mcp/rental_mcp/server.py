@@ -81,7 +81,9 @@ def _now() -> datetime:
 
 
 def _half_up(x: float) -> int:
-    return int(x + 0.5)
+    # Delegated so every amount in this process rounds the same way as the dashboard
+    # (Decimal ROUND_HALF_UP; Python's built-in round() is banker's rounding).
+    return domain_pricing.round_half_up(x)
 
 
 def _coerce_price(val: Any) -> float:
@@ -124,8 +126,15 @@ async def _quote_internal(
     coupon_code: str | None,
     shipping_total: float,
     apply_iva: bool,
+    reserve_type: str | None = None,
+    reserve_value: float | str | None = None,
 ) -> dict[str, Any]:
-    """Shared logic for quoting (used by tool and draft_create_order)."""
+    """
+    Shared logic for quoting (used by tool and draft_create_order).
+
+    `reserve_type` / `reserve_value` mirror `orders.reserve_type` / `orders.reserve_value`.
+    When they are absent the module falls back to the business default (percent 25).
+    """
     jornadas = domain_pricing.num_jornadas(start_date, end_date)
     qtys = quantities or {}
 
@@ -165,6 +174,7 @@ async def _quote_internal(
     # Coupon resolution
     coupon_type: str | None = None
     coupon_amount: float = 0.0
+    coupon_maximum_amount: float | None = None
     coupon_info: dict[str, Any] | None = None
 
     if coupon_code:
@@ -181,11 +191,16 @@ async def _quote_internal(
             else:
                 coupon_type = coupon_row["discount_type"]
                 coupon_amount = float(coupon_row["amount"])
+                # coupons.maximum_amount caps a percentage discount; ignoring it overcharged
+                # the discount against the dashboard.
+                raw_maximum = coupon_row.get("maximum_amount")
+                coupon_maximum_amount = float(raw_maximum) if raw_maximum is not None else None
                 coupon_info = {
                     "code": coupon_code,
                     "valid": True,
                     "discount_type": coupon_type,
                     "amount": coupon_amount,
+                    "maximum_amount": coupon_maximum_amount,
                 }
 
     calc = domain_pricing.calculate_quote(
@@ -195,6 +210,9 @@ async def _quote_internal(
         coupon_type=coupon_type,
         coupon_amount=coupon_amount,
         apply_iva=apply_iva,
+        coupon_maximum_amount=coupon_maximum_amount,
+        reserve_type=reserve_type,
+        reserve_value=reserve_value,
     )
 
     return {
@@ -207,8 +225,11 @@ async def _quote_internal(
         "calculated_subtotal": calc["calculated_subtotal"],
         "calculated_iva": calc["calculated_iva"],
         "calculated_total": calc["calculated_total"],
-        "reserva_25": calc["reserva_25"],
-        "saldo_75": calc["saldo_75"],
+        "reserva": calc["reserva"],
+        "saldo": calc["saldo"],
+        "reserva_label": calc["reserva_label"],
+        "reserve_type": calc["reserve_type"],
+        "reserve_value": calc["reserve_value"],
         "presented_total": calc["presented_total"],
         "presented_iva": calc["presented_iva"],
         "presented_reserva": calc["presented_reserva"],
@@ -231,15 +252,28 @@ async def quote_rental(
     coupon_code: str | None = None,
     shipping_total: float = 0,
     apply_iva: bool = True,
+    reserve_type: str | None = None,
+    reserve_value: float | None = None,
 ) -> dict[str, Any]:
     """
     Cotiza un arriendo fotográfico para los productos indicados.
-    Calcula jornadas, subtotales, IVA, reserva 25% y saldo 75%.
-    Valida cupón (existencia, vigencia, límite de uso).
+    Calcula jornadas, subtotales, IVA (19%), reserva y saldo, en pesos enteros.
+    La reserva NO es siempre 25%: se toma de reserve_type ('percent' | 'fixed')
+    y reserve_value; si no se indican, se usa el default del negocio (25%).
+    El campo `reserva_label` trae la etiqueta exacta que hay que mostrar al cliente.
+    Valida cupón (existencia, vigencia, límite de uso, tope maximum_amount).
     """
     try:
         return await _quote_internal(
-            product_ids, start_date, end_date, quantities, coupon_code, shipping_total, apply_iva
+            product_ids,
+            start_date,
+            end_date,
+            quantities,
+            coupon_code,
+            shipping_total,
+            apply_iva,
+            reserve_type,
+            reserve_value,
         )
     except ValueError as e:
         return {"error": str(e)}
@@ -412,13 +446,28 @@ async def get_order_status(order_id: int) -> dict[str, Any]:
                 o.order_fecha_inicio, o.order_fecha_termino, o.num_jornadas,
                 o.calculated_total, o.new_pdf_on_hold_url, o.new_pdf_processing_url,
                 o.date_created, o.date_modified,
-                o.billing_first_name, o.billing_last_name
+                o.billing_first_name, o.billing_last_name,
+                -- Read through to_jsonb so the query still runs on an instance where
+                -- migration 0008 (reserve_type / reserve_value) has not been applied yet:
+                -- a missing key yields NULL instead of "column does not exist".
+                to_jsonb(o) ->> 'reserve_type'  AS reserve_type,
+                to_jsonb(o) ->> 'reserve_value' AS reserve_value
             FROM orders o WHERE o.id = %s
             """,
             (order_id,),
         )
         if not row:
             return {"error": f"Orden {order_id} no encontrada"}
+
+        # The reserve is the order's own, never a hardcoded 25%: orders negotiated at another
+        # share would otherwise be quoted wrong to the customer.
+        reserve_type = row.get("reserve_type")
+        reserve_value = row.get("reserve_value")
+        total = _coerce_price(row.get("calculated_total"))
+        reserva = domain_pricing.reserve_amount(
+            domain_pricing.round_half_up(total), reserve_type, reserve_value
+        )
+
         return {
             "id": row["id"],
             "status": row["status"],
@@ -428,6 +477,16 @@ async def get_order_status(order_id: int) -> dict[str, Any]:
             "order_fecha_termino": row["order_fecha_termino"].isoformat() if row.get("order_fecha_termino") else None,
             "num_jornadas": row.get("num_jornadas"),
             "calculated_total": row.get("calculated_total"),
+            "reserve_type": reserve_type or domain_pricing.DEFAULT_RESERVE_TYPE,
+            # to_jsonb ->> yields text ('25.00'); the agent must receive a number.
+            "reserve_value": (
+                _coerce_price(reserve_value)
+                if reserve_value is not None
+                else domain_pricing.DEFAULT_RESERVE_VALUE
+            ),
+            "reserva": reserva,
+            "saldo": domain_pricing.round_half_up(total) - reserva,
+            "reserva_label": domain_pricing.reserve_label(reserve_type, reserve_value),
             "pdf_on_hold": row.get("new_pdf_on_hold_url"),
             "pdf_processing": row.get("new_pdf_processing_url"),
             "date_created": row["date_created"].isoformat() if row.get("date_created") else None,
@@ -950,9 +1009,13 @@ async def draft_create_order(
     coupon_code: str | None = None,
     shipping_total: float = 0,
     apply_iva: bool = True,
+    reserve_type: str | None = None,
+    reserve_value: float | None = None,
 ) -> dict[str, Any]:
     """
     Prepara un borrador de orden de arriendo (requiere confirmación).
+    La reserva del borrador usa reserve_type / reserve_value; sin ellos rige
+    el default del negocio (25%).
     Valida: cliente existe, tiene contrato firmado, fechas válidas,
     disponibilidad (conflictos = advertencia), y cotiza.
     Devuelve plan_id + preview + confirmation_token (válido 15 minutos).
@@ -986,7 +1049,15 @@ async def draft_create_order(
 
         # Quote
         quote = await _quote_internal(
-            product_ids, start_date, end_date, quantities, coupon_code, shipping_total, apply_iva
+            product_ids,
+            start_date,
+            end_date,
+            quantities,
+            coupon_code,
+            shipping_total,
+            apply_iva,
+            reserve_type,
+            reserve_value,
         )
         if "error" in quote:
             return quote
@@ -1032,6 +1103,7 @@ async def draft_create_order(
                 "num_jornadas": quote["num_jornadas"],
                 "total_presentado": quote["presented_total"],
                 "reserva_presentada": quote["presented_reserva"],
+                "reserva_label": quote["reserva_label"],
                 "saldo_presentado": quote["presented_saldo"],
                 "iva_presentado": quote["presented_iva"],
                 "moneda": "CLP",

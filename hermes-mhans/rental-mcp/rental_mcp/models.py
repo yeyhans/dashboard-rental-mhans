@@ -28,6 +28,8 @@ class CouponInfo(BaseModel):
     code: str
     discount_type: str
     amount: float
+    #: `coupons.maximum_amount` — caps a percentage discount when set.
+    maximum_amount: float | None = None
     valid: bool
     reason: str = ""
 
@@ -38,18 +40,27 @@ class CouponInfo(BaseModel):
 
 
 class QuoteResult(BaseModel):
+    """
+    Every amount is a whole CLP integer produced by `domain.pricing` — CLP has no decimals and
+    the dashboard stores integers.
+    """
+
     num_jornadas: int
     lineas: list[QuoteLine]
-    subtotal: float
-    descuento_cupon: float
+    subtotal: int
+    descuento_cupon: int
     coupon: CouponInfo | None = None
-    shipping_total: float
-    calculated_subtotal: float
-    calculated_iva: float
-    calculated_total: float
-    reserva_25: float
-    saldo_75: float
-    # Presented (int, half-up)
+    shipping_total: int
+    calculated_subtotal: int
+    calculated_iva: int
+    calculated_total: int
+    #: The order's own reserve (`orders.reserve_type` / `orders.reserve_value`), not a fixed 25%.
+    reserva: int
+    saldo: int
+    reserva_label: str = "Reserva 25%"
+    reserve_type: str = "percent"
+    reserve_value: float = 25
+    # Presented aliases kept for the existing tool payloads (same integers).
     presented_total: int
     presented_iva: int
     presented_reserva: int
