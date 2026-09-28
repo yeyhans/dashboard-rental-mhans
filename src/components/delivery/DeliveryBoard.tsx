@@ -1,7 +1,16 @@
-import React, { useMemo, useState } from 'react';
-import { toast } from 'sonner';
-import { Loader2, Pencil, Plus, Search, Trash2, Truck } from 'lucide-react';
-import { itemsFromLineItems } from '../../lib/checkIn';
+import React, { useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  CheckCircle2,
+  Clock,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Truck,
+  Wallet,
+} from "lucide-react";
+import { itemsFromLineItems } from "../../lib/checkIn";
 import {
   SHIPMENT_STATUSES,
   canRecordCheckout,
@@ -9,18 +18,24 @@ import {
   isAwaitingDispatch,
   shipmentLabel,
   type ShipmentStatus,
-} from '../../lib/delivery';
+} from "../../lib/delivery";
 import {
   shippingMethodDeleteWarning,
   shippingMethodFromRecord,
   shippingMethodPayload,
-  shippingTypeLabel,
   type ShippingMethodForm,
   type StoredShippingMethod,
-} from '../../lib/shippingMethods';
-import { apiClient } from '../../services/apiClient';
-import { ConfirmDialog, ShippingTypeDialog } from './ShippingTypeDialog';
-import type { DeliveryBoard as DeliveryBoardData, ShipmentRow } from '../../services/deliveryService';
+} from "../../lib/shippingMethods";
+import { apiClient } from "../../services/apiClient";
+import { KpiCard } from "../shared/KpiCard";
+import { RowActionsMenu, type RowActionItem } from "../shared/RowActionsMenu";
+import { StatusBadge } from "../shared/StatusBadge";
+import { badgeDotClass } from "../shared/statusBadgeTones";
+import { ConfirmDialog, ShippingTypeDialog } from "./ShippingTypeDialog";
+import type {
+  DeliveryBoard as DeliveryBoardData,
+  ShipmentRow,
+} from "../../services/deliveryService";
 
 /**
  * Delivery.
@@ -111,10 +126,12 @@ function AssetCheckOutControl({
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<AssetOption[] | null>(null);
   const [loadingOptions, setLoadingOptions] = useState(false);
-  const [selectedAssetId, setSelectedAssetId] = useState<number | ''>('');
-  const [notes, setNotes] = useState('');
+  const [selectedAssetId, setSelectedAssetId] = useState<number | "">("");
+  const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(
+    null,
+  );
   const [registeredCount, setRegisteredCount] = useState(0);
 
   const loadOptions = async () => {
@@ -122,7 +139,9 @@ function AssetCheckOutControl({
     if (options !== null) return;
     setLoadingOptions(true);
     try {
-      const response = await apiClient.get(`/api/inventory/assets?product_id=${productId}`);
+      const response = await apiClient.get(
+        `/api/inventory/assets?product_id=${productId}`,
+      );
       const payload = await apiClient.handleJsonResponse<{
         success: boolean;
         data: { assets: AssetOption[] };
@@ -137,33 +156,41 @@ function AssetCheckOutControl({
 
   const handleCheckOut = async () => {
     if (!selectedAssetId) {
-      toast.error('Selecciona un número de serie');
+      toast.error("Selecciona un número de serie");
       return;
     }
     setSubmitting(true);
     setResult(null);
     try {
-      const response = await apiClient.post('/api/inventory/movements', {
+      const response = await apiClient.post("/api/inventory/movements", {
         asset_id: selectedAssetId,
         order_id: orderId,
-        direction: 'checkout',
+        direction: "checkout",
         condition_notes: notes.trim() || undefined,
       });
       const payload = await response.json();
       if (!response.ok || !payload.success) {
-        setResult({ ok: false, message: payload.error || 'No se pudo registrar la salida' });
+        setResult({
+          ok: false,
+          message: payload.error || "No se pudo registrar la salida",
+        });
         return;
       }
       // El serial recién despachado no puede volver a elegirse para esta misma línea, y la
       // selección se limpia para que la siguiente unidad no reutilice por error el mismo notes/id.
-      setOptions(prev => (prev ?? []).filter(asset => asset.id !== selectedAssetId));
-      setRegisteredCount(count => count + 1);
-      setSelectedAssetId('');
-      setNotes('');
-      setResult({ ok: true, message: 'Salida registrada' });
-      toast.success('Salida registrada');
+      setOptions((prev) =>
+        (prev ?? []).filter((asset) => asset.id !== selectedAssetId),
+      );
+      setRegisteredCount((count) => count + 1);
+      setSelectedAssetId("");
+      setNotes("");
+      setResult({ ok: true, message: "Salida registrada" });
+      toast.success("Salida registrada");
     } catch (error) {
-      setResult({ ok: false, message: error instanceof Error ? error.message : 'Error de conexión' });
+      setResult({
+        ok: false,
+        message: error instanceof Error ? error.message : "Error de conexión",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -198,15 +225,21 @@ function AssetCheckOutControl({
         <>
           <select
             value={selectedAssetId}
-            onChange={e => setSelectedAssetId(e.target.value ? Number(e.target.value) : '')}
+            onChange={(e) =>
+              setSelectedAssetId(e.target.value ? Number(e.target.value) : "")
+            }
             disabled={loadingOptions || (options?.length ?? 0) === 0}
             aria-label="Número de serie"
             className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-[11px]"
           >
             <option value="">
-              {loadingOptions ? 'Cargando…' : options?.length ? 'Elige el número de serie' : 'Sin equipos registrados'}
+              {loadingOptions
+                ? "Cargando…"
+                : options?.length
+                  ? "Elige el número de serie"
+                  : "Sin equipos registrados"}
             </option>
-            {(options ?? []).map(asset => (
+            {(options ?? []).map((asset) => (
               <option key={asset.id} value={asset.id}>
                 {asset.serial_number}
               </option>
@@ -215,7 +248,7 @@ function AssetCheckOutControl({
           <input
             type="text"
             value={notes}
-            onChange={e => setNotes(e.target.value)}
+            onChange={(e) => setNotes(e.target.value)}
             placeholder="Notas (opcional)"
             aria-label="Notas de la salida"
             className="w-28 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-[11px]"
@@ -226,13 +259,13 @@ function AssetCheckOutControl({
             disabled={submitting || !selectedAssetId}
             className="rounded-[6px] bg-[var(--color-text-primary)] px-2 py-1 text-[11px] font-medium text-white disabled:opacity-50"
           >
-            {submitting ? 'Guardando…' : 'Confirmar'}
+            {submitting ? "Guardando…" : "Confirmar"}
           </button>
         </>
       )}
       {result && (
         <span
-          className={`text-[11px] ${result.ok ? 'text-[var(--color-ok)]' : 'text-[var(--color-crit)]'}`}
+          className={`text-[11px] ${result.ok ? "text-[var(--color-ok)]" : "text-[var(--color-crit)]"}`}
           role="status"
         >
           {result.message}
@@ -243,33 +276,36 @@ function AssetCheckOutControl({
 }
 
 const STATUS_TONES: Record<string, string> = {
-  pending: 'bg-[var(--color-neutral-bg)] text-[var(--color-neutral)]',
-  processing: 'bg-[var(--color-warn-bg)] text-[var(--color-warn)]',
-  shipped: 'bg-[var(--color-info-bg)] text-[var(--color-info)]',
-  delivered: 'bg-[var(--color-ok-bg)] text-[var(--color-ok)]',
-  cancelled: 'bg-[var(--color-neutral-bg)] text-[var(--color-muted)]',
+  pending: "bg-[var(--color-neutral-bg)] text-[var(--color-neutral)]",
+  processing: "bg-[var(--color-warn-bg)] text-[var(--color-warn)]",
+  shipped: "bg-[var(--color-info-bg)] text-[var(--color-info)]",
+  delivered: "bg-[var(--color-ok-bg)] text-[var(--color-ok)]",
+  cancelled: "bg-[var(--color-neutral-bg)] text-[var(--color-muted)]",
 };
 
 function statusPill(status: string): string {
-  return STATUS_TONES[status] ?? 'bg-[var(--color-neutral-bg)] text-[var(--color-neutral)]';
+  return (
+    STATUS_TONES[status] ??
+    "bg-[var(--color-neutral-bg)] text-[var(--color-neutral)]"
+  );
 }
 
 function formatDay(value: string | null): string {
-  if (!value) return '—';
-  const [y, m, d] = value.slice(0, 10).split('-');
+  if (!value) return "—";
+  const [y, m, d] = value.slice(0, 10).split("-");
   return `${d}/${m}/${y}`;
 }
 
 /** El servidor entrega los tipos ordenados por nombre; un alta local mantiene ese orden. */
 function byName(a: StoredShippingMethod, b: StoredShippingMethod): number {
-  return a.name.localeCompare(b.name, 'es');
+  return a.name.localeCompare(b.name, "es");
 }
 
 async function requestJson(url: string, init: RequestInit): Promise<any> {
   // Los endpoints exigen sesión de admin (`withAuth`), que se resuelve por cookie.
   const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
     ...init,
   });
   const payload = await response.json().catch(() => null);
@@ -277,16 +313,16 @@ async function requestJson(url: string, init: RequestInit): Promise<any> {
   if (!response.ok) {
     // El endpoint responde `{ error, details }`; `details` puede traer el mensaje crudo de
     // Postgres, así que solo se muestra `error`.
-    throw new Error(payload?.error ?? 'No se pudo completar la operación');
+    throw new Error(payload?.error ?? "No se pudo completar la operación");
   }
 
   return payload;
 }
 
 export default function DeliveryBoard({ data }: DeliveryBoardProps) {
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('todos');
-  const [typeFilter, setTypeFilter] = useState('todos');
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [typeFilter, setTypeFilter] = useState("todos");
 
   // R3-205: estado local de "Delivery activos" para que marcar despachado/entregado (`PUT
   // /api/delivery/shipments/:id`) refresque `canRecordCheckout` en esa fila sin recargar la
@@ -295,24 +331,33 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
   // recomputarlos en el cliente en cada transición es un alcance mayor que lo que este fix
   // necesita — solo la disponibilidad del control de checkout es lo que R3-201/R3-205 exigían
   // mantener correcto en vivo.
-  const [activeShipments, setActiveShipments] = useState<ShipmentRow[]>(data.active);
+  const [activeShipments, setActiveShipments] = useState<ShipmentRow[]>(
+    data.active,
+  );
 
   function handleShipmentStatusChanged(id: number, status: ShipmentStatus) {
-    setActiveShipments(prev =>
+    setActiveShipments((prev) =>
       prev
-        .map(row => (row.id === id ? { ...row, status } : row))
+        .map((row) => (row.id === id ? { ...row, status } : row))
         // Una vez `delivered` (o `cancelled`) el envío deja de estar "activo" — mismo criterio que
         // `DeliveryService.getBoard` usa para construir `active` en el server.
-        .filter(row => isAwaitingDispatch(row.status) || row.status === 'shipped')
+        .filter(
+          (row) => isAwaitingDispatch(row.status) || row.status === "shipped",
+        ),
     );
   }
 
   const [types, setTypes] = useState<StoredShippingMethod[]>(data.types);
-  const [editing, setEditing] = useState<StoredShippingMethod | 'new' | null>(null);
+  const [editing, setEditing] = useState<StoredShippingMethod | "new" | null>(
+    null,
+  );
   const [deleting, setDeleting] = useState<StoredShippingMethod | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
-  const [feedback, setFeedback] = useState<{ tone: 'ok' | 'crit'; message: string } | null>(null);
+  const [feedback, setFeedback] = useState<{
+    tone: "ok" | "crit";
+    message: string;
+  } | null>(null);
 
   /**
    * El filtro se indexa por `id` y no por nombre: `shipping_methods.name` no tiene UNIQUE, así que
@@ -320,43 +365,53 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
    * dejaría el historial vacío sin explicar por qué.
    */
   function keepTypeFilterValid(next: StoredShippingMethod[]) {
-    setTypeFilter(current =>
-      current === 'todos' || next.some(type => String(type.id) === current) ? current : 'todos'
+    setTypeFilter((current) =>
+      current === "todos" || next.some((type) => String(type.id) === current)
+        ? current
+        : "todos",
     );
   }
 
   async function handleSubmitType(form: ShippingMethodForm) {
     if (editing === null) return;
 
-    const isNew = editing === 'new';
+    const isNew = editing === "new";
     setSaving(true);
     setFeedback(null);
 
     try {
       const saved = shippingMethodFromRecord(
         await requestJson(
-          isNew ? '/api/shipping/methods' : `/api/shipping/methods/${editing.id}`,
-          { method: isNew ? 'POST' : 'PUT', body: JSON.stringify(shippingMethodPayload(form)) }
-        )
+          isNew
+            ? "/api/shipping/methods"
+            : `/api/shipping/methods/${editing.id}`,
+          {
+            method: isNew ? "POST" : "PUT",
+            body: JSON.stringify(shippingMethodPayload(form)),
+          },
+        ),
       );
 
-      setTypes(prev => {
+      setTypes((prev) => {
         const next = isNew
           ? [...prev, saved].sort(byName)
-          : prev.map(type => (type.id === saved.id ? saved : type));
+          : prev.map((type) => (type.id === saved.id ? saved : type));
         keepTypeFilterValid(next);
         return next;
       });
 
       setEditing(null);
       setFeedback({
-        tone: 'ok',
-        message: isNew ? 'Tipo de envío creado.' : 'Tipo de envío actualizado.',
+        tone: "ok",
+        message: isNew ? "Tipo de envío creado." : "Tipo de envío actualizado.",
       });
     } catch (error) {
       setFeedback({
-        tone: 'crit',
-        message: error instanceof Error ? error.message : 'No se pudo guardar el tipo de envío',
+        tone: "crit",
+        message:
+          error instanceof Error
+            ? error.message
+            : "No se pudo guardar el tipo de envío",
       });
     } finally {
       setSaving(false);
@@ -371,20 +426,27 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
       // Solo viaja `enabled`: mandar el registro completo reescribiría campos que nadie tocó.
       const saved = shippingMethodFromRecord(
         await requestJson(`/api/shipping/methods/${type.id}`, {
-          method: 'PUT',
+          method: "PUT",
           body: JSON.stringify({ enabled: !type.enabled }),
-        })
+        }),
       );
 
-      setTypes(prev => prev.map(item => (item.id === saved.id ? saved : item)));
+      setTypes((prev) =>
+        prev.map((item) => (item.id === saved.id ? saved : item)),
+      );
       setFeedback({
-        tone: 'ok',
-        message: saved.enabled ? `"${saved.name}" quedó activo.` : `"${saved.name}" quedó inactivo.`,
+        tone: "ok",
+        message: saved.enabled
+          ? `"${saved.name}" quedó activo.`
+          : `"${saved.name}" quedó inactivo.`,
       });
     } catch (error) {
       setFeedback({
-        tone: 'crit',
-        message: error instanceof Error ? error.message : 'No se pudo cambiar el estado',
+        tone: "crit",
+        message:
+          error instanceof Error
+            ? error.message
+            : "No se pudo cambiar el estado",
       });
     } finally {
       setBusyId(null);
@@ -398,20 +460,25 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
     setFeedback(null);
 
     try {
-      await requestJson(`/api/shipping/methods/${deleting.id}`, { method: 'DELETE' });
+      await requestJson(`/api/shipping/methods/${deleting.id}`, {
+        method: "DELETE",
+      });
 
-      setTypes(prev => {
-        const next = prev.filter(type => type.id !== deleting.id);
+      setTypes((prev) => {
+        const next = prev.filter((type) => type.id !== deleting.id);
         keepTypeFilterValid(next);
         return next;
       });
 
-      setFeedback({ tone: 'ok', message: `"${deleting.name}" fue eliminado.` });
+      setFeedback({ tone: "ok", message: `"${deleting.name}" fue eliminado.` });
       setDeleting(null);
     } catch (error) {
       setFeedback({
-        tone: 'crit',
-        message: error instanceof Error ? error.message : 'No se pudo eliminar el tipo de envío',
+        tone: "crit",
+        message:
+          error instanceof Error
+            ? error.message
+            : "No se pudo eliminar el tipo de envío",
       });
     } finally {
       setBusyId(null);
@@ -420,74 +487,90 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
 
   const history = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return data.history.filter(row => {
-      if (statusFilter !== 'todos' && row.status !== statusFilter) return false;
-      if (typeFilter !== 'todos' && String(row.methodId) !== typeFilter) return false;
+    return data.history.filter((row) => {
+      if (statusFilter !== "todos" && row.status !== statusFilter) return false;
+      if (typeFilter !== "todos" && String(row.methodId) !== typeFilter)
+        return false;
       if (!needle) return true;
       return (
         row.orderReference.toLowerCase().includes(needle) ||
         row.client.toLowerCase().includes(needle) ||
-        (row.trackingNumber ?? '').toLowerCase().includes(needle)
+        (row.trackingNumber ?? "").toLowerCase().includes(needle)
       );
     });
   }, [data.history, search, statusFilter, typeFilter]);
 
   const variacion =
     data.kpis.variacionDiaria === null
-      ? 'sin referencia'
-      : `${data.kpis.variacionDiaria >= 0 ? '↑' : '↓'} ${Math.abs(data.kpis.variacionDiaria)}% vs ayer`;
+      ? "sin referencia"
+      : `${data.kpis.variacionDiaria >= 0 ? "↑" : "↓"} ${Math.abs(data.kpis.variacionDiaria)}% vs ayer`;
 
   return (
     <div className="space-y-5">
+      {/* Canon (m-del, "Medio"): las 4 KPI llevan ícono circular. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-          <div className="text-xs text-[var(--color-text-secondary)]">Envíos Hoy</div>
-          <div className="font-mono text-2xl font-semibold">{data.kpis.enviosHoy}</div>
-          <div className="mt-1 text-[11px] text-[var(--color-text-faint)]">{variacion}</div>
-        </div>
-        <div className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-          <div className="text-xs text-[var(--color-text-secondary)]">Por Despachar</div>
-          <div className="font-mono text-2xl font-semibold text-[var(--color-warn)]">
-            {data.kpis.porDespachar}
-          </div>
-          <div className="mt-1 text-[11px] text-[var(--color-text-faint)]">Pendientes de salida</div>
-        </div>
-        <div className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-          <div className="text-xs text-[var(--color-text-secondary)]">Entregados Hoy</div>
-          <div className="font-mono text-2xl font-semibold text-[var(--color-ok)]">
-            {data.kpis.entregadosHoy}
-          </div>
-          <div className="mt-1 text-[11px] text-[var(--color-text-faint)]">Confirmados</div>
-        </div>
-        <div className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-          <div className="mb-1.5 text-xs text-[var(--color-text-secondary)]">Costo Delivery</div>
-          <dl className="space-y-0.5 text-[11px]">
-            <div className="flex justify-between gap-2">
-              <dt className="text-[var(--color-text-faint)]">Hoy</dt>
-              <dd className="font-mono">{formatCLP(data.kpis.costoHoy)}</dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-[var(--color-text-faint)]">Semana</dt>
-              <dd className="font-mono">{formatCLP(data.kpis.costoSemana)}</dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-[var(--color-text-faint)]">Mes</dt>
-              <dd className="font-mono">{formatCLP(data.kpis.costoMes)}</dd>
-            </div>
-          </dl>
-        </div>
+        <KpiCard
+          icon={Truck}
+          label="Envíos Hoy"
+          value={data.kpis.enviosHoy}
+          footer={variacion}
+        />
+        <KpiCard
+          icon={Clock}
+          label="Por Despachar"
+          value={
+            <span className="text-[var(--color-warn)]">
+              {data.kpis.porDespachar}
+            </span>
+          }
+          footer="Pendientes de salida"
+        />
+        <KpiCard
+          icon={CheckCircle2}
+          label="Entregados Hoy"
+          value={
+            <span className="text-[var(--color-ok)]">
+              {data.kpis.entregadosHoy}
+            </span>
+          }
+          footer="Confirmados"
+        />
+        <KpiCard
+          icon={Wallet}
+          label="Costo Delivery"
+          value={formatCLP(data.kpis.costoHoy)}
+          footer={
+            <dl className="space-y-0.5">
+              <div className="flex justify-between gap-2">
+                <dt className="text-[var(--color-text-faint)]">Semana</dt>
+                <dd className="font-mono">
+                  {formatCLP(data.kpis.costoSemana)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-[var(--color-text-faint)]">Mes</dt>
+                <dd className="font-mono">{formatCLP(data.kpis.costoMes)}</dd>
+              </div>
+            </dl>
+          }
+        />
       </div>
 
       <section className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)]">
         <div className="flex items-baseline justify-between border-b border-[var(--color-border)] p-4">
           <h2 className="text-sm font-semibold">Delivery activos</h2>
-          <span className="rounded-full bg-[var(--color-surface-2)] px-2 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
-            {activeShipments.length} {activeShipments.length === 1 ? 'activo' : 'activos'}
-          </span>
+          {/* Canon (m-del, "Medio"): badge info "N activos" en vez del pill gris neutro. */}
+          <StatusBadge
+            tone="info"
+            label={`${activeShipments.length} ${activeShipments.length === 1 ? "activo" : "activos"}`}
+          />
         </div>
         {activeShipments.length === 0 ? (
           <div className="flex flex-col items-center gap-2 p-8 text-center">
-            <Truck className="h-7 w-7 text-[var(--color-text-faint)]" aria-hidden="true" />
+            <Truck
+              className="h-7 w-7 text-[var(--color-text-faint)]"
+              aria-hidden="true"
+            />
             <p className="text-xs text-[var(--color-text-secondary)]">
               No hay envíos en curso ahora mismo.
             </p>
@@ -497,18 +580,36 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-text-secondary)]">
-                  <th scope="col" className="px-4 py-2 font-medium">Pedido</th>
-                  <th scope="col" className="px-4 py-2 font-medium">Cliente</th>
-                  <th scope="col" className="px-4 py-2 font-medium">Proyecto</th>
-                  <th scope="col" className="px-4 py-2 font-medium">Tipo</th>
-                  <th scope="col" className="px-4 py-2 text-right font-medium">Valor</th>
-                  <th scope="col" className="px-4 py-2 font-medium">Estado</th>
-                  <th scope="col" className="px-4 py-2 font-medium">Equipos</th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Pedido
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Cliente
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Proyecto
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Tipo
+                  </th>
+                  <th scope="col" className="px-4 py-2 text-right font-medium">
+                    Valor
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Estado
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Equipos
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {activeShipments.map(row => (
-                  <ShipmentTableRow key={row.id} row={row} onStatusChanged={handleShipmentStatusChanged} />
+                {activeShipments.map((row) => (
+                  <ShipmentTableRow
+                    key={row.id}
+                    row={row}
+                    onStatusChanged={handleShipmentStatusChanged}
+                  />
                 ))}
               </tbody>
             </table>
@@ -524,7 +625,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
               type="button"
               onClick={() => {
                 setFeedback(null);
-                setEditing('new');
+                setEditing("new");
               }}
               className="inline-flex items-center gap-1.5 rounded-[6px] border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:bg-[var(--color-surface-2)]"
             >
@@ -538,9 +639,9 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
           <p
             role="status"
             className={`border-b border-[var(--color-border)] px-4 py-2 text-[11px] ${
-              feedback.tone === 'ok'
-                ? 'bg-[var(--color-ok-bg)] text-[var(--color-ok)]'
-                : 'bg-[var(--color-crit-bg)] text-[var(--color-crit)]'
+              feedback.tone === "ok"
+                ? "bg-[var(--color-ok-bg)] text-[var(--color-ok)]"
+                : "bg-[var(--color-crit-bg)] text-[var(--color-crit)]"
             }`}
           >
             {feedback.message}
@@ -556,73 +657,85 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-text-secondary)]">
-                  <th scope="col" className="px-4 py-2 font-medium">Tipo de Envío</th>
-                  <th scope="col" className="px-4 py-2 font-medium">Modalidad</th>
-                  <th scope="col" className="px-4 py-2 font-medium">Descripción</th>
-                  <th scope="col" className="px-4 py-2 text-right font-medium">Valor</th>
-                  <th scope="col" className="px-4 py-2 font-medium">Estado</th>
-                  <th scope="col" className="px-4 py-2 text-right font-medium">Acciones</th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Tipo de Envío
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Descripción
+                  </th>
+                  <th scope="col" className="px-4 py-2 text-right font-medium">
+                    Valor
+                  </th>
+                  <th scope="col" className="px-4 py-2 text-right font-medium">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {types.map(type => (
-                  <tr key={type.id} className="border-b border-[var(--color-border-soft)]">
-                    <td className="px-4 py-2 font-medium">{type.name}</td>
-                    <td className="px-4 py-2 text-[var(--color-text-secondary)]">
-                      {shippingTypeLabel(type.shippingType)}
-                    </td>
-                    <td className="px-4 py-2 text-[var(--color-text-secondary)]">
-                      {type.description || '—'}
-                    </td>
-                    <td className="px-4 py-2 text-right font-mono">{formatCLP(type.cost)}</td>
-                    <td className="px-4 py-2">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleType(type)}
-                        disabled={busyId === type.id}
-                        aria-label={
-                          type.enabled ? `Desactivar ${type.name}` : `Activar ${type.name}`
-                        }
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] disabled:opacity-60 ${
-                          type.enabled
-                            ? 'bg-[var(--color-ok-bg)] text-[var(--color-ok)]'
-                            : 'bg-[var(--color-neutral-bg)] text-[var(--color-muted)]'
-                        }`}
-                      >
-                        {busyId === type.id && (
-                          <Loader2 className="h-2.5 w-2.5 animate-spin" aria-hidden="true" />
-                        )}
-                        {type.enabled ? 'Activo' : 'Inactivo'}
-                      </button>
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFeedback(null);
-                            setEditing(type);
-                          }}
-                          aria-label={`Editar ${type.name}`}
-                          className="rounded-[6px] p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
-                        >
-                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFeedback(null);
-                            setDeleting(type);
-                          }}
-                          aria-label={`Eliminar ${type.name}`}
-                          className="rounded-[6px] p-1.5 text-[var(--color-crit)] hover:bg-[var(--color-crit-bg)]"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {types.map((type) => {
+                  const actions: RowActionItem[] = [
+                    {
+                      label: "Editar",
+                      icon: Pencil,
+                      onSelect: () => {
+                        setFeedback(null);
+                        setEditing(type);
+                      },
+                    },
+                    {
+                      label:
+                        busyId === type.id
+                          ? "Actualizando…"
+                          : type.enabled
+                            ? "Desactivar"
+                            : "Activar",
+                      disabled: busyId === type.id,
+                      onSelect: () => handleToggleType(type),
+                    },
+                    {
+                      label: "Eliminar",
+                      icon: Trash2,
+                      destructive: true,
+                      onSelect: () => {
+                        setFeedback(null);
+                        setDeleting(type);
+                      },
+                    },
+                  ];
+
+                  return (
+                    <tr
+                      key={type.id}
+                      className="border-b border-[var(--color-border-soft)]"
+                    >
+                      <td className="px-4 py-2 font-medium">
+                        {/* Canon (m-del, "Medio"): punto de nivel en vez de la columna Estado. */}
+                        <span className="inline-flex items-center gap-2">
+                          <span
+                            className={`h-1.5 w-1.5 shrink-0 rounded-full ${badgeDotClass(type.enabled ? "ok" : "neutral")}`}
+                            aria-hidden="true"
+                          />
+                          <span className="sr-only">
+                            {type.enabled ? "Activo. " : "Inactivo. "}
+                          </span>
+                          {type.name}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-[var(--color-text-secondary)]">
+                        {type.description || "—"}
+                      </td>
+                      <td className="px-4 py-2 text-right font-mono">
+                        {formatCLP(type.cost)}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <RowActionsMenu
+                          items={actions}
+                          label={`Acciones de ${type.name}`}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -641,7 +754,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
               <input
                 type="search"
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar envío, cliente o pedido"
                 aria-label="Buscar envío, cliente o pedido"
                 className="w-full rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] py-1.5 pl-8 pr-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text-primary)]"
@@ -649,12 +762,12 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
             </div>
             <select
               value={typeFilter}
-              onChange={e => setTypeFilter(e.target.value)}
+              onChange={(e) => setTypeFilter(e.target.value)}
               aria-label="Filtrar por tipo de envío"
               className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
             >
               <option value="todos">Todos los tipos</option>
-              {types.map(type => (
+              {types.map((type) => (
                 <option key={type.id} value={String(type.id)}>
                   {type.name}
                 </option>
@@ -662,12 +775,12 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
             </select>
             <select
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
+              onChange={(e) => setStatusFilter(e.target.value)}
               aria-label="Filtrar por estado del envío"
               className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
             >
               <option value="todos">Todos los estados</option>
-              {SHIPMENT_STATUSES.map(status => (
+              {SHIPMENT_STATUSES.map((status) => (
                 <option key={status} value={status}>
                   {shipmentLabel(status)}
                 </option>
@@ -680,37 +793,64 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-text-secondary)]">
-                <th scope="col" className="px-4 py-2 font-medium">Fecha</th>
-                <th scope="col" className="px-4 py-2 font-medium">Pedido</th>
-                <th scope="col" className="px-4 py-2 font-medium">Cliente</th>
-                <th scope="col" className="px-4 py-2 font-medium">Tipo de Envío</th>
-                <th scope="col" className="px-4 py-2 text-right font-medium">Valor</th>
-                <th scope="col" className="px-4 py-2 font-medium">Estado</th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Fecha
+                </th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Pedido
+                </th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Cliente
+                </th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Tipo de Envío
+                </th>
+                <th scope="col" className="px-4 py-2 text-right font-medium">
+                  Valor
+                </th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Estado
+                </th>
               </tr>
             </thead>
             <tbody>
               {history.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-[var(--color-text-secondary)]">
+                  <td
+                    colSpan={6}
+                    className="p-8 text-center text-[var(--color-text-secondary)]"
+                  >
                     No se encontraron envíos con los filtros aplicados.
                   </td>
                 </tr>
               )}
-              {history.map(row => (
-                <tr key={row.id} className="border-b border-[var(--color-border-soft)]">
+              {history.map((row) => (
+                <tr
+                  key={row.id}
+                  className="border-b border-[var(--color-border-soft)]"
+                >
                   <td className="whitespace-nowrap px-4 py-2 font-mono text-[11px]">
                     {formatDay(row.createdAt)}
                   </td>
                   <td className="px-4 py-2 font-mono text-[11px]">
-                    <a href={`/orders/${row.orderId}`} className="underline underline-offset-2">
+                    <a
+                      href={`/orders/${row.orderId}`}
+                      className="underline underline-offset-2"
+                    >
                       {row.orderReference}
                     </a>
                   </td>
                   <td className="px-4 py-2">{row.client}</td>
-                  <td className="px-4 py-2 text-[var(--color-text-secondary)]">{row.methodName}</td>
-                  <td className="px-4 py-2 text-right font-mono">{formatCLP(row.cost)}</td>
+                  <td className="px-4 py-2 text-[var(--color-text-secondary)]">
+                    {row.methodName}
+                  </td>
+                  <td className="px-4 py-2 text-right font-mono">
+                    {formatCLP(row.cost)}
+                  </td>
                   <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] ${statusPill(row.status)}`}>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] ${statusPill(row.status)}`}
+                    >
                       {shipmentLabel(row.status)}
                     </span>
                   </td>
@@ -722,15 +862,25 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
 
         <div className="grid grid-cols-3 gap-3 border-t border-[var(--color-border)] p-4">
           <div>
-            <div className="text-[10px] text-[var(--color-text-faint)]">Total Envíos</div>
-            <div className="font-mono text-base font-semibold">{data.totals.totalEnvios}</div>
+            <div className="text-[10px] text-[var(--color-text-faint)]">
+              Total Envíos
+            </div>
+            <div className="font-mono text-base font-semibold">
+              {data.totals.totalEnvios}
+            </div>
           </div>
           <div>
-            <div className="text-[10px] text-[var(--color-text-faint)]">Costo Total</div>
-            <div className="font-mono text-base font-semibold">{formatCLP(data.totals.costoTotal)}</div>
+            <div className="text-[10px] text-[var(--color-text-faint)]">
+              Costo Total
+            </div>
+            <div className="font-mono text-base font-semibold">
+              {formatCLP(data.totals.costoTotal)}
+            </div>
           </div>
           <div>
-            <div className="text-[10px] text-[var(--color-text-faint)]">Promedio por Envío</div>
+            <div className="text-[10px] text-[var(--color-text-faint)]">
+              Promedio por Envío
+            </div>
             <div className="font-mono text-base font-semibold">
               {formatCLP(data.totals.promedioPorEnvio)}
             </div>
@@ -738,17 +888,18 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
         </div>
 
         <p className="border-t border-[var(--color-border)] bg-[var(--color-surface-soft)] p-3 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
-          El canónico incluye además las columnas <strong>Conductor</strong> y{' '}
-          <strong>Pago Delivery</strong>. <code>shipping_usage</code> no tiene ninguna de las dos:
-          solo un <code>metadata</code> jsonb sin forma acordada. Se omiten hasta que el esquema
-          las respalde — una columna vacía se lee como datos faltantes, no como una función que
-          todavía no existe.
+          El canónico incluye además las columnas <strong>Conductor</strong> y{" "}
+          <strong>Pago Delivery</strong>. <code>shipping_usage</code> no tiene
+          ninguna de las dos: solo un <code>metadata</code> jsonb sin forma
+          acordada. Se omiten hasta que el esquema las respalde — una columna
+          vacía se lee como datos faltantes, no como una función que todavía no
+          existe.
         </p>
       </section>
 
       {editing !== null && (
         <ShippingTypeDialog
-          method={editing === 'new' ? null : editing}
+          method={editing === "new" ? null : editing}
           saving={saving}
           onSubmit={handleSubmitType}
           onClose={() => setEditing(null)}
@@ -760,7 +911,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
           title="Eliminar tipo de envío"
           description={shippingMethodDeleteWarning(
             deleting.name,
-            data.history.filter(row => row.methodId === deleting.id).length
+            data.history.filter((row) => row.methodId === deleting.id).length,
           )}
           confirmLabel="Eliminar de todas formas"
           busy={busyId === deleting.id}
@@ -790,9 +941,13 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
  * son las dos que importan operacionalmente (la segunda es la que apaga el checkout de vuelta) —
  * aunque la máquina de estados también permite `cancelled` desde cualquier estado no terminal.
  */
-function nextDispatchAction(status: string): { to: ShipmentStatus; label: string } | null {
-  if (isAwaitingDispatch(status)) return { to: 'shipped', label: 'Marcar despachado' };
-  if (status === 'shipped') return { to: 'delivered', label: 'Marcar entregado' };
+function nextDispatchAction(
+  status: string,
+): { to: ShipmentStatus; label: string } | null {
+  if (isAwaitingDispatch(status))
+    return { to: "shipped", label: "Marcar despachado" };
+  if (status === "shipped")
+    return { to: "delivered", label: "Marcar entregado" };
   return null;
 }
 
@@ -803,8 +958,11 @@ function ShipmentTableRow({
   row: ShipmentRow;
   onStatusChanged: (id: number, status: ShipmentStatus) => void;
 }) {
-  const items = useMemo(() => itemsFromLineItems(row.lineItems), [row.lineItems]);
-  const serialisableItems = items.filter(item => item.productId !== null);
+  const items = useMemo(
+    () => itemsFromLineItems(row.lineItems),
+    [row.lineItems],
+  );
+  const serialisableItems = items.filter((item) => item.productId !== null);
   const eligible = canRecordCheckout(row.status);
   const action = nextDispatchAction(row.status);
 
@@ -816,18 +974,27 @@ function ShipmentTableRow({
     setUpdating(true);
     setStatusError(null);
     try {
-      const response = await apiClient.put(`/api/delivery/shipments/${row.id}`, { status: action.to });
+      const response = await apiClient.put(
+        `/api/delivery/shipments/${row.id}`,
+        { status: action.to },
+      );
       const payload = await response.json();
       if (!response.ok || !payload.success) {
-        setStatusError(payload.error || 'No se pudo actualizar el estado del envío');
+        setStatusError(
+          payload.error || "No se pudo actualizar el estado del envío",
+        );
         return;
       }
       onStatusChanged(row.id, payload.data.status);
       toast.success(
-        action.to === 'shipped' ? 'Envío marcado como despachado' : 'Envío marcado como entregado'
+        action.to === "shipped"
+          ? "Envío marcado como despachado"
+          : "Envío marcado como entregado",
       );
     } catch (error) {
-      setStatusError(error instanceof Error ? error.message : 'Error de conexión');
+      setStatusError(
+        error instanceof Error ? error.message : "Error de conexión",
+      );
     } finally {
       setUpdating(false);
     }
@@ -836,16 +1003,25 @@ function ShipmentTableRow({
   return (
     <tr className="border-b border-[var(--color-border-soft)]">
       <td className="px-4 py-2 font-mono text-[11px]">
-        <a href={`/orders/${row.orderId}`} className="underline underline-offset-2">
+        <a
+          href={`/orders/${row.orderId}`}
+          className="underline underline-offset-2"
+        >
           {row.orderReference}
         </a>
       </td>
       <td className="px-4 py-2">{row.client}</td>
-      <td className="px-4 py-2 text-[var(--color-text-secondary)]">{row.project}</td>
-      <td className="px-4 py-2 text-[var(--color-text-secondary)]">{row.methodName}</td>
+      <td className="px-4 py-2 text-[var(--color-text-secondary)]">
+        {row.project}
+      </td>
+      <td className="px-4 py-2 text-[var(--color-text-secondary)]">
+        {row.methodName}
+      </td>
       <td className="px-4 py-2 text-right font-mono">{formatCLP(row.cost)}</td>
       <td className="px-4 py-2">
-        <span className={`rounded-full px-2 py-0.5 text-[10px] ${statusPill(row.status)}`}>
+        <span
+          className={`rounded-full px-2 py-0.5 text-[10px] ${statusPill(row.status)}`}
+        >
           {shipmentLabel(row.status)}
         </span>
         {action && (
@@ -856,12 +1032,15 @@ function ShipmentTableRow({
               disabled={updating}
               className="whitespace-nowrap rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
             >
-              {updating ? 'Actualizando…' : action.label}
+              {updating ? "Actualizando…" : action.label}
             </button>
           </div>
         )}
         {statusError && (
-          <div className="mt-1 text-[10px] text-[var(--color-crit)]" role="alert">
+          <div
+            className="mt-1 text-[10px] text-[var(--color-crit)]"
+            role="alert"
+          >
             {statusError}
           </div>
         )}
@@ -871,13 +1050,15 @@ function ShipmentTableRow({
           <span className="text-[10px] text-[var(--color-text-faint)]">—</span>
         ) : !eligible ? (
           <span className="text-[10px] text-[var(--color-text-faint)]">
-            Disponible cuando el envío esté en ruta ({shipmentLabel('shipped')})
+            Disponible cuando el envío esté en ruta ({shipmentLabel("shipped")})
           </span>
         ) : (
           <div className="flex flex-col gap-1.5">
             {serialisableItems.map((item, index) => (
               <div key={`${item.sku}-${index}`}>
-                <div className="truncate text-[10px] text-[var(--color-text-secondary)]">{item.name}</div>
+                <div className="truncate text-[10px] text-[var(--color-text-secondary)]">
+                  {item.name}
+                </div>
                 {/* `item.productId` no es null: filtrado arriba en `serialisableItems`. */}
                 <AssetCheckOutControl
                   productId={item.productId as number}
