@@ -1,51 +1,72 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle
-} from '../ui/card';
+  CardTitle,
+} from "../ui/card";
 import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TableRow
-} from '../ui/table';
+  TableRow,
+} from "../ui/table";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '../ui/dialog';
+} from "../ui/dialog";
 
-
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import type { Order } from '../../types/order';
-import { ChevronRight, RefreshCw, Search, FileText, FileCheck } from 'lucide-react';
-import CreateOrderForm from './CreateOrderForm';
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
+import type { Order } from "../../types/order";
+import {
+  ChevronRight,
+  RefreshCw,
+  Search,
+  FileText,
+  FileCheck,
+  Package,
+  Truck,
+  RotateCcw,
+  ListChecks,
+} from "lucide-react";
+import CreateOrderForm from "./CreateOrderForm";
 import ProcessOrder from "./ProcessOrder";
-import { statusBadgeClass, statusLabel } from '../../lib/orderStatus';
+import {
+  statusTone,
+  statusLabel,
+  ORDER_LIST_TABS,
+} from "../../lib/orderStatus";
+import { StatusBadge } from "../shared/StatusBadge";
+import { KpiCard } from "../shared/KpiCard";
+import { RowActionsMenu } from "../shared/RowActionsMenu";
+import {
+  computeOrderListKpis,
+  matchesOrderListTab,
+  orderListTabCounts,
+  toBadgeTone,
+} from "./orderListMetrics";
 
 // Helper function to format currency with thousands separator
 const formatCurrency = (value: string | number) => {
-  const numValue = typeof value === 'string' ? parseFloat(value) : value;
-  return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const numValue = typeof value === "string" ? parseFloat(value) : value;
+  return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
 // Status translations and colors based on WooCommerce
 
-
 // Payment status colors and text
 const paymentStatusColors: { [key: string]: string } = {
-  'true': 'bg-[#c6e1c6] text-[#5b841b]',
-  'false': 'bg-[#f8dda7] text-[#94660c]'
+  true: "bg-[#c6e1c6] text-[#5b841b]",
+  false: "bg-[#f8dda7] text-[#94660c]",
 };
-
 
 interface SessionData {
   access_token: string;
@@ -95,15 +116,17 @@ const OrdersDashboard = ({
   initialOrders,
   initialTotal,
   sessionData,
-  initialUsers
+  initialUsers,
 }: OrdersDashboardProps) => {
   // All orders loaded from server
   const [allOrders, setAllOrders] = useState<Order[]>(initialOrders);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [shippingFilter, setShippingFilter] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState("");
+  // D-05: pestaña de estado del canon, no un <select>. "todos" excluye cancelled — el canon no
+  // le da pestaña propia (ver `ORDER_LIST_TABS` en `lib/orderStatus.ts`).
+  const [activeTab, setActiveTab] = useState<string>("todos");
+  const [shippingFilter, setShippingFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isMobileView, setIsMobileView] = useState(false);
@@ -119,38 +142,65 @@ const OrdersDashboard = ({
     };
 
     checkIfMobile();
-    window.addEventListener('resize', checkIfMobile);
+    window.addEventListener("resize", checkIfMobile);
 
     return () => {
-      window.removeEventListener('resize', checkIfMobile);
+      window.removeEventListener("resize", checkIfMobile);
     };
   }, []);
 
   // Filter orders based on search and status usando campos directos de la DB
   const filteredOrders = React.useMemo(() => {
-    return allOrders.filter(order => {
+    return allOrders.filter((order) => {
       // Filter by search term usando campos directos
-      const matchesSearch = !searchTerm ||
-        (order.billing_first_name && order.billing_first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (order.billing_last_name && order.billing_last_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (order.billing_email && order.billing_email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (order.order_proyecto && order.order_proyecto.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      const matchesSearch =
+        !searchTerm ||
+        (order.billing_first_name &&
+          order.billing_first_name
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase())) ||
+        (order.billing_last_name &&
+          order.billing_last_name
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase())) ||
+        (order.billing_email &&
+          order.billing_email
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase())) ||
+        (order.order_proyecto &&
+          order.order_proyecto
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase())) ||
         (order.id && order.id.toString().includes(searchTerm));
 
-      // Filter by status
-      const matchesStatus = !statusFilter || order.status === statusFilter;
+      // Filter by status tab
+      const matchesStatus = matchesOrderListTab(order.status, activeTab);
 
       // Filter by shipping
       let matchesShipping = true;
-      if (shippingFilter === 'con_envios') {
-        matchesShipping = order.shipping_total && parseFloat(order.shipping_total.toString()) > 0;
-      } else if (shippingFilter === 'sin_envios') {
-        matchesShipping = !order.shipping_total || parseFloat(order.shipping_total.toString()) === 0;
+      if (shippingFilter === "con_envios") {
+        matchesShipping =
+          order.shipping_total &&
+          parseFloat(order.shipping_total.toString()) > 0;
+      } else if (shippingFilter === "sin_envios") {
+        matchesShipping =
+          !order.shipping_total ||
+          parseFloat(order.shipping_total.toString()) === 0;
       }
 
       return matchesSearch && matchesStatus && matchesShipping;
     });
-  }, [allOrders, searchTerm, statusFilter, shippingFilter]);
+  }, [allOrders, searchTerm, activeTab, shippingFilter]);
+
+  // D-05: 4 KPI del canon + contador por pestaña, ambos derivados de `allOrders` (sin fetch extra).
+  const orderListKpis = React.useMemo(
+    () => computeOrderListKpis(allOrders),
+    [allOrders],
+  );
+  const tabCounts = React.useMemo(
+    () => orderListTabCounts(allOrders),
+    [allOrders],
+  );
 
   // Calculate pagination
   const totalFilteredOrders = filteredOrders.length;
@@ -168,16 +218,16 @@ const OrdersDashboard = ({
   // Initialize filters from URL on component mount
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const pageParam = urlParams.get('page');
-    const statusParam = urlParams.get('status');
-    const searchParam = urlParams.get('search');
-    const shippingParam = urlParams.get('shipping');
+    const pageParam = urlParams.get("page");
+    const statusParam = urlParams.get("status");
+    const searchParam = urlParams.get("search");
+    const shippingParam = urlParams.get("shipping");
 
     if (pageParam) {
       const page = parseInt(pageParam);
       if (page > 0) setCurrentPage(page);
     }
-    if (statusParam) setStatusFilter(statusParam);
+    if (statusParam) setActiveTab(statusParam);
     if (searchParam) setSearchTerm(searchParam);
     if (shippingParam) setShippingFilter(shippingParam);
   }, []);
@@ -185,10 +235,7 @@ const OrdersDashboard = ({
   // Reset page when search or status changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, shippingFilter]);
-
-  // Get unique statuses from filtered orders
-  const uniqueStatuses = Array.from(new Set(allOrders.map(order => order.status)));
+  }, [searchTerm, activeTab, shippingFilter]);
 
   // Function to refresh data from server
   const refreshData = async () => {
@@ -196,26 +243,28 @@ const OrdersDashboard = ({
       setLoading(true);
       setError(null);
 
-      console.log('🔄 Refreshing orders data from server...');
+      console.log("🔄 Refreshing orders data from server...");
 
       // Prepare auth headers
-      let headers: HeadersInit = { 'Content-Type': 'application/json' };
+      let headers: HeadersInit = { "Content-Type": "application/json" };
 
       if (sessionData?.access_token) {
         headers = {
-          'Authorization': `Bearer ${sessionData.access_token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${sessionData.access_token}`,
+          "Content-Type": "application/json",
         };
       }
 
       // Fetch fresh orders data
-      const response = await fetch('/api/orders?limit=1000', {
+      const response = await fetch("/api/orders?limit=1000", {
         headers,
-        credentials: 'include'
+        credentials: "include",
       });
 
       if (!response.ok) {
-        throw new Error(`Error fetching orders: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `Error fetching orders: ${response.status} ${response.statusText}`,
+        );
       }
 
       const data = await response.json();
@@ -239,7 +288,7 @@ const OrdersDashboard = ({
             order_retire_name: order.order_retire_name,
             order_retire_rut: order.order_retire_rut,
             order_retire_phone: order.order_retire_phone,
-            order_comments: order.order_comments
+            order_comments: order.order_comments,
           },
           billing: {
             first_name: order.billing_first_name,
@@ -248,21 +297,27 @@ const OrdersDashboard = ({
             address_1: order.billing_address_1,
             city: order.billing_city,
             email: order.billing_email,
-            phone: order.billing_phone
-          }
+            phone: order.billing_phone,
+          },
         }));
 
         setAllOrders(transformedOrders);
         setTotal(data.data.total || transformedOrders.length);
         setLastRefreshTime(new Date());
 
-        console.log('✅ Orders data refreshed successfully:', transformedOrders.length, 'orders loaded');
+        console.log(
+          "✅ Orders data refreshed successfully:",
+          transformedOrders.length,
+          "orders loaded",
+        );
       } else {
-        throw new Error(data.error || 'Error loading orders');
+        throw new Error(data.error || "Error loading orders");
       }
     } catch (err) {
-      console.error('❌ Error refreshing orders:', err);
-      setError(err instanceof Error ? err.message : 'Error al actualizar los datos');
+      console.error("❌ Error refreshing orders:", err);
+      setError(
+        err instanceof Error ? err.message : "Error al actualizar los datos",
+      );
     } finally {
       setLoading(false);
     }
@@ -271,100 +326,105 @@ const OrdersDashboard = ({
   // Function to update URL with current filters
   const updateURLWithFilters = () => {
     const url = new URL(window.location.href);
-    url.searchParams.set('page', currentPage.toString());
+    url.searchParams.set("page", currentPage.toString());
 
-    if (statusFilter) {
-      url.searchParams.set('status', statusFilter);
+    if (activeTab && activeTab !== "todos") {
+      url.searchParams.set("status", activeTab);
     } else {
-      url.searchParams.delete('status');
+      url.searchParams.delete("status");
     }
 
     if (searchTerm) {
-      url.searchParams.set('search', searchTerm);
+      url.searchParams.set("search", searchTerm);
     } else {
-      url.searchParams.delete('search');
+      url.searchParams.delete("search");
     }
 
     if (shippingFilter) {
-      url.searchParams.set('shipping', shippingFilter);
+      url.searchParams.set("shipping", shippingFilter);
     } else {
-      url.searchParams.delete('shipping');
+      url.searchParams.delete("shipping");
     }
 
-    window.history.pushState({}, '', url.toString());
+    window.history.pushState({}, "", url.toString());
   };
 
   // Update URL when filters change
   useEffect(() => {
     updateURLWithFilters();
-  }, [currentPage, statusFilter, searchTerm, shippingFilter]);
+  }, [currentPage, activeTab, searchTerm, shippingFilter]);
 
   // Format date using UTC to avoid timezone shift
   const formatDate = (dateString: string) => {
-    if (!dateString) return '';
+    if (!dateString) return "";
     const date = new Date(dateString);
-    const day = String(date.getUTCDate()).padStart(2, '0');
-    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
     const year = date.getUTCFullYear();
     return `${day}/${month}/${year}`;
   };
 
-
-
   const handleOrderCreated = async (newOrder: any) => {
-    console.log('🎉 New order created:', newOrder.id);
+    console.log("🎉 New order created:", newOrder.id);
 
     // Immediately add the new order to the list for instant feedback
     const transformedOrder: Order = {
       ...newOrder,
       // Create metadata object from direct properties for backward compatibility
       metadata: {
-        order_proyecto: newOrder.order_proyecto || '',
-        order_fecha_inicio: newOrder.order_fecha_inicio || '',
-        order_fecha_termino: newOrder.order_fecha_termino || '',
-        num_jornadas: newOrder.num_jornadas?.toString() || '',
-        calculated_subtotal: newOrder.calculated_subtotal?.toString() || '0',
-        calculated_discount: newOrder.calculated_discount?.toString() || '0',
-        calculated_iva: newOrder.calculated_iva?.toString() || '0',
-        calculated_total: newOrder.calculated_total?.toString() || '0',
-        company_rut: newOrder.company_rut || '',
-        pdf_on_hold_url: newOrder.new_pdf_on_hold_url || newOrder.pdf_on_hold_url || '',
-        pdf_processing_url: newOrder.new_pdf_processing_url || newOrder.pdf_processing_url || '',
-        order_retire_name: newOrder.order_retire_name || '',
-        order_retire_rut: newOrder.order_retire_rut || '',
-        order_retire_phone: newOrder.order_retire_phone || '',
-        order_comments: newOrder.order_comments || ''
+        order_proyecto: newOrder.order_proyecto || "",
+        order_fecha_inicio: newOrder.order_fecha_inicio || "",
+        order_fecha_termino: newOrder.order_fecha_termino || "",
+        num_jornadas: newOrder.num_jornadas?.toString() || "",
+        calculated_subtotal: newOrder.calculated_subtotal?.toString() || "0",
+        calculated_discount: newOrder.calculated_discount?.toString() || "0",
+        calculated_iva: newOrder.calculated_iva?.toString() || "0",
+        calculated_total: newOrder.calculated_total?.toString() || "0",
+        company_rut: newOrder.company_rut || "",
+        pdf_on_hold_url:
+          newOrder.new_pdf_on_hold_url || newOrder.pdf_on_hold_url || "",
+        pdf_processing_url:
+          newOrder.new_pdf_processing_url || newOrder.pdf_processing_url || "",
+        order_retire_name: newOrder.order_retire_name || "",
+        order_retire_rut: newOrder.order_retire_rut || "",
+        order_retire_phone: newOrder.order_retire_phone || "",
+        order_comments: newOrder.order_comments || "",
       },
       // Create billing object from direct properties
       billing: {
-        first_name: newOrder.billing_first_name || '',
-        last_name: newOrder.billing_last_name || '',
-        company: newOrder.billing_company || '',
-        address_1: newOrder.billing_address_1 || '',
-        city: newOrder.billing_city || '',
-        email: newOrder.billing_email || '',
-        phone: newOrder.billing_phone || ''
+        first_name: newOrder.billing_first_name || "",
+        last_name: newOrder.billing_last_name || "",
+        company: newOrder.billing_company || "",
+        address_1: newOrder.billing_address_1 || "",
+        city: newOrder.billing_city || "",
+        email: newOrder.billing_email || "",
+        phone: newOrder.billing_phone || "",
       },
       // Set default values for missing properties
       fotos_garantia: newOrder.fotos_garantia || [],
       correo_enviado: newOrder.correo_enviado || false,
-      pago_completo: newOrder.pago_completo || false
+      pago_completo: newOrder.pago_completo || false,
     };
 
     setAllOrders([transformedOrder, ...allOrders]);
     setTotal(total + 1);
 
     // Schedule automatic refresh after a short delay to get updated data including PDFs
-    console.log('⏰ Scheduling automatic refresh to get updated PDF URLs...');
+    console.log("⏰ Scheduling automatic refresh to get updated PDF URLs...");
     setTimeout(async () => {
-      console.log('🔄 Auto-refreshing data to get latest PDF URLs...');
+      console.log("🔄 Auto-refreshing data to get latest PDF URLs...");
       await refreshData();
     }, 3000); // Wait 3 seconds for budget generation to complete
   };
 
   // Función para manejar el cambio de página
   const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage && !loading) {
+    if (
+      newPage >= 1 &&
+      newPage <= totalPages &&
+      newPage !== currentPage &&
+      !loading
+    ) {
       setCurrentPage(newPage);
     }
   };
@@ -405,102 +465,142 @@ const OrdersDashboard = ({
       return (
         <div className="space-y-4">
           {currentOrders.map((order) => (
-            <Card key={`${order.customer_id}-${order.date_created}`} className="overflow-hidden">
+            <Card
+              key={`${order.customer_id}-${order.date_created}`}
+              className="overflow-hidden"
+            >
               <CardContent className="p-4">
                 <div className="flex justify-between items-start mb-3">
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusBadgeClass(order.status)}`}>
-                    {statusLabel(order.status)}
-                  </span>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Nº Pedido {order.id}
+                    </span>
+                    <StatusBadge
+                      tone={toBadgeTone(order.status)}
+                      label={statusLabel(order.status)}
+                    />
+                  </div>
                   <div className="text-right">
                     {order.order_fecha_inicio && order.order_fecha_termino ? (
                       <div className="flex flex-col gap-1 text-xs">
                         <div className="flex items-center justify-end gap-1">
                           <span className="text-muted-foreground">Inicio:</span>
-                          <span className="text-green-600 font-medium">{formatDate(order.order_fecha_inicio)}</span>
+                          <span className="text-green-600 font-medium">
+                            {formatDate(order.order_fecha_inicio)}
+                          </span>
                         </div>
                         <div className="flex items-center justify-end gap-1">
-                          <span className="text-muted-foreground">Término:</span>
-                          <span className="text-red-600 font-medium">{formatDate(order.order_fecha_termino)}</span>
+                          <span className="text-muted-foreground">
+                            Término:
+                          </span>
+                          <span className="text-red-600 font-medium">
+                            {formatDate(order.order_fecha_termino)}
+                          </span>
                         </div>
                       </div>
                     ) : (
-                      <div className="text-xs text-muted-foreground">Sin fechas</div>
+                      <div className="text-xs text-muted-foreground">
+                        Sin fechas
+                      </div>
                     )}
                   </div>
                 </div>
 
-                <h3 className="font-semibold text-foreground text-lg mb-1">{order.billing_first_name} {order.billing_last_name}</h3>
-                <p className="text-sm text-muted-foreground mb-2">{order.billing_email}</p>
+                <h3 className="font-semibold text-foreground text-lg mb-1">
+                  {order.billing_first_name} {order.billing_last_name}
+                </h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  {order.billing_email}
+                </p>
 
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <div>
                     <p className="text-xs text-muted-foreground">Proyecto</p>
-                    <p className="text-sm font-medium text-foreground truncate">{order.order_proyecto || ''}</p>
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {order.order_proyecto || ""}
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-muted-foreground">Total</p>
-                    <p className="text-lg font-bold text-foreground">${formatCurrency(order.calculated_total || '0')}</p>
+                    <p className="text-lg font-bold text-foreground">
+                      ${formatCurrency(order.calculated_total || "0")}
+                    </p>
                   </div>
                 </div>
 
                 <div className="mt-2 flex gap-2">
+                  {order.new_pdf_on_hold_url &&
+                    (() => {
+                      const budgetUrls = order.new_pdf_on_hold_url
+                        .split(",")
+                        .filter((url) => url.trim());
+                      const latestUrl =
+                        budgetUrls[budgetUrls.length - 1]?.trim();
 
-                  {order.new_pdf_on_hold_url && (() => {
-                    const budgetUrls = order.new_pdf_on_hold_url.split(',').filter(url => url.trim());
-                    const latestUrl = budgetUrls[budgetUrls.length - 1]?.trim();
+                      return (
+                        <div className="flex items-center gap-1 flex-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="bg-blue-200 text-blue-900 hover:bg-blue-300"
+                            onClick={() => window.open(latestUrl, "_blank")}
+                            title={`Ver presupuesto más reciente ${budgetUrls.length > 1 ? `(v${budgetUrls.length})` : ""}`}
+                          >
+                            <FileText className="h-4 w-4" />
+                            {budgetUrls.length > 1 && (
+                              <span className="ml-1 text-xs">
+                                v{budgetUrls.length}
+                              </span>
+                            )}
+                          </Button>
 
-                    return (
-                      <div className="flex items-center gap-1 flex-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="bg-blue-200 text-blue-900 hover:bg-blue-300"
-                          onClick={() => window.open(latestUrl, '_blank')}
-                          title={`Ver presupuesto más reciente ${budgetUrls.length > 1 ? `(v${budgetUrls.length})` : ''}`}
-                        >
-                          <FileText className="h-4 w-4" />
-                          {budgetUrls.length > 1 && <span className="ml-1 text-xs">v{budgetUrls.length}</span>}
-                        </Button>
-
-                        {budgetUrls.length > 1 && (
-                          <div className="flex gap-1">
-                            {budgetUrls.slice(0, -1).map((url, index) => (
-                              <Button
-                                key={index}
-                                variant="outline"
-                                size="sm"
-                                className="h-6 w-6 p-0 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
-                                onClick={() => window.open(url.trim(), '_blank')}
-                                title={`Ver versión ${index + 1} del presupuesto`}
-                              >
-                                {index + 1}
-                              </Button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
+                          {budgetUrls.length > 1 && (
+                            <div className="flex gap-1">
+                              {budgetUrls.slice(0, -1).map((url, index) => (
+                                <Button
+                                  key={index}
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                  onClick={() =>
+                                    window.open(url.trim(), "_blank")
+                                  }
+                                  title={`Ver versión ${index + 1} del presupuesto`}
+                                >
+                                  {index + 1}
+                                </Button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   {order.new_pdf_processing_url && (
                     <Button
                       variant="ghost"
                       size="sm"
                       className="flex-1 bg-green-200 text-green-900 hover:bg-green-300"
-                      onClick={() => window.open(order.new_pdf_processing_url, '_blank')}
+                      onClick={() =>
+                        window.open(order.new_pdf_processing_url, "_blank")
+                      }
                     >
                       <FileCheck className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
-                <a href={`/orders/${order.id}`} className="no-underline w-full block mt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                  >
-                    Ver detalles <ChevronRight className="h-4 w-4 ml-2" />
-                  </Button>
-                </a>
+                <div className="mt-2 flex w-full justify-end">
+                  <RowActionsMenu
+                    items={[
+                      {
+                        label: "Ver detalles",
+                        icon: ChevronRight,
+                        onSelect: () => {
+                          window.location.href = `/orders/${order.id}`;
+                        },
+                      },
+                    ]}
+                  />
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -514,17 +614,44 @@ const OrdersDashboard = ({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-foreground font-semibold">Estado</TableHead>
-              <TableHead className="text-foreground font-semibold">Cliente</TableHead>
-              <TableHead className="text-foreground font-semibold">Proyecto</TableHead>
-              <TableHead className="text-foreground font-semibold">Inicio - Término</TableHead>
-              <TableHead className="text-foreground font-semibold text-right">Total</TableHead>
-              <TableHead className="text-right text-foreground font-semibold">Acciones</TableHead>
+              <TableHead className="text-foreground font-semibold">
+                Nº Pedido
+              </TableHead>
+              <TableHead className="text-foreground font-semibold">
+                Estado
+              </TableHead>
+              <TableHead className="text-foreground font-semibold">
+                Cliente
+              </TableHead>
+              <TableHead className="text-foreground font-semibold">
+                Proyecto
+              </TableHead>
+              <TableHead className="text-foreground font-semibold">
+                Inicio - Término
+              </TableHead>
+              <TableHead className="text-foreground font-semibold text-right">
+                Jornadas
+              </TableHead>
+              <TableHead className="text-foreground font-semibold text-right">
+                Neto
+              </TableHead>
+              <TableHead className="text-foreground font-semibold text-right">
+                IVA
+              </TableHead>
+              <TableHead className="text-foreground font-semibold text-right">
+                Total
+              </TableHead>
+              <TableHead className="text-right text-foreground font-semibold">
+                Acciones
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {currentOrders.map((order) => (
               <TableRow key={`${order.customer_id}-${order.date_created}`}>
+                <TableCell className="text-foreground font-medium">
+                  {order.id}
+                </TableCell>
                 <TableCell>
                   <Dialog>
                     <DialogTrigger asChild>
@@ -532,112 +659,161 @@ const OrdersDashboard = ({
                         onClick={() => setSelectedOrder(order)}
                         variant="ghost"
                         size="sm"
-                        className={`${statusBadgeClass(order.status)} hover:opacity-80`}
+                        className="hover:opacity-80"
                       >
-                        {statusLabel(order.status)}
+                        <StatusBadge
+                          tone={toBadgeTone(order.status)}
+                          label={statusLabel(order.status)}
+                        />
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
                       <DialogHeader>
-                        <DialogTitle>Detalles del Proceso - Orden #{order.id}</DialogTitle>
+                        <DialogTitle>
+                          Detalles del Proceso - Orden #{order.id}
+                        </DialogTitle>
                       </DialogHeader>
                       <ProcessOrder
                         order={{
                           orders: {
                             success: true,
-                            orders: [{
-                              ...order, // Usar todos los campos directos de la DB
-                              customer: {
-                                id: order.customer_id,
-                                first_name: order.billing_first_name,
-                                last_name: order.billing_last_name,
-                                email: order.billing_email
-                              }
-                            }]
-                          }
+                            orders: [
+                              {
+                                ...order, // Usar todos los campos directos de la DB
+                                customer: {
+                                  id: order.customer_id,
+                                  first_name: order.billing_first_name,
+                                  last_name: order.billing_last_name,
+                                  email: order.billing_email,
+                                },
+                              },
+                            ],
+                          },
                         }}
                       />
                     </DialogContent>
                   </Dialog>
                 </TableCell>
                 <TableCell className="text-foreground">
-                  <div className="font-medium">{order.billing_first_name} {order.billing_last_name}</div>
-                  <div className="text-sm text-muted-foreground">{order.billing_email}</div>
+                  <div className="font-medium">
+                    {order.billing_first_name} {order.billing_last_name}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {order.billing_email}
+                  </div>
                 </TableCell>
-                <TableCell className="text-foreground font-medium">{order.order_proyecto || ''}</TableCell>
+                <TableCell className="text-foreground font-medium">
+                  {order.order_proyecto || ""}
+                </TableCell>
                 <TableCell className="text-foreground">
                   {order.order_fecha_inicio && order.order_fecha_termino ? (
                     <div className="flex flex-col gap-1 text-sm">
                       <div className="flex items-center gap-1">
-                        <span className="text-xs text-muted-foreground w-12">Inicio:</span>
-                        <span className="text-green-600 font-medium">{formatDate(order.order_fecha_inicio)}</span>
+                        <span className="text-xs text-muted-foreground w-12">
+                          Inicio:
+                        </span>
+                        <span className="text-green-600 font-medium">
+                          {formatDate(order.order_fecha_inicio)}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className="text-xs text-muted-foreground w-12">Término:</span>
-                        <span className="text-red-600 font-medium">{formatDate(order.order_fecha_termino)}</span>
+                        <span className="text-xs text-muted-foreground w-12">
+                          Término:
+                        </span>
+                        <span className="text-red-600 font-medium">
+                          {formatDate(order.order_fecha_termino)}
+                        </span>
                       </div>
                     </div>
                   ) : (
-                    <span className="text-xs text-muted-foreground">Sin fechas</span>
+                    <span className="text-xs text-muted-foreground">
+                      Sin fechas
+                    </span>
                   )}
                 </TableCell>
-                <TableCell className="text-foreground text-right font-bold">${formatCurrency(order.calculated_total || '0')}</TableCell>
+                <TableCell className="text-foreground text-right">
+                  {order.num_jornadas ?? ""}
+                </TableCell>
+                <TableCell className="text-foreground text-right">
+                  ${formatCurrency(order.calculated_subtotal || "0")}
+                </TableCell>
+                <TableCell className="text-foreground text-right">
+                  ${formatCurrency(order.calculated_iva || "0")}
+                </TableCell>
+                <TableCell className="text-foreground text-right font-bold">
+                  ${formatCurrency(order.calculated_total || "0")}
+                </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex flex-row gap-2 justify-end">
-                    {order.new_pdf_on_hold_url && (() => {
-                      const budgetUrls = order.new_pdf_on_hold_url.split(',').filter(url => url.trim());
-                      const latestUrl = budgetUrls[budgetUrls.length - 1]?.trim();
+                  <div className="flex flex-row gap-2 justify-end items-center">
+                    {order.new_pdf_on_hold_url &&
+                      (() => {
+                        const budgetUrls = order.new_pdf_on_hold_url
+                          .split(",")
+                          .filter((url) => url.trim());
+                        const latestUrl =
+                          budgetUrls[budgetUrls.length - 1]?.trim();
 
-                      return (
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="bg-blue-200 text-blue-900 hover:bg-blue-300"
-                            onClick={() => window.open(latestUrl, '_blank')}
-                            title={`Ver presupuesto más reciente ${budgetUrls.length > 1 ? `(v${budgetUrls.length})` : ''}`}
-                          >
-                            <FileText className="h-4 w-4" />
-                            {budgetUrls.length > 1 && <span className="ml-1 text-xs">v{budgetUrls.length}</span>}
-                          </Button>
+                        return (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="bg-blue-200 text-blue-900 hover:bg-blue-300"
+                              onClick={() => window.open(latestUrl, "_blank")}
+                              title={`Ver presupuesto más reciente ${budgetUrls.length > 1 ? `(v${budgetUrls.length})` : ""}`}
+                            >
+                              <FileText className="h-4 w-4" />
+                              {budgetUrls.length > 1 && (
+                                <span className="ml-1 text-xs">
+                                  v{budgetUrls.length}
+                                </span>
+                              )}
+                            </Button>
 
-                          {budgetUrls.length > 1 && (
-                            <div className="flex gap-1">
-                              {budgetUrls.slice(0, -1).map((url, index) => (
-                                <Button
-                                  key={index}
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-6 w-6 p-0 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
-                                  onClick={() => window.open(url.trim(), '_blank')}
-                                  title={`Ver versión ${index + 1} del presupuesto`}
-                                >
-                                  {index + 1}
-                                </Button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
+                            {budgetUrls.length > 1 && (
+                              <div className="flex gap-1">
+                                {budgetUrls.slice(0, -1).map((url, index) => (
+                                  <Button
+                                    key={index}
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-6 w-6 p-0 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                    onClick={() =>
+                                      window.open(url.trim(), "_blank")
+                                    }
+                                    title={`Ver versión ${index + 1} del presupuesto`}
+                                  >
+                                    {index + 1}
+                                  </Button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     {order.new_pdf_processing_url && (
                       <Button
                         variant="ghost"
                         size="sm"
                         className="bg-green-200 text-green-900 hover:bg-green-300"
-                        onClick={() => window.open(order.new_pdf_processing_url, '_blank')}
+                        onClick={() =>
+                          window.open(order.new_pdf_processing_url, "_blank")
+                        }
                       >
                         <FileCheck className="h-4 w-4" />
                       </Button>
                     )}
-                    <a href={`/orders/${order.id}`} className="no-underline" target="_blank">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                      >
-                        Ver detalles
-                      </Button>
-                    </a>
+                    <RowActionsMenu
+                      items={[
+                        {
+                          label: "Ver detalles",
+                          icon: ChevronRight,
+                          onSelect: () => {
+                            window.open(`/orders/${order.id}`, "_blank");
+                          },
+                        },
+                      ]}
+                    />
                   </div>
                 </TableCell>
               </TableRow>
@@ -650,6 +826,30 @@ const OrdersDashboard = ({
 
   return (
     <div className="space-y-6">
+      {/* D-05: franja de 4 KPI del canon */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KpiCard
+          icon={Package}
+          label="Retiros Hoy"
+          value={orderListKpis.retirosHoy}
+        />
+        <KpiCard
+          icon={Truck}
+          label="Entregas Hoy"
+          value={orderListKpis.entregasHoy}
+        />
+        <KpiCard
+          icon={RotateCcw}
+          label="Devoluciones Hoy"
+          value={orderListKpis.devolucionesHoy}
+        />
+        <KpiCard
+          icon={ListChecks}
+          label="Pedidos Activos"
+          value={orderListKpis.pedidosActivos}
+        />
+      </div>
+
       {/* Filters */}
       <Card>
         <CardHeader className="pb-3">
@@ -674,20 +874,6 @@ const OrdersDashboard = ({
 
               <div className="w-full sm:w-48">
                 <select
-                  id="status"
-                  className="flex h-9 w-full border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <option value="">Todos los estados</option>
-                  {uniqueStatuses.map(status => (
-                    <option key={status} value={status}>{statusLabel(status)}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="w-full sm:w-48">
-                <select
                   id="shipping"
                   className="flex h-9 w-full border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
                   value={shippingFilter}
@@ -704,14 +890,45 @@ const OrdersDashboard = ({
                 onClick={refreshData}
                 disabled={loading}
                 variant="outline"
-                title={lastRefreshTime ? `Última actualización: ${lastRefreshTime.toLocaleTimeString()}` : 'Actualizar datos'}
+                title={
+                  lastRefreshTime
+                    ? `Última actualización: ${lastRefreshTime.toLocaleTimeString()}`
+                    : "Actualizar datos"
+                }
               >
-                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                {loading ? 'Actualizando...' : 'Actualizar'}
+                <RefreshCw
+                  className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
+                />
+                {loading ? "Actualizando..." : "Actualizar"}
               </Button>
 
-              <CreateOrderForm onOrderCreated={handleOrderCreated} sessionData={sessionData} initialUsers={initialUsers} />
+              <CreateOrderForm
+                onOrderCreated={handleOrderCreated}
+                sessionData={sessionData}
+                initialUsers={initialUsers}
+              />
+
+              <a href="/check-in" className="w-full sm:w-auto">
+                <Button variant="outline" className="w-full sm:w-auto">
+                  Registrar Devolución
+                </Button>
+              </a>
             </div>
+
+            {/* D-05: pestañas de estado del canon, con contador por pestaña */}
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0">
+                {ORDER_LIST_TABS.map((tab) => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className="border border-border data-[state=active]:border-foreground"
+                  >
+                    {tab.label} ({tabCounts[tab.value]})
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
           </div>
 
           {/* Orders table or cards */}
@@ -720,7 +937,9 @@ const OrdersDashboard = ({
           {/* Pagination */}
           <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="text-sm text-muted-foreground order-2 sm:order-1">
-              Mostrando {Math.min(startIndex + 1, totalFilteredOrders)}-{Math.min(endIndex, totalFilteredOrders)} de {totalFilteredOrders} pedidos filtrados ({total} total)
+              Mostrando {Math.min(startIndex + 1, totalFilteredOrders)}-
+              {Math.min(endIndex, totalFilteredOrders)} de {totalFilteredOrders}{" "}
+              pedidos filtrados ({total} total)
             </div>
 
             <div className="flex flex-wrap justify-center gap-2 order-1 sm:order-2">
@@ -756,13 +975,17 @@ const OrdersDashboard = ({
                   return (
                     <Button
                       key={pageToShow}
-                      variant={currentPage === pageToShow ? "default" : "outline"}
+                      variant={
+                        currentPage === pageToShow ? "default" : "outline"
+                      }
                       size="sm"
                       onClick={() => handlePageChange(pageToShow)}
                       disabled={loading}
                       className="w-9 h-9 hidden sm:flex items-center justify-center"
                       aria-label={`Ir a página ${pageToShow}`}
-                      aria-current={currentPage === pageToShow ? "page" : undefined}
+                      aria-current={
+                        currentPage === pageToShow ? "page" : undefined
+                      }
                     >
                       {pageToShow}
                     </Button>
