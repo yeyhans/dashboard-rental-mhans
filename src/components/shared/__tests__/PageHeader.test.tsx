@@ -1,0 +1,50 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import { PageHeader } from "../PageHeader";
+
+describe("PageHeader", () => {
+  it("renders the title as an uppercase h1", () => {
+    const html = renderToStaticMarkup(<PageHeader title="Centro de Control" />);
+    expect(html).toMatch(
+      /<h1[^>]*class="[^"]*uppercase[^"]*"[^>]*>Centro de Control<\/h1>/,
+    );
+  });
+
+  it("renders the subtitle when given", () => {
+    const html = renderToStaticMarkup(
+      <PageHeader
+        title="Pedidos"
+        subtitle="Gestiona el ciclo completo del arriendo"
+      />,
+    );
+    expect(html).toContain("Gestiona el ciclo completo del arriendo");
+  });
+
+  it("omits the subtitle paragraph when not given", () => {
+    const withSubtitle = renderToStaticMarkup(
+      <PageHeader title="Pedidos" subtitle="Detalle" />,
+    );
+    const withoutSubtitle = renderToStaticMarkup(
+      <PageHeader title="Pedidos" />,
+    );
+    expect(withSubtitle).toContain("Detalle");
+    expect(withoutSubtitle).not.toContain("Detalle");
+  });
+
+  it("renders the date when given", () => {
+    const html = renderToStaticMarkup(
+      <PageHeader title="Pedidos" date="28/09/2026" />,
+    );
+    expect(html).toContain("28/09/2026");
+  });
+
+  it("renders the actions slot content", () => {
+    const html = renderToStaticMarkup(
+      <PageHeader
+        title="Pedidos"
+        actions={<button type="button">Nuevo Pedido</button>}
+      />,
+    );
+    expect(html).toContain("Nuevo Pedido");
+  });
+});
