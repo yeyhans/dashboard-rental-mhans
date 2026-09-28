@@ -31,6 +31,29 @@ describe("KpiCard", () => {
     expect(html).toContain("$1.200.000");
   });
 
+  it("renders without an icon wrapper when no icon is given", () => {
+    const withIcon = renderToStaticMarkup(
+      <KpiCard icon={FakeIcon} label="Pendientes Hoy" value={4} />,
+    );
+    const withoutIcon = renderToStaticMarkup(
+      <KpiCard label="Pendientes Hoy" value={4} />,
+    );
+    expect(withIcon).toMatch(/rounded-full/);
+    expect(withoutIcon).not.toMatch(/rounded-full/);
+    expect(withoutIcon).toContain("Pendientes Hoy");
+  });
+
+  it("accepts a ReactNode value for tone-colored figures", () => {
+    const html = renderToStaticMarkup(
+      <KpiCard
+        label="Devoluciones Atrasadas"
+        value={<span className="text-[var(--color-warn)]">2</span>}
+      />,
+    );
+    expect(html).toContain("text-[var(--color-warn)]");
+    expect(html).toContain(">2<");
+  });
+
   it("renders the footer when given, and omits it when not", () => {
     const withFooter = renderToStaticMarkup(
       <KpiCard

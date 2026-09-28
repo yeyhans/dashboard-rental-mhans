@@ -2,10 +2,15 @@ import type { ReactNode } from "react";
 import { cn } from "../../lib/utils";
 
 interface KpiCardProps {
-  /** A lucide-react icon component (or compatible: takes `className`). */
-  icon: React.ComponentType<{ className?: string }>;
+  /**
+   * A lucide-react icon component (or compatible: takes `className`). Optional: D-06 Check-In
+   * KPIs are the one canon module that shows no icon at all, so the circular wrapper only renders
+   * when a caller passes one.
+   */
+  icon?: React.ComponentType<{ className?: string }>;
   label: string;
-  value: string | number;
+  /** Usually a plain number/string; a `ReactNode` lets a caller wrap it for semantic tone color. */
+  value: ReactNode;
   footer?: ReactNode;
   className?: string;
 }
@@ -26,9 +31,11 @@ export function KpiCard({
       className={cn("rounded-lg border border-border bg-card p-4", className)}
     >
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
-          <Icon className="h-5 w-5" />
-        </span>
+        {Icon && (
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+            <Icon className="h-5 w-5" />
+          </span>
+        )}
         <div className="min-w-0">
           <p className="truncate text-xs font-medium text-muted-foreground">
             {label}
