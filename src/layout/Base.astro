@@ -115,6 +115,20 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalURL} />
 
+    <!--
+      Tipografia del canonico (P1): Inter + JetBrains Mono, via Google Fonts. No hay archivos de
+      fuente locales en el repo y no se pueden agregar dependencias npm (node_modules es un
+      junction compartido con produccion), asi que se auto-hospedar no es viable ahora mismo.
+      Requiere `style-src` con `https://fonts.googleapis.com` en el CSP de `vercel.json`;
+      `font-src` ya admite `https:` para los archivos de `fonts.gstatic.com`.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    />
+
     <style is:inline>
       /* ── Theme base ── */
       body { background-color: hsl(0 0% 100%); color: hsl(0 0% 3.9%); }
@@ -188,8 +202,8 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
         background-color: hsl(0 0% 95.1%);
       }
       .sidebar-nav-item.active {
-        color: hsl(0 0% 9%);
-        background-color: hsl(0 0% 95.1%);
+        color: hsl(0 0% 100%);
+        background-color: #111111;
       }
       .sidebar-nav-item .nav-icon {
         flex-shrink: 0;
@@ -413,27 +427,18 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
           <div class="flex items-center justify-between px-4 py-4 border-b border-inherit">
             <div class="sidebar-logo-wrap">
               <div class="sidebar-logo-full">
-                <a href="/dashboard">
-                  <img
-                    src="/logo-black.png"
-                    alt="Mario Hans Rental"
-                    class="h-10 w-auto logo-image"
-                    data-dark-src="/logo-black.png"
-                    data-light-src="/logo-white.png"
-                    onerror="this.src='/placeholder-logo.svg'; this.onerror=null;"
-                  />
+                <a href="/dashboard" class="flex flex-col leading-tight">
+                  <span class="text-sm font-bold tracking-tight text-[#111111]">MarioHans OS</span>
+                  <span class="text-[0.6875rem] text-muted-foreground">Rental Técnico</span>
                 </a>
               </div>
               <div class="sidebar-logo-icon">
-                <a href="/dashboard">
-                  <img
-                    src="/toggle-button-black.png"
-                    alt="MH"
-                    class="h-8 w-8 logo-image"
-                    data-dark-src="/toggle-button-black.png"
-                    data-light-src="/toggle-button-white.png"
-                    onerror="this.src='/placeholder-icon.svg'; this.onerror=null;"
-                  />
+                <a
+                  href="/dashboard"
+                  class="flex h-8 w-8 items-center justify-center rounded-md bg-[#111111] text-xs font-bold text-white"
+                  aria-label="MarioHans OS"
+                >
+                  MH
                 </a>
               </div>
             </div>
@@ -514,10 +519,21 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
           <!-- Logout + admin email -->
           <div class="px-3 py-3 border-t border-inherit">
             {adminSession && (
-              <div class="sidebar-label mb-2 px-1">
-                <p class="text-xs text-muted-foreground truncate" title={adminSession.admin.email}>
-                  {adminSession.admin.email}
-                </p>
+              <div class="flex items-center gap-2 mb-2 px-1">
+                <span
+                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#111111] text-[0.6875rem] font-bold text-white"
+                  aria-hidden="true"
+                >
+                  HS
+                </span>
+                <div class="sidebar-label min-w-0">
+                  <p class="text-xs font-medium text-foreground truncate" title={adminSession.admin.email}>
+                    {adminSession.admin.email}
+                  </p>
+                  <p class="text-[0.6875rem] text-muted-foreground truncate">
+                    {adminSession.admin.role === 'super_admin' ? 'Super Admin' : 'Administrador'}
+                  </p>
+                </div>
               </div>
             )}
             <button onclick="handleLogout()" class="sidebar-logout">
