@@ -13,34 +13,34 @@ export const prerender = false;
 const adminSession = await getServerAdmin(Astro);
 
 if (!adminSession) {
-  console.log('🚫 Acceso denegado a products - Usuario no es administrador');
+  console.log("🚫 Acceso denegado a products - Usuario no es administrador");
   clearAuthCookies(Astro);
   return Astro.redirect("/");
 }
 
-console.log('✅ Admin autenticado en products:', adminSession.admin.email);
+console.log("✅ Admin autenticado en products:", adminSession.admin.email);
 
 // Extract access token from cookies
-const accessToken = Astro.cookies.get('sb-access-token')?.value || '';
+const accessToken = Astro.cookies.get("sb-access-token")?.value || "";
 
 if (!accessToken) {
-  console.error('❌ No access token found in cookies');
+  console.error("❌ No access token found in cookies");
   clearAuthCookies(Astro);
   return Astro.redirect("/");
 }
 
 // Load ALL products and categories for client-side pagination and filtering
 // This ensures we have all data available for proper pagination
-const { products, total } = await ProductService.searchProducts('', 1, 1000); // Load up to 1000 products
+const { products, total } = await ProductService.searchProducts("", 1, 1000); // Load up to 1000 products
 const { categories } = await CategoryService.getAllCategories(1, 100); // Load all categories
 
 const productsData = {
   products: products || [],
-  total: total || 0
+  total: total || 0,
 };
 
 const categoriesData = {
-  categories: categories || []
+  categories: categories || [],
 };
 
 /**
@@ -48,13 +48,17 @@ const categoriesData = {
  * usable con los indicadores en cero en vez de dejar la pantalla en blanco.
  */
 let availability = {
-  modelosPublicados: 0, disponiblesHoy: 0, porcentajeDisponible: 0,
-  modelosEnArriendo: 0, unidadesEnArriendo: 0, bloqueados: 0,
+  modelosPublicados: 0,
+  disponiblesHoy: 0,
+  porcentajeDisponible: 0,
+  modelosEnArriendo: 0,
+  unidadesEnArriendo: 0,
+  bloqueados: 0,
 };
 try {
   availability = await CatalogService.getAvailabilityKpis();
 } catch (error) {
-  console.error('[products] Error al calcular la disponibilidad:', {
+  console.error("[products] Error al calcular la disponibilidad:", {
     admin: adminSession.admin.email,
     error,
   });
@@ -65,16 +69,13 @@ const title = `Catálogo de Equipos | ${adminSession.admin.email}`;
 
 <Base title={title}>
   <div class="container py-6">
-    <header class="mb-5">
-      <h1 class="text-xl font-semibold tracking-tight">Catálogo de Equipos</h1>
-      <p class="mt-1 text-sm text-[var(--color-text-secondary)]">
-        Inventario de activos físicos con disponibilidad en tiempo real
-      </p>
-    </header>
-
+    <!--
+      D-08: el header (PageHeader + "Nuevo Equipo") vive dentro de ProductsDashboard, no aquí —
+      mismo patrón que D-04/D-06, para que `actions` reciba el handler real en un único árbol React.
+    -->
     <CatalogKpiRow kpis={availability} />
 
-    <ProductsDashboard 
+    <ProductsDashboard
       client:load
       initialProducts={productsData.products as any}
       initialTotal={productsData.total}
