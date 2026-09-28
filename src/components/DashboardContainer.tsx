@@ -1,14 +1,42 @@
-import React, { useState, useEffect } from 'react';
-import DashboardFilters from './DashboardFilters';
-import OrderSummaryStats from './OrderSummaryStats';
-import OrderStatusTables from './OrderStatusTables';
-import RentedEquipmentTable from './RentedEquipmentTable';
-import OrderKpiRow from './OrderKpiRow';
-import FinancialSummary from './FinancialSummary';
-import { Separator } from './ui/separator';
-import { Alert, AlertDescription } from './ui/alert';
-import { Loader2, AlertCircle } from 'lucide-react';
-import { collectedAmount, reserveAmount, type FinanceOrderLike } from '../lib/finance';
+import React, { useState, useEffect } from "react";
+import DashboardFilters from "./DashboardFilters";
+import OrderSummaryStats from "./OrderSummaryStats";
+import OrderStatusTables from "./OrderStatusTables";
+import RentedEquipmentTable from "./RentedEquipmentTable";
+import OrderKpiRow from "./OrderKpiRow";
+import FinancialSummary from "./FinancialSummary";
+import { Separator } from "./ui/separator";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Button } from "./ui/button";
+import { PageHeader } from "./shared/PageHeader";
+import { KpiCard } from "./shared/KpiCard";
+import {
+  Loader2,
+  AlertCircle,
+  Package,
+  Truck,
+  RotateCcw,
+  TrendingUp,
+  CircleDollarSign,
+} from "lucide-react";
+import {
+  collectedAmount,
+  reserveAmount,
+  type FinanceOrderLike,
+} from "../lib/finance";
+import { mapDashboardKpis, type DashboardKpiKey } from "./dashboardKpis";
+
+/** Icon per D-04 top KPI card, keyed the same way as `mapDashboardKpis`. */
+const DASHBOARD_KPI_ICONS: Record<
+  DashboardKpiKey,
+  React.ComponentType<{ className?: string }>
+> = {
+  pedidosActivos: Package,
+  proximasEntregas: Truck,
+  devolucionesHoy: RotateCcw,
+  ingresosMes: TrendingUp,
+  cobrosPendientes: CircleDollarSign,
+};
 
 /**
  * Adapta una fila de `/api/dashboard/filtered` al contrato de `lib/finance`, que es la única
@@ -31,67 +59,88 @@ interface FilterState {
   dateRange: {
     start: string;
     end: string;
-    period: 'weekly' | 'monthly' | 'yearly' | 'all' | 'month-year' | 'custom';
+    period: "weekly" | "monthly" | "yearly" | "all" | "month-year" | "custom";
     selectedMonth?: number;
     selectedYear?: number;
   };
   status: string[];
-  financialStatus: 'all' | 'paid' | 'pending' | 'partial';
+  financialStatus: "all" | "paid" | "pending" | "partial";
   searchTerm: string;
 }
 
-import type { DashboardStats, MonthlyOrderStats } from '../services/dashboardService';
+import type {
+  DashboardStats,
+  MonthlyOrderStats,
+} from "../services/dashboardService";
 import {
   ORDER_STATUSES,
   canonicalStatus,
   emptyStatusBuckets,
   type OrderStatus,
-} from '../lib/orderStatus';
+} from "../lib/orderStatus";
 
 interface DashboardContainerProps {
   initialData: DashboardStats;
   adminContext?: any;
 }
 
-export default function DashboardContainer({ initialData }: DashboardContainerProps) {
-  const [dashboardData, setDashboardData] = useState<DashboardStats>(initialData);
+export default function DashboardContainer({
+  initialData,
+}: DashboardContainerProps) {
+  const [dashboardData, setDashboardData] =
+    useState<DashboardStats>(initialData);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastFilters, setLastFilters] = useState<FilterState | null>(null);
   // Pestaña de la lista, controlada aquí para que las tarjetas de KPI puedan cambiarla.
-  const [selectedTab, setSelectedTab] = useState<string>('todos');
+  const [selectedTab, setSelectedTab] = useState<string>("todos");
 
   // Función para generar descripción de filtros
   const getFilterDescription = (filters: FilterState): string => {
     const parts: string[] = [];
 
     // Período
-    if (filters.dateRange.period === 'weekly') parts.push('última semana');
-    else if (filters.dateRange.period === 'monthly') parts.push('último mes');
-    else if (filters.dateRange.period === 'yearly') parts.push('último año');
-    else if (filters.dateRange.period === 'all') parts.push('todo el período');
-    else if (filters.dateRange.period === 'month-year') {
-      const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-      const monthName = monthNames[filters.dateRange.selectedMonth ?? new Date().getMonth()];
+    if (filters.dateRange.period === "weekly") parts.push("última semana");
+    else if (filters.dateRange.period === "monthly") parts.push("último mes");
+    else if (filters.dateRange.period === "yearly") parts.push("último año");
+    else if (filters.dateRange.period === "all") parts.push("todo el período");
+    else if (filters.dateRange.period === "month-year") {
+      const monthNames = [
+        "enero",
+        "febrero",
+        "marzo",
+        "abril",
+        "mayo",
+        "junio",
+        "julio",
+        "agosto",
+        "septiembre",
+        "octubre",
+        "noviembre",
+        "diciembre",
+      ];
+      const monthName =
+        monthNames[filters.dateRange.selectedMonth ?? new Date().getMonth()];
       const year = filters.dateRange.selectedYear ?? new Date().getFullYear();
       parts.push(`${monthName} ${year}`);
-    }
-    else if (filters.dateRange.period === 'custom') parts.push('período personalizado');
+    } else if (filters.dateRange.period === "custom")
+      parts.push("período personalizado");
 
     // Estados
     if (filters.status.length > 0) {
-      parts.push(`estados: ${filters.status.join(', ')}`);
+      parts.push(`estados: ${filters.status.join(", ")}`);
     }
 
     // Estado financiero
-    if (filters.financialStatus !== 'all') {
+    if (filters.financialStatus !== "all") {
       const statusMap = {
-        'paid': 'pagado',
-        'partial': 'parcial',
-        'pending': 'pendiente'
+        paid: "pagado",
+        partial: "parcial",
+        pending: "pendiente",
       };
-      parts.push(`estado: ${statusMap[filters.financialStatus as keyof typeof statusMap]}`);
+      parts.push(
+        `estado: ${statusMap[filters.financialStatus as keyof typeof statusMap]}`,
+      );
     }
 
     // Búsqueda
@@ -99,7 +148,7 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
       parts.push(`búsqueda: "${filters.searchTerm}"`);
     }
 
-    return parts.join(', ') || 'filtros aplicados';
+    return parts.join(", ") || "filtros aplicados";
   };
 
   // Efecto para aplicar filtros iniciales del último mes al cargar
@@ -107,13 +156,13 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
     // Crear filtros iniciales para el último mes
     const initialFilters: FilterState = {
       dateRange: {
-        start: '',
-        end: '',
-        period: 'monthly'
+        start: "",
+        end: "",
+        period: "monthly",
       },
       status: [],
-      financialStatus: 'all',
-      searchTerm: ''
+      financialStatus: "all",
+      searchTerm: "",
     };
 
     // Generar fechas del último mes con horas precisas
@@ -123,8 +172,8 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
     start.setMonth(end.getMonth() - 1);
     start.setHours(0, 0, 0, 0); // Inicio del día hace un mes
 
-    initialFilters.dateRange.start = start.toISOString().split('T')[0] || '';
-    initialFilters.dateRange.end = end.toISOString().split('T')[0] || '';
+    initialFilters.dateRange.start = start.toISOString().split("T")[0] || "";
+    initialFilters.dateRange.end = end.toISOString().split("T")[0] || "";
 
     // Aplicar filtros iniciales para asegurar que todos los componentes usen datos del último mes
     handleFiltersChange(initialFilters);
@@ -144,7 +193,7 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
       // SIEMPRE ejecutar consulta filtrada para asegurar consistencia
       // Los datos iniciales contienen todas las órdenes, no solo del último mes
       // Por lo tanto, siempre usar la consulta filtrada para obtener datos precisos del período
-      console.log('Executing filtered query with filters:', filters);
+      console.log("Executing filtered query with filters:", filters);
 
       // Asegurar que siempre haya un rango de fechas válido
       let dateRange = filters.dateRange;
@@ -156,22 +205,22 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
 
         dateRange = {
           ...dateRange,
-          start: start.toISOString().split('T')[0] || '',
-          end: end.toISOString().split('T')[0] || ''
+          start: start.toISOString().split("T")[0] || "",
+          end: end.toISOString().split("T")[0] || "",
         };
       }
 
       const filtersWithValidDates = {
         ...filters,
-        dateRange
+        dateRange,
       };
 
-      const response = await fetch('/api/dashboard/filtered', {
-        method: 'POST',
+      const response = await fetch("/api/dashboard/filtered", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(filtersWithValidDates)
+        body: JSON.stringify(filtersWithValidDates),
       });
 
       if (!response.ok) {
@@ -181,7 +230,7 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
       const result = await response.json();
 
       if (!result.success) {
-        throw new Error(result.error || 'Error fetching filtered data');
+        throw new Error(result.error || "Error fetching filtered data");
       }
 
       // Procesar datos filtrados y actualizar estado
@@ -194,7 +243,9 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
       const monthlyStats: MonthlyOrderStats = {
         totalOrders: filteredData.stats.totalOrders,
         createdOrders: filteredData.stats.totalOrders,
-        byStatus: Object.fromEntries(ORDER_STATUSES.map(s => [s, 0])) as Record<OrderStatus, number>,
+        byStatus: Object.fromEntries(
+          ORDER_STATUSES.map((s) => [s, 0]),
+        ) as Record<OrderStatus, number>,
       };
 
       filteredData.orders.forEach((order: any) => {
@@ -205,38 +256,52 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
       });
 
       // Actualizar resumen financiero basado en datos filtrados
-      const completedOrders = filteredData.orders.filter((order: any) => order.status === 'completed');
+      const completedOrders = filteredData.orders.filter(
+        (order: any) => order.status === "completed",
+      );
 
       // Las tres cifras salen de `lib/finance`, que es la única fuente de la reserva: respeta
       // `reserve_type`/`reserve_value` por orden y distingue los TRES estados de cobro. Antes se
       // calculaba aquí con un `0.25` propio y sin mirar `pago_reserva`, así que toda orden impaga
       // se contaba como si hubiera pagado la reserva — caja inventada en el Centro de Control.
       const totalPaidActual = completedOrders.reduce(
-        (sum: number, order: any) => sum + collectedAmount(toFinanceOrder(order)),
-        0
+        (sum: number, order: any) =>
+          sum + collectedAmount(toFinanceOrder(order)),
+        0,
       );
 
       const reservationPayments = completedOrders
         .filter((order: any) => !order.pago_completo && order.pago_reserva)
-        .reduce((sum: number, order: any) => sum + reserveAmount(toFinanceOrder(order)), 0);
+        .reduce(
+          (sum: number, order: any) =>
+            sum + reserveAmount(toFinanceOrder(order)),
+          0,
+        );
 
       const finalPayments = completedOrders
         .filter((order: any) => order.pago_completo)
-        .reduce((sum: number, order: any) => sum + (order.calculated_total || 0), 0);
+        .reduce(
+          (sum: number, order: any) => sum + (order.calculated_total || 0),
+          0,
+        );
 
       const financialSummary = {
         totalSales: filteredData.stats.financialBreakdown.totalSales,
         totalPaid: totalPaidActual,
         totalPending: filteredData.stats.financialBreakdown.totalPending,
         reservationPayments,
-        finalPayments
+        finalPayments,
       };
 
       // Filtrar equipos rentados basado en las órdenes filtradas
-      const filteredRentedEquipment = initialData.rentedEquipment.filter((equipment: any) => {
-        // Buscar si el equipo pertenece a alguna de las órdenes filtradas
-        return filteredData.orders.some((order: any) => order.id === equipment.orderId);
-      });
+      const filteredRentedEquipment = initialData.rentedEquipment.filter(
+        (equipment: any) => {
+          // Buscar si el equipo pertenece a alguna de las órdenes filtradas
+          return filteredData.orders.some(
+            (order: any) => order.id === equipment.orderId,
+          );
+        },
+      );
 
       setDashboardData({
         monthlyOrderStats: monthlyStats,
@@ -246,12 +311,11 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
         operationalKpis: initialData.operationalKpis,
         ordersByStatus,
         rentedEquipment: filteredRentedEquipment,
-        financialSummary
+        financialSummary,
       });
-
     } catch (err) {
-      console.error('Error applying filters:', err);
-      setError(err instanceof Error ? err.message : 'Error desconocido');
+      console.error("Error applying filters:", err);
+      setError(err instanceof Error ? err.message : "Error desconocido");
       // En caso de error, mantener datos actuales
     } finally {
       setIsLoading(false);
@@ -260,6 +324,32 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
 
   return (
     <div className="space-y-6">
+      {/* D-04: header canónico + 5 KPI superiores + acciones primarias */}
+      <PageHeader
+        title="Centro de Control"
+        actions={
+          <>
+            <a href="/orders">
+              <Button>Nuevo Pedido</Button>
+            </a>
+            <a href="/check-in">
+              <Button variant="outline">Registrar Devolución</Button>
+            </a>
+          </>
+        }
+      />
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {mapDashboardKpis(dashboardData).map((kpi) => (
+          <KpiCard
+            key={kpi.key}
+            icon={DASHBOARD_KPI_ICONS[kpi.key]}
+            label={kpi.label}
+            value={kpi.value}
+          />
+        ))}
+      </div>
+
       {/* Filtros del Dashboard */}
       <DashboardFilters
         onFiltersChange={handleFiltersChange}
@@ -280,22 +370,23 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Error al cargar datos: {error}
-          </AlertDescription>
+          <AlertDescription>Error al cargar datos: {error}</AlertDescription>
         </Alert>
       )}
 
       {/* Contenido del Dashboard */}
-      <div className={isLoading ? 'opacity-50 pointer-events-none' : ''}>
+      <div className={isLoading ? "opacity-50 pointer-events-none" : ""}>
         {/* Fila de KPIs del canónico: cada tarjeta salta a su pestaña */}
-        <OrderKpiRow kpis={dashboardData.operationalKpis} onSelectTab={setSelectedTab} />
+        <OrderKpiRow
+          kpis={dashboardData.operationalKpis}
+          onSelectTab={setSelectedTab}
+        />
 
         {/* Estadísticas del Mes */}
         <OrderSummaryStats
           monthlyStats={dashboardData.monthlyOrderStats}
           isFiltered={lastFilters !== null}
-          filterInfo={lastFilters ? getFilterDescription(lastFilters) : ''}
+          filterInfo={lastFilters ? getFilterDescription(lastFilters) : ""}
         />
 
         <Separator />
@@ -306,7 +397,7 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
           selectedTab={selectedTab}
           onSelectTab={setSelectedTab}
           isFiltered={lastFilters !== null}
-          filterInfo={lastFilters ? getFilterDescription(lastFilters) : ''}
+          filterInfo={lastFilters ? getFilterDescription(lastFilters) : ""}
         />
 
         <Separator />
@@ -315,7 +406,7 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
         <RentedEquipmentTable
           rentedEquipment={dashboardData.rentedEquipment}
           isFiltered={lastFilters !== null}
-          filterInfo={lastFilters ? getFilterDescription(lastFilters) : ''}
+          filterInfo={lastFilters ? getFilterDescription(lastFilters) : ""}
         />
 
         <Separator />
@@ -324,7 +415,7 @@ export default function DashboardContainer({ initialData }: DashboardContainerPr
         <FinancialSummary
           financialSummary={dashboardData.financialSummary}
           isFiltered={lastFilters !== null}
-          filterInfo={lastFilters ? getFilterDescription(lastFilters) : ''}
+          filterInfo={lastFilters ? getFilterDescription(lastFilters) : ""}
         />
       </div>
     </div>
