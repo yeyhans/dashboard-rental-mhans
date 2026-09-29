@@ -109,9 +109,9 @@ describe("resolveOrderListTabParam", () => {
     expect(resolveOrderListTabParam("on-hold")).toBe("request");
   });
 
-  it("falls back to todos for cancelled, which has no tab", () => {
-    expect(resolveOrderListTabParam("cancelled")).toBe("todos");
-    expect(resolveOrderListTabParam("failed")).toBe("todos"); // legacy → cancelled
+  it("maps cancelled (and its legacy failed) to the Cancelados tab (D-17, Q-6)", () => {
+    expect(resolveOrderListTabParam("cancelled")).toBe("cancelled");
+    expect(resolveOrderListTabParam("failed")).toBe("cancelled"); // legacy → cancelled
   });
 
   it("falls back to todos for an unrecognised value instead of an empty list", () => {

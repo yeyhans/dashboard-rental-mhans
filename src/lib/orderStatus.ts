@@ -13,14 +13,14 @@
 
 /** The eight values the migrated `orders_status_check` constraint admits. */
 export const ORDER_STATUSES = [
-  'request',
-  'evaluation',
-  'confirmed',
-  'preparation',
-  'in-rental',
-  'return',
-  'completed',
-  'cancelled',
+  "request",
+  "evaluation",
+  "confirmed",
+  "preparation",
+  "in-rental",
+  "return",
+  "completed",
+  "cancelled",
 ] as const;
 
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
@@ -37,13 +37,13 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
  * `reviewing`, `preparing`, `delivering` and `paid`. Those four were never database values.
  */
 export const LEGACY_ORDER_STATUSES = [
-  'pending',
-  'processing',
-  'on-hold',
-  'completed',
-  'cancelled',
-  'refunded',
-  'failed',
+  "pending",
+  "processing",
+  "on-hold",
+  "completed",
+  "cancelled",
+  "refunded",
+  "failed",
 ] as const;
 
 export type LegacyOrderStatus = (typeof LEGACY_ORDER_STATUSES)[number];
@@ -63,14 +63,14 @@ export type LegacyOrderStatus = (typeof LEGACY_ORDER_STATUSES)[number];
  * eight wrong for that reason.
  */
 export const STATUS_LABELS: Record<OrderStatus, string> = {
-  request: 'Solicitud',
-  evaluation: 'Evaluación',
-  confirmed: 'Confirmado',
-  preparation: 'Preparación',
-  'in-rental': 'En arriendo',
-  return: 'Devolución',
-  completed: 'Completado',
-  cancelled: 'Cancelado',
+  request: "Solicitud",
+  evaluation: "Evaluación",
+  confirmed: "Confirmado",
+  preparation: "Preparación",
+  "in-rental": "En arriendo",
+  return: "Devolución",
+  completed: "Completado",
+  cancelled: "Cancelado",
 };
 
 /**
@@ -81,23 +81,31 @@ export const STATUS_LABELS: Record<OrderStatus, string> = {
  * `failed` from a migrated `cancelled` must read `orders.cancellation_reason`.
  */
 const LEGACY_TO_V12: Record<LegacyOrderStatus, OrderStatus> = {
-  completed: 'completed',
-  cancelled: 'cancelled',
-  failed: 'cancelled',
-  'on-hold': 'request',
-  processing: 'confirmed',
-  pending: 'request',
-  refunded: 'cancelled',
+  completed: "completed",
+  cancelled: "cancelled",
+  failed: "cancelled",
+  "on-hold": "request",
+  processing: "confirmed",
+  pending: "request",
+  refunded: "cancelled",
 };
 
 /** Narrows an untrusted value to `OrderStatus`. Accepts non-strings without throwing. */
 export function isOrderStatus(value: unknown): value is OrderStatus {
-  return typeof value === 'string' && (ORDER_STATUSES as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    (ORDER_STATUSES as readonly string[]).includes(value)
+  );
 }
 
 /** Narrows an untrusted value to `LegacyOrderStatus`. `completed` and `cancelled` are both. */
-export function isLegacyOrderStatus(value: unknown): value is LegacyOrderStatus {
-  return typeof value === 'string' && (LEGACY_ORDER_STATUSES as readonly string[]).includes(value);
+export function isLegacyOrderStatus(
+  value: unknown,
+): value is LegacyOrderStatus {
+  return (
+    typeof value === "string" &&
+    (LEGACY_ORDER_STATUSES as readonly string[]).includes(value)
+  );
 }
 
 /**
@@ -144,12 +152,12 @@ export function statusLabel(status: string): string {
  *   Devolución    --("Completar pedido")----------------------------------------> Completado
  */
 const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
-  request: 'evaluation',
-  evaluation: 'confirmed',
-  confirmed: 'preparation',
-  preparation: 'in-rental',
-  'in-rental': 'return',
-  return: 'completed',
+  request: "evaluation",
+  evaluation: "confirmed",
+  confirmed: "preparation",
+  preparation: "in-rental",
+  "in-rental": "return",
+  return: "completed",
 };
 
 /**
@@ -159,10 +167,13 @@ const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
  * v1.2 vocabulary has two, collapsing Rechazada and Cancelada into `cancelled`. The distinction is
  * not lost: it lives in `orders.cancellation_reason`, added by migration 0003 for exactly this.
  */
-export const TERMINAL_STATUSES = ['completed', 'cancelled'] as const;
+export const TERMINAL_STATUSES = ["completed", "cancelled"] as const;
 
 export function isTerminalStatus(status: unknown): boolean {
-  return typeof status === 'string' && (TERMINAL_STATUSES as readonly string[]).includes(status);
+  return (
+    typeof status === "string" &&
+    (TERMINAL_STATUSES as readonly string[]).includes(status)
+  );
 }
 
 /** The one stage an order may advance to, or `null` at a terminal. */
@@ -185,7 +196,7 @@ export function nextStatus(status: OrderStatus): OrderStatus | null {
 export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
   if (!isOrderStatus(from) || !isOrderStatus(to)) return false;
   if (isTerminalStatus(from)) return false;
-  if (to === 'cancelled') return true;
+  if (to === "cancelled") return true;
   return NEXT_STATUS[from] === to;
 }
 
@@ -201,9 +212,13 @@ export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
  * zero rows — and it does so silently: Postgres returns an empty set, PostgREST returns 200, and
  * the caller renders "no hay órdenes" as though that were the answer.
  */
-function legacyEquivalents(statuses: readonly OrderStatus[]): LegacyOrderStatus[] {
+function legacyEquivalents(
+  statuses: readonly OrderStatus[],
+): LegacyOrderStatus[] {
   return LEGACY_ORDER_STATUSES.filter(
-    (legacy) => statuses.includes(LEGACY_TO_V12[legacy]) && !statuses.includes(legacy as OrderStatus)
+    (legacy) =>
+      statuses.includes(LEGACY_TO_V12[legacy]) &&
+      !statuses.includes(legacy as OrderStatus),
   );
 }
 
@@ -226,10 +241,9 @@ export function canonicalStatus(value: unknown): OrderStatus | null {
 
 /** One empty array per status, each a distinct reference. */
 export function emptyStatusBuckets<T>(): Record<OrderStatus, T[]> {
-  return Object.fromEntries(ORDER_STATUSES.map((status) => [status, [] as T[]])) as Record<
-    OrderStatus,
-    T[]
-  >;
+  return Object.fromEntries(
+    ORDER_STATUSES.map((status) => [status, [] as T[]]),
+  ) as Record<OrderStatus, T[]>;
 }
 
 /**
@@ -246,7 +260,7 @@ export function emptyStatusBuckets<T>(): Record<OrderStatus, T[]> {
  * double-booked equipment on a shoot day, not an error in a log.
  */
 export function bookingStatusFilter(): string[] {
-  const current = ORDER_STATUSES.filter((s) => s !== 'cancelled');
+  const current = ORDER_STATUSES.filter((s) => s !== "cancelled");
   return [...current, ...legacyEquivalents(current)];
 }
 
@@ -259,7 +273,7 @@ export function bookingStatusFilter(): string[] {
  */
 export function isBookingStatus(status: unknown): boolean {
   const canonical = canonicalStatus(status);
-  return canonical !== null && canonical !== 'cancelled';
+  return canonical !== null && canonical !== "cancelled";
 }
 
 /**
@@ -279,7 +293,9 @@ export function activeStatusFilter(): string[] {
  * while the migration window still has legacy rows. Returns `null` when nothing usable was
  * selected, which the caller must read as "no status filter" rather than "match nothing".
  */
-export function expandStatusFilter(selection: readonly string[] | undefined): string[] | null {
+export function expandStatusFilter(
+  selection: readonly string[] | undefined,
+): string[] | null {
   if (!selection || selection.length === 0) return null;
 
   const canonical: OrderStatus[] = [];
@@ -306,7 +322,14 @@ export function expandStatusFilter(selection: readonly string[] | undefined): st
  * muted, desaturated one (`#256B44` / `#E7F2EC`). An admin stares at these badges all day.
  * `muted` is the extra one — the canonical's `badge-cancelada` is greyer still than `neutral`.
  */
-export const STATUS_TONES_VALUES = ['ok', 'warn', 'crit', 'info', 'neutral', 'muted'] as const;
+export const STATUS_TONES_VALUES = [
+  "ok",
+  "warn",
+  "crit",
+  "info",
+  "neutral",
+  "muted",
+] as const;
 
 export type StatusTone = (typeof STATUS_TONES_VALUES)[number];
 
@@ -327,14 +350,14 @@ export type StatusTone = (typeof STATUS_TONES_VALUES)[number];
  * another. Colour here is information, so a disagreement is a wrong reading, not a style nit.
  */
 export const STATUS_TONES: Record<OrderStatus, StatusTone> = {
-  request: 'neutral',
-  evaluation: 'warn',
-  confirmed: 'ok',
-  preparation: 'warn',
-  'in-rental': 'info',
-  return: 'neutral',
-  completed: 'neutral',
-  cancelled: 'muted',
+  request: "neutral",
+  evaluation: "warn",
+  confirmed: "ok",
+  preparation: "warn",
+  "in-rental": "info",
+  return: "neutral",
+  completed: "neutral",
+  cancelled: "muted",
 };
 
 /**
@@ -345,7 +368,7 @@ export const STATUS_TONES: Record<OrderStatus, StatusTone> = {
  * value is a far better outcome than a thrown error inside a React island.
  */
 export function statusTone(status: string): StatusTone {
-  return isOrderStatus(status) ? STATUS_TONES[status] : 'neutral';
+  return isOrderStatus(status) ? STATUS_TONES[status] : "neutral";
 }
 
 /**
@@ -361,12 +384,12 @@ export function statusTone(status: string): StatusTone {
  * drifted apart between components.
  */
 const TONE_BADGE_CLASSES: Record<StatusTone, string> = {
-  ok: 'bg-[var(--color-ok-bg)] text-[var(--color-ok)]',
-  warn: 'bg-[var(--color-warn-bg)] text-[var(--color-warn)]',
-  crit: 'bg-[var(--color-crit-bg)] text-[var(--color-crit)]',
-  info: 'bg-[var(--color-info-bg)] text-[var(--color-info)]',
-  neutral: 'bg-[var(--color-neutral-bg)] text-[var(--color-neutral)]',
-  muted: 'bg-[var(--color-muted-bg)] text-[var(--color-muted)]',
+  ok: "bg-[var(--color-ok-bg)] text-[var(--color-ok)]",
+  warn: "bg-[var(--color-warn-bg)] text-[var(--color-warn)]",
+  crit: "bg-[var(--color-crit-bg)] text-[var(--color-crit)]",
+  info: "bg-[var(--color-info-bg)] text-[var(--color-info)]",
+  neutral: "bg-[var(--color-neutral-bg)] text-[var(--color-neutral)]",
+  muted: "bg-[var(--color-muted-bg)] text-[var(--color-muted)]",
 };
 
 export function statusBadgeClass(status: string): string {
@@ -394,8 +417,10 @@ export function statusChartColor(status: string): string {
  * violation surfaced as a 500. Chain order matters too: the machine only advances one stage, so
  * the option immediately below the current one is the only ordinary move.
  */
-export const STATUS_OPTIONS: ReadonlyArray<{ value: OrderStatus; label: string }> =
-  ORDER_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }));
+export const STATUS_OPTIONS: ReadonlyArray<{
+  value: OrderStatus;
+  label: string;
+}> = ORDER_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }));
 
 /**
  * Si en esta etapa corresponde generar o regenerar el presupuesto.
@@ -411,18 +436,18 @@ export const STATUS_OPTIONS: ReadonlyArray<{ value: OrderStatus; label: string }
  */
 export function isBudgetStatus(status: unknown): boolean {
   const canonical = canonicalStatus(status);
-  return canonical === 'request' || canonical === 'evaluation';
+  return canonical === "request" || canonical === "evaluation";
 }
 
 /* ---------------------------------------------------------------------------------------------
  * Pedidos list tabs
  * ------------------------------------------------------------------------------------------ */
 
-/** `todos` plus the seven status tabs. `cancelled` has no tab in the canonical. */
-export type OrderListTab = 'todos' | Exclude<OrderStatus, 'cancelled'>;
+/** `todos` plus one tab per `OrderStatus`, `cancelled` included (D-17, Q-6). */
+export type OrderListTab = "todos" | OrderStatus;
 
 /**
- * The Pedidos list tabs, verbatim from the client's canonical screen.
+ * The Pedidos list tabs, verbatim from the client's canonical screen, plus one addition.
  *
  * Source: `CONSOLIDADO WEB YEYSON/Área 01 · Rental Técnico/OFF/
  * MarioHans_OS_Area01_Pedidos_Canonical_RC2.1.2.html`, the `#list-tabs` block.
@@ -431,32 +456,42 @@ export type OrderListTab = 'todos' | Exclude<OrderStatus, 'cancelled'>;
  * dashboard bucketing: with eight statuses and a four-tab UI, someone had to choose a grouping.
  * The canonical chooses none — one tab per status, plus Todos.
  *
- * `cancelled` deliberately has no tab, and the canonical's own counts prove Todos excludes it:
- * 5+3+8+7+12+2+1 = 38, the exact Todos count. That is the same set as `bookingStatusFilter()`.
+ * `cancelled` has no tab in the canonical itself, and the canonical's own counts prove its
+ * "Todos" excludes it: 5+3+8+7+12+2+1 = 38, the exact Todos count (same set as
+ * `bookingStatusFilter()`, and `statusesForTab('todos')` below still follows it). D-17 (Q-6,
+ * resolved) appends a "Cancelados" tab anyway, OUTSIDE the canon's chain order, because without
+ * one cancelled orders are unreachable from the list — the client chose reachability over an
+ * exact canon match for this one tab.
  *
  * The labels are PLURAL because a tab names a collection, where `STATUS_LABELS` is singular
  * because a badge names one pedido. Two label sets, two sources; merging them would put
  * "Completado" on a tab counting twelve orders. The irregular capitalisation ("En evaluación"
  * against "En Arriendo") is copied as found — normalising it is a redesign nobody approved.
  */
-export const ORDER_LIST_TABS: ReadonlyArray<{ value: OrderListTab; label: string }> = [
-  { value: 'todos', label: 'Todos' },
-  { value: 'request', label: 'Solicitudes' },
-  { value: 'evaluation', label: 'En evaluación' },
-  { value: 'confirmed', label: 'Confirmados' },
-  { value: 'preparation', label: 'Preparación' },
-  { value: 'in-rental', label: 'En Arriendo' },
-  { value: 'return', label: 'Devolución' },
-  { value: 'completed', label: 'Completados' },
+export const ORDER_LIST_TABS: ReadonlyArray<{
+  value: OrderListTab;
+  label: string;
+}> = [
+  { value: "todos", label: "Todos" },
+  { value: "request", label: "Solicitudes" },
+  { value: "evaluation", label: "En evaluación" },
+  { value: "confirmed", label: "Confirmados" },
+  { value: "preparation", label: "Preparación" },
+  { value: "in-rental", label: "En Arriendo" },
+  { value: "return", label: "Devolución" },
+  { value: "completed", label: "Completados" },
+  { value: "cancelled", label: "Cancelados" },
 ];
 
 /**
  * The statuses a tab shows. Empty for an unrecognised tab id — falling back to Todos would make
- * a typo in a tab id look like a working filter that just happens to show everything.
+ * a typo in a tab id look like a working filter that just happens to show everything. "Todos"
+ * still excludes `cancelled` (D-17 leaves that definition untouched); the "Cancelados" tab is the
+ * only way to reach them.
  */
 export function statusesForTab(tab: string): OrderStatus[] {
-  if (tab === 'todos') return ORDER_STATUSES.filter((s) => s !== 'cancelled');
-  return isOrderStatus(tab) && tab !== 'cancelled' ? [tab] : [];
+  if (tab === "todos") return ORDER_STATUSES.filter((s) => s !== "cancelled");
+  return isOrderStatus(tab) ? [tab] : [];
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -490,11 +525,11 @@ export function statusesForTab(tab: string): OrderStatus[] {
  * customer. There is no ninth template to write.
  */
 export const EMAIL_ON_ENTER: Partial<Record<OrderStatus, string>> = {
-  request: 'solicitud-recibida', //      03
-  evaluation: 'equipos-disponibles', //  04
-  'in-rental': 'equipos-entregados', //  07
-  completed: 'pedido-completado', //     08
-  cancelled: 'equipos-no-disponibles', //06
+  request: "solicitud-recibida", //      03
+  evaluation: "equipos-disponibles", //  04
+  "in-rental": "equipos-entregados", //  07
+  completed: "pedido-completado", //     08
+  cancelled: "equipos-no-disponibles", //06
 };
 
 /**
@@ -505,7 +540,11 @@ export const EMAIL_ON_ENTER: Partial<Record<OrderStatus, string>> = {
  * canonical stages also stops a legacy row being rewritten in the new vocabulary from counting
  * as a transition: `on-hold` → `request` is the same stage, and must not re-send.
  */
-export function enteredStatus(previous: unknown, next: unknown, target: OrderStatus): boolean {
+export function enteredStatus(
+  previous: unknown,
+  next: unknown,
+  target: OrderStatus,
+): boolean {
   const to = canonicalStatus(next);
   if (to !== target) return false;
   return canonicalStatus(previous) !== target;
@@ -515,7 +554,10 @@ export function enteredStatus(previous: unknown, next: unknown, target: OrderSta
  * The template key a status change should send, or `null`. Single decision point for the eight
  * emails of the handoff, replacing one hard-coded `if` per endpoint.
  */
-export function emailOnTransition(previous: unknown, next: unknown): string | null {
+export function emailOnTransition(
+  previous: unknown,
+  next: unknown,
+): string | null {
   const to = canonicalStatus(next);
   if (!to || canonicalStatus(previous) === to) return null;
   return EMAIL_ON_ENTER[to] ?? null;
