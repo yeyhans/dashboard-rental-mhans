@@ -18,9 +18,16 @@ export function productStockTone(status: string | null | undefined): BadgeTone {
   }
 }
 
-/** Same fallback rule the table already used: a missing status reads as `outofstock`. */
+const KNOWN_STOCK_STATUSES = new Set(["instock", "outofstock", "onbackorder"]);
+
+/**
+ * Same fallback rule the table already used: a missing status reads as `outofstock`. A present
+ * but unrecognised status (D-16 finding) no longer echoes the raw DB value into the Spanish UI —
+ * it reads as "Sin definir" instead.
+ */
 export function productStockBadgeLabel(
   status: string | null | undefined,
 ): string {
+  if (status && !KNOWN_STOCK_STATUSES.has(status)) return "Sin definir";
   return stockLabel(status ?? "outofstock");
 }

@@ -23,6 +23,10 @@ import { StatusBadge } from "../shared/StatusBadge";
 import { Button } from "../ui/button";
 import { financePaymentTone } from "./financePaymentTone";
 import { financeRowsToCsv, formatDay } from "./financeExport";
+import { businessDay } from "../../lib/businessDay";
+
+/** UTF-8 BOM so Excel opens the CSV with the right encoding instead of mangling accents. */
+const CSV_BOM = "﻿";
 
 /**
  * Finanzas & Cobranza.
@@ -100,14 +104,21 @@ export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
     if (typeof window === "undefined" || tab === "finanzas") return;
     const rows = tab === "pendientes" ? pendingRows : paidRows;
     const csv = financeRowsToCsv(rows, tab);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    // D-16: BOM so Excel reads accents correctly; the file's date is the Chilean business day,
+    // not the server's UTC one (R3-104, same rule as `businessDay.ts`).
+    const blob = new Blob([CSV_BOM + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessDay(new Date());
     link.href = url;
     link.download = `finanzas-${tab}-${today}.csv`;
+    // Attached to the DOM before the click, same reason as F-04/D-13's warning: Firefox and
+    // Safari can silently ignore `click()` on a detached anchor. Revoking the object URL is
+    // deferred so the browser has started the download before the URL is invalidated.
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   return (

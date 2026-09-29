@@ -32,4 +32,8 @@ describe("productStockBadgeLabel", () => {
     expect(productStockBadgeLabel(null)).toBe("No disponible");
     expect(productStockBadgeLabel(undefined)).toBe("No disponible");
   });
+
+  it("falls back to a friendly label instead of echoing an unrecognised status verbatim", () => {
+    expect(productStockBadgeLabel("discontinued")).toBe("Sin definir");
+  });
 });

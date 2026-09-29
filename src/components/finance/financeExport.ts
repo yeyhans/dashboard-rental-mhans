@@ -9,7 +9,7 @@ export function formatDay(value: string | null): string {
 }
 
 function csvEscape(value: string): string {
-  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
   return value;
 }
 

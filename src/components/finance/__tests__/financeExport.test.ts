@@ -53,6 +53,31 @@ describe("financeRowsToCsv — pendientes", () => {
     const csv = financeRowsToCsv([makeRow({ overdue: true })], "pendientes");
     expect(csv).toContain("Vencido");
   });
+
+  it("doubles an embedded double-quote inside a quoted field", () => {
+    const csv = financeRowsToCsv(
+      [makeRow({ project: 'Sesión "producto"' })],
+      "pendientes",
+    );
+    const [, line] = csv.split("\n");
+    expect(line).toContain('"Sesión ""producto"""');
+  });
+
+  it("quotes a field containing an embedded newline", () => {
+    const csv = financeRowsToCsv(
+      [makeRow({ client: "Ana\nPérez" })],
+      "pendientes",
+    );
+    expect(csv).toContain('"Ana\nPérez"');
+  });
+
+  it("quotes a field containing a bare carriage return (D-16)", () => {
+    const csv = financeRowsToCsv(
+      [makeRow({ client: "Ana\rPérez" })],
+      "pendientes",
+    );
+    expect(csv).toContain('"Ana\rPérez"');
+  });
 });
 
 describe("financeRowsToCsv — pagados", () => {
