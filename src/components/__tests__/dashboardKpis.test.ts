@@ -34,11 +34,17 @@ describe("mapDashboardKpis", () => {
     const items = mapDashboardKpis(makeStats());
     expect(items.map((i) => i.label)).toEqual([
       "Pedidos Activos",
-      "Próximas Entregas",
+      "Entregas Hoy",
       "Devoluciones Hoy",
       "Ingresos Mes",
       "Cobros Pendientes",
     ]);
+  });
+
+  it("labels the deliveries KPI honestly as 'Entregas Hoy' (D-14d): its value is entregasHoy, not a real upcoming-deliveries count", () => {
+    const items = mapDashboardKpis(makeStats());
+    const proximasEntregas = items.find((i) => i.key === "proximasEntregas");
+    expect(proximasEntregas?.label).toBe("Entregas Hoy");
   });
 
   it("maps Pedidos Activos, Próximas Entregas and Devoluciones Hoy straight from operationalKpis", () => {
@@ -89,5 +95,38 @@ describe("mapDashboardKpis", () => {
     expect(items.find((i) => i.key === "cobrosPendientes")?.value).toBe(
       "$1.234.568",
     );
+  });
+
+  it("uses the unfiltered total pending override for Cobros Pendientes when given (D-14c), ignoring the period-filtered financialSummary.totalPending", () => {
+    const items = mapDashboardKpis(
+      makeStats({
+        financialSummary: {
+          totalSales: 0,
+          totalPaid: 0,
+          totalPending: 500, // period-filtered value (e.g. "last month")
+          reservationPayments: 0,
+          finalPayments: 0,
+        },
+      }),
+      999000, // unfiltered, company-wide total pending
+    );
+    expect(items.find((i) => i.key === "cobrosPendientes")?.value).toBe(
+      "$999.000",
+    );
+  });
+
+  it("falls back to financialSummary.totalPending when no override is given", () => {
+    const items = mapDashboardKpis(
+      makeStats({
+        financialSummary: {
+          totalSales: 0,
+          totalPaid: 0,
+          totalPending: 500,
+          reservationPayments: 0,
+          finalPayments: 0,
+        },
+      }),
+    );
+    expect(items.find((i) => i.key === "cobrosPendientes")?.value).toBe("$500");
   });
 });

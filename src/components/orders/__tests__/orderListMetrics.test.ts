@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   computeOrderListKpis,
   matchesOrderListTab,
   filterOrdersByTab,
   orderListTabCounts,
+  resolveOrderListTabParam,
   toBadgeTone,
 } from "../orderListMetrics";
 
@@ -61,6 +62,60 @@ describe("computeOrderListKpis", () => {
       HOY,
     );
     expect(kpis.pedidosActivos).toBe(2);
+  });
+
+  describe("America/Santiago boundary (D-14e)", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("still resolves 'hoy' against Santiago's calendar day, not the runtime's local getters", () => {
+      // Simulates a runtime whose local timezone is NOT Santiago (e.g. Vercel's UTC), which
+      // reports the day after Santiago's for a `today` instant late in the Santiago evening.
+      // `Date.prototype.getDate` is what the old bug read; a fix based on `businessDay` (Intl,
+      // fixed to America/Santiago) must be unaffected by this mock.
+      const realGetDate = Date.prototype.getDate;
+      vi.spyOn(Date.prototype, "getDate").mockImplementation(function (
+        this: Date,
+      ) {
+        return realGetDate.call(this) + 1;
+      });
+
+      const today = new Date("2026-06-11T22:00:00-04:00"); // 22:00 in Santiago, still June 11 there
+      const kpis = computeOrderListKpis(
+        [order("in-rental", "2026-06-11", "2026-06-13")],
+        today,
+      );
+
+      expect(kpis.entregasHoy).toBe(1);
+    });
+  });
+});
+
+describe("resolveOrderListTabParam", () => {
+  it("falls back to todos when there is no param", () => {
+    expect(resolveOrderListTabParam(null)).toBe("todos");
+    expect(resolveOrderListTabParam(undefined)).toBe("todos");
+    expect(resolveOrderListTabParam("")).toBe("todos");
+  });
+
+  it("keeps a valid canonical tab as-is", () => {
+    expect(resolveOrderListTabParam("confirmed")).toBe("confirmed");
+    expect(resolveOrderListTabParam("todos")).toBe("todos");
+  });
+
+  it("maps a legacy status to its v1.2 tab", () => {
+    expect(resolveOrderListTabParam("processing")).toBe("confirmed");
+    expect(resolveOrderListTabParam("on-hold")).toBe("request");
+  });
+
+  it("falls back to todos for cancelled, which has no tab", () => {
+    expect(resolveOrderListTabParam("cancelled")).toBe("todos");
+    expect(resolveOrderListTabParam("failed")).toBe("todos"); // legacy → cancelled
+  });
+
+  it("falls back to todos for an unrecognised value instead of an empty list", () => {
+    expect(resolveOrderListTabParam("bogus")).toBe("todos");
   });
 });
 

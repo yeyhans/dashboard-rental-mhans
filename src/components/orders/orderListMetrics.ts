@@ -6,6 +6,7 @@ import {
   ORDER_LIST_TABS,
   type OrderListTab,
 } from "../../lib/orderStatus";
+import { businessDay } from "../../lib/businessDay";
 import type { BadgeTone } from "../shared/statusBadgeTones";
 
 /** The subset of order fields the D-05 Pedidos list KPIs and tabs need. */
@@ -32,13 +33,14 @@ export interface OrderListKpis {
  * bundle. The rationale for the string-slice (not `new Date()`) is the same: `order_fecha_inicio`/
  * `order_fecha_termino` are `date` columns, and parsing `'2026-06-12'` with `new Date()` reads it
  * as UTC midnight, which is the previous day in Chile (UTC-4).
+ *
+ * A `Date` instant (only `today` goes through this branch) is resolved with `businessDay`
+ * (D-14e), not with `Date`'s local getters: those read the *runtime's* timezone (UTC on Vercel),
+ * which rolls over the day hours before Santiago does.
  */
 function toIsoDay(value: string | Date): string {
   if (typeof value === "string") return value.slice(0, 10);
-  const y = value.getFullYear();
-  const m = String(value.getMonth() + 1).padStart(2, "0");
-  const d = String(value.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return businessDay(value);
 }
 
 /**
@@ -85,6 +87,27 @@ export function computeOrderListKpis(
   }
 
   return kpis;
+}
+
+/**
+ * Resolves the `?status=` URL param to a valid `ORDER_LIST_TAB` (D-14a). Before this, an
+ * unrecognised or legacy value (e.g. a bookmarked link from before the v1.2 migration) was set
+ * as the tab verbatim, and `matchesOrderListTab` — correctly — matches nothing against a tab id
+ * it does not recognise, so the list silently rendered empty instead of falling back to "todos".
+ *
+ * Maps legacy statuses (`processing`, `on-hold`, …) to their v1.2 tab via `canonicalStatus`, and
+ * falls back to "todos" for anything without a tab — including `cancelled`/`failed`, which have
+ * no tab in the canon (Q-6, out of scope here).
+ */
+export function resolveOrderListTabParam(
+  value: string | null | undefined,
+): OrderListTab {
+  if (!value || value === "todos") return "todos";
+  const canonical = canonicalStatus(value);
+  if (canonical && ORDER_LIST_TABS.some((tab) => tab.value === canonical)) {
+    return canonical as OrderListTab;
+  }
+  return "todos";
 }
 
 /** Whether `status` belongs to the given Pedidos list tab (`todos` excludes `cancelled`). */

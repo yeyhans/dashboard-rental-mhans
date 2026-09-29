@@ -1,5 +1,6 @@
-import { supabaseAdmin } from '../lib/supabase';
-import { reserveAmount } from '../lib/finance';
+import { supabaseAdmin } from "../lib/supabase";
+import { reserveAmount } from "../lib/finance";
+import { businessDay } from "../lib/businessDay";
 import {
   ORDER_STATUSES,
   bookingStatusFilter,
@@ -8,10 +9,10 @@ import {
   emptyStatusBuckets,
   isTerminalStatus,
   type OrderStatus,
-} from '../lib/orderStatus';
-import type { Database } from '../types/database';
+} from "../lib/orderStatus";
+import type { Database } from "../types/database";
 
-type Order = Database['public']['Tables']['orders']['Row'];
+type Order = Database["public"]["Tables"]["orders"]["Row"];
 
 /** Los cuatro contadores de la `.kpi-row` del canónico de Pedidos. */
 export interface OperationalKpis {
@@ -28,13 +29,14 @@ export interface OperationalKpis {
  * llegan como `'2026-06-12'`. Pasarlas por `new Date()` las interpretaría como medianoche UTC y
  * en Chile (UTC-4) restaría un día — el mismo error que `formatDate` ya evita usando métodos UTC.
  * Por eso se recorta la cadena en vez de parsearla.
+ *
+ * Un instante `Date` (solo `today` pasa por esta rama) se resuelve con `businessDay` (D-14e), no
+ * con los getters locales de `Date`: esos leen la zona horaria del RUNTIME (UTC en Vercel), que
+ * cambia de dia horas antes que Santiago.
  */
 function toIsoDay(value: string | Date): string {
-  if (typeof value === 'string') return value.slice(0, 10);
-  const y = value.getFullYear();
-  const m = String(value.getMonth() + 1).padStart(2, '0');
-  const d = String(value.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  if (typeof value === "string") return value.slice(0, 10);
+  return businessDay(value);
 }
 
 export interface MonthlyOrderStats {
@@ -80,7 +82,7 @@ export class DashboardService {
   static async getDashboardStats(): Promise<DashboardStats> {
     try {
       if (!supabaseAdmin) {
-        throw new Error('Supabase admin client is not initialized');
+        throw new Error("Supabase admin client is not initialized");
       }
 
       const currentMonth = new Date();
@@ -91,7 +93,10 @@ export class DashboardService {
       nextMonth.setMonth(nextMonth.getMonth() + 1);
 
       // Obtener estadísticas mensuales
-      const monthlyStats = await this.getMonthlyOrderStats(currentMonth, nextMonth);
+      const monthlyStats = await this.getMonthlyOrderStats(
+        currentMonth,
+        nextMonth,
+      );
 
       // Obtener órdenes por estado
       const ordersByStatus = await this.getOrdersByStatus();
@@ -110,10 +115,10 @@ export class DashboardService {
         operationalKpis,
         ordersByStatus,
         rentedEquipment,
-        financialSummary
+        financialSummary,
       };
     } catch (error) {
-      console.error('Error fetching dashboard stats:', error);
+      console.error("Error fetching dashboard stats:", error);
       throw error;
     }
   }
@@ -124,31 +129,33 @@ export class DashboardService {
   private static async getMonthlyOrderStats(startDate: Date, endDate: Date) {
     try {
       if (!supabaseAdmin) {
-        throw new Error('Supabase admin client is not initialized');
+        throw new Error("Supabase admin client is not initialized");
       }
 
       const { data: monthlyOrders, error } = await supabaseAdmin
-        .from('orders')
-        .select('status, date_created, date_completed')
-        .gte('date_created', startDate.toISOString())
-        .lt('date_created', endDate.toISOString());
+        .from("orders")
+        .select("status, date_created, date_completed")
+        .gte("date_created", startDate.toISOString())
+        .lt("date_created", endDate.toISOString());
 
       if (error) throw error;
 
       const stats: MonthlyOrderStats = {
         totalOrders: monthlyOrders?.length || 0,
         createdOrders: monthlyOrders?.length || 0,
-        byStatus: Object.fromEntries(ORDER_STATUSES.map(s => [s, 0])) as Record<OrderStatus, number>,
+        byStatus: Object.fromEntries(
+          ORDER_STATUSES.map((s) => [s, 0]),
+        ) as Record<OrderStatus, number>,
       };
 
-      monthlyOrders?.forEach(order => {
+      monthlyOrders?.forEach((order) => {
         const bucket = canonicalStatus(order.status);
         if (bucket) stats.byStatus[bucket]++;
       });
 
       return stats;
     } catch (error) {
-      console.error('Error fetching monthly order stats:', error);
+      console.error("Error fetching monthly order stats:", error);
       throw error;
     }
   }
@@ -173,7 +180,9 @@ export class DashboardService {
    * `today` se inyecta para que el cálculo sea determinista: un KPI atado al reloj del proceso
    * produce un test que falla a medianoche y pasa el resto del día.
    */
-  static async getOperationalKpis(today: Date = new Date()): Promise<OperationalKpis> {
+  static async getOperationalKpis(
+    today: Date = new Date(),
+  ): Promise<OperationalKpis> {
     const kpis: OperationalKpis = {
       retirosHoy: 0,
       entregasHoy: 0,
@@ -183,36 +192,43 @@ export class DashboardService {
 
     try {
       if (!supabaseAdmin) {
-        throw new Error('Supabase admin client is not initialized');
+        throw new Error("Supabase admin client is not initialized");
       }
 
       const { data: orders, error } = await supabaseAdmin
-        .from('orders')
-        .select('id, status, order_fecha_inicio, order_fecha_termino')
-        .in('status', bookingStatusFilter());
+        .from("orders")
+        .select("id, status, order_fecha_inicio, order_fecha_termino")
+        .in("status", bookingStatusFilter());
 
       if (error) throw error;
 
       const hoy = toIsoDay(today);
       const manana = toIsoDay(new Date(today.getTime() + 24 * 60 * 60 * 1000));
 
-      orders?.forEach(order => {
+      orders?.forEach((order) => {
         const status = canonicalStatus(order.status);
         if (!status || isTerminalStatus(status)) return;
 
         kpis.pedidosActivos++;
 
-        const inicio = order.order_fecha_inicio ? toIsoDay(order.order_fecha_inicio) : null;
-        const termino = order.order_fecha_termino ? toIsoDay(order.order_fecha_termino) : null;
+        const inicio = order.order_fecha_inicio
+          ? toIsoDay(order.order_fecha_inicio)
+          : null;
+        const termino = order.order_fecha_termino
+          ? toIsoDay(order.order_fecha_termino)
+          : null;
 
-        if (status === 'preparation' && inicio === manana) kpis.retirosHoy++;
+        if (status === "preparation" && inicio === manana) kpis.retirosHoy++;
         if (inicio === hoy) kpis.entregasHoy++;
         if (termino === hoy) kpis.devolucionesHoy++;
       });
 
       return kpis;
     } catch (error) {
-      console.error('[DashboardService] Error calculando los KPIs operacionales:', error);
+      console.error(
+        "[DashboardService] Error calculando los KPIs operacionales:",
+        error,
+      );
       throw error;
     }
   }
@@ -223,12 +239,13 @@ export class DashboardService {
   private static async getOrdersByStatus() {
     try {
       if (!supabaseAdmin) {
-        throw new Error('Supabase admin client is not initialized');
+        throw new Error("Supabase admin client is not initialized");
       }
 
       const { data: orders, error } = await supabaseAdmin
-        .from('orders')
-        .select(`
+        .from("orders")
+        .select(
+          `
           *,
           user_profiles (
             nombre,
@@ -236,9 +253,10 @@ export class DashboardService {
             email
           ),
           line_items
-        `)
-        .in('status', bookingStatusFilter())
-        .order('order_fecha_inicio', { ascending: false, nullsFirst: false })
+        `,
+        )
+        .in("status", bookingStatusFilter())
+        .order("order_fecha_inicio", { ascending: false, nullsFirst: false })
         .limit(1000); // Aumentar límite significativamente para mostrar todas las órdenes
 
       if (error) throw error;
@@ -250,7 +268,7 @@ export class DashboardService {
       // estado vacio, sin linea de log: el pedido no aparece y el equipo esta fuera de bodega.
       const ordersByStatus = emptyStatusBuckets<Order>();
 
-      orders?.forEach(order => {
+      orders?.forEach((order) => {
         // Ensure calculated fields
         const orderWithCalculatedFields = {
           ...order,
@@ -259,7 +277,7 @@ export class DashboardService {
           calculated_iva: order.calculated_iva || 0,
           calculated_total: order.calculated_total || order.total || 0,
           total: order.total || 0,
-          shipping_total: order.shipping_total || 0
+          shipping_total: order.shipping_total || 0,
         };
 
         // Durante la ventana conviven ambos vocabularios; `canonicalStatus` pliega el valor
@@ -268,16 +286,19 @@ export class DashboardService {
         if (bucket) {
           ordersByStatus[bucket].push(orderWithCalculatedFields);
         } else {
-          console.warn('[DashboardService] Pedido con estado no reconocido, sin agrupar:', {
-            orderId: order.id,
-            status: order.status,
-          });
+          console.warn(
+            "[DashboardService] Pedido con estado no reconocido, sin agrupar:",
+            {
+              orderId: order.id,
+              status: order.status,
+            },
+          );
         }
       });
 
       return ordersByStatus;
     } catch (error) {
-      console.error('Error fetching orders by status:', error);
+      console.error("Error fetching orders by status:", error);
       throw error;
     }
   }
@@ -288,24 +309,26 @@ export class DashboardService {
   private static async getRentedEquipment() {
     try {
       if (!supabaseAdmin) {
-        throw new Error('Supabase admin client is not initialized');
+        throw new Error("Supabase admin client is not initialized");
       }
 
       const currentDate = new Date();
 
       const { data: activeOrders, error } = await supabaseAdmin
-        .from('orders')
-        .select(`
+        .from("orders")
+        .select(
+          `
           id,
           order_proyecto,
           order_fecha_inicio,
           order_fecha_termino,
           status,
           line_items
-        `)
-        .in('status', bookingStatusFilter())
-        .not('order_fecha_termino', 'is', null)
-        .gte('order_fecha_termino', currentDate.toISOString());
+        `,
+        )
+        .in("status", bookingStatusFilter())
+        .not("order_fecha_termino", "is", null)
+        .gte("order_fecha_termino", currentDate.toISOString());
 
       if (error) throw error;
 
@@ -319,33 +342,35 @@ export class DashboardService {
         daysRemaining: number;
       }> = [];
 
-      activeOrders?.forEach(order => {
+      activeOrders?.forEach((order) => {
         if (order.line_items) {
           let lineItems: any[] = [];
 
           try {
-            if (typeof order.line_items === 'string') {
+            if (typeof order.line_items === "string") {
               lineItems = JSON.parse(order.line_items);
             } else if (Array.isArray(order.line_items)) {
               lineItems = order.line_items;
             }
           } catch (e) {
-            console.warn('Error parsing line_items for order', order.id);
+            console.warn("Error parsing line_items for order", order.id);
             return;
           }
 
           const endDate = new Date(order.order_fecha_termino!);
-          const daysRemaining = Math.ceil((endDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
+          const daysRemaining = Math.ceil(
+            (endDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24),
+          );
 
-          lineItems.forEach(item => {
+          lineItems.forEach((item) => {
             rentedEquipment.push({
-              productName: item.name || 'Producto sin nombre',
-              productImage: item.image || 'https://via.placeholder.com/150',
+              productName: item.name || "Producto sin nombre",
+              productImage: item.image || "https://via.placeholder.com/150",
               orderId: order.id,
-              orderProject: order.order_proyecto || 'Sin proyecto',
+              orderProject: order.order_proyecto || "Sin proyecto",
               endDate: order.order_fecha_termino!,
               status: order.status,
-              daysRemaining
+              daysRemaining,
             });
           });
         }
@@ -353,7 +378,7 @@ export class DashboardService {
 
       return rentedEquipment.sort((a, b) => a.daysRemaining - b.daysRemaining);
     } catch (error) {
-      console.error('Error fetching rented equipment:', error);
+      console.error("Error fetching rented equipment:", error);
       throw error;
     }
   }
@@ -364,20 +389,22 @@ export class DashboardService {
   private static async getFinancialSummary() {
     try {
       if (!supabaseAdmin) {
-        throw new Error('Supabase admin client is not initialized');
+        throw new Error("Supabase admin client is not initialized");
       }
 
       const { data: orders, error } = await supabaseAdmin
-        .from('orders')
-        .select(`
+        .from("orders")
+        .select(
+          `
           status,
           calculated_total,
           pago_reserva,
           pago_completo,
           reserve_type,
           reserve_value
-        `)
-        .in('status', bookingStatusFilter());
+        `,
+        )
+        .in("status", bookingStatusFilter());
 
       if (error) throw error;
 
@@ -386,10 +413,10 @@ export class DashboardService {
         totalPaid: 0,
         totalPending: 0,
         reservationPayments: 0, // 25% payments
-        finalPayments: 0 // 75% payments
+        finalPayments: 0, // 75% payments
       };
 
-      orders?.forEach(order => {
+      orders?.forEach((order) => {
         const total = order.calculated_total || 0;
         summary.totalSales += total;
 
@@ -401,7 +428,7 @@ export class DashboardService {
           reserveValue: (order as any).reserve_value,
         });
 
-        if (order.status === 'completed') {
+        if (order.status === "completed") {
           if (order.pago_completo) {
             // Pago completo (reserva + saldo)
             summary.totalPaid += total;
@@ -427,10 +454,10 @@ export class DashboardService {
         totalPaid: Math.round(summary.totalPaid),
         totalPending: Math.round(summary.totalPending),
         reservationPayments: Math.round(summary.reservationPayments),
-        finalPayments: Math.round(summary.finalPayments)
+        finalPayments: Math.round(summary.finalPayments),
       };
     } catch (error) {
-      console.error('Error fetching financial summary:', error);
+      console.error("Error fetching financial summary:", error);
       throw error;
     }
   }
@@ -438,39 +465,45 @@ export class DashboardService {
   /**
    * Obtener órdenes filtradas por rango de fechas
    */
-  static async getOrdersByDateRange(startDate: string, endDate: string, status?: readonly string[]) {
+  static async getOrdersByDateRange(
+    startDate: string,
+    endDate: string,
+    status?: readonly string[],
+  ) {
     try {
       if (!supabaseAdmin) {
-        throw new Error('Supabase admin client is not initialized');
+        throw new Error("Supabase admin client is not initialized");
       }
 
       // Log para debugging
-      console.log('getOrdersByDateRange called with:', {
+      console.log("getOrdersByDateRange called with:", {
         startDate: `${startDate}T00:00:00.000Z`,
         endDate: `${endDate}T23:59:59.999Z`,
-        status
+        status,
       });
 
       let query = supabaseAdmin
-        .from('orders')
-        .select(`
+        .from("orders")
+        .select(
+          `
           *,
           user_profiles (
             nombre,
             apellido,
             email
           )
-        `)
-        .gte('date_created', `${startDate}T00:00:00.000Z`)
-        .lte('date_created', `${endDate}T23:59:59.999Z`)
-        .order('date_created', { ascending: false })
+        `,
+        )
+        .gte("date_created", `${startDate}T00:00:00.000Z`)
+        .lte("date_created", `${endDate}T23:59:59.999Z`)
+        .order("date_created", { ascending: false })
         .limit(1000); // Agregar límite alto para asegurar que se obtengan todas las órdenes
 
       // El filtro llega como la selección del admin y puede traer varios estados. Se expande a
       // los equivalentes legados para que la ventana de migración no devuelva cero filas.
       const statusFilter = expandStatusFilter(status);
       if (statusFilter) {
-        query = query.in('status', statusFilter);
+        query = query.in("status", statusFilter);
       }
 
       const { data, error } = await query;
@@ -481,19 +514,20 @@ export class DashboardService {
       console.log(`getOrdersByDateRange found ${data?.length || 0} orders`);
 
       // Ensure calculated fields
-      const ordersWithCalculatedFields = data?.map(order => ({
-        ...order,
-        calculated_subtotal: order.calculated_subtotal || 0,
-        calculated_discount: order.calculated_discount || 0,
-        calculated_iva: order.calculated_iva || 0,
-        calculated_total: order.calculated_total || order.total || 0,
-        total: order.total || 0,
-        shipping_total: order.shipping_total || 0
-      })) || [];
+      const ordersWithCalculatedFields =
+        data?.map((order) => ({
+          ...order,
+          calculated_subtotal: order.calculated_subtotal || 0,
+          calculated_discount: order.calculated_discount || 0,
+          calculated_iva: order.calculated_iva || 0,
+          calculated_total: order.calculated_total || order.total || 0,
+          total: order.total || 0,
+          shipping_total: order.shipping_total || 0,
+        })) || [];
 
       return ordersWithCalculatedFields;
     } catch (error) {
-      console.error('Error fetching orders by date range:', error);
+      console.error("Error fetching orders by date range:", error);
       throw error;
     }
   }

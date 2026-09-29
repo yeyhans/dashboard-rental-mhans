@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Fila de KPIs de la pantalla canónica de Pedidos
@@ -24,7 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 const from = vi.fn();
 
-vi.mock('../../lib/supabase', () => ({
+vi.mock("../../lib/supabase", () => ({
   get supabaseAdmin() {
     return { from };
   },
@@ -41,12 +41,13 @@ function stubOrders(rows: Array<Record<string, unknown>>) {
     eq: () => thenable,
     order: () => thenable,
     limit: () => Promise.resolve({ data: rows, error: null }),
-    then: (resolve: (v: unknown) => unknown) => resolve({ data: rows, error: null }),
+    then: (resolve: (v: unknown) => unknown) =>
+      resolve({ data: rows, error: null }),
   };
   from.mockReturnValue(thenable);
 }
 
-const HOY = new Date('2026-06-11T09:00:00-04:00');
+const HOY = new Date("2026-06-11T09:00:00-04:00");
 
 function order(id: number, status: string, inicio: string, termino: string) {
   return {
@@ -66,69 +67,69 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('DashboardService.getOperationalKpis', () => {
-  it('cuenta como retiro de hoy un pedido en preparación que arrienda mañana', async () => {
+describe("DashboardService.getOperationalKpis", () => {
+  it("cuenta como retiro de hoy un pedido en preparación que arrienda mañana", async () => {
     stubOrders([
-      order(1, 'preparation', '2026-06-12', '2026-06-14'), // retiro hoy
-      order(2, 'preparation', '2026-06-13', '2026-06-15'), // retiro mañana, no hoy
-      order(3, 'confirmed', '2026-06-12', '2026-06-14'), // arrienda mañana pero no está en bodega
+      order(1, "preparation", "2026-06-12", "2026-06-14"), // retiro hoy
+      order(2, "preparation", "2026-06-13", "2026-06-15"), // retiro mañana, no hoy
+      order(3, "confirmed", "2026-06-12", "2026-06-14"), // arrienda mañana pero no está en bodega
     ]);
-    const { DashboardService } = await import('../dashboardService');
+    const { DashboardService } = await import("../dashboardService");
 
     const kpis = await DashboardService.getOperationalKpis(HOY);
 
     expect(kpis.retirosHoy).toBe(1);
   });
 
-  it('cuenta como entrega de hoy todo pedido cuyo arriendo empieza hoy', async () => {
+  it("cuenta como entrega de hoy todo pedido cuyo arriendo empieza hoy", async () => {
     stubOrders([
-      order(1, 'in-rental', '2026-06-11', '2026-06-13'),
-      order(2, 'preparation', '2026-06-11', '2026-06-12'),
-      order(3, 'in-rental', '2026-06-10', '2026-06-13'), // empezó ayer
+      order(1, "in-rental", "2026-06-11", "2026-06-13"),
+      order(2, "preparation", "2026-06-11", "2026-06-12"),
+      order(3, "in-rental", "2026-06-10", "2026-06-13"), // empezó ayer
     ]);
-    const { DashboardService } = await import('../dashboardService');
+    const { DashboardService } = await import("../dashboardService");
 
     const kpis = await DashboardService.getOperationalKpis(HOY);
 
     expect(kpis.entregasHoy).toBe(2);
   });
 
-  it('cuenta como devolución de hoy todo pedido cuyo término es hoy', async () => {
+  it("cuenta como devolución de hoy todo pedido cuyo término es hoy", async () => {
     stubOrders([
-      order(1, 'in-rental', '2026-06-09', '2026-06-11'),
-      order(2, 'return', '2026-06-08', '2026-06-11'),
-      order(3, 'in-rental', '2026-06-09', '2026-06-12'),
+      order(1, "in-rental", "2026-06-09", "2026-06-11"),
+      order(2, "return", "2026-06-08", "2026-06-11"),
+      order(3, "in-rental", "2026-06-09", "2026-06-12"),
     ]);
-    const { DashboardService } = await import('../dashboardService');
+    const { DashboardService } = await import("../dashboardService");
 
     const kpis = await DashboardService.getOperationalKpis(HOY);
 
     expect(kpis.devolucionesHoy).toBe(2);
   });
 
-  it('cuenta como activo todo pedido que no está en un estado terminal', async () => {
+  it("cuenta como activo todo pedido que no está en un estado terminal", async () => {
     stubOrders([
-      order(1, 'request', '2026-06-20', '2026-06-22'),
-      order(2, 'in-rental', '2026-06-09', '2026-06-13'),
-      order(3, 'completed', '2026-05-01', '2026-05-03'),
-      order(4, 'cancelled', '2026-05-01', '2026-05-03'),
+      order(1, "request", "2026-06-20", "2026-06-22"),
+      order(2, "in-rental", "2026-06-09", "2026-06-13"),
+      order(3, "completed", "2026-05-01", "2026-05-03"),
+      order(4, "cancelled", "2026-05-01", "2026-05-03"),
     ]);
-    const { DashboardService } = await import('../dashboardService');
+    const { DashboardService } = await import("../dashboardService");
 
     const kpis = await DashboardService.getOperationalKpis(HOY);
 
     expect(kpis.pedidosActivos).toBe(2);
   });
 
-  it('pliega el vocabulario legado antes de contar', async () => {
+  it("pliega el vocabulario legado antes de contar", async () => {
     // Durante la ventana hay filas con `on-hold` y `processing`. Un KPI que solo mire los ocho
     // valores v1.2 marcaría cero mientras el negocio opera con normalidad.
     stubOrders([
-      order(1, 'on-hold', '2026-06-20', '2026-06-22'), // → request, activo
-      order(2, 'processing', '2026-06-11', '2026-06-13'), // → confirmed, activo y entrega hoy
-      order(3, 'failed', '2026-06-11', '2026-06-13'), // → cancelled, no activo
+      order(1, "on-hold", "2026-06-20", "2026-06-22"), // → request, activo
+      order(2, "processing", "2026-06-11", "2026-06-13"), // → confirmed, activo y entrega hoy
+      order(3, "failed", "2026-06-11", "2026-06-13"), // → cancelled, no activo
     ]);
-    const { DashboardService } = await import('../dashboardService');
+    const { DashboardService } = await import("../dashboardService");
 
     const kpis = await DashboardService.getOperationalKpis(HOY);
 
@@ -136,9 +137,9 @@ describe('DashboardService.getOperationalKpis', () => {
     expect(kpis.entregasHoy).toBe(1);
   });
 
-  it('no cuenta pedidos cancelados en ninguna tarjeta', async () => {
-    stubOrders([order(1, 'cancelled', '2026-06-11', '2026-06-11')]);
-    const { DashboardService } = await import('../dashboardService');
+  it("no cuenta pedidos cancelados en ninguna tarjeta", async () => {
+    stubOrders([order(1, "cancelled", "2026-06-11", "2026-06-11")]);
+    const { DashboardService } = await import("../dashboardService");
 
     const kpis = await DashboardService.getOperationalKpis(HOY);
 
@@ -150,13 +151,46 @@ describe('DashboardService.getOperationalKpis', () => {
     });
   });
 
-  it('tolera fechas nulas sin caerse', async () => {
-    stubOrders([{ id: 1, status: 'request', order_fecha_inicio: null, order_fecha_termino: null }]);
-    const { DashboardService } = await import('../dashboardService');
+  it("tolera fechas nulas sin caerse", async () => {
+    stubOrders([
+      {
+        id: 1,
+        status: "request",
+        order_fecha_inicio: null,
+        order_fecha_termino: null,
+      },
+    ]);
+    const { DashboardService } = await import("../dashboardService");
 
     const kpis = await DashboardService.getOperationalKpis(HOY);
 
     expect(kpis.pedidosActivos).toBe(1);
     expect(kpis.entregasHoy).toBe(0);
+  });
+
+  describe("frontera America/Santiago (D-14e)", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("resuelve 'hoy' contra el día calendario de Santiago, no contra los getters locales del runtime", async () => {
+      // El servidor corre en Vercel (UTC); esto simula ese desacople sin depender del TZ real
+      // de la máquina que ejecuta el test. `businessDay` (Intl, fijo a America/Santiago) no debe
+      // verse afectado por este mock, a diferencia de la implementación anterior con getters.
+      const realGetDate = Date.prototype.getDate;
+      vi.spyOn(Date.prototype, "getDate").mockImplementation(function (
+        this: Date,
+      ) {
+        return realGetDate.call(this) + 1;
+      });
+
+      stubOrders([order(1, "in-rental", "2026-06-11", "2026-06-13")]);
+      const { DashboardService } = await import("../dashboardService");
+
+      const today = new Date("2026-06-11T22:00:00-04:00"); // 22:00 en Santiago, sigue siendo 11 de junio ahí
+      const kpis = await DashboardService.getOperationalKpis(today);
+
+      expect(kpis.entregasHoy).toBe(1);
+    });
   });
 });

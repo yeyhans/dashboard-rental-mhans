@@ -51,6 +51,7 @@ import {
   computeOrderListKpis,
   matchesOrderListTab,
   orderListTabCounts,
+  resolveOrderListTabParam,
   toBadgeTone,
 } from "./orderListMetrics";
 
@@ -227,7 +228,7 @@ const OrdersDashboard = ({
       const page = parseInt(pageParam);
       if (page > 0) setCurrentPage(page);
     }
-    if (statusParam) setActiveTab(statusParam);
+    if (statusParam) setActiveTab(resolveOrderListTabParam(statusParam));
     if (searchParam) setSearchTerm(searchParam);
     if (shippingParam) setShippingFilter(shippingParam);
   }, []);

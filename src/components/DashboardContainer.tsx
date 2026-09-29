@@ -92,6 +92,13 @@ export default function DashboardContainer({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastFilters, setLastFilters] = useState<FilterState | null>(null);
+  // D-14c: "Cobros Pendientes" es el saldo pendiente de TODA la empresa, no del período
+  // seleccionado. `handleFiltersChange` reemplaza `dashboardData.financialSummary` completo con
+  // el resumen del rango filtrado (el mes por defecto en el efecto de montaje), así que se
+  // conserva por separado el valor inicial sin filtrar y nunca se vuelve a tocar.
+  const [totalPendingUnfiltered] = useState<number>(
+    initialData.financialSummary.totalPending,
+  );
   // Pestaña de la lista, controlada aquí para que las tarjetas de KPI puedan cambiarla.
   const [selectedTab, setSelectedTab] = useState<string>("todos");
 
@@ -340,7 +347,7 @@ export default function DashboardContainer({
       />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {mapDashboardKpis(dashboardData).map((kpi) => (
+        {mapDashboardKpis(dashboardData, totalPendingUnfiltered).map((kpi) => (
           <KpiCard
             key={kpi.key}
             icon={DASHBOARD_KPI_ICONS[kpi.key]}
