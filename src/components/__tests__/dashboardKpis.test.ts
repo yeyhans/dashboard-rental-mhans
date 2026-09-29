@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { mapDashboardKpis, EMPTY_KPI_VALUE } from "../dashboardKpis";
+import {
+  mapDashboardKpis,
+  EMPTY_KPI_VALUE,
+  isUnfilteredDashboardQuery,
+} from "../dashboardKpis";
 import type { DashboardStats } from "../../services/dashboardService";
 import { emptyStatusBuckets } from "../../lib/orderStatus";
 
@@ -128,5 +132,63 @@ describe("mapDashboardKpis", () => {
       }),
     );
     expect(items.find((i) => i.key === "cobrosPendientes")?.value).toBe("$500");
+  });
+});
+
+/**
+ * D-18: Centro de Control caches `totalPendingUnfiltered` from the mount-time load and never
+ * touches it again — even when the user later applies "todo el período" with no other filter,
+ * which is the one query whose `totalPending` is genuinely company-wide. This decides when a
+ * `handleFiltersChange` load is unfiltered enough to refresh that cache: any status, financial or
+ * search scoping (or a bounded date period) means the load is NOT the company-wide figure and
+ * must leave the cached value alone.
+ */
+describe("isUnfilteredDashboardQuery", () => {
+  function makeFilters(
+    overrides: Partial<Parameters<typeof isUnfilteredDashboardQuery>[0]> = {},
+  ) {
+    return {
+      dateRange: { period: "all" as const },
+      status: [] as string[],
+      financialStatus: "all" as const,
+      searchTerm: "",
+      ...overrides,
+    };
+  }
+
+  it("is true for the fully unfiltered query: period all, no status/financial/search filter", () => {
+    expect(isUnfilteredDashboardQuery(makeFilters())).toBe(true);
+  });
+
+  it("is false when the period is scoped (e.g. monthly, the mount-time default)", () => {
+    expect(
+      isUnfilteredDashboardQuery(
+        makeFilters({ dateRange: { period: "monthly" } }),
+      ),
+    ).toBe(false);
+  });
+
+  it("is false when a status filter is applied", () => {
+    expect(
+      isUnfilteredDashboardQuery(makeFilters({ status: ["completed"] })),
+    ).toBe(false);
+  });
+
+  it("is false when a financial status filter is applied", () => {
+    expect(
+      isUnfilteredDashboardQuery(makeFilters({ financialStatus: "pending" })),
+    ).toBe(false);
+  });
+
+  it("is false when a non-blank search term is present", () => {
+    expect(isUnfilteredDashboardQuery(makeFilters({ searchTerm: "ana" }))).toBe(
+      false,
+    );
+  });
+
+  it("is true for a whitespace-only search term, same as the row-matching logic treats it", () => {
+    expect(isUnfilteredDashboardQuery(makeFilters({ searchTerm: "   " }))).toBe(
+      true,
+    );
   });
 });

@@ -24,7 +24,11 @@ import {
   reserveAmount,
   type FinanceOrderLike,
 } from "../lib/finance";
-import { mapDashboardKpis, type DashboardKpiKey } from "./dashboardKpis";
+import {
+  mapDashboardKpis,
+  isUnfilteredDashboardQuery,
+  type DashboardKpiKey,
+} from "./dashboardKpis";
 
 /** Icon per D-04 top KPI card, keyed the same way as `mapDashboardKpis`. */
 const DASHBOARD_KPI_ICONS: Record<
@@ -94,9 +98,10 @@ export default function DashboardContainer({
   const [lastFilters, setLastFilters] = useState<FilterState | null>(null);
   // D-14c: "Cobros Pendientes" es el saldo pendiente de TODA la empresa, no del período
   // seleccionado. `handleFiltersChange` reemplaza `dashboardData.financialSummary` completo con
-  // el resumen del rango filtrado (el mes por defecto en el efecto de montaje), así que se
-  // conserva por separado el valor inicial sin filtrar y nunca se vuelve a tocar.
-  const [totalPendingUnfiltered] = useState<number>(
+  // el resumen del rango filtrado, así que se conserva por separado el valor sin filtrar.
+  // D-18: esto SÍ debe refrescarse — no quedar congelado en el valor de montaje — cuando
+  // `handleFiltersChange` vuelve a cargar la consulta genuinamente sin filtro (`isUnfilteredDashboardQuery`).
+  const [totalPendingUnfiltered, setTotalPendingUnfiltered] = useState<number>(
     initialData.financialSummary.totalPending,
   );
   // Pestaña de la lista, controlada aquí para que las tarjetas de KPI puedan cambiarla.
@@ -320,6 +325,13 @@ export default function DashboardContainer({
         rentedEquipment: filteredRentedEquipment,
         financialSummary,
       });
+
+      // D-18: esta carga es la única con un `totalPending` genuinamente de toda la empresa
+      // (período "todo", sin estado/estado financiero/búsqueda) — es seguro refrescar el caché.
+      // Cualquier otra combinación de filtros sigue dejándolo intacto.
+      if (isUnfilteredDashboardQuery(filtersWithValidDates)) {
+        setTotalPendingUnfiltered(financialSummary.totalPending);
+      }
     } catch (err) {
       console.error("Error applying filters:", err);
       setError(err instanceof Error ? err.message : "Error desconocido");

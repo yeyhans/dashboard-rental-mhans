@@ -20,6 +20,36 @@ export interface DashboardKpiItem {
 /** Canon empty-state placeholder, not a magic string repeated at call sites. */
 export const EMPTY_KPI_VALUE = "—";
 
+/** The subset of `DashboardContainer`'s `FilterState` this decision actually needs. */
+export interface UnfilteredQueryFilters {
+  dateRange: { period: string };
+  status: string[];
+  financialStatus: string;
+  searchTerm: string;
+}
+
+/**
+ * D-18: `DashboardContainer` caches the mount-time `financialSummary.totalPending` as
+ * `totalPendingUnfiltered` (D-14c) because "Cobros Pendientes" must be the company-wide balance,
+ * not the selected period's. That cache was frozen forever after mount — even a later "todo el
+ * período" query with no other filter, which IS the company-wide figure, never refreshed it.
+ *
+ * This is true only for the one query that is genuinely unscoped: period `"all"`, no status
+ * filter, no financial-status filter and no search term. Any other combination is a real scoping
+ * (a bounded date range, a status, a financial state or a search) and its `totalPending` must NOT
+ * overwrite the cached company-wide value.
+ */
+export function isUnfilteredDashboardQuery(
+  filters: UnfilteredQueryFilters,
+): boolean {
+  return (
+    filters.dateRange.period === "all" &&
+    filters.status.length === 0 &&
+    filters.financialStatus === "all" &&
+    filters.searchTerm.trim() === ""
+  );
+}
+
 function formatClp(amount: number): string {
   return `$${Math.round(amount).toLocaleString("es-CL")}`;
 }
