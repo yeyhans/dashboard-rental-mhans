@@ -47,4 +47,16 @@ describe("PageHeader", () => {
     );
     expect(html).toContain("Nuevo Pedido");
   });
+
+  it("renders a numeric 0 actions slot wrapped in the actions container, not as a bare leak", () => {
+    const html = renderToStaticMarkup(
+      <PageHeader title="Pedidos" actions={0} />,
+    );
+    expect(html).toMatch(/<div[^>]*gap-2[^>]*>0<\/div>/);
+  });
+
+  it("omits the actions wrapper when actions is not given", () => {
+    const html = renderToStaticMarkup(<PageHeader title="Pedidos" />);
+    expect(html).not.toMatch(/>0</);
+  });
 });

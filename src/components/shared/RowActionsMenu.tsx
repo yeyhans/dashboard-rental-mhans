@@ -8,8 +8,11 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { rowActionItemClass } from "./rowActionItemStyle";
+import { rowActionKey } from "./rowActionKey";
 
 export interface RowActionItem {
+  /** Optional stable identity (e.g. the action name). Falls back to `index-label` when absent. */
+  id?: string | number;
   label: string;
   onSelect: () => void;
   icon?: ComponentType<{ className?: string }>;
@@ -39,11 +42,11 @@ export function RowActionsMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {items.map((item) => {
+        {items.map((item, index) => {
           const Icon = item.icon;
           return (
             <DropdownMenuItem
-              key={item.label}
+              key={rowActionKey(item, index)}
               disabled={item.disabled}
               onSelect={item.onSelect}
               className={rowActionItemClass({ destructive: item.destructive })}

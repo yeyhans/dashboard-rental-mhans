@@ -69,4 +69,11 @@ describe("KpiCard", () => {
     expect(withFooter).toContain("+3 esta semana");
     expect(withoutFooter).not.toContain("+3 esta semana");
   });
+
+  it("renders a numeric 0 footer wrapped in the footer container, not as a bare leak", () => {
+    const html = renderToStaticMarkup(
+      <KpiCard icon={FakeIcon} label="Pedidos activos" value={12} footer={0} />,
+    );
+    expect(html).toMatch(/<div[^>]*mt-3[^>]*>0<\/div>/);
+  });
 });

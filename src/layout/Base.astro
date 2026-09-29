@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { activeModule, visibleNavGroups } from "../lib/navigation";
 import { AlertService } from "../services/alertService";
+import { getAdminInitials } from "../lib/adminIdentity";
 
 interface Props {
   title: string;
@@ -39,6 +40,7 @@ const canonicalURL = new URL(Astro.url).href;
 const adminSession = await getServerAdmin(Astro);
 const isAuthenticated = !!adminSession;
 const currentPath = Astro.url.pathname;
+const adminInitials = getAdminInitials(adminSession?.admin);
 
 /**
  * Iconos de la barra lateral. `navigation.ts` guarda el NOMBRE del icono, no el componente, para
@@ -524,7 +526,7 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
                   class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#111111] text-[0.6875rem] font-bold text-white"
                   aria-hidden="true"
                 >
-                  HS
+                  {adminInitials}
                 </span>
                 <div class="sidebar-label min-w-0">
                   <p class="text-xs font-medium text-foreground truncate" title={adminSession.admin.email}>

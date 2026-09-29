@@ -4,7 +4,7 @@ import { RowActionsMenu } from "../RowActionsMenu";
 
 /**
  * The Radix `DropdownMenu` content is portalled and closed by default, so a static-markup render
- * only ever shows the trigger — see `rowActionsMenu.test.ts` for the destructive-styling logic
+ * only ever shows the trigger — see `rowActionItemStyle.test.ts` for the destructive-styling logic
  * that lives outside Radix and is covered directly.
  */
 describe("RowActionsMenu", () => {

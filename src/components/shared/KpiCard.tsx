@@ -43,7 +43,7 @@ export function KpiCard({
           <p className="text-lg font-semibold text-foreground">{value}</p>
         </div>
       </div>
-      {footer && (
+      {footer !== undefined && footer !== null && (
         <div className="mt-3 text-xs text-muted-foreground">{footer}</div>
       )}
     </div>
