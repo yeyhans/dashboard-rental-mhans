@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   checkInKpis,
   checkInTotals,
+  formatCheckInItemCount,
   formatCheckInProgress,
+  formatReturnDeadlineLabel,
   isLateReturn,
   itemsFromLineItems,
   returnUrgency,
@@ -404,16 +406,94 @@ describe("itemsFromLineItems", () => {
   });
 });
 
-describe('formatCheckInProgress', () => {
+describe("formatCheckInProgress", () => {
   it('formats received units against the total, e.g. "3 / 12 recibidos"', () => {
     expect(
-      formatCheckInProgress({ total: 12, recibidos: 3, incompletos: 2, danados: 1, pendientes: 6 })
-    ).toBe('3 / 12 recibidos');
+      formatCheckInProgress({
+        total: 12,
+        recibidos: 3,
+        incompletos: 2,
+        danados: 1,
+        pendientes: 6,
+      }),
+    ).toBe("3 / 12 recibidos");
   });
 
-  it('reads 0 / 0 recibidos for an order with no serialised units yet', () => {
+  it("reads 0 / 0 recibidos for an order with no serialised units yet", () => {
     expect(
-      formatCheckInProgress({ total: 0, recibidos: 0, incompletos: 0, danados: 0, pendientes: 0 })
-    ).toBe('0 / 0 recibidos');
+      formatCheckInProgress({
+        total: 0,
+        recibidos: 0,
+        incompletos: 0,
+        danados: 0,
+        pendientes: 0,
+      }),
+    ).toBe("0 / 0 recibidos");
+  });
+});
+
+describe("formatCheckInItemCount", () => {
+  it('reads the plain unit count, e.g. "12 ítems" (D-15: no fake progress)', () => {
+    expect(
+      formatCheckInItemCount({
+        total: 12,
+        recibidos: 0,
+        incompletos: 0,
+        danados: 0,
+        pendientes: 12,
+      }),
+    ).toBe("12 ítems");
+  });
+
+  it("uses the singular for exactly one unit", () => {
+    expect(
+      formatCheckInItemCount({
+        total: 1,
+        recibidos: 0,
+        incompletos: 0,
+        danados: 0,
+        pendientes: 1,
+      }),
+    ).toBe("1 ítem");
+  });
+
+  it("reads 0 ítems for an order with no units", () => {
+    expect(
+      formatCheckInItemCount({
+        total: 0,
+        recibidos: 0,
+        incompletos: 0,
+        danados: 0,
+        pendientes: 0,
+      }),
+    ).toBe("0 ítems");
+  });
+});
+
+describe("formatReturnDeadlineLabel (D-15)", () => {
+  // `todayIsoDay` is the server-resolved calendar day (R3-105: the clock is resolved on the
+  // server, never with the client's `new Date()` — see `check-in.astro`), so this takes a plain
+  // `YYYY-MM-DD` string rather than a `Date`.
+  it("shows the bare hour when the deadline falls today", () => {
+    // endDate = 2026-06-15 → deadline = 2026-06-16 13:00; "today" is that same day.
+    expect(formatReturnDeadlineLabel("2026-06-15", "2026-06-16")).toBe("13:00");
+  });
+
+  it("includes the dd/mm date when the deadline is not today (scheduled ahead)", () => {
+    // endDate = 2026-06-20 → deadline = 2026-06-21 13:00, but "today" is still the 15th.
+    expect(formatReturnDeadlineLabel("2026-06-20", "2026-06-15")).toBe(
+      "21/06 13:00",
+    );
+  });
+
+  it("includes the dd/mm date when the deadline already passed (late)", () => {
+    // endDate = 2026-06-10 → deadline = 2026-06-11 13:00, "today" is the 15th.
+    expect(formatReturnDeadlineLabel("2026-06-10", "2026-06-15")).toBe(
+      "11/06 13:00",
+    );
+  });
+
+  it("falls back to the bare hour when there is no end date", () => {
+    expect(formatReturnDeadlineLabel(null, "2026-06-15")).toBe("13:00");
   });
 });

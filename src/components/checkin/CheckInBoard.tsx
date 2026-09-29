@@ -2,9 +2,9 @@ import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Package, Search } from "lucide-react";
 import {
-  RETURN_DEADLINE_HOUR,
   checkInTotals,
-  formatCheckInProgress,
+  formatCheckInItemCount,
+  formatReturnDeadlineLabel,
   itemsFromLineItems,
   type ItemReceiptState,
   type ReturnUrgency,
@@ -42,6 +42,11 @@ interface CheckInBoardProps {
   data: CheckInBoardData;
   /** Fecha de la cabecera. Se inyecta desde el servidor para no depender del reloj del cliente. */
   todayLabel: string;
+  /**
+   * Día calendario de hoy (`YYYY-MM-DD`, D-15), también resuelto en el servidor. Decide si
+   * "Vence 13:00" de una fila muestra además su fecha (ver `formatReturnDeadlineLabel`).
+   */
+  todayIsoDay: string;
 }
 
 const URGENCY_STYLES: Record<
@@ -67,10 +72,6 @@ const ITEM_FILTERS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "received", label: "Recibidos" },
   { value: "incidencias", label: "Incidencias" },
 ];
-
-function pad2(value: number): string {
-  return String(value).padStart(2, "0");
-}
 
 interface AssetOption {
   id: number;
@@ -219,7 +220,11 @@ function AssetCheckInControl({
   );
 }
 
-export default function CheckInBoard({ data, todayLabel }: CheckInBoardProps) {
+export default function CheckInBoard({
+  data,
+  todayLabel,
+  todayIsoDay,
+}: CheckInBoardProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [itemFilter, setItemFilter] = useState("todos");
@@ -287,7 +292,8 @@ export default function CheckInBoard({ data, todayLabel }: CheckInBoardProps) {
   // Canon (m-chk, "Alto"): fila con hora de devolución. No hay una hora por pedido en el
   // esquema — `order_fecha_termino` es `date`, sin componente de hora — así que se muestra el
   // plazo fijo de la regla de negocio (13:00 del día siguiente al término, R3-105/checkIn.ts).
-  const deadlineLabel = `${pad2(RETURN_DEADLINE_HOUR)}:00`;
+  // D-15: la FECHA de ese plazo es por pedido, así que cada fila la calcula con la suya
+  // (`formatReturnDeadlineLabel`, más abajo) en vez de compartir una etiqueta fija.
 
   return (
     <div>
@@ -368,10 +374,17 @@ export default function CheckInBoard({ data, todayLabel }: CheckInBoardProps) {
             {visible.map((entry) => {
               const urgency = URGENCY_STYLES[entry.urgency];
               const isSelected = entry.id === selectedId;
-              // Canon (m-chk, "Alto"): progreso "3 / 12 recibidos" por fila. Se calcula sobre las
-              // mismas `lineItems` que ya viajan con cada entrada — no hace falta otra consulta.
+              // D-15: ya no se muestra un progreso "3 / 12 recibidos" — `itemsFromLineItems`
+              // marca todo como pending (no hay columna de recepción por ítem en el esquema), así
+              // que ese contador siempre leía "0 / N recibidos", un progreso falso. Se calcula
+              // sobre las mismas `lineItems` que ya viajan con cada entrada — no hace falta otra
+              // consulta — pero solo para el conteo honesto de unidades.
               const rowTotals = checkInTotals(
                 itemsFromLineItems(entry.lineItems),
+              );
+              const deadlineLabel = formatReturnDeadlineLabel(
+                entry.endDate,
+                todayIsoDay,
               );
               return (
                 <li key={entry.id}>
@@ -415,7 +428,7 @@ export default function CheckInBoard({ data, todayLabel }: CheckInBoardProps) {
                         </span>
                       )}
                       <span className="text-[10px] text-[var(--color-text-faint)]">
-                        {formatCheckInProgress(rowTotals)}
+                        {formatCheckInItemCount(rowTotals)}
                       </span>
                     </div>
                   </button>

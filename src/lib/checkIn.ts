@@ -169,6 +169,40 @@ export function formatCheckInProgress(totals: CheckInTotals): string {
   return `${totals.recibidos} / ${totals.total} recibidos`;
 }
 
+/**
+ * Honest per-row summary for the check-in list (D-15). `itemsFromLineItems` marks every unit
+ * `pending` — there is no per-item reception column in the schema, by design (see its own
+ * docstring) — so `formatCheckInProgress`'s "X / Y recibidos" was always "0 / N recibidos", a
+ * fake progress readout. Until the schema records real per-item reception state, the row shows a
+ * plain unit count instead of a progress bar with nothing behind it.
+ */
+export function formatCheckInItemCount(totals: CheckInTotals): string {
+  return totals.total === 1 ? "1 ítem" : `${totals.total} ítems`;
+}
+
+/**
+ * "Vence 13:00" label for a return row (D-15). The deadline hour is fixed, but its DATE is
+ * per-order (the day after `endDate`); showing only the hour on every row made every open return
+ * look due at 13:00 TODAY regardless of its real deadline. Rows whose deadline is today keep the
+ * bare hour; every other row also shows its `dd/mm` date.
+ *
+ * `todayIsoDay` is the server-resolved calendar day (R3-105: the clock is resolved server-side,
+ * never with the client's `new Date()`), so this takes a plain `YYYY-MM-DD` rather than a `Date`.
+ */
+export function formatReturnDeadlineLabel(
+  endDate: string | null,
+  todayIsoDay: string,
+): string {
+  const hourLabel = `${String(RETURN_DEADLINE_HOUR).padStart(2, "0")}:00`;
+  if (!endDate) return hourLabel;
+
+  const deadlineDay = addDays(isoDay(endDate), 1);
+  if (deadlineDay === todayIsoDay) return hourLabel;
+
+  const [, month, day] = deadlineDay.split("-");
+  return `${day}/${month} ${hourLabel}`;
+}
+
 export function checkInTotals(items: readonly CheckInItem[]): CheckInTotals {
   const totals: CheckInTotals = {
     total: 0,

@@ -3,6 +3,7 @@ import Base from "../layout/Base.astro";
 import CheckInBoard from "../components/checkin/CheckInBoard";
 import { getServerAdmin, clearAuthCookies } from "../lib/supabase";
 import { CheckInService } from "../services/checkInService";
+import { businessDay } from "../lib/businessDay";
 
 export const prerender = false;
 
@@ -39,6 +40,9 @@ const todayLabel = new Intl.DateTimeFormat("es-CL", {
   day: "numeric",
   month: "long",
 }).format(now);
+// D-15: cada fila necesita "hoy" para decidir si "Vence 13:00" muestra su fecha o no; se resuelve
+// aquí, no en el navegador, por la misma razón que `todayLabel`.
+const todayIsoDay = businessDay(now);
 
 const title = `Check-In / Devoluciones | ${adminSession.admin.email}`;
 ---
@@ -66,7 +70,12 @@ const title = `Check-In / Devoluciones | ${adminSession.admin.email}`;
           </div>
         </>
       ) : (
-        <CheckInBoard client:load data={board} todayLabel={todayLabel} />
+        <CheckInBoard
+          client:load
+          data={board}
+          todayLabel={todayLabel}
+          todayIsoDay={todayIsoDay}
+        />
       )
     }
   </div>
