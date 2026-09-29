@@ -1,9 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '../types/database';
-import type { APIContext } from 'astro';
-import type { AstroGlobal } from 'astro';
-import type { User } from '@supabase/supabase-js';
-import { ADMIN_ROLES } from './accessControl';
+import { createClient } from "@supabase/supabase-js";
+import type { Database } from "../types/database";
+import type { APIContext } from "astro";
+import type { AstroGlobal } from "astro";
+import type { User } from "@supabase/supabase-js";
+import { ADMIN_ROLES } from "./accessControl";
 
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -13,24 +13,26 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 let supabaseAdmin: ReturnType<typeof createClient<Database>> | null = null;
 
 // Solo crear el cliente admin en el servidor
-if (typeof window === 'undefined') {
+if (typeof window === "undefined") {
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('❌ Variables de entorno faltantes para Supabase Admin Client');
-    throw new Error('Missing Supabase environment variables for service role');
+    console.error(
+      "❌ Variables de entorno faltantes para Supabase Admin Client",
+    );
+    throw new Error("Missing Supabase environment variables for service role");
   }
 
   try {
     supabaseAdmin = createClient<Database>(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
-        persistSession: false
+        persistSession: false,
       },
       db: {
-        schema: 'public'
-      }
+        schema: "public",
+      },
     });
   } catch (error) {
-    console.error('❌ Error creando Supabase Admin Client:', error);
+    console.error("❌ Error creando Supabase Admin Client:", error);
     throw error;
   }
 }
@@ -40,7 +42,7 @@ export { supabaseAdmin };
 // Types for authentication
 export interface AuthenticatedUser {
   auth: User | null;
-  profile: Database['public']['Tables']['user_profiles']['Row'] | null;
+  profile: Database["public"]["Tables"]["user_profiles"]["Row"] | null;
 }
 
 export interface AdminUser {
@@ -70,52 +72,74 @@ export interface ExtendedSession {
 }
 
 // Cliente regular para autenticación de usuarios (cliente y servidor)
-export const supabase = supabaseUrl && supabaseAnonKey ? createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  },
-  db: {
-    schema: 'public'
+export const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient<Database>(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: true,
+        },
+        db: {
+          schema: "public",
+        },
+      })
+    : null;
+
+/**
+ * Cliente de auth desechable para iniciar sesión (D-20). `signInWithPassword` guarda la sesión en
+ * el cliente que la ejecuta: hacerlo sobre `supabaseAdmin` (singleton del proceso) dejaba todas
+ * las consultas "admin" posteriores de esa instancia corriendo como `authenticated` en vez de
+ * `service_role`. Un cliente nuevo por login, sin persistir ni refrescar, se descarta al terminar.
+ */
+export const createEphemeralAuthClient = () => {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing Supabase environment variables for auth client");
   }
-}) : null;
+  return createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  });
+};
 
 // Función para verificar conexión
 export const testConnection = async () => {
   try {
     if (!supabaseAdmin) {
-      console.error('❌ Supabase admin client not available');
+      console.error("❌ Supabase admin client not available");
       return false;
     }
-    
+
     const { error } = await supabaseAdmin
-      .from('user_profiles')
-      .select('count')
+      .from("user_profiles")
+      .select("count")
       .limit(1);
-    
+
     if (error) {
-      console.error('Supabase connection test failed:', error);
+      console.error("Supabase connection test failed:", error);
       return false;
     }
-    
-    console.log('✅ Supabase connection successful');
+
+    console.log("✅ Supabase connection successful");
     return true;
   } catch (error) {
-    console.error('❌ Supabase connection error:', error);
+    console.error("❌ Supabase connection error:", error);
     return false;
   }
 };
 
 // Cookie config reutilizable para tokens de auth
 export const getAuthCookieConfig = () => ({
-  path: '/',
+  path: "/",
   maxAge: 60 * 60 * 24 * 30, // 30 días
   httpOnly: true,
   secure: import.meta.env.PROD,
   // 'lax' en vez de 'strict': con 'strict' el browser NO envía cookies al navegar
   // desde links externos (email, Telegram), lo que mataba la sesión del admin
-  sameSite: 'lax' as const,
+  sameSite: "lax" as const,
 });
 
 // Dedupe de refresh concurrente: N requests paralelos con el mismo refresh token
@@ -123,10 +147,14 @@ export const getAuthCookieConfig = () => ({
 // mismo token rotativo — el primero lo consumía y el resto invalidaba la familia
 // completa de tokens en Supabase, matando la sesión. Este mapa garantiza UN solo
 // refreshSession() en vuelo por refresh token dentro de la misma instancia.
-type RefreshResult = Awaited<ReturnType<NonNullable<typeof supabase>['auth']['refreshSession']>>;
+type RefreshResult = Awaited<
+  ReturnType<NonNullable<typeof supabase>["auth"]["refreshSession"]>
+>;
 const inflightRefreshes = new Map<string, Promise<RefreshResult>>();
 
-const refreshSessionDeduped = (refreshToken: string): Promise<RefreshResult> => {
+const refreshSessionDeduped = (
+  refreshToken: string,
+): Promise<RefreshResult> => {
   const existing = inflightRefreshes.get(refreshToken);
   if (existing) return existing;
 
@@ -144,60 +172,75 @@ const refreshSessionDeduped = (refreshToken: string): Promise<RefreshResult> => 
 export const getServerUser = async (context: APIContext | AstroGlobal) => {
   try {
     if (!supabase) {
-      console.error('[Auth] Supabase client not available');
+      console.error("[Auth] Supabase client not available");
       return null;
     }
 
-    const accessToken = context.cookies.get('sb-access-token')?.value;
-    const refreshToken = context.cookies.get('sb-refresh-token')?.value;
+    const accessToken = context.cookies.get("sb-access-token")?.value;
+    const refreshToken = context.cookies.get("sb-refresh-token")?.value;
 
     if (!accessToken) {
-      console.log('[Auth] No access token found in cookies');
+      console.log("[Auth] No access token found in cookies");
       return null;
     }
 
     // 1. Intentar con el access token actual
-    const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(accessToken);
 
     if (!error && user) {
       return user;
     }
 
     // 2. Access token expirado — intentar refresh
-    console.log('[Auth] Access token expired, attempting refresh...');
+    console.log("[Auth] Access token expired, attempting refresh...");
 
     if (!refreshToken) {
-      console.log('[Auth] No refresh token available');
+      console.log("[Auth] No refresh token available");
       return null;
     }
 
-    const { data: refreshData, error: refreshError } = await refreshSessionDeduped(refreshToken);
+    const { data: refreshData, error: refreshError } =
+      await refreshSessionDeduped(refreshToken);
 
     if (refreshError || !refreshData.session || !refreshData.user) {
       // "Already Used" = otro request/lambda ya rotó este token (race entre instancias).
       // La cookie nueva viene en camino en esa respuesta — NO es una sesión muerta.
       // Devolver null sin destruir nada; el siguiente request llegará con tokens frescos.
-      console.error('[Auth] Token refresh failed:', refreshError?.message);
+      console.error("[Auth] Token refresh failed:", refreshError?.message);
       return null;
     }
 
     // 3. Refresh exitoso — actualizar cookies con nuevos tokens
-    if (typeof context.cookies.set === 'function') {
+    if (typeof context.cookies.set === "function") {
       const cookieConfig = getAuthCookieConfig();
-      context.cookies.set('sb-access-token', refreshData.session.access_token, cookieConfig);
-      context.cookies.set('sb-refresh-token', refreshData.session.refresh_token, cookieConfig);
-      console.log('[Auth] Tokens refreshed and cookies updated');
+      context.cookies.set(
+        "sb-access-token",
+        refreshData.session.access_token,
+        cookieConfig,
+      );
+      context.cookies.set(
+        "sb-refresh-token",
+        refreshData.session.refresh_token,
+        cookieConfig,
+      );
+      console.log("[Auth] Tokens refreshed and cookies updated");
     }
 
     return refreshData.user;
   } catch (error) {
-    console.error('[Auth] Error in getServerUser:', error);
+    console.error("[Auth] Error in getServerUser:", error);
     return null;
   }
 };
 
 // Función optimizada para verificar admin con cache
-const adminCache = new Map<string, { admin: AdminUser | null, timestamp: number }>();
+const adminCache = new Map<
+  string,
+  { admin: AdminUser | null; timestamp: number }
+>();
 const ADMIN_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
 /**
@@ -210,13 +253,14 @@ export const invalidateAdminCache = (userId: string): void => {
   adminCache.delete(userId);
 };
 
-const isDeactivated = (admin: AdminUser | null): boolean => !!admin && admin.is_active === false;
+const isDeactivated = (admin: AdminUser | null): boolean =>
+  !!admin && admin.is_active === false;
 
 const extendedSession = (user: User, admin: AdminUser): ExtendedSession => ({
   user,
   admin,
   expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
-  isExtended: true
+  isExtended: true,
 });
 
 /**
@@ -229,25 +273,30 @@ const extendedSession = (user: User, admin: AdminUser): ExtendedSession => ({
  * them, they are deactivated rarely, and the cache is what keeps the dashboard's per-request
  * cost down.
  */
-export const resolveAdminSession = async (context: APIContext | AstroGlobal): Promise<AdminResolution> => {
+export const resolveAdminSession = async (
+  context: APIContext | AstroGlobal,
+): Promise<AdminResolution> => {
   const refused: AdminResolution = { session: null, inactive: false };
   try {
     const user = await getServerUser(context);
     if (!user) {
-      console.log('🔒 No user found in session');
+      console.log("🔒 No user found in session");
       return refused;
     }
 
     // Check admin cache first
     const cached = adminCache.get(user.id);
-    const cacheUsable = cached && (Date.now() - cached.timestamp) < ADMIN_CACHE_TTL && cached.admin?.role !== 'operator';
+    const cacheUsable =
+      cached &&
+      Date.now() - cached.timestamp < ADMIN_CACHE_TTL &&
+      cached.admin?.role !== "operator";
     if (cached && cacheUsable) {
       if (isDeactivated(cached.admin)) {
-        console.log('🔒 Account deactivated (cached)');
+        console.log("🔒 Account deactivated (cached)");
         return { session: null, inactive: true };
       }
       if (!cached.admin) {
-        console.log('🔒 User not admin (cached)');
+        console.log("🔒 User not admin (cached)");
         return refused;
       }
 
@@ -255,7 +304,7 @@ export const resolveAdminSession = async (context: APIContext | AstroGlobal): Pr
     }
 
     if (!supabaseAdmin) {
-      console.error('❌ Supabase admin client not available');
+      console.error("❌ Supabase admin client not available");
       return refused;
     }
 
@@ -265,46 +314,51 @@ export const resolveAdminSession = async (context: APIContext | AstroGlobal): Pr
     // `ADMIN_ROLES` incluye `operator` (0011); lo que cada rol puede abrir lo decide
     // `resolveAccess`, no esta consulta.
     const { data: adminRow, error: adminError } = await supabaseAdmin
-      .from('admin_users')
-      .select('*')
-      .eq('user_id', user.id)
-      .in('role', [...ADMIN_ROLES])
+      .from("admin_users")
+      .select("*")
+      .eq("user_id", user.id)
+      .in("role", [...ADMIN_ROLES])
       .single();
     // `user_id` is nullable in the generated Row; the `.eq('user_id', ...)` filter guarantees it here.
     const adminUser = adminRow as AdminUser | null;
 
-    if (adminError && adminError.code !== 'PGRST116') {
+    if (adminError && adminError.code !== "PGRST116") {
       // Error transitorio (red, timeout) — NO cachear como "no admin",
       // de lo contrario el admin queda expulsado 5 minutos por un fallo pasajero
-      console.error('❌ Error verificando admin (transitorio, no cacheado):', adminError.message);
+      console.error(
+        "❌ Error verificando admin (transitorio, no cacheado):",
+        adminError.message,
+      );
       return refused;
     }
 
     // Cache the result (solo resultados definitivos: admin encontrado, desactivado, o PGRST116 = no existe)
     adminCache.set(user.id, {
       admin: adminUser,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
 
     if (!adminUser) {
-      console.log('🔒 User is not admin:', user.email);
+      console.log("🔒 User is not admin:", user.email);
       return refused;
     }
 
     if (isDeactivated(adminUser)) {
-      console.log('🔒 Account deactivated:', adminUser.email);
+      console.log("🔒 Account deactivated:", adminUser.email);
       return { session: null, inactive: true };
     }
 
-    console.log('✅ Admin verified:', adminUser.email);
+    console.log("✅ Admin verified:", adminUser.email);
     return { session: extendedSession(user, adminUser), inactive: false };
   } catch (error) {
-    console.error('❌ Error in resolveAdminSession:', error);
+    console.error("❌ Error in resolveAdminSession:", error);
     return refused;
   }
 };
 
-export const getServerAdmin = async (context: APIContext | AstroGlobal): Promise<ExtendedSession | null> => {
+export const getServerAdmin = async (
+  context: APIContext | AstroGlobal,
+): Promise<ExtendedSession | null> => {
   const { session } = await resolveAdminSession(context);
   return session;
 };
@@ -312,20 +366,22 @@ export const getServerAdmin = async (context: APIContext | AstroGlobal): Promise
 // Función para limpiar cookies de sesión
 export const clearAuthCookies = (context: APIContext | AstroGlobal) => {
   const cookiesToClear = [
-    'sb-access-token',
-    'sb-refresh-token', 
-    'sb-admin-session',
-    'sb-session-expiry'
+    "sb-access-token",
+    "sb-refresh-token",
+    "sb-admin-session",
+    "sb-session-expiry",
   ];
-  
-  cookiesToClear.forEach(name => {
-    context.cookies.delete(name, { path: '/' });
+
+  cookiesToClear.forEach((name) => {
+    context.cookies.delete(name, { path: "/" });
   });
-  
-  console.log('🧹 Auth cookies cleared');
+
+  console.log("🧹 Auth cookies cleared");
 };
 
-export const getServerUserProfile = async (context: APIContext | AstroGlobal) => {
+export const getServerUserProfile = async (
+  context: APIContext | AstroGlobal,
+) => {
   try {
     const user = await getServerUser(context);
     if (!user) {
@@ -333,28 +389,28 @@ export const getServerUserProfile = async (context: APIContext | AstroGlobal) =>
     }
 
     if (!supabaseAdmin) {
-      console.error('❌ Supabase admin client not available');
+      console.error("❌ Supabase admin client not available");
       return null;
     }
 
     // Get user profile
     const { data: profile, error } = await supabaseAdmin
-      .from('user_profiles')
-      .select('*')
-      .eq('auth_uid', user.id)
+      .from("user_profiles")
+      .select("*")
+      .eq("auth_uid", user.id)
       .single();
 
     if (error) {
-      console.error('❌ Error getting user profile:', error);
+      console.error("❌ Error getting user profile:", error);
       return null;
     }
 
     return {
       auth: user,
-      profile: profile
+      profile: profile,
     };
   } catch (error) {
-    console.error('❌ Error in getServerUserProfile:', error);
+    console.error("❌ Error in getServerUserProfile:", error);
     return null;
   }
 };
