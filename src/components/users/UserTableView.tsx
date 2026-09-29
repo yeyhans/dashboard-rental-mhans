@@ -110,7 +110,7 @@ const UserTableView = ({
                     >
                       Ver ficha
                     </Button>
-                    <DropdownMenu>
+                    <DropdownMenu modal={false}>
                       <DropdownMenuTrigger asChild>
                         <Button
                           variant="ghost"

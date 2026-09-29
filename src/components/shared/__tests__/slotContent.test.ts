@@ -13,9 +13,12 @@ describe("hasSlotContent", () => {
     expect(hasSlotContent(0)).toBe(true);
   });
 
-  it("treats a non-empty string, a node and true as present", () => {
+  it("treats a non-empty string and a node as present", () => {
     expect(hasSlotContent("+3 esta semana")).toBe(true);
     expect(hasSlotContent(12)).toBe(true);
-    expect(hasSlotContent(true)).toBe(true);
+  });
+
+  it("treats true as absent, since React renders nothing for it (D-19)", () => {
+    expect(hasSlotContent(true)).toBe(false);
   });
 });

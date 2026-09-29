@@ -121,7 +121,7 @@ describe("buildFinanceExportBlobContent (BOM, D-16)", () => {
     expect(content.slice(1)).toBe("a,b\n1,2");
   });
 
-  it("does not double the BOM when called again", () => {
+  it("returns only the BOM for empty CSV content", () => {
     const content = buildFinanceExportBlob("");
     expect(content).toBe("﻿");
   });

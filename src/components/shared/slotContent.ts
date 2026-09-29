@@ -5,10 +5,11 @@ import type { ReactNode } from "react";
  * wrapper container. `undefined`/`null`/`false`/`""` all mean "the caller passed nothing
  * meaningful" and must omit the container entirely — a bare `value !== undefined && value !==
  * null` check let `false` and `""` through, rendering an empty wrapper `<div>`/`<span>` into the
- * layout. A numeric `0` is a real value (e.g. "+0 esta semana") and must still render.
+ * layout. `true` is also absent: React renders nothing for it (D-19). A numeric `0` is a real
+ * value (e.g. "+0 esta semana") and must still render.
  */
 export function hasSlotContent(value: ReactNode): boolean {
   return (
-    value !== undefined && value !== null && value !== false && value !== ""
+    value !== undefined && value !== null && value !== false && value !== true && value !== ""
   );
 }
