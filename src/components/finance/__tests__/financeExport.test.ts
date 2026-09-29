@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { financeRowsToCsv } from "../financeExport";
+import {
+  financeRowsToCsv,
+  buildFinanceExportBlob,
+  buildFinanceExportFilename,
+} from "../financeExport";
 import type { FinanceRow } from "../../../services/financeService";
 
 function makeRow(overrides: Partial<FinanceRow> = {}): FinanceRow {
@@ -102,6 +106,41 @@ describe("financeRowsToCsv — pagados", () => {
     const [, line] = csv.split("\n");
     expect(line).toBe(
       "#0001,Ana Pérez,Sesión producto,05/03/2026,100000,OC-9,F-9",
+    );
+  });
+});
+
+/**
+ * D-18: `FinanceBoard.handleExport` built the BOM-prefixed blob content and the filename inline,
+ * so neither was covered by a test — pull them out as pure functions.
+ */
+describe("buildFinanceExportBlobContent (BOM, D-16)", () => {
+  it("prefixes the CSV with a UTF-8 BOM so Excel reads accents correctly", () => {
+    const content = buildFinanceExportBlob("a,b\n1,2");
+    expect(content.charCodeAt(0)).toBe(0xfeff);
+    expect(content.slice(1)).toBe("a,b\n1,2");
+  });
+
+  it("does not double the BOM when called again", () => {
+    const content = buildFinanceExportBlob("");
+    expect(content).toBe("﻿");
+  });
+});
+
+describe("buildFinanceExportFilename", () => {
+  it("names the file with the tab and the Chilean business day, not the server's UTC one", () => {
+    // 02:00 UTC on 2026-09-11 is still 22:00 on 2026-09-10 in America/Santiago (D-16, R3-104) —
+    // the server's UTC day would wrongly name the file one day ahead.
+    const lateNightUtc = new Date("2026-09-11T02:00:00.000Z");
+    expect(buildFinanceExportFilename("pendientes", lateNightUtc)).toBe(
+      "finanzas-pendientes-2026-09-10.csv",
+    );
+  });
+
+  it("uses the pagados tab name", () => {
+    const instant = new Date("2026-01-15T18:00:00.000Z");
+    expect(buildFinanceExportFilename("pagados", instant)).toBe(
+      "finanzas-pagados-2026-01-15.csv",
     );
   });
 });

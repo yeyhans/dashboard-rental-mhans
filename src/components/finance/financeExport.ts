@@ -1,5 +1,6 @@
 import type { FinanceRow } from "../../services/financeService";
 import { financePaymentTone } from "./financePaymentTone";
+import { businessDay } from "../../lib/businessDay";
 
 /** `orders.date_paid`/`order_fecha_termino`-shaped ISO day → DD/MM/YYYY, project convention. */
 export function formatDay(value: string | null): string {
@@ -77,4 +78,28 @@ export function financeRowsToCsv(
     ...rows.map((row) => toLine(row).map(csvEscape).join(",")),
   ];
   return lines.join("\n");
+}
+
+/** UTF-8 BOM so Excel opens the CSV with the right encoding instead of mangling accents. */
+const CSV_BOM = "﻿";
+
+/**
+ * D-18: the exact string handed to the export `Blob` — the BOM-prefixed CSV — pulled out of
+ * `FinanceBoard.handleExport` so it is unit-testable without a `Blob`/DOM.
+ */
+export function buildFinanceExportBlob(csv: string): string {
+  return CSV_BOM + csv;
+}
+
+/**
+ * D-18: the download filename for the Exportar button, pulled out of
+ * `FinanceBoard.handleExport`. The date is the Chilean business day (D-16, R3-104), not the
+ * server's UTC one — Vercel runs in UTC, so naming the file with `new Date()`'s own getters would
+ * be one day ahead for the last few hours of each Chilean working day.
+ */
+export function buildFinanceExportFilename(
+  tab: "pendientes" | "pagados",
+  now: Date,
+): string {
+  return `finanzas-${tab}-${businessDay(now)}.csv`;
 }

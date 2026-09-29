@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -12,6 +11,7 @@ import { FileText } from "lucide-react";
 import type { UserProfile } from "../../types/user";
 import type { DocumentType } from "../../lib/documentUploadService";
 import DocumentUploadSection from "./DocumentUploadSection";
+import { useControllableOpen } from "../shared/useControllableOpen";
 
 interface UserDocumentUploadProps {
   user: UserProfile;
@@ -19,6 +19,13 @@ interface UserDocumentUploadProps {
   sessionToken: string;
   /** Custom trigger node (D-09: a row-menu item instead of the default standalone button). */
   trigger?: React.ReactNode;
+  /**
+   * Controlled open state (D-18): when given, a parent (e.g. `UserTableView`) decides when the
+   * dialog is open instead of an internal `useState`. Lets the dialog be rendered outside a
+   * `DropdownMenuContent`, which Radix unmounts on menu close along with anything nested in it.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const UserDocumentUpload = ({
@@ -26,8 +33,13 @@ const UserDocumentUpload = ({
   onUserUpdated,
   sessionToken,
   trigger,
+  open: openProp,
+  onOpenChange,
 }: UserDocumentUploadProps) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen, isControlled] = useControllableOpen(
+    openProp,
+    onOpenChange,
+  );
 
   const handleDocumentUploaded = (docType: DocumentType, url: string) => {
     const updatedUser = { ...user };
@@ -50,14 +62,16 @@ const UserDocumentUpload = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <Button variant="outline" size="sm">
-            <FileText className="h-4 w-4 mr-2" />
-            Documentos
-          </Button>
-        )}
-      </DialogTrigger>
+      {(trigger !== undefined || !isControlled) && (
+        <DialogTrigger asChild>
+          {trigger || (
+            <Button variant="outline" size="sm">
+              <FileText className="h-4 w-4 mr-2" />
+              Documentos
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

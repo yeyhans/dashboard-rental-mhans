@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -19,6 +20,12 @@ import { enhanceUser, formatDate, statusColors } from "./utils/userUtils";
 import EditUserDialog from "../EditUserDialog";
 import UserDocumentUpload from "./UserDocumentUpload";
 import RegenerateContractDialog from "./RegenerateContractDialog";
+import {
+  isRowDialogOpen,
+  openRowDialog,
+  closeRowDialog,
+  type ActiveRowDialog,
+} from "./utils/rowDialogState";
 
 interface UserCardViewProps {
   users: UserProfile[];
@@ -33,6 +40,10 @@ const UserCardView = ({
   onViewDetails,
   sessionToken,
 }: UserCardViewProps) => {
+  // D-18: tracked once per view, not once per dialog, so the dialogs can be rendered outside
+  // `DropdownMenuContent` (see `rowDialogState.ts`).
+  const [activeDialog, setActiveDialog] = useState<ActiveRowDialog>(null);
+
   return (
     <div className="space-y-4">
       {users.map((user) => {
@@ -113,43 +124,79 @@ const UserCardView = ({
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
+                  {/* D-18: the menu only picks WHICH dialog to open; the dialogs themselves
+                      render as siblings of this DropdownMenu below, not nested in here — Radix
+                      unmounts DropdownMenuContent (and anything inside it) the instant the menu
+                      closes, which used to unmount the dialog along with it. */}
                   <DropdownMenuContent align="end">
-                    <UserDocumentUpload
-                      user={user}
-                      onUserUpdated={onUserUpdated}
-                      sessionToken={sessionToken}
-                      trigger={
-                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                          <FileText className="mr-2 h-4 w-4" />
-                          Documentos
-                        </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        setActiveDialog(
+                          openRowDialog(user.user_id, "documents"),
+                        )
                       }
-                    />
-                    <EditUserDialog
-                      user={user}
-                      onUserUpdated={onUserUpdated}
-                      sessionToken={sessionToken}
-                      trigger={
-                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                          <Edit className="mr-2 h-4 w-4" />
-                          Editar
-                        </DropdownMenuItem>
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      Documentos
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        setActiveDialog(openRowDialog(user.user_id, "edit"))
                       }
-                    />
-                    <RegenerateContractDialog
-                      user={user}
-                      onUserUpdated={onUserUpdated}
-                      sessionToken={sessionToken}
-                      trigger={
-                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                          Contrato
-                        </DropdownMenuItem>
+                    >
+                      <Edit className="mr-2 h-4 w-4" />
+                      Editar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        setActiveDialog(openRowDialog(user.user_id, "contract"))
                       }
-                    />
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Contrato
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
+              <UserDocumentUpload
+                user={user}
+                onUserUpdated={onUserUpdated}
+                sessionToken={sessionToken}
+                open={isRowDialogOpen(activeDialog, user.user_id, "documents")}
+                onOpenChange={(next) =>
+                  setActiveDialog(
+                    next
+                      ? openRowDialog(user.user_id, "documents")
+                      : closeRowDialog(),
+                  )
+                }
+              />
+              <EditUserDialog
+                user={user}
+                onUserUpdated={onUserUpdated}
+                sessionToken={sessionToken}
+                open={isRowDialogOpen(activeDialog, user.user_id, "edit")}
+                onOpenChange={(next) =>
+                  setActiveDialog(
+                    next
+                      ? openRowDialog(user.user_id, "edit")
+                      : closeRowDialog(),
+                  )
+                }
+              />
+              <RegenerateContractDialog
+                user={user}
+                onUserUpdated={onUserUpdated}
+                sessionToken={sessionToken}
+                open={isRowDialogOpen(activeDialog, user.user_id, "contract")}
+                onOpenChange={(next) =>
+                  setActiveDialog(
+                    next
+                      ? openRowDialog(user.user_id, "contract")
+                      : closeRowDialog(),
+                  )
+                }
+              />
             </CardContent>
           </Card>
         );
