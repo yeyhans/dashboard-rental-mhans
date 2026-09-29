@@ -58,5 +58,21 @@ describe("PageHeader", () => {
   it("omits the actions wrapper when actions is not given", () => {
     const html = renderToStaticMarkup(<PageHeader title="Pedidos" />);
     expect(html).not.toMatch(/>0</);
+    // Same reasoning as KpiCard's footer: the container itself must be gone, not just its text.
+    expect(html).not.toMatch(/gap-2/);
+  });
+
+  it("omits the actions wrapper when actions is false", () => {
+    const html = renderToStaticMarkup(
+      <PageHeader title="Pedidos" actions={false} />,
+    );
+    expect(html).not.toMatch(/gap-2/);
+  });
+
+  it("omits the actions wrapper when actions is an empty string", () => {
+    const html = renderToStaticMarkup(
+      <PageHeader title="Pedidos" actions="" />,
+    );
+    expect(html).not.toMatch(/gap-2/);
   });
 });

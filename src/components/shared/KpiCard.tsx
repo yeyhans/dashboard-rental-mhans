@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "../../lib/utils";
+import { hasSlotContent } from "./slotContent";
 
 interface KpiCardProps {
   /**
@@ -43,7 +44,7 @@ export function KpiCard({
           <p className="text-lg font-semibold text-foreground">{value}</p>
         </div>
       </div>
-      {footer !== undefined && footer !== null && (
+      {hasSlotContent(footer) && (
         <div className="mt-3 text-xs text-muted-foreground">{footer}</div>
       )}
     </div>

@@ -54,7 +54,7 @@ describe("KpiCard", () => {
     expect(html).toContain(">2<");
   });
 
-  it("renders the footer when given, and omits it when not", () => {
+  it("renders the footer when given, and omits the whole container when not", () => {
     const withFooter = renderToStaticMarkup(
       <KpiCard
         icon={FakeIcon}
@@ -68,6 +68,10 @@ describe("KpiCard", () => {
     );
     expect(withFooter).toContain("+3 esta semana");
     expect(withoutFooter).not.toContain("+3 esta semana");
+    // Omission means the footer container itself is absent, not just its text — a
+    // `footer={undefined}` that still rendered an empty `<div class="... mt-3 ...">` would pass
+    // the assertion above while leaking an empty box into the layout.
+    expect(withoutFooter).not.toMatch(/mt-3/);
   });
 
   it("renders a numeric 0 footer wrapped in the footer container, not as a bare leak", () => {
@@ -75,5 +79,24 @@ describe("KpiCard", () => {
       <KpiCard icon={FakeIcon} label="Pedidos activos" value={12} footer={0} />,
     );
     expect(html).toMatch(/<div[^>]*mt-3[^>]*>0<\/div>/);
+  });
+
+  it("omits the footer container when footer is false", () => {
+    const html = renderToStaticMarkup(
+      <KpiCard
+        icon={FakeIcon}
+        label="Pedidos activos"
+        value={12}
+        footer={false}
+      />,
+    );
+    expect(html).not.toMatch(/mt-3/);
+  });
+
+  it("omits the footer container when footer is an empty string", () => {
+    const html = renderToStaticMarkup(
+      <KpiCard icon={FakeIcon} label="Pedidos activos" value={12} footer="" />,
+    );
+    expect(html).not.toMatch(/mt-3/);
   });
 });

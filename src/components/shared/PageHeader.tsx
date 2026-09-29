@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "../../lib/utils";
+import { hasSlotContent } from "./slotContent";
 
 interface PageHeaderProps {
   title: string;
@@ -36,7 +37,7 @@ export function PageHeader({
         )}
         {date && <p className="mt-1 text-xs text-muted-foreground">{date}</p>}
       </div>
-      {actions !== undefined && actions !== null && (
+      {hasSlotContent(actions) && (
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {actions}
         </div>
