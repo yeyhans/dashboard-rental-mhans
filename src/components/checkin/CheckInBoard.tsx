@@ -9,6 +9,10 @@ import {
   type ItemReceiptState,
   type ReturnUrgency,
 } from "../../lib/checkIn";
+import {
+  checkInBandTitle,
+  filterByReturnDate,
+} from "../../lib/checkInDateFilter";
 import { statusBadgeClass, statusLabel } from "../../lib/orderStatus";
 import { apiClient } from "../../services/apiClient";
 import { Button } from "../ui/button";
@@ -225,20 +229,33 @@ export default function CheckInBoard({
   todayLabel,
   todayIsoDay,
 }: CheckInBoardProps) {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  // D-22 (03e): el panel derecho ya no arranca vacío cuando hay devoluciones que mostrar — se
+  // preselecciona la primera de la lista, igual que cualquier maestro/detalle con datos.
+  const [selectedId, setSelectedId] = useState<number | null>(
+    data.entries[0]?.id ?? null,
+  );
   const [search, setSearch] = useState("");
   const [itemFilter, setItemFilter] = useState("todos");
+  // D-22 (03a): "Filtrar fecha" filtra la lista YA CARGADA por fecha de término exacta — sin
+  // endpoint nuevo. Vacío (por defecto) sigue mostrando devoluciones abiertas + atrasadas.
+  const [dateFilter, setDateFilter] = useState("");
 
   const visible = useMemo(() => {
+    const byDate = filterByReturnDate(data.entries, dateFilter);
     const needle = search.trim().toLowerCase();
-    if (!needle) return data.entries;
-    return data.entries.filter(
+    if (!needle) return byDate;
+    return byDate.filter(
       (e) =>
         e.reference.toLowerCase().includes(needle) ||
         e.client.toLowerCase().includes(needle) ||
         e.project.toLowerCase().includes(needle),
     );
-  }, [data.entries, search]);
+  }, [data.entries, search, dateFilter]);
+
+  // D-22 (03b): "Devoluciones hoy" solo cuando el filtro deja la lista acotada exactamente a hoy;
+  // en cualquier otro caso (sin filtro, o un día distinto) se conserva "Devoluciones" porque la
+  // vista sigue mezclando abiertas + atrasadas (ver docstring de más abajo, D-15).
+  const bandTitle = checkInBandTitle(dateFilter, todayIsoDay);
 
   const selected: CheckInListEntry | null =
     data.entries.find((e) => e.id === selectedId) ?? null;
@@ -302,13 +319,25 @@ export default function CheckInBoard({
         subtitle="Recepción y cierre de equipos devueltos"
         date={todayLabel}
         actions={
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => window.location.reload()}
-          >
-            Actualizar
-          </Button>
+          <>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              Filtrar fecha
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                aria-label="Filtrar fecha de devolución"
+                className="rounded-[6px] border border-border bg-background px-2 py-1 text-xs text-foreground"
+              />
+            </label>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => window.location.reload()}
+            >
+              Actualizar
+            </Button>
+          </>
         }
         className="mb-4"
       />
@@ -330,16 +359,17 @@ export default function CheckInBoard({
           aria-label="Devoluciones"
         >
           {/*
-            Canon (m-chk, "Alto"): banda gris "Devoluciones hoy · N pedidos". Se aplica la banda
-            gris; el título se deja "Devoluciones" (no "Devoluciones hoy") porque el conteo real
-            junta TODAS las devoluciones abiertas más las cerradas hoy (ver docstring de
-            `CheckInService.getBoard`), no solo las de hoy — titularlo "hoy" con ese número
-            confundiría de qué está compuesto. Ítem abierto: acotar el conteo a "hoy" separaría
-            esta vista de la de atrasadas, fuera de este alcance.
+            Canon (m-chk, "Alto"): banda gris "Devoluciones hoy · N pedidos". Banda gris siempre;
+            el título es "Devoluciones hoy" solo cuando "Filtrar fecha" (D-22 03a) acota la lista
+            a exactamente hoy — recién ahí el conteo real ES "hoy". Sin filtro (por defecto) sigue
+            "Devoluciones", porque mezcla TODAS las abiertas más las cerradas hoy (ver docstring
+            de `CheckInService.getBoard`), no solo las de hoy — titularlo "hoy" con ese número
+            confundiría de qué está compuesto. `checkInBandTitle` (`lib/checkInDateFilter.ts`)
+            decide el título; esta sección solo lo pinta.
           */}
           <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
             <div className="flex items-baseline justify-between gap-2">
-              <h2 className="text-sm font-semibold">Devoluciones</h2>
+              <h2 className="text-sm font-semibold">{bandTitle}</h2>
               <span className="rounded-full bg-[var(--color-surface)] px-2 py-0.5 text-[11px] text-[var(--color-text-secondary)]">
                 {visible.length} {visible.length === 1 ? "pedido" : "pedidos"}
               </span>
@@ -506,8 +536,15 @@ export default function CheckInBoard({
                       key={metric.label}
                       className="rounded-[6px] bg-[var(--color-surface-2)] p-2 text-center"
                     >
+                      {/*
+                        D-22 (03d): Tailwind's `font-mono` utility is the SYSTEM mono stack
+                        (SF Mono/Menlo on macOS), which renders "0" with a slash — not the
+                        canonical figure font. `var(--font-mono)` (D-02, JetBrains Mono) is the
+                        one actually wired to the design system's figures.
+                      */}
                       <div
-                        className={`font-mono text-base font-semibold ${metric.tone}`}
+                        className={`text-base font-semibold ${metric.tone}`}
+                        style={{ fontFamily: "var(--font-mono)" }}
                       >
                         {metric.value}
                       </div>

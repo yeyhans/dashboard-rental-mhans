@@ -28,6 +28,7 @@ import {
 } from "../../lib/shippingMethods";
 import { apiClient } from "../../services/apiClient";
 import { KpiCard } from "../shared/KpiCard";
+import { PageHeader } from "../shared/PageHeader";
 import { RowActionsMenu, type RowActionItem } from "../shared/RowActionsMenu";
 import { StatusBadge } from "../shared/StatusBadge";
 import { badgeDotClass } from "../shared/statusBadgeTones";
@@ -507,6 +508,19 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
 
   return (
     <div className="space-y-5">
+      {/*
+        D-22 (encabezado de Delivery en mayúsculas, seguimiento D-21): el header vivía como
+        <header> crudo en `delivery.astro`, sin pasar por `PageHeader` (D-03) — por eso el título
+        no salía en mayúsculas como en el resto de los módulos, que ya componen su H1 con este
+        primitivo dentro del propio board (mismo patrón que D-04 en `DashboardContainer` y D-06
+        en `CheckInBoard`).
+      */}
+      <PageHeader
+        title="Delivery"
+        subtitle="Coordinación de entregas y retiros realizados por servicios externos"
+        className="mb-1"
+      />
+
       {/* Canon (m-del, "Medio"): las 4 KPI llevan ícono circular. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard

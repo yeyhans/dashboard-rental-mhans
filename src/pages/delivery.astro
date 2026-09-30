@@ -45,22 +45,25 @@ const title = `Delivery | ${adminSession.admin.email}`;
 
 <Base title={title}>
   <div class="container py-6">
-    <header class="mb-5 border-b border-[var(--color-border)] pb-4">
-      <h1 class="text-xl font-semibold tracking-tight">Delivery</h1>
-      <p class="mt-1 text-sm text-[var(--color-text-secondary)]">
-        Coordinación de entregas y retiros realizados por servicios externos
-      </p>
-    </header>
+    {
+      loadError ? (
+        <header class="mb-5 border-b border-[var(--color-border)] pb-4">
+          <h1 class="text-xl font-semibold tracking-tight">Delivery</h1>
+        </header>
+      ) : null
+    }
 
-    {loadError ? (
-      <div
-        role="alert"
-        class="rounded-[10px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-4 text-sm text-[var(--color-crit)]"
-      >
-        {loadError}
-      </div>
-    ) : (
-      <DeliveryBoard client:load data={board} />
-    )}
+    {
+      loadError ? (
+        <div
+          role="alert"
+          class="rounded-[10px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-4 text-sm text-[var(--color-crit)]"
+        >
+          {loadError}
+        </div>
+      ) : (
+        <DeliveryBoard client:load data={board} />
+      )
+    }
   </div>
 </Base>

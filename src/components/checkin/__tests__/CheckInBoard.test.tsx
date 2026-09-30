@@ -99,3 +99,54 @@ describe("CheckInBoard — list row (D-15)", () => {
     expect(html).not.toContain("Vence");
   });
 });
+
+describe("CheckInBoard — Filtrar fecha, banda y preselección (D-22)", () => {
+  it('renders a "Filtrar fecha" date input in the header', () => {
+    const html = renderToStaticMarkup(
+      <CheckInBoard
+        data={makeBoard()}
+        todayLabel="Sábado, 13 de junio"
+        todayIsoDay="2026-06-13"
+      />,
+    );
+    expect(html).toContain("Filtrar fecha");
+    expect(html).toContain('type="date"');
+  });
+
+  it('shows the plain "Devoluciones" band title with no date filter set', () => {
+    const html = renderToStaticMarkup(
+      <CheckInBoard
+        data={makeBoard()}
+        todayLabel="Sábado, 13 de junio"
+        todayIsoDay="2026-06-13"
+      />,
+    );
+    expect(html).toContain(">Devoluciones<");
+    expect(html).not.toContain("Devoluciones hoy");
+  });
+
+  it("preselects the first order so the right panel is not empty on load", () => {
+    const html = renderToStaticMarkup(
+      <CheckInBoard
+        data={makeBoard()}
+        todayLabel="Sábado, 13 de junio"
+        todayIsoDay="2026-06-13"
+      />,
+    );
+    expect(html).not.toContain(
+      "Selecciona un pedido para revisar los equipos.",
+    );
+    expect(html).toContain("Ana Pérez");
+  });
+
+  it("uses the JetBrains Mono token (not the system mono stack) for the detail figures", () => {
+    const html = renderToStaticMarkup(
+      <CheckInBoard
+        data={makeBoard()}
+        todayLabel="Sábado, 13 de junio"
+        todayIsoDay="2026-06-13"
+      />,
+    );
+    expect(html).toContain("var(--font-mono)");
+  });
+});

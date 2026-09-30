@@ -54,6 +54,7 @@ import {
   resolveOrderListTabParam,
   toBadgeTone,
 } from "./orderListMetrics";
+import { formatOrderDateWithWeekday } from "../../lib/orderDateFormat";
 
 // Helper function to format currency with thousands separator
 const formatCurrency = (value: string | number) => {
@@ -355,16 +356,6 @@ const OrdersDashboard = ({
     updateURLWithFilters();
   }, [currentPage, activeTab, searchTerm, shippingFilter]);
 
-  // Format date using UTC to avoid timezone shift
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "";
-    const date = new Date(dateString);
-    const day = String(date.getUTCDate()).padStart(2, "0");
-    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-    const year = date.getUTCFullYear();
-    return `${day}/${month}/${year}`;
-  };
-
   const handleOrderCreated = async (newOrder: any) => {
     console.log("🎉 New order created:", newOrder.id);
 
@@ -486,16 +477,20 @@ const OrdersDashboard = ({
                       <div className="flex flex-col gap-1 text-xs">
                         <div className="flex items-center justify-end gap-1">
                           <span className="text-muted-foreground">Inicio:</span>
-                          <span className="text-green-600 font-medium">
-                            {formatDate(order.order_fecha_inicio)}
+                          <span className="font-medium text-foreground">
+                            {formatOrderDateWithWeekday(
+                              order.order_fecha_inicio,
+                            )}
                           </span>
                         </div>
                         <div className="flex items-center justify-end gap-1">
                           <span className="text-muted-foreground">
                             Término:
                           </span>
-                          <span className="text-red-600 font-medium">
-                            {formatDate(order.order_fecha_termino)}
+                          <span className="font-medium text-foreground">
+                            {formatOrderDateWithWeekday(
+                              order.order_fecha_termino,
+                            )}
                           </span>
                         </div>
                       </div>
@@ -543,7 +538,7 @@ const OrdersDashboard = ({
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="bg-blue-200 text-blue-900 hover:bg-blue-300"
+                            className="bg-muted text-foreground hover:bg-muted/80"
                             onClick={() => window.open(latestUrl, "_blank")}
                             title={`Ver presupuesto más reciente ${budgetUrls.length > 1 ? `(v${budgetUrls.length})` : ""}`}
                           >
@@ -713,16 +708,18 @@ const OrdersDashboard = ({
                         <span className="text-xs text-muted-foreground w-12">
                           Inicio:
                         </span>
-                        <span className="text-green-600 font-medium">
-                          {formatDate(order.order_fecha_inicio)}
+                        <span className="font-medium text-foreground">
+                          {formatOrderDateWithWeekday(order.order_fecha_inicio)}
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-xs text-muted-foreground w-12">
                           Término:
                         </span>
-                        <span className="text-red-600 font-medium">
-                          {formatDate(order.order_fecha_termino)}
+                        <span className="font-medium text-foreground">
+                          {formatOrderDateWithWeekday(
+                            order.order_fecha_termino,
+                          )}
                         </span>
                       </div>
                     </div>
@@ -759,7 +756,7 @@ const OrdersDashboard = ({
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="bg-blue-200 text-blue-900 hover:bg-blue-300"
+                              className="bg-muted text-foreground hover:bg-muted/80"
                               onClick={() => window.open(latestUrl, "_blank")}
                               title={`Ver presupuesto más reciente ${budgetUrls.length > 1 ? `(v${budgetUrls.length})` : ""}`}
                             >
