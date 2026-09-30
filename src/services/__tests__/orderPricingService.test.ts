@@ -11,7 +11,12 @@ const couponEligibility = vi.hoisted(() =>
   vi.fn(async (): Promise<Eligibility> => ({ eligible: true, reason: null }))
 );
 
-vi.mock('../couponService', () => ({
+// couponCodeFromLines is pure; loading the real module only needs the admin client stubbed.
+vi.mock('../../lib/supabase', () => ({ supabaseAdmin: {} }));
+
+vi.mock('../couponService', async (importOriginal) => ({
+  couponCodeFromLines: (await importOriginal<typeof import('../couponService')>())
+    .couponCodeFromLines,
   CouponService: { getCouponByCode, couponEligibility },
 }));
 
