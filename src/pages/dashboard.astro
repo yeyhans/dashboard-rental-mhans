@@ -97,22 +97,29 @@ const title = `Dashboard - Rental Mario Hans | ${adminSession.admin.email}`;
 <Base title={title}>
   <div class="container py-3 px-2 sm:px-4">
     <!--
-      Agenda Operacional del canonico. Va antes del tablero de filtros porque responde la pregunta
-      con la que el admin abre la pantalla: que hay que mover hoy y en los proximos cuatro dias.
+      D-21 (01e): grid canónico main + side, igual que `.main-row` de
+      `Centro_Control_Canonical_RC2.1.2`. La agenda ya no va a todo el ancho arriba del header
+      (D-04 la dejó ahí por simplicidad): ahora es la columna lateral "Próximas Operaciones" junto
+      al contenido principal en desktop, y se apila debajo en mobile (`lg:` es el corte).
     -->
-    <div class="mb-6">
-      <OperationalAgenda agenda={agenda} />
+    <div
+      class="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start"
+    >
+      <div class="min-w-0">
+        <!--
+          D-04: el header (PageHeader + 5 KPI + acciones "Nuevo Pedido"/"Registrar Devolución")
+          vive dentro de DashboardContainer, no aquí — así son un único árbol React y `actions`
+          recibe JSX real en vez de intentar pasar slots de Astro a props de un componente framework.
+        -->
+        <DashboardContainer
+          client:load
+          initialData={dashboardStats}
+          adminContext={dashboardContext}
+        />
+      </div>
+      <div class="min-w-0">
+        <OperationalAgenda agenda={agenda} />
+      </div>
     </div>
-
-    <!--
-      D-04: el header (PageHeader + 5 KPI + acciones "Nuevo Pedido"/"Registrar Devolución") vive
-      dentro de DashboardContainer, no aquí — así son un único árbol React y `actions` recibe JSX
-      real en vez de intentar pasar slots de Astro a props de un componente framework.
-    -->
-    <DashboardContainer
-      client:load
-      initialData={dashboardStats}
-      adminContext={dashboardContext}
-    />
   </div>
 </Base>

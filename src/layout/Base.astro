@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleCheck,
+  CircleHelp,
   Coins,
   CreditCard,
   Grid3X3,
@@ -27,6 +28,7 @@ import {
 import { activeModule, visibleNavGroups } from "../lib/navigation";
 import { AlertService } from "../services/alertService";
 import { getAdminInitials } from "../lib/adminIdentity";
+import { formatTopbarDateTime } from "../lib/topbarDateTime";
 
 interface Props {
   title: string;
@@ -398,6 +400,101 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
         transition: opacity 200ms ease;
       }
       .sidebar-collapsed .sidebar-section-label { opacity: 0; height: 0; padding: 0; }
+
+      /* ── Topbar (D-21, canon 01f) ── */
+      #topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid hsl(0 0% 91.8%);
+        background-color: hsl(0 0% 100%);
+      }
+      .topbar-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.125rem;
+        min-width: 0;
+      }
+      .topbar-meta .topbar-date {
+        font-size: 0.75rem;
+        color: hsl(0 0% 45.1%);
+        white-space: nowrap;
+      }
+      .topbar-meta .topbar-time {
+        font-size: 0.8125rem;
+        font-weight: 500;
+      }
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-shrink: 0;
+      }
+      .topbar-icon-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.375rem;
+        color: hsl(0 0% 45.1%);
+        transition: color 150ms ease, background-color 150ms ease;
+        position: relative;
+      }
+      .topbar-icon-btn:hover {
+        color: hsl(0 0% 9%);
+        background-color: hsl(0 0% 95.1%);
+      }
+      .topbar-icon-btn:focus-visible,
+      .topbar-avatar:focus-visible {
+        outline: 2px solid hsl(0 0% 9%);
+        outline-offset: 2px;
+      }
+      .topbar-avatar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 9999px;
+        background-color: #111111;
+        color: #ffffff;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+      .topbar-notif { position: relative; }
+      .topbar-bell-panel {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 0.5rem);
+        z-index: 25;
+        min-width: 14rem;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        border: 1px solid hsl(0 0% 91.8%);
+        background-color: hsl(0 0% 100%);
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
+      }
+      .topbar-bell-panel.hidden { display: none; }
+      .topbar-panel-empty {
+        font-size: 0.75rem;
+        color: hsl(0 0% 45.1%);
+        margin: 0;
+      }
+
+      /* ── Topbar mobile: compact, and clear the fixed burger button ── */
+      @media (max-width: 767px) {
+        #topbar {
+          padding-left: 3.5rem;
+        }
+        .topbar-meta .topbar-date {
+          display: none;
+        }
+      }
     </style>
   </head>
   <body class="flex flex-col min-h-screen w-full">
@@ -548,6 +645,45 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
     )}
 
     <main id="main-content" class="flex-1 flex flex-col">
+      {isAuthenticated && (
+        <header id="topbar">
+          <div class="topbar-meta">
+            <span class="topbar-date" id="topbar-date" aria-hidden="true"></span>
+            <span class="topbar-time font-mono" id="topbar-time" aria-hidden="true"></span>
+          </div>
+          <div class="topbar-actions">
+            <div class="topbar-notif">
+              <button
+                id="topbar-bell-btn"
+                type="button"
+                class="topbar-icon-btn"
+                aria-haspopup="true"
+                aria-expanded="false"
+                aria-controls="topbar-bell-panel"
+                aria-label="Notificaciones"
+                onclick="toggleTopbarBellPanel()"
+              >
+                <Bell className="h-4 w-4" />
+              </button>
+              <div id="topbar-bell-panel" class="topbar-bell-panel hidden" role="menu" aria-label="Notificaciones">
+                <p class="topbar-panel-empty">No hay notificaciones por ahora.</p>
+              </div>
+            </div>
+            <a
+              class="topbar-icon-btn"
+              href="https://wa.me/56990818976"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Ayuda por WhatsApp"
+            >
+              <CircleHelp className="h-4 w-4" />
+            </a>
+            <span class="topbar-avatar" aria-hidden="true" title={adminSession?.admin.email}>
+              {adminInitials}
+            </span>
+          </div>
+        </header>
+      )}
       <slot />
     </main>
 
@@ -767,6 +903,58 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
 
   document.addEventListener('DOMContentLoaded', function() {
     if (typeof updateLogoImages === 'function') updateLogoImages();
+  });
+</script>
+
+<script>
+  // Topbar (D-21, canon 01f): clock + bell empty-state panel.
+  //
+  // Rendered purely client-side on purpose: a server-rendered timestamp would be the server's
+  // clock, not the admin's, and would go stale the instant the page is cached or the admin keeps
+  // a tab open — there is no SSR value to hydrate against, so there is no mismatch to cause.
+  import { formatTopbarDateTime } from "../lib/topbarDateTime";
+
+  function renderTopbarClock() {
+    const dateEl = document.getElementById("topbar-date");
+    const timeEl = document.getElementById("topbar-time");
+    if (!dateEl || !timeEl) return;
+    const { date, time } = formatTopbarDateTime(new Date());
+    dateEl.textContent = date;
+    timeEl.textContent = time;
+  }
+
+  function closeTopbarBellPanel() {
+    const panel = document.getElementById("topbar-bell-panel");
+    const btn = document.getElementById("topbar-bell-btn");
+    if (panel) panel.classList.add("hidden");
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  }
+
+  (window as any).toggleTopbarBellPanel = function toggleTopbarBellPanel() {
+    const panel = document.getElementById("topbar-bell-panel");
+    const btn = document.getElementById("topbar-bell-btn");
+    if (!panel || !btn) return;
+    const willOpen = panel.classList.contains("hidden");
+    panel.classList.toggle("hidden", !willOpen);
+    btn.setAttribute("aria-expanded", String(willOpen));
+  };
+
+  document.addEventListener("DOMContentLoaded", () => {
+    renderTopbarClock();
+    setInterval(renderTopbarClock, 60000);
+
+    document.addEventListener("click", (event) => {
+      const panel = document.getElementById("topbar-bell-panel");
+      const notifWrap = document.querySelector(".topbar-notif");
+      if (!panel || panel.classList.contains("hidden")) return;
+      if (notifWrap && !notifWrap.contains(event.target as Node)) {
+        closeTopbarBellPanel();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeTopbarBellPanel();
+    });
   });
 </script>
 
