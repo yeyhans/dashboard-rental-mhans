@@ -75,6 +75,23 @@ Forecast ≈ 350 authored lines (migration + down + test). Strategy: `ask-on-ris
 - RDD: assess `medium` / `review_due: slice_budget_reached` (1002 lines) → consent granted by
   user → lens `review-reliability` → approved → acknowledged
   (`gentle-ai.review-acknowledged/v1`, target `sha256:25448d54…`). Reviewed boundary = `2bf283b`.
+
+### T2 — applied on CONSOLIDADO 2026-10-01 (authenticated-flow check pending)
+
+- User authorized the remote step explicitly (ssh hermes-vps → `supabase-stg-db`).
+- Backup: `/root/backups/mhans-stg-pre-0014-20261001-0548.dump` (443 KB, `pg_dump -U supabase_admin -Fc`;
+  `-U postgres` fails with `permission denied for schema auth`). `pg_restore --list` lists 33 public functions.
+- Apply: `psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f /tmp/0014_rpc_least_privilege.sql`
+  → `BEGIN` … `COMMIT`, exit 0.
+- MCP post-apply (19 SECURITY DEFINER functions): group A anon=false auth=false sr=true; group B
+  anon=false auth=true sr=true, guard `auth.role() IS DISTINCT FROM 'service_role'` present,
+  `search_path` set; group C anon=true unchanged.
+- PostgREST probe with the public anon key against `https://supabase-v2.mariohans.cl`:
+  `update_user_profile_securely` → 401 `42501 permission denied for function`;
+  `get_user_profile_by_auth_uid` → 401 `42501`; `get_available_shipping_methods` → 200.
+- Pending: logged-in flow on new.mariohans.cl (document upload / contract signature → group B
+  with own JWT must succeed; coupon + shipping on checkout).
+
 - Authored lines so far: 933 (migration 457 + down 255 + test 221). Over the ~400 heuristic
   because the five group-B bodies must be restated verbatim in both up and down; splitting
   would leave the exposure half-closed between commits.
