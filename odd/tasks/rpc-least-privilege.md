@@ -50,7 +50,7 @@ production.
 
 ## Tasks
 
-- [ ] T1 — Write `0014_rpc_least_privilege.sql`, `.down.sql`, `__tests__/0014_rpc_least_privilege.test.ts` (RED first), run `pnpm test` + `lint-chain.sh`. Route: delegated writer (writer trigger: 3 non-trivial files). Commit on `consolidado-web-2027`.
+- [x] T1 — Write `0014_rpc_least_privilege.sql`, `.down.sql`, `__tests__/0014_rpc_least_privilege.test.ts` (RED first), run `pnpm test` + `lint-chain.sh`. Route: delegated writer (writer trigger: 3 non-trivial files). Commit on `consolidado-web-2027`.
 - [ ] T2 — Apply 0014 on CONSOLIDADO (`supabase-stg-db`) as supabase_admin; post-apply privilege assertions via MCP; browser check on new.mariohans.cl: login, upload document / sign contract, checkout with coupon + shipping.
 - [ ] T3 — Apply 0014 on PRODUCTION in a user-authorized window; same assertions; read-only browser check on rental.mariohans.cl.
 - [ ] T4 — Resume `/compliance-cl` (Fase 2 onward) with this remediation recorded.
@@ -61,4 +61,20 @@ Forecast ≈ 350 authored lines (migration + down + test). Strategy: `ask-on-ris
 
 ## Progress / evidence
 
-(empty)
+### T1 — done 2026-10-01, commit `2bf283b`
+
+- Route: delegated writer (sonnet), writer trigger (3 non-trivial files). Parent spot check:
+  structural readback of `apply_coupon` body and of every REVOKE/GRANT line.
+- Parent correction before commit: guard read `current_setting('request.jwt.claim.role')`,
+  which current PostgREST no longer sets (claims arrive as `request.jwt.claims` JSON) — would have
+  blocked the dashboard's service_role calls to `apply_coupon`/`get_user_coupon_history`.
+  Replaced with `auth.role()` (verified: identical helper in prod and consolidado, md5
+  f31486fe…, reads both forms). Test updated to require `auth.role()` and forbid the raw setting.
+- TDD: RED `Tests 5 failed | 1639 passed` → GREEN `Test Files 146 passed, Tests 1644 passed`.
+- `bash supabase/migrations/lint-chain.sh`: `0 findings — 33 sequenced migration(s)`, exit 0.
+- RDD: assess `medium` / `review_due: slice_budget_reached` (1002 lines) → consent granted by
+  user → lens `review-reliability` → approved → acknowledged
+  (`gentle-ai.review-acknowledged/v1`, target `sha256:25448d54…`). Reviewed boundary = `2bf283b`.
+- Authored lines so far: 933 (migration 457 + down 255 + test 221). Over the ~400 heuristic
+  because the five group-B bodies must be restated verbatim in both up and down; splitting
+  would leave the exposure half-closed between commits.
