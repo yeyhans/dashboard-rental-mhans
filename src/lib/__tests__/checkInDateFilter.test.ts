@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { checkInBandTitle, filterByReturnDate } from "../checkInDateFilter";
+import {
+  checkInBandTitle,
+  filterByReturnDate,
+  resolveVisibleSelection,
+} from "../checkInDateFilter";
 
 describe("filterByReturnDate", () => {
   const entries = [
@@ -40,5 +44,25 @@ describe("checkInBandTitle", () => {
 
   it('returns "Devoluciones" when the filter day is not today (includes overdue)', () => {
     expect(checkInBandTitle("2026-09-15", "2026-09-30")).toBe("Devoluciones");
+  });
+});
+
+describe("resolveVisibleSelection (D-25, R3-checkin-preselect-hidden-by-filter)", () => {
+  const visible = [{ id: 1 }, { id: 2 }, { id: 3 }];
+
+  it("keeps the current selection when it is still visible", () => {
+    expect(resolveVisibleSelection(visible, 2)).toBe(2);
+  });
+
+  it("falls back to the first visible entry when the current selection is filtered out", () => {
+    expect(resolveVisibleSelection(visible, 99)).toBe(1);
+  });
+
+  it("falls back to the first visible entry when nothing was selected yet", () => {
+    expect(resolveVisibleSelection(visible, null)).toBe(1);
+  });
+
+  it("returns null when the filter leaves no visible entries", () => {
+    expect(resolveVisibleSelection([], 1)).toBeNull();
   });
 });

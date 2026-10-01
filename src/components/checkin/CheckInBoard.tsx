@@ -12,6 +12,7 @@ import {
 import {
   checkInBandTitle,
   filterByReturnDate,
+  resolveVisibleSelection,
 } from "../../lib/checkInDateFilter";
 import { statusBadgeClass, statusLabel } from "../../lib/orderStatus";
 import { apiClient } from "../../services/apiClient";
@@ -257,8 +258,13 @@ export default function CheckInBoard({
   // vista sigue mezclando abiertas + atrasadas (ver docstring de más abajo, D-15).
   const bandTitle = checkInBandTitle(dateFilter, todayIsoDay);
 
+  // D-25 (R3-checkin-preselect-hidden-by-filter): if "Filtrar fecha" hides the previously
+  // selected entry, fall back to the first entry still visible instead of leaving the detail
+  // panel showing a row that is no longer highlighted (or even visible) on the left.
+  const effectiveSelectedId = resolveVisibleSelection(visible, selectedId);
+
   const selected: CheckInListEntry | null =
-    data.entries.find((e) => e.id === selectedId) ?? null;
+    data.entries.find((e) => e.id === effectiveSelectedId) ?? null;
 
   const items = useMemo(
     () => itemsFromLineItems(selected?.lineItems),
@@ -393,7 +399,12 @@ export default function CheckInBoard({
             </div>
           </div>
 
-          <ul className="max-h-[560px] overflow-y-auto">
+          {/*
+            D-25: capped height + internal scroll only from `lg:` up, where the list sits
+            side-by-side with the detail panel. Below that the two sections stack in the page's
+            own scroll, so a second independent scroll container here would be a double scroll.
+          */}
+          <ul className="lg:max-h-[560px] lg:overflow-y-auto">
             {visible.length === 0 && (
               <li className="p-8 text-center text-xs text-[var(--color-text-secondary)]">
                 {search
@@ -403,7 +414,7 @@ export default function CheckInBoard({
             )}
             {visible.map((entry) => {
               const urgency = URGENCY_STYLES[entry.urgency];
-              const isSelected = entry.id === selectedId;
+              const isSelected = entry.id === effectiveSelectedId;
               // D-15: ya no se muestra un progreso "3 / 12 recibidos" — `itemsFromLineItems`
               // marca todo como pending (no hay columna de recepción por ítem en el esquema), así
               // que ese contador siempre leía "0 / N recibidos", un progreso falso. Se calcula
@@ -573,7 +584,7 @@ export default function CheckInBoard({
                 ))}
               </div>
 
-              <ul className="max-h-[300px] overflow-y-auto">
+              <ul className="lg:max-h-[300px] lg:overflow-y-auto">
                 {filteredItems.length === 0 && (
                   <li className="p-6 text-center text-xs text-[var(--color-text-secondary)]">
                     Este pedido no tiene equipos en esa categoría.

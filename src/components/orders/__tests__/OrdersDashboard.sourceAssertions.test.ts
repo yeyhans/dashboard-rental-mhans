@@ -33,3 +33,22 @@ describe("OrdersDashboard — source assertions (D-22)", () => {
     expect(source).not.toContain("text-blue-900");
   });
 });
+
+describe("OrdersDashboard — mobile pass (D-25)", () => {
+  it("hides the empty 'Proyecto' label on the mobile card instead of showing a blank value", () => {
+    const mobileCardBlock = source.slice(
+      source.indexOf("if (isMobileView) {"),
+      source.indexOf("// Desktop view - Table layout"),
+    );
+    expect(mobileCardBlock).toMatch(/order\.order_proyecto\s*&&/);
+  });
+
+  it("pairs 'Nuevo Pedido' and 'Registrar Devolución' at equal width on mobile", () => {
+    expect(source).toContain('triggerClassName="w-full sm:w-auto sm:ml-3"');
+    const actionsBlock = source.slice(
+      source.indexOf("grid grid-cols-2 gap-2 sm:contents"),
+      source.indexOf("</Tabs>"),
+    );
+    expect(actionsBlock).toMatch(/<CreateOrderForm[\s\S]*Registrar Devolución/);
+  });
+});

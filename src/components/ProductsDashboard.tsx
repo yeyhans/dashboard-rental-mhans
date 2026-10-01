@@ -18,7 +18,6 @@ import { Label } from "./ui/label";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Skeleton } from "./ui/skeleton";
-import { Badge } from "./ui/badge";
 import {
   Select,
   SelectContent,
@@ -102,10 +101,19 @@ const ProductsDashboard = ({
   const [categories] = useState<ProductCategory[]>(initialCategories);
   const [isMobileView, setIsMobileView] = useState(false);
   // D-23 (05e): list/grid view toggle, persisted per browser (`localStorage`, wrapped in
-  // try/catch inside `catalogViewPreference.ts`). `useState(loadCatalogViewMode)` is lazy, so
-  // it reads storage once on mount, not on every render.
-  const [viewMode, setViewMode] =
-    useState<CatalogViewMode>(loadCatalogViewMode);
+  // try/catch inside `catalogViewPreference.ts`).
+  //
+  // D-25 (R3-viewmode-hydration-mismatch): the initial state used to call `loadCatalogViewMode`
+  // directly, which reads `localStorage` during the client's first render. Astro's SSR pass has
+  // no `window`, so it always renders the "list" default — if the admin had saved "grid", the
+  // client's first render disagreed with the server-rendered markup it is meant to hydrate.
+  // Starting from the same literal default both sides already render, then reading the real
+  // preference in an effect (after hydration), keeps the two in sync.
+  const [viewMode, setViewMode] = useState<CatalogViewMode>("list");
+
+  useEffect(() => {
+    setViewMode(loadCatalogViewMode());
+  }, []);
 
   const handleViewModeChange = (mode: CatalogViewMode) => {
     setViewMode(mode);
@@ -487,11 +495,8 @@ const ProductsDashboard = ({
                         {product.name}
                       </a>
                     </h3>
-                    <p className="text-2xs text-muted-foreground mb-0.5">
-                      SKU: {product.sku}
-                    </p>
                     <p className="text-2xs text-muted-foreground mb-1">
-                      Slug: {product.slug || "-"}
+                      SKU: {product.sku}
                     </p>
                   </div>
                 </div>
@@ -512,26 +517,6 @@ const ProductsDashboard = ({
                     <StockStatusBadge
                       status={product.stock_status || "outofstock"}
                     />
-                  </div>
-                </div>
-
-                <div className="mb-2">
-                  <p className="text-2xs text-muted-foreground mb-0.5">
-                    Categorías
-                  </p>
-                  <div className="flex flex-wrap gap-0.5">
-                    {product.categories_name ? (
-                      <Badge
-                        variant="outline"
-                        className="text-2xs font-normal py-0 px-1.5"
-                      >
-                        {product.categories_name}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground text-2xs">
-                        Sin categoría
-                      </span>
-                    )}
                   </div>
                 </div>
 

@@ -48,6 +48,11 @@ interface CreateOrderFormProps {
   onOrderCreated: (order: any) => void;
   sessionData?: SessionData;
   initialUsers?: UserProfile[]; // Users loaded from Astro
+  /**
+   * D-25: lets the caller pair this trigger with a sibling action at equal width on mobile
+   * (default keeps the original desktop-only spacing untouched).
+   */
+  triggerClassName?: string;
 }
 
 interface NewOrderForm {
@@ -122,7 +127,7 @@ const initialFormState: NewOrderForm = {
   }>
 };
 
-const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOrderFormProps) => {
+const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers, triggerClassName }: CreateOrderFormProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -828,7 +833,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
-        <Button className="ml-3">
+        <Button className={triggerClassName ?? "ml-3"}>
           <Plus className="h-4 w-4 mr-2" />
           Nuevo Pedido
         </Button>

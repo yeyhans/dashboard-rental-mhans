@@ -99,13 +99,62 @@ describe("ProductsDashboard row actions (D-23)", () => {
   });
 });
 
+describe("ProductsDashboard — mobile card (D-25)", () => {
+  it("drops Slug and Categorías from the mobile card (still in the detail page) and keeps the ⋮ menu", () => {
+    const mobileCardBlock = source.slice(
+      source.indexOf("if (isMobileView) {"),
+      source.indexOf('if (viewMode === "grid")'),
+    );
+    expect(mobileCardBlock).not.toMatch(/Slug:/);
+    expect(mobileCardBlock).not.toMatch(/Categorías/);
+    expect(mobileCardBlock).toContain("RowActionsMenu");
+  });
+});
+
+describe("ProductsDashboard — view mode hydration (D-25, R3-viewmode-hydration-mismatch)", () => {
+  it("initializes the list/grid toggle with the server default, reading localStorage only after mount", () => {
+    expect(source).toContain('useState<CatalogViewMode>("list")');
+    expect(source).not.toContain(
+      "useState<CatalogViewMode>(loadCatalogViewMode)",
+    );
+    expect(source).toMatch(
+      /useEffect\(\(\) => \{\s*setViewMode\(loadCatalogViewMode\(\)\);\s*\}, \[\]\)/,
+    );
+  });
+});
+
 describe("ProductsDashboard filters and view toggle (D-23, 05e)", () => {
   it("declares a brand filter and a stock-state filter", () => {
+    // Radix `Select`/`SelectContent` never commits its children on a `renderToStaticMarkup`
+    // pass (see the file-level comment above), so the dropdown wiring itself stays a source
+    // assertion. The underlying filtering behavior is exercised for real right below instead
+    // of being asserted twice at the source level (D-25, R3-source-only-assertions).
     expect(source).toContain("Todas las marcas");
     expect(source).toContain("Todos los estados");
-    expect(source).toContain("uniqueBrands");
-    expect(source).toContain("brandFilter");
-    expect(source).toContain("stockStatusFilter");
+  });
+
+  it("does not let the default (unfiltered) brand/stock state hide any loaded product (D-25, R3-source-only-assertions)", () => {
+    // Exercises the real `filterCatalogProducts`/`uniqueBrands` pipeline the component wires up,
+    // instead of only grepping for the identifiers — both products must survive the default
+    // "all"/"all" filters and both brands must be derived for the dropdown.
+    const html = renderToStaticMarkup(
+      <ProductsDashboard
+        initialProducts={[
+          makeProduct({ id: 1, name: "Profoto B10", brands: "Profoto" }),
+          makeProduct({
+            id: 2,
+            name: "Canon R5",
+            brands: "Canon",
+            stock_status: "outofstock",
+          }),
+        ]}
+        initialTotal={2}
+        initialCategories={[]}
+        accessToken="token"
+      />,
+    );
+    expect(html).toContain("Profoto B10");
+    expect(html).toContain("Canon R5");
   });
 
   it("renders the list/grid view toggle with accessible pressed state", () => {

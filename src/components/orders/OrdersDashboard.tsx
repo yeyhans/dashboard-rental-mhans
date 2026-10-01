@@ -510,12 +510,14 @@ const OrdersDashboard = ({
                 </p>
 
                 <div className="grid grid-cols-2 gap-2 mb-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Proyecto</p>
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {order.order_proyecto || ""}
-                    </p>
-                  </div>
+                  {order.order_proyecto && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Proyecto</p>
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {order.order_proyecto}
+                      </p>
+                    </div>
+                  )}
                   <div className="text-right">
                     <p className="text-xs text-muted-foreground">Total</p>
                     <p className="text-lg font-bold text-foreground">
@@ -900,17 +902,26 @@ const OrdersDashboard = ({
                 {loading ? "Actualizando..." : "Actualizar"}
               </Button>
 
-              <CreateOrderForm
-                onOrderCreated={handleOrderCreated}
-                sessionData={sessionData}
-                initialUsers={initialUsers}
-              />
+              {/*
+                D-25: "Nuevo Pedido" and "Registrar Devolución" are the two primary actions —
+                paired at equal width on mobile instead of each stacking full-width on its own.
+                `sm:contents` dissolves this wrapper at the `sm:` breakpoint so both children fall
+                back into the surrounding flex row with their own `sm:w-auto` sizing, unchanged.
+              */}
+              <div className="grid grid-cols-2 gap-2 sm:contents">
+                <CreateOrderForm
+                  onOrderCreated={handleOrderCreated}
+                  sessionData={sessionData}
+                  initialUsers={initialUsers}
+                  triggerClassName="w-full sm:w-auto sm:ml-3"
+                />
 
-              <a href="/check-in" className="w-full sm:w-auto">
-                <Button variant="outline" className="w-full sm:w-auto">
-                  Registrar Devolución
-                </Button>
-              </a>
+                <a href="/check-in" className="w-full sm:w-auto">
+                  <Button variant="outline" className="w-full sm:w-auto">
+                    Registrar Devolución
+                  </Button>
+                </a>
+              </div>
             </div>
 
             {/* D-05: pestañas de estado del canon, con contador por pestaña */}

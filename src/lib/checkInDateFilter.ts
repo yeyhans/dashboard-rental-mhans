@@ -32,3 +32,18 @@ export function checkInBandTitle(
 ): string {
   return filterDay === todayIsoDay ? "Devoluciones hoy" : "Devoluciones";
 }
+
+/**
+ * D-25 (R3-checkin-preselect-hidden-by-filter): the right panel used to keep showing whatever
+ * was selected before "Filtrar fecha" ran, even once that entry dropped out of `visible` — so
+ * the detail panel and the highlighted row disagreed about what was "selected". A pure derivation
+ * instead of a separate effect: if the current selection is still in the visible list, keep it;
+ * otherwise fall back to the first visible entry, or `null` when the filter leaves nothing.
+ */
+export function resolveVisibleSelection<T extends { id: number }>(
+  visibleEntries: readonly T[],
+  currentId: number | null,
+): number | null {
+  if (visibleEntries.some((entry) => entry.id === currentId)) return currentId;
+  return visibleEntries[0]?.id ?? null;
+}

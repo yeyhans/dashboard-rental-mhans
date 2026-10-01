@@ -13,8 +13,16 @@ vi.mock("../../../services/apiClient", () => ({
   },
 }));
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import CheckInBoard from "../CheckInBoard";
 import type { CheckInBoard as CheckInBoardData } from "../../../services/checkInService";
+
+const source = readFileSync(
+  fileURLToPath(new URL("../CheckInBoard.tsx", import.meta.url)),
+  "utf8",
+);
 
 /**
  * D-15 render test: one row of the list panel, checked against the two findings.
@@ -148,5 +156,24 @@ describe("CheckInBoard — Filtrar fecha, banda y preselección (D-22)", () => {
       />,
     );
     expect(html).toContain("var(--font-mono)");
+  });
+});
+
+describe("CheckInBoard — mobile pass (D-25)", () => {
+  it("does not cap the returns list height or scroll it on its own below the lg breakpoint (no double scroll)", () => {
+    expect(source).not.toMatch(/className="max-h-\[560px\] overflow-y-auto"/);
+    expect(source).toContain("lg:max-h-[560px] lg:overflow-y-auto");
+  });
+
+  it("does not cap the item list height or scroll it on its own below the lg breakpoint either", () => {
+    expect(source).not.toMatch(/className="max-h-\[300px\] overflow-y-auto"/);
+    expect(source).toContain("lg:max-h-[300px] lg:overflow-y-auto");
+  });
+
+  it("derives the effective selection through resolveVisibleSelection instead of trusting selectedId blindly", () => {
+    expect(source).toContain("resolveVisibleSelection");
+    expect(source).toContain('from "../../lib/checkInDateFilter"');
+    expect(source).toContain("resolveVisibleSelection(visible, selectedId)");
+    expect(source).toContain("entry.id === effectiveSelectedId");
   });
 });
