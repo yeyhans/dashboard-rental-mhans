@@ -331,6 +331,11 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
         pointer-events: auto;
       }
 
+      /* ── Sub-links group under a module (D-25: named so mobile can tighten it) ── */
+      .nav-sublinks {
+        padding-left: 2.25rem;
+      }
+
       /* ── Mobile: sidebar off-screen by default ── */
       @media (max-width: 767px) {
         #sidebar {
@@ -345,18 +350,18 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
           margin-left: 0 !important;
         }
         /* D-25: tighten the drawer's own rows so the eight modules + their sub-links fit
-           without the nav needing its own scrollbar on a 360-583px wide phone. */
+           without the nav needing its own scrollbar on a 360-583px wide phone.
+           D-27 (R3-nav-sublinks-mobile-override-dead): this media query used to sit BEFORE the
+           unconditional `.nav-sublinks` rule, so at equal specificity the unconditional one
+           (later in source order) always won the cascade — on mobile too, silently dropping this
+           override. Moving the base rule above this block (same selector, no specificity hack)
+           makes this media query the one that comes last, so it wins as intended. */
         .sidebar-nav-item {
           padding: 0.375rem 0.75rem;
         }
         .nav-sublinks {
           padding-left: 1.5rem;
         }
-      }
-
-      /* ── Sub-links group under a module (D-25: named so mobile can tighten it) ── */
-      .nav-sublinks {
-        padding-left: 2.25rem;
       }
 
       /* ── Logo section (cross-fade) ── */
@@ -908,7 +913,7 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
   // Rendered purely client-side on purpose: a server-rendered timestamp would be the server's
   // clock, not the admin's, and would go stale the instant the page is cached or the admin keeps
   // a tab open — there is no SSR value to hydrate against, so there is no mismatch to cause.
-  import { formatTopbarDateTime } from "../lib/topbarDateTime";
+  import { formatTopbarDateTime, msUntilNextMinute } from "../lib/topbarDateTime";
 
   function renderTopbarClock() {
     const dateEl = document.getElementById("topbar-date");
@@ -941,9 +946,7 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
   // next minute boundary keeps every later tick on the minute, same as a real clock.
   function scheduleTopbarClock() {
     renderTopbarClock();
-    const now = new Date();
-    const msToNextMinute =
-      60000 - (now.getSeconds() * 1000 + now.getMilliseconds());
+    const msToNextMinute = msUntilNextMinute(new Date());
     setTimeout(() => {
       renderTopbarClock();
       setInterval(renderTopbarClock, 60000);

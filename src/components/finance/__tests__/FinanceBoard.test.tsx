@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import FinanceBoard from "../FinanceBoard";
 import type { FinanceBoard as FinanceBoardData } from "../../../services/financeService";
+import { monthlyBucketSums, sparklinePoints } from "../../../lib/sparkline";
 
 function row(overrides: Partial<FinanceBoardData["pendingRows"][number]> = {}) {
   return {
@@ -93,16 +94,54 @@ describe("FinanceBoard — period selector + Filtros (D-24 07c)", () => {
     expect(html).not.toContain("999.999");
   });
 
-  it("renders a sparkline polyline for Monto Pendiente when rows span 2+ months", () => {
+  it("renders a sparkline polyline for Monto Pendiente with the real trailing-6-month values (D-27 R3-sparkline-test-vacuous-time-dependent)", () => {
+    // Fixed `now` (via the injectable prop) instead of the real clock: the two rows' months must
+    // land inside the trailing 6-month window relative to a KNOWN date, not whatever date the
+    // suite happens to run on.
+    const now = new Date("2026-09-15T12:00:00.000Z");
     const data = makeData({
       pendingRows: [
-        row({ id: 1, endDate: "2026-06-05" }),
-        row({ id: 2, endDate: "2026-07-10" }),
+        row({ id: 1, endDate: "2026-06-05", outstanding: 75000 }),
+        row({ id: 2, endDate: "2026-07-10", outstanding: 25000 }),
       ],
     });
     const html = renderToStaticMarkup(
-      <FinanceBoard data={data} periodLabel="septiembre 2026" />,
+      <FinanceBoard data={data} periodLabel="septiembre 2026" now={now} />,
     );
+
+    // The real values this component must compute: a 6-bucket (Apr..Sep) sum of `outstanding`.
+    const expectedBuckets = monthlyBucketSums(
+      data.pendingRows,
+      (r) => r.endDate,
+      (r) => r.outstanding,
+      now,
+      6,
+    );
+    expect(expectedBuckets).toEqual([0, 0, 75000, 25000, 0, 0]);
+    const expectedPoints = sparklinePoints(expectedBuckets, 56, 18);
+
     expect(html).toContain("<polyline");
+    expect(html).toContain(`points="${expectedPoints}"`);
+  });
+});
+
+describe("FinanceBoard — active filter visibility while collapsed (D-27)", () => {
+  it('shows no filter chips and the plain period in "Mostrando" when nothing is filtered', () => {
+    const html = renderToStaticMarkup(
+      <FinanceBoard data={makeData()} periodLabel="septiembre 2026" />,
+    );
+    expect(html).toContain("Mostrando: Todo");
+    expect(html).not.toContain("Cliente:");
+    expect(html).not.toContain("Estado:");
+    expect(html).not.toContain("Limpiar");
+  });
+
+  it("the collapsed Filtros panel still does not leak into the chip assertions above", () => {
+    // Sanity check for the test above: the panel is closed by default, so the only way these
+    // strings could appear is through the new chip row / summary label themselves.
+    const html = renderToStaticMarkup(
+      <FinanceBoard data={makeData()} periodLabel="septiembre 2026" />,
+    );
+    expect(html).not.toContain("Estado de pago");
   });
 });

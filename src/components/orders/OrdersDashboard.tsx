@@ -518,7 +518,10 @@ const OrdersDashboard = ({
                       </p>
                     </div>
                   )}
-                  <div className="text-right">
+                  {/* D-27 (R3-orders-total-shifts-left-without-proyecto): `col-start-2` pins
+                      Total to the right-hand grid column even when Proyecto is hidden — without
+                      it, grid auto-placement drops this as the only child into column 1. */}
+                  <div className="text-right col-start-2">
                     <p className="text-xs text-muted-foreground">Total</p>
                     <p className="text-lg font-bold text-foreground">
                       ${formatCurrency(order.calculated_total || "0")}

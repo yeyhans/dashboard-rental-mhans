@@ -40,6 +40,10 @@ import {
   type PaymentFilterKey,
 } from "./financePaymentFilter";
 import {
+  financeActiveFilterChips,
+  financeSummaryFilterLabel,
+} from "./financeActiveFilters";
+import {
   filterByPeriod,
   periodRangeFor,
   PERIOD_OPTIONS,
@@ -57,6 +61,12 @@ import { monthlyBucketSums } from "../../lib/sparkline";
 interface FinanceBoardProps {
   data: FinanceBoardData;
   periodLabel: string;
+  /**
+   * D-27 (R3-sparkline-test-vacuous-time-dependent): injectable "now", defaulting to the real
+   * current date. Lets tests fix the sparkline's trailing 6-month window instead of depending on
+   * whatever date the suite happens to run on.
+   */
+  now?: Date;
 }
 
 type Tab = "pendientes" | "pagados" | "finanzas";
@@ -106,13 +116,49 @@ function Kpi({
   );
 }
 
-export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
+export default function FinanceBoard({
+  data,
+  periodLabel,
+  now: nowProp,
+}: FinanceBoardProps) {
   const [tab, setTab] = useState<Tab>("pendientes");
   const [search, setSearch] = useState("");
   const [period, setPeriod] = useState<PeriodKey>("all");
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilterKey>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const now = useMemo(() => new Date(), []);
+  const now = useMemo(() => nowProp ?? new Date(), [nowProp]);
+
+  // D-27 (R3-finance-search-hidden-when-collapsed / R3-finance-summary-hidden-filters): the
+  // client search and "Estado de pago" filter keep hiding rows (and KPI totals) once the
+  // "Filtros" panel collapses, with nothing on screen explaining why — these chips and the
+  // summary label below make that explicit regardless of panel state.
+  const activeFilterChips = useMemo(
+    () =>
+      financeActiveFilterChips({
+        search,
+        paymentFilter,
+        // `paymentFilter` only ever filters `pendingRows` (see the memo above), but that feeds
+        // both the Pendientes table AND the Finanzas summary — only Pagados is unaffected.
+        showPaymentFilter: tab !== "pagados",
+      }),
+    [search, paymentFilter, tab],
+  );
+  // The "Período" dropdown's own label ("Este mes", "Todo", …), not the `periodLabel` prop —
+  // that one is the page header's generic current-date caption, unrelated to this selector.
+  const periodOptionLabel =
+    PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? period;
+  const summaryLabel = useMemo(
+    () =>
+      financeSummaryFilterLabel({
+        periodLabel: periodOptionLabel,
+        chips: activeFilterChips,
+      }),
+    [periodOptionLabel, activeFilterChips],
+  );
+  const clearActiveFilters = () => {
+    setSearch("");
+    setPaymentFilter("all");
+  };
 
   // D-24 07c: a period selector filtering the rows `FinanceService.getBoard` already loaded (it
   // fetches every non-cancelled order without a date window, so there is no second query here —
@@ -315,11 +361,38 @@ export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
               )}
             </div>
           )}
+
+          {/* D-27 (R3-finance-search-hidden-when-collapsed): with the panel collapsed, this is
+              the only visible sign that Cliente/Estado are still filtering the rows below. */}
+          {!filtersOpen && activeFilterChips.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {activeFilterChips.map((chip) => (
+                <span
+                  key={chip.key}
+                  className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[11px] text-[var(--color-text-secondary)]"
+                >
+                  {chip.label}
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={clearActiveFilters}
+                className="text-[11px] underline underline-offset-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+              >
+                Limpiar
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {tab === "pendientes" && (
         <>
+          {/* D-27 (R3-finance-summary-hidden-filters): names the period + any hidden filter so
+              these KPI totals' scope is explicit, not just implied by a collapsed panel. */}
+          <p className="text-[11px] text-[var(--color-text-secondary)]">
+            Mostrando: {summaryLabel}
+          </p>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Kpi
               icon={Wallet}
@@ -462,6 +535,9 @@ export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
 
       {tab === "pagados" && (
         <>
+          <p className="text-[11px] text-[var(--color-text-secondary)]">
+            Mostrando: {summaryLabel}
+          </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Kpi
               icon={CheckCircle2}
@@ -573,6 +649,12 @@ export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
 
       {tab === "finanzas" && (
         <div className="space-y-4">
+          {/* No filter UI renders on this tab, but `paymentFilter`/`search` set on another tab
+              still narrow `pendingRows`/`paidRows` feeding this summary — state above makes that
+              carry-over explicit instead of a silently different total. */}
+          <p className="text-[11px] text-[var(--color-text-secondary)]">
+            Mostrando: {summaryLabel}
+          </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Kpi
               icon={TrendingUp}

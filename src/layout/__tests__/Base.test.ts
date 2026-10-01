@@ -55,9 +55,12 @@ describe("Base.astro topbar (D-21, 01f)", () => {
   });
 
   it("aligns the clock refresh to the minute boundary instead of drifting from load time (R3-topbar-clock-drift)", () => {
-    expect(source).toContain("getSeconds");
-    expect(source).toContain("getMilliseconds");
-    // The periodic 60s refresh must start only once the alignment setTimeout fires, not immediately.
+    // D-27 (R3-source-only-behavior-tests): the delay computation itself moved to
+    // `msUntilNextMinute` (`lib/topbarDateTime.ts`, with real behavior tests); this stays a
+    // source assertion only for the wiring — that the schedule is built from that helper and
+    // the periodic 60s refresh starts only once the alignment setTimeout fires, not immediately.
+    expect(source).toContain("msUntilNextMinute");
+    expect(source).toContain('from "../lib/topbarDateTime"');
     const setTimeoutIndex = source.indexOf("setTimeout(() => {");
     const setIntervalIndex = source.indexOf(
       "setInterval(renderTopbarClock, 60000);",
@@ -124,5 +127,19 @@ describe("Base.astro mobile drawer and burger (D-25)", () => {
     expect(source).toMatch(
       /@media \(max-width: 767px\)[\s\S]*?\.nav-sublinks\s*\{[^}]*padding-left:/,
     );
+  });
+
+  it("orders the base .nav-sublinks rule before the mobile media query (R3-nav-sublinks-mobile-override-dead)", () => {
+    // Same selector, same specificity in both places: whichever comes LAST in source order wins
+    // the cascade. The unconditional rule used to come after the media query, so it silently
+    // overrode the tightened mobile value on every viewport, including mobile. The base rule
+    // must now appear first so the media query is the one the browser applies last on mobile.
+    const baseRuleIndex = source.search(
+      /\.nav-sublinks\s*\{\s*padding-left:\s*2\.25rem;/,
+    );
+    const mediaBlockIndex = source.indexOf("@media (max-width: 767px)");
+    expect(baseRuleIndex).toBeGreaterThan(-1);
+    expect(mediaBlockIndex).toBeGreaterThan(-1);
+    expect(baseRuleIndex).toBeLessThan(mediaBlockIndex);
   });
 });

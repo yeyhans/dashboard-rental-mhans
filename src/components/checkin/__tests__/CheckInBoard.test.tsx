@@ -177,3 +177,16 @@ describe("CheckInBoard — mobile pass (D-25)", () => {
     expect(source).toContain("entry.id === effectiveSelectedId");
   });
 });
+
+describe("CheckInBoard — D-27 follow-up", () => {
+  it("persists the resolved fallback selection back into state (R3-checkin-effective-selection-not-persisted)", () => {
+    // `renderToStaticMarkup` does not run effects, so this stays a source assertion (same reason
+    // as the mobile-pass block above): a later action relying on `selectedId` — e.g. clearing the
+    // date filter — must read the entry actually shown, not the hidden one `setSelectedId` was
+    // last called with.
+    expect(source).toContain("useEffect(() => {");
+    expect(source).toMatch(
+      /useEffect\(\(\) => \{\s*if \(effectiveSelectedId !== selectedId\) setSelectedId\(effectiveSelectedId\);\s*\}, \[effectiveSelectedId, selectedId\]\);/,
+    );
+  });
+});

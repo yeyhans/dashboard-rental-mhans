@@ -50,3 +50,14 @@ export function formatTopbarDateTime(now: Date): TopbarDateTime {
 
   return { date, time };
 }
+
+/**
+ * D-27 (R3-source-only-behavior-tests, follow-up to R3-topbar-clock-drift): the delay, in
+ * milliseconds, until the next wall-clock minute boundary — extracted out of `Base.astro`'s
+ * inline script so the computation itself has a real, deterministic test instead of only a grep
+ * for `getSeconds`/`getMilliseconds` in the source. Always in `(0, 60000]`: exactly `60000` when
+ * called precisely on the boundary, so the schedule never fires immediately again.
+ */
+export function msUntilNextMinute(now: Date): number {
+  return 60000 - (now.getSeconds() * 1000 + now.getMilliseconds());
+}

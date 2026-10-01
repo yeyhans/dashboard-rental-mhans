@@ -51,4 +51,12 @@ describe("OrdersDashboard — mobile pass (D-25)", () => {
     );
     expect(actionsBlock).toMatch(/<CreateOrderForm[\s\S]*Registrar Devolución/);
   });
+
+  it("keeps the mobile card's Total pinned to the right column even without Proyecto (D-27 R3-orders-total-shifts-left-without-proyecto)", () => {
+    const mobileCardBlock = source.slice(
+      source.indexOf("if (isMobileView) {"),
+      source.indexOf("// Desktop view - Table layout"),
+    );
+    expect(mobileCardBlock).toMatch(/className="text-right col-start-2"/);
+  });
 });

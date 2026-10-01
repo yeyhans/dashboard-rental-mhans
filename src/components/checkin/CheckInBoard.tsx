@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Package, Search } from "lucide-react";
 import {
@@ -262,6 +262,15 @@ export default function CheckInBoard({
   // selected entry, fall back to the first entry still visible instead of leaving the detail
   // panel showing a row that is no longer highlighted (or even visible) on the left.
   const effectiveSelectedId = resolveVisibleSelection(visible, selectedId);
+
+  // D-27 (R3-checkin-effective-selection-not-persisted): `effectiveSelectedId` only recomputes
+  // the fallback for THIS render; without writing it back, `selectedId` keeps pointing at the
+  // hidden entry, so the next filter change re-derives from the stale id instead of the one the
+  // admin is actually looking at. Persisting it keeps later actions (e.g. clearing the date
+  // filter) consistent with what is currently shown.
+  useEffect(() => {
+    if (effectiveSelectedId !== selectedId) setSelectedId(effectiveSelectedId);
+  }, [effectiveSelectedId, selectedId]);
 
   const selected: CheckInListEntry | null =
     data.entries.find((e) => e.id === effectiveSelectedId) ?? null;

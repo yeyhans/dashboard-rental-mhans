@@ -42,4 +42,23 @@ describe("filterMonthlySeries", () => {
     const result = filterMonthlySeries(series, "all", NOW);
     expect(result).not.toBe(series);
   });
+
+  it('"last-90-days" clips the partial starting month instead of including it whole (D-27 R3-monthly-series-90d-whole-month)', () => {
+    // periodRangeFor("last-90-days", NOW) starts 2026-06-18 — the 90-day window only covers
+    // 13 of June's 30 days, so June must not appear as if it were a full month in the series.
+    const result = filterMonthlySeries(series, "last-90-days", NOW);
+    expect(result.map((p) => p.month)).toEqual([
+      "2026-07",
+      "2026-08",
+      "2026-09",
+    ]);
+  });
+
+  it('"last-90-days" keeps a starting month that happens to fall on the 1st', () => {
+    // A 90-day window anchored so its start lands exactly on a month's first day is NOT partial
+    // and must be kept — the clip only drops months the window only partially covers.
+    const now = new Date("2026-05-01T12:00:00.000Z"); // business day 2026-05-01
+    const result = filterMonthlySeries(series, "last-90-days", now);
+    expect(result.map((p) => p.month)).toContain("2026-05");
+  });
 });
