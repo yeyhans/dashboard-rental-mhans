@@ -6,11 +6,13 @@ import {
   calculateROI,
   growth,
   idleAssets,
+  monthlyMarginSeries,
   monthlyRevenueSeries,
   periodMetrics,
   sumByCategoryGroup,
   type AssetRotation,
   type MarginResult,
+  type MonthlyMargin,
   type MonthlyRevenue,
   type PeriodMetrics,
   type RevenueOrderLike,
@@ -41,6 +43,12 @@ export interface ProfitabilityBoard {
     equiposUtilizados: number | null;
   };
   series: MonthlyRevenue[];
+  /**
+   * D-24 08c: one point per month of `series`, with Costos Directos / Gastos Operacionales /
+   * Utilidad Operacional / both margins. `null` under the same `expenses`-table-missing
+   * condition as `costs` below -- see `getMarginSeries`.
+   */
+  marginSeries: MonthlyMargin[] | null;
   rotation: AssetRotation[];
   idle: Array<{ id: string; name: string }>;
   /** Calendar days in the period, which the canonical prints beside the metrics. */
@@ -131,6 +139,39 @@ export class ProfitabilityService {
     }
   }
 
+  /**
+   * D-24 08c: the same Costos Directos / Gastos Operacionales / Margen Bruto / Utilidad
+   * Operacional derivation as `getCosts`, bucketed across the full 12-month window instead of
+   * just the current month, so the "Evolucion resultados" / "Margenes (%)" charts have a real
+   * series instead of a flat line. `null` under the same `expenses`-table-missing condition.
+   */
+  private static async getMarginSeries(
+    client: any,
+    series: MonthlyRevenue[],
+    windowStart: Date
+  ): Promise<MonthlyMargin[] | null> {
+    try {
+      const { data: expenseRows, error } = await client
+        .from('expenses')
+        .select('category, amount, expense_date')
+        .gte('expense_date', windowStart.toISOString().slice(0, 10));
+
+      if (error) throw error;
+
+      const expenses = (expenseRows ?? []) as Array<{
+        category: string;
+        amount: number;
+        expense_date: string;
+      }>;
+      return monthlyMarginSeries(series, expenses as any);
+    } catch (error) {
+      if ((error as { code?: string })?.code === UNDEFINED_TABLE) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   static async getBoard(now: Date = new Date()): Promise<ProfitabilityBoard> {
     ProfitabilityService.ensureSupabaseAdmin();
 
@@ -179,6 +220,12 @@ export class ProfitabilityService {
       thisMonth.start,
       thisMonth.end
     );
+    const series = monthlyRevenueSeries(orders, now);
+    const marginSeries = await ProfitabilityService.getMarginSeries(
+      supabaseAdmin as any,
+      series,
+      windowStart
+    );
 
     return {
       current,
@@ -190,7 +237,8 @@ export class ProfitabilityService {
         pedidosRealizados: growth(current.pedidosRealizados, previous.pedidosRealizados),
         equiposUtilizados: growth(current.equiposUtilizados, previous.equiposUtilizados),
       },
-      series: monthlyRevenueSeries(orders, now),
+      series,
+      marginSeries,
       rotation,
       idle: idleAssets(productRows ?? [], rotation),
       diasPeriodo: thisMonth.days,

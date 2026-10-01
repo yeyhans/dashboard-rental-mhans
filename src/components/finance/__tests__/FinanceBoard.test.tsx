@@ -1,0 +1,108 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import FinanceBoard from "../FinanceBoard";
+import type { FinanceBoard as FinanceBoardData } from "../../../services/financeService";
+
+function row(overrides: Partial<FinanceBoardData["pendingRows"][number]> = {}) {
+  return {
+    id: 1,
+    reference: "#0001",
+    client: "Ana Pérez",
+    project: "Sesión producto",
+    status: "processing",
+    total: 100000,
+    reserve: 25000,
+    outstanding: 75000,
+    collected: 25000,
+    reservePaid: true,
+    fullyPaid: false,
+    overdue: false,
+    endDate: "2026-07-10",
+    paidAt: null,
+    purchaseOrder: null,
+    invoiceNumber: null,
+    ...overrides,
+  };
+}
+
+function makeData(overrides: Partial<FinanceBoardData> = {}): FinanceBoardData {
+  return {
+    pending: {
+      montoPendiente: 0,
+      documentosPendientes: 0,
+      pedidosPendientes: 0,
+      reservasPendientes: 0,
+      montoReservasPendientes: 0,
+      montoVencido: 0,
+      documentosVencidos: 0,
+    },
+    paid: { cobradoPeriodo: 0, pedidosPagados: 0, ticketPromedio: 0 },
+    summary: {
+      ingresosPeriodo: 0,
+      cobrosRecibidos: 0,
+      porCobrar: 0,
+      tasaCobranza: 0,
+    },
+    pendingRows: [],
+    paidRows: [],
+    ...overrides,
+  };
+}
+
+describe("FinanceBoard — period selector + Filtros (D-24 07c)", () => {
+  it("renders the period selector with the canon labels", () => {
+    const html = renderToStaticMarkup(
+      <FinanceBoard data={makeData()} periodLabel="septiembre 2026" />,
+    );
+    expect(html).toContain("Este mes");
+    expect(html).toContain("Mes anterior");
+    expect(html).toContain("Últimos 90 días");
+    expect(html).toContain("Todo");
+  });
+
+  it('shows a "Filtros" button and keeps the panel closed by default', () => {
+    const html = renderToStaticMarkup(
+      <FinanceBoard data={makeData()} periodLabel="septiembre 2026" />,
+    );
+    expect(html).toContain("Filtros");
+    expect(html).not.toContain("Estado de pago");
+  });
+
+  it("recomputes the KPIs from the rows' own precomputed totals, not a stale server snapshot", () => {
+    const data = makeData({
+      // The server-computed `pending` KPI intentionally does not match the rows below, so the
+      // test fails if the board just renders `data.pending` instead of recomputing it.
+      pending: {
+        montoPendiente: 999999,
+        documentosPendientes: 99,
+        pedidosPendientes: 99,
+        reservasPendientes: 99,
+        montoReservasPendientes: 999999,
+        montoVencido: 999999,
+        documentosVencidos: 99,
+      },
+      pendingRows: [
+        row({ id: 1, outstanding: 75000 }),
+        row({ id: 2, outstanding: 25000 }),
+      ],
+    });
+    const html = renderToStaticMarkup(
+      <FinanceBoard data={data} periodLabel="septiembre 2026" />,
+    );
+    expect(html).toContain("100.000"); // 75000 + 25000, recomputed
+    expect(html).not.toContain("999.999");
+  });
+
+  it("renders a sparkline polyline for Monto Pendiente when rows span 2+ months", () => {
+    const data = makeData({
+      pendingRows: [
+        row({ id: 1, endDate: "2026-06-05" }),
+        row({ id: 2, endDate: "2026-07-10" }),
+      ],
+    });
+    const html = renderToStaticMarkup(
+      <FinanceBoard data={data} periodLabel="septiembre 2026" />,
+    );
+    expect(html).toContain("<polyline");
+  });
+});

@@ -49,6 +49,7 @@
 import { canonicalStatus } from './orderStatus';
 import { businessDay } from './businessDay';
 import type { LineItem } from '../types/order';
+import { FIXED_EXPENSE_CATEGORIES, VARIABLE_EXPENSE_CATEGORIES } from '../types/expenses';
 import type { ExpenseCategory, ExpenseLike } from '../types/expenses';
 
 export interface RevenueOrderLike {
@@ -272,4 +273,54 @@ export function calculateROI(profit: number, acquisitionCost: number | null | un
     return null;
   }
   return profit / acquisitionCost;
+}
+
+export interface MonthlyMargin {
+  month: string;
+  ingresos: number;
+  costosDirectos: number;
+  gastosOperacionales: number;
+  utilidadOperacional: number;
+  margenBrutoPercentage: number | null;
+  margenOperacionalPercentage: number | null;
+}
+
+/**
+ * D-24 08c: the "Evolucion resultados (12 meses)" / "Margenes (%)" charts' series, one point per
+ * month of `revenueSeries` (the same 12-month window `monthlyRevenueSeries` already builds).
+ * Reuses the exact Costos Directos / Margen Bruto / Gastos Operacionales / Utilidad Operacional
+ * derivation this file's header confirms for the single current-month snapshot (`getCosts`),
+ * just bucketed by month instead of only the latest one -- same tables (`expenses`), same
+ * formula. A month with no recorded expense is simply 0, same convention as
+ * `monthlyRevenueSeries`: no invented numbers.
+ */
+export function monthlyMarginSeries(
+  revenueSeries: readonly MonthlyRevenue[],
+  expenses: readonly ExpenseLike[]
+): MonthlyMargin[] {
+  const byMonth = new Map<string, ExpenseLike[]>();
+  for (const expense of expenses) {
+    const month = expense.expense_date.slice(0, 7);
+    const list = byMonth.get(month);
+    if (list) list.push(expense);
+    else byMonth.set(month, [expense]);
+  }
+
+  return revenueSeries.map(bucket => {
+    const monthExpenses = byMonth.get(bucket.month) ?? [];
+    const costosDirectos = sumByCategoryGroup(monthExpenses, VARIABLE_EXPENSE_CATEGORIES);
+    const margenBruto = calculateMargin(bucket.ingresos, costosDirectos);
+    const gastosOperacionales = sumByCategoryGroup(monthExpenses, FIXED_EXPENSE_CATEGORIES);
+    const utilidadOperacional = calculateMargin(margenBruto.margin, gastosOperacionales);
+
+    return {
+      month: bucket.month,
+      ingresos: bucket.ingresos,
+      costosDirectos,
+      gastosOperacionales,
+      utilidadOperacional: utilidadOperacional.margin,
+      margenBrutoPercentage: margenBruto.marginPercentage,
+      margenOperacionalPercentage: utilidadOperacional.marginPercentage,
+    };
+  });
 }

@@ -9,6 +9,7 @@ import {
   PiggyBank,
   Receipt,
   Search,
+  SlidersHorizontal,
   TrendingUp,
   Wallet,
 } from "lucide-react";
@@ -28,6 +29,23 @@ import {
   buildFinanceExportBlob,
   buildFinanceExportFilename,
 } from "./financeExport";
+import {
+  recomputePaidKpis,
+  recomputePendingKpis,
+  recomputeSummary,
+} from "./financePeriodKpis";
+import {
+  matchesPaymentFilter,
+  PAYMENT_FILTER_OPTIONS,
+  type PaymentFilterKey,
+} from "./financePaymentFilter";
+import {
+  filterByPeriod,
+  periodRangeFor,
+  PERIOD_OPTIONS,
+  type PeriodKey,
+} from "../../lib/periodRange";
+import { monthlyBucketSums } from "../../lib/sparkline";
 
 /**
  * Finanzas & Cobranza.
@@ -67,12 +85,15 @@ function Kpi({
   value,
   meta,
   tone,
+  sparkline,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   meta: string;
   tone?: string;
+  /** D-24 07d: optional trend line, forwarded straight to `KpiCard`. */
+  sparkline?: readonly number[];
 }) {
   return (
     <KpiCard
@@ -80,6 +101,7 @@ function Kpi({
       label={label}
       value={<span className={tone}>{value}</span>}
       footer={meta}
+      sparkline={sparkline}
     />
   );
 }
@@ -87,20 +109,68 @@ function Kpi({
 export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
   const [tab, setTab] = useState<Tab>("pendientes");
   const [search, setSearch] = useState("");
+  const [period, setPeriod] = useState<PeriodKey>("all");
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilterKey>("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const now = useMemo(() => new Date(), []);
 
-  const pendingRows = useMemo(
-    () => data.pendingRows.filter((r) => matches(r, search.trim())),
-    [data.pendingRows, search],
+  // D-24 07c: a period selector filtering the rows `FinanceService.getBoard` already loaded (it
+  // fetches every non-cancelled order without a date window, so there is no second query here —
+  // just a client-side `endDate`/`paidAt` cut). KPIs below are recomputed from whatever rows
+  // survive period + "Filtros" (estado de pago) + the search box.
+  const range = useMemo(() => periodRangeFor(period, now), [period, now]);
+
+  const pendingRows = useMemo(() => {
+    const byPeriod = filterByPeriod(data.pendingRows, range, (r) => r.endDate);
+    const byPayment = byPeriod.filter((r) =>
+      matchesPaymentFilter(r, paymentFilter),
+    );
+    return byPayment.filter((r) => matches(r, search.trim()));
+  }, [data.pendingRows, range, paymentFilter, search]);
+
+  const paidRows = useMemo(() => {
+    const byPeriod = filterByPeriod(data.paidRows, range, (r) => r.paidAt);
+    return byPeriod.filter((r) => matches(r, search.trim()));
+  }, [data.paidRows, range, search]);
+
+  const pendingKpis = useMemo(
+    () => recomputePendingKpis(pendingRows),
+    [pendingRows],
   );
-  const paidRows = useMemo(
-    () => data.paidRows.filter((r) => matches(r, search.trim())),
-    [data.paidRows, search],
+  const paidKpisData = useMemo(() => recomputePaidKpis(paidRows), [paidRows]);
+  const summary = useMemo(
+    () => recomputeSummary(pendingRows, paidRows),
+    [pendingRows, paidRows],
   );
 
-  // D-10: "Exportar" descarga en CSV, sin dependencias nuevas, las filas ya cargadas/filtradas de
-  // la pestaña activa. Sin selector de período ni "Filtros": la consulta trae todo pedido no
-  // cancelado sin acotar por fecha (ver FinanceService), así que un selector de período o un botón
-  // "Filtros" sin una query que los respalde sería un control decorativo — queda abierto.
+  // D-24 07d: trailing 6-month trend for the two headline KPIs, from the board's own loaded
+  // rows (not the period-filtered subset above — a sparkline is meant to show the trend
+  // regardless of which period the admin is currently looking at).
+  const pendingSparkline = useMemo(
+    () =>
+      monthlyBucketSums(
+        data.pendingRows,
+        (r) => r.endDate,
+        (r) => r.outstanding,
+        now,
+        6,
+      ),
+    [data.pendingRows, now],
+  );
+  const paidSparkline = useMemo(
+    () =>
+      monthlyBucketSums(
+        data.paidRows,
+        (r) => r.paidAt,
+        (r) => r.total,
+        now,
+        6,
+      ),
+    [data.paidRows, now],
+  );
+
+  // D-10/D-24: "Exportar" descarga en CSV, sin dependencias nuevas, las filas ya
+  // cargadas/filtradas (período + estado de pago + búsqueda) de la pestaña activa.
   const handleExport = () => {
     if (typeof window === "undefined" || tab === "finanzas") return;
     const rows = tab === "pendientes" ? pendingRows : paidRows;
@@ -130,12 +200,26 @@ export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
         subtitle="¿Cuánto dinero ingresó y qué dinero falta cobrar?"
         date={periodLabel}
         actions={
-          tab !== "finanzas" ? (
-            <Button variant="outline" size="sm" onClick={handleExport}>
-              <Download className="mr-1 h-3.5 w-3.5" />
-              Exportar
-            </Button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value as PeriodKey)}
+              aria-label="Período"
+              className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs"
+            >
+              {PERIOD_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {tab !== "finanzas" && (
+              <Button variant="outline" size="sm" onClick={handleExport}>
+                <Download className="mr-1 h-3.5 w-3.5" />
+                Exportar
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -163,27 +247,74 @@ export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
       </div>
 
       {tab !== "finanzas" && (
-        <div className="relative max-w-sm">
-          <Search
-            className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-[var(--color-text-faint)]"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={
-              tab === "pendientes"
-                ? "Buscar en pendientes"
-                : "Buscar en pagados"
-            }
-            aria-label={
-              tab === "pendientes"
-                ? "Buscar en pendientes"
-                : "Buscar en pagados"
-            }
-            className="w-full rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] py-1.5 pl-8 pr-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text-primary)]"
-          />
+        <div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setFiltersOpen((open) => !open)}
+            aria-expanded={filtersOpen}
+            aria-controls="finance-filters-panel"
+          >
+            <SlidersHorizontal className="mr-1 h-3.5 w-3.5" />
+            Filtros
+          </Button>
+
+          {filtersOpen && (
+            <div
+              id="finance-filters-panel"
+              className="mt-2 flex flex-wrap items-end gap-3 rounded-[8px] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+            >
+              <div className="relative max-w-sm flex-1">
+                <label
+                  htmlFor="finance-client-search"
+                  className="mb-1 block text-[11px] font-medium text-[var(--color-text-secondary)]"
+                >
+                  Cliente
+                </label>
+                <Search
+                  className="pointer-events-none absolute left-2.5 top-[26px] h-3.5 w-3.5 text-[var(--color-text-faint)]"
+                  aria-hidden="true"
+                />
+                <input
+                  id="finance-client-search"
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={
+                    tab === "pendientes"
+                      ? "Buscar en pendientes"
+                      : "Buscar en pagados"
+                  }
+                  className="w-full rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] py-1.5 pl-8 pr-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text-primary)]"
+                />
+              </div>
+
+              {tab === "pendientes" && (
+                <div>
+                  <label
+                    htmlFor="finance-payment-filter"
+                    className="mb-1 block text-[11px] font-medium text-[var(--color-text-secondary)]"
+                  >
+                    Estado de pago
+                  </label>
+                  <select
+                    id="finance-payment-filter"
+                    value={paymentFilter}
+                    onChange={(e) =>
+                      setPaymentFilter(e.target.value as PaymentFilterKey)
+                    }
+                    className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
+                  >
+                    {PAYMENT_FILTER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -193,27 +324,28 @@ export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
             <Kpi
               icon={Wallet}
               label="Monto Pendiente"
-              value={formatCLP(data.pending.montoPendiente)}
-              meta={`${data.pending.documentosPendientes} documentos`}
+              value={formatCLP(pendingKpis.montoPendiente)}
+              meta={`${pendingKpis.documentosPendientes} documentos`}
+              sparkline={pendingSparkline}
             />
             <Kpi
               icon={Package}
               label="Pedidos Pendientes"
-              value={String(data.pending.pedidosPendientes)}
+              value={String(pendingKpis.pedidosPendientes)}
               meta="Órdenes de arriendo"
             />
             <Kpi
               icon={PiggyBank}
               label="Reservas Pendientes"
-              value={String(data.pending.reservasPendientes)}
-              meta={formatCLP(data.pending.montoReservasPendientes)}
+              value={String(pendingKpis.reservasPendientes)}
+              meta={formatCLP(pendingKpis.montoReservasPendientes)}
               tone="text-[var(--color-warn)]"
             />
             <Kpi
               icon={AlertTriangle}
               label="Pagos Vencidos"
-              value={formatCLP(data.pending.montoVencido)}
-              meta={`${data.pending.documentosVencidos} documentos`}
+              value={formatCLP(pendingKpis.montoVencido)}
+              meta={`${pendingKpis.documentosVencidos} documentos`}
               tone="text-[var(--color-crit)]"
             />
           </div>
@@ -334,20 +466,21 @@ export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
             <Kpi
               icon={CheckCircle2}
               label="Cobrado Período"
-              value={formatCLP(data.paid.cobradoPeriodo)}
+              value={formatCLP(paidKpisData.cobradoPeriodo)}
               meta="Pagos completos"
               tone="text-[var(--color-ok)]"
+              sparkline={paidSparkline}
             />
             <Kpi
               icon={Package}
               label="Pedidos Pagados"
-              value={String(data.paid.pedidosPagados)}
+              value={String(paidKpisData.pedidosPagados)}
               meta="Cerrados"
             />
             <Kpi
               icon={Receipt}
               label="Ticket Promedio"
-              value={formatCLP(data.paid.ticketPromedio)}
+              value={formatCLP(paidKpisData.ticketPromedio)}
               meta="Por pedido"
             />
           </div>
@@ -444,27 +577,27 @@ export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
             <Kpi
               icon={TrendingUp}
               label="Ingresos Período"
-              value={formatCLP(data.summary.ingresosPeriodo)}
+              value={formatCLP(summary.ingresosPeriodo)}
               meta="Facturado, sin cancelados"
             />
             <Kpi
               icon={CheckCircle2}
               label="Cobros Recibidos"
-              value={formatCLP(data.summary.cobrosRecibidos)}
+              value={formatCLP(summary.cobrosRecibidos)}
               meta="Reservas incluidas"
               tone="text-[var(--color-ok)]"
             />
             <Kpi
               icon={Clock}
               label="Por Cobrar"
-              value={formatCLP(data.summary.porCobrar)}
+              value={formatCLP(summary.porCobrar)}
               meta="Diferencia"
               tone="text-[var(--color-warn)]"
             />
             <Kpi
               icon={Percent}
               label="Tasa de Cobranza"
-              value={`${data.summary.tasaCobranza}%`}
+              value={`${summary.tasaCobranza}%`}
               meta="Cobrado sobre facturado"
             />
           </div>
@@ -476,12 +609,12 @@ export default function FinanceBoard({ data, periodLabel }: FinanceBoardProps) {
             <div
               className="h-3 overflow-hidden rounded-full bg-[var(--color-surface-2)]"
               role="img"
-              aria-label={`Cobrado ${data.summary.tasaCobranza}% de lo facturado`}
+              aria-label={`Cobrado ${summary.tasaCobranza}% de lo facturado`}
             >
               <div
                 className="h-full bg-[var(--color-ok)]"
                 style={{
-                  width: `${Math.min(100, Math.max(0, data.summary.tasaCobranza))}%`,
+                  width: `${Math.min(100, Math.max(0, summary.tasaCobranza))}%`,
                 }}
               />
             </div>

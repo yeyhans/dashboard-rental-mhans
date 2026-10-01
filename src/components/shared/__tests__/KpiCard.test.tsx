@@ -99,4 +99,44 @@ describe("KpiCard", () => {
     );
     expect(html).not.toMatch(/mt-3/);
   });
+
+  it("renders a sparkline polyline when given 2+ values (D-24 07d)", () => {
+    const html = renderToStaticMarkup(
+      <KpiCard
+        icon={FakeIcon}
+        label="Monto Pendiente"
+        value="$100.000"
+        sparkline={[10, 20, 5, 30]}
+      />,
+    );
+    expect(html).toMatch(/<svg[^>]*><polyline points="[^"]+"/);
+  });
+
+  it("omits the sparkline svg when not given one", () => {
+    const html = renderToStaticMarkup(
+      <KpiCard icon={FakeIcon} label="Monto Pendiente" value="$100.000" />,
+    );
+    expect(html).not.toContain("<polyline");
+  });
+
+  it("omits the sparkline svg for a single-value or empty series", () => {
+    const single = renderToStaticMarkup(
+      <KpiCard
+        icon={FakeIcon}
+        label="Monto Pendiente"
+        value="$100.000"
+        sparkline={[10]}
+      />,
+    );
+    const empty = renderToStaticMarkup(
+      <KpiCard
+        icon={FakeIcon}
+        label="Monto Pendiente"
+        value="$100.000"
+        sparkline={[]}
+      />,
+    );
+    expect(single).not.toContain("<polyline");
+    expect(empty).not.toContain("<polyline");
+  });
 });

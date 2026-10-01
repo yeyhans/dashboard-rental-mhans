@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { apiClient } from "../../services/apiClient";
 import { formatCLP } from "../../lib/delivery";
@@ -11,12 +11,32 @@ import {
 import type { ProfitabilityBoard as ProfitabilityBoardData } from "../../services/profitabilityService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { KpiCard } from "../shared/KpiCard";
+import { Button } from "../ui/button";
 import { PROFITABILITY_TABS, roiDisplay } from "./profitabilityView";
+import { filterMonthlySeries } from "./profitabilityPeriod";
+import {
+  buildProfitabilityExportBlob,
+  buildProfitabilityExportFilename,
+  marginSeriesToCsv,
+  revenueSeriesToCsv,
+} from "./profitabilityExport";
+import { PERIOD_OPTIONS, type PeriodKey } from "../../lib/periodRange";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import {
   Boxes,
   CalendarRange,
   Coins,
   DollarSign,
+  Download,
   Package,
   Receipt,
   ShoppingCart,
@@ -317,6 +337,43 @@ export default function ProfitabilityBoard({
 }: ProfitabilityBoardProps) {
   const peak = Math.max(1, ...data.series.map((m) => m.ingresos));
 
+  // D-24 08c/08d: the "Evolución resultados" chart's own period selector, independent of the
+  // board's `periodLabel` (the Centro de Control-style current/previous month comparison stays
+  // as is) — this one narrows which months of the 12-month series the chart and its Exportar
+  // show.
+  const [chartPeriod, setChartPeriod] = useState<PeriodKey>("all");
+  const now = useMemo(() => new Date(), []);
+
+  const visibleRevenueSeries = useMemo(
+    () => filterMonthlySeries(data.series, chartPeriod, now),
+    [data.series, chartPeriod, now],
+  );
+  const visibleMarginSeries = useMemo(
+    () =>
+      data.marginSeries
+        ? filterMonthlySeries(data.marginSeries, chartPeriod, now)
+        : null,
+    [data.marginSeries, chartPeriod, now],
+  );
+
+  const handleExportResultados = () => {
+    if (typeof window === "undefined") return;
+    const csv = visibleMarginSeries
+      ? marginSeriesToCsv(visibleMarginSeries)
+      : revenueSeriesToCsv(visibleRevenueSeries);
+    const blob = new Blob([buildProfitabilityExportBlob(csv)], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = buildProfitabilityExportFilename(new Date());
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
   const metrics = [
     {
       label: "Jornadas vendidas",
@@ -450,34 +507,142 @@ export default function ProfitabilityBoard({
           </div>
         )}
 
+        {/* D-24 08c/08d: replaces the 12 flat bars with a Recharts line chart (4 series when
+            `marginSeries` is available; Ingresos only otherwise, no invented cost numbers) plus a
+            period selector and Exportar (CSV of the series currently visible). */}
         <section className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-          <h2 className="mb-4 text-sm font-semibold">
-            Evolución de ingresos (12 meses)
-          </h2>
-          <div
-            className="flex h-40 items-end gap-1.5"
-            role="img"
-            aria-label="Ingresos de los últimos doce meses"
-          >
-            {data.series.map((month) => (
-              <div
-                key={month.month}
-                className="flex flex-1 flex-col items-center gap-1"
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">
+              Evolución resultados (12 meses)
+            </h2>
+            <div className="flex items-center gap-2">
+              <select
+                value={chartPeriod}
+                onChange={(e) => setChartPeriod(e.target.value as PeriodKey)}
+                aria-label="Período del gráfico"
+                className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs"
               >
-                <div
-                  className="w-full rounded-t-sm bg-[var(--color-text-primary)]"
-                  style={{
-                    height: `${Math.round((month.ingresos / peak) * 100)}%`,
-                    minHeight: month.ingresos > 0 ? "2px" : "0",
-                  }}
-                  title={`${monthShort(month.month)}: ${formatCLP(month.ingresos)}`}
-                />
-                <span className="text-[9px] text-[var(--color-text-faint)]">
-                  {monthShort(month.month)}
-                </span>
-              </div>
-            ))}
+                {PERIOD_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportResultados}
+              >
+                <Download className="mr-1 h-3.5 w-3.5" />
+                Exportar
+              </Button>
+            </div>
           </div>
+
+          {visibleMarginSeries ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart
+                data={visibleMarginSeries}
+                margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid
+                  stroke="var(--color-border-soft)"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="month"
+                  tickFormatter={monthShort}
+                  tick={{ fontSize: 9 }}
+                />
+                <YAxis
+                  tick={{ fontSize: 9 }}
+                  width={56}
+                  tickFormatter={(value: number) => formatCLP(value)}
+                />
+                <Tooltip
+                  formatter={(value: number) => formatCLP(value)}
+                  labelFormatter={monthShort}
+                />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Line
+                  type="monotone"
+                  dataKey="ingresos"
+                  name="Ingresos"
+                  stroke="var(--color-ok)"
+                  dot={false}
+                  strokeWidth={2}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="costosDirectos"
+                  name="Costos Directos"
+                  stroke="var(--color-info)"
+                  dot={false}
+                  strokeWidth={1.5}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="gastosOperacionales"
+                  name="Gastos Operacionales"
+                  stroke="var(--color-warn)"
+                  dot={false}
+                  strokeWidth={1.5}
+                  strokeDasharray="5 3"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="utilidadOperacional"
+                  name="Utilidad Operacional"
+                  stroke="var(--color-text-primary)"
+                  dot={false}
+                  strokeWidth={1.5}
+                  strokeDasharray="3 2"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart
+                  data={visibleRevenueSeries}
+                  margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    stroke="var(--color-border-soft)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="month"
+                    tickFormatter={monthShort}
+                    tick={{ fontSize: 9 }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 9 }}
+                    width={56}
+                    tickFormatter={(value: number) => formatCLP(value)}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => formatCLP(value)}
+                    labelFormatter={monthShort}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="ingresos"
+                    name="Ingresos"
+                    stroke="var(--color-ok)"
+                    dot={false}
+                    strokeWidth={2}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+                Costos Directos, Gastos Operacionales y Utilidad Operacional no
+                están disponibles todavía (migración <code>expenses</code> sin
+                aplicar): el gráfico muestra solo Ingresos.
+              </p>
+            </>
+          )}
+
           <table className="sr-only">
             <caption>Ingresos por mes</caption>
             <thead>
@@ -497,6 +662,66 @@ export default function ProfitabilityBoard({
               ))}
             </tbody>
           </table>
+        </section>
+
+        <section className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          <h2 className="mb-4 text-sm font-semibold">Márgenes (%)</h2>
+          {visibleMarginSeries ? (
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart
+                data={visibleMarginSeries}
+                margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid
+                  stroke="var(--color-border-soft)"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="month"
+                  tickFormatter={monthShort}
+                  tick={{ fontSize: 9 }}
+                />
+                <YAxis tick={{ fontSize: 9 }} width={40} unit="%" />
+                <Tooltip
+                  formatter={(value: number) =>
+                    `${Math.round(value * 10) / 10}%`
+                  }
+                  labelFormatter={monthShort}
+                />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Line
+                  type="monotone"
+                  dataKey="margenBrutoPercentage"
+                  name="Margen Bruto"
+                  stroke="var(--color-ok)"
+                  dot={false}
+                  strokeWidth={2}
+                  connectNulls
+                />
+                <Line
+                  type="monotone"
+                  dataKey="margenOperacionalPercentage"
+                  name="Margen Operacional"
+                  stroke="var(--color-info)"
+                  dot={false}
+                  strokeWidth={1.5}
+                  strokeDasharray="5 3"
+                  connectNulls
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="rounded-[10px] border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface-soft)] p-6 text-center">
+              <p className="text-sm font-medium text-[var(--color-text-secondary)]">
+                Márgenes no disponibles todavía
+              </p>
+              <p className="mx-auto mt-1.5 max-w-md text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+                Necesita la migración de gastos aplicada para calcular Margen
+                Bruto y Margen Operacional por mes. Sin eso, no se inventa una
+                cifra.
+              </p>
+            </div>
+          )}
         </section>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

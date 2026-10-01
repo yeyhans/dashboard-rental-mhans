@@ -1,17 +1,13 @@
 import type { FinanceRow } from "../../services/financeService";
 import { financePaymentTone } from "./financePaymentTone";
 import { businessDay } from "../../lib/businessDay";
+import { buildCsvBlob, rowsToCsv } from "../../lib/csv";
 
 /** `orders.date_paid`/`order_fecha_termino`-shaped ISO day → DD/MM/YYYY, project convention. */
 export function formatDay(value: string | null): string {
   if (!value) return "—";
   const [y, m, d] = value.slice(0, 10).split("-");
   return `${d}/${m}/${y}`;
-}
-
-function csvEscape(value: string): string {
-  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
 }
 
 const PENDING_HEADER = [
@@ -73,22 +69,19 @@ export function financeRowsToCsv(
 ): string {
   const header = tab === "pendientes" ? PENDING_HEADER : PAID_HEADER;
   const toLine = tab === "pendientes" ? pendingLine : paidLine;
-  const lines = [
-    header.join(","),
-    ...rows.map((row) => toLine(row).map(csvEscape).join(",")),
-  ];
-  return lines.join("\n");
+  return rowsToCsv(
+    header,
+    rows.map((row) => toLine(row)),
+  );
 }
-
-/** UTF-8 BOM so Excel opens the CSV with the right encoding instead of mangling accents. */
-const CSV_BOM = "﻿";
 
 /**
  * D-18: the exact string handed to the export `Blob` — the BOM-prefixed CSV — pulled out of
- * `FinanceBoard.handleExport` so it is unit-testable without a `Blob`/DOM.
+ * `FinanceBoard.handleExport` so it is unit-testable without a `Blob`/DOM. D-24: the BOM and the
+ * quoting rules now live in `lib/csv.ts`, shared with Rentabilidad's export.
  */
 export function buildFinanceExportBlob(csv: string): string {
-  return CSV_BOM + csv;
+  return buildCsvBlob(csv);
 }
 
 /**
