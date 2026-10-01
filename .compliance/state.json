@@ -1,0 +1,187 @@
+{
+  "schema": 1,
+  "generated_at": "2026-10-01T07:01:44Z",
+  "git_commit": "24f84c8",
+  "environment": "consolidado",
+  "company": {
+    "razon_social": "HANS SALINAS SpA",
+    "rut": "77.892.569-9",
+    "tamano": "micro",
+    "domicilio": "Purísima 25, Recoleta, Santiago, Región Metropolitana, Chile",
+    "representante_legal": "Mario Hans, RUT 16.135.586-0",
+    "encargado_datos": "Mario Hans",
+    "encargado_prevencion": "Mario Hans",
+    "encargado_externo": "Yeyson Hans, RUT 18.502.826-7 (desarrollo y administración del software)",
+    "numero_trabajadores": "[COMPLETAR: número de trabajadores]"
+  },
+  "active_packs": ["ley-21595", "ley-21719"],
+  "controls": {
+    "gov-responsable": {
+      "status": "pass",
+      "evidence": "declarado por el usuario: Mario Hans asume responsable de datos y encargado de prevención; acta en 21595-acta-encargado-prevencion.md",
+      "remediation": ""
+    },
+    "gov-registro": {
+      "status": "pass",
+      "evidence": "21719-rat.md y 21595-matriz-riesgos.md generados en esta corrida",
+      "remediation": ""
+    },
+    "gov-politicas": {
+      "status": "partial",
+      "evidence": "frontend/src/pages/privacy.astro:27-80 ya existente, pero desactualizado respecto del calendario de retención aprobado; 21595-codigo-etica.md generado",
+      "remediation": "Publicar 21719-politica-privacidad.md generada, reemplazando privacy.astro"
+    },
+    "gov-capacitacion": {
+      "status": "fail",
+      "evidence": "declarado por el usuario: no se ha hecho capacitación",
+      "remediation": "Ejecutar plan de capacitación inicial (90 días) y anual, ver 21595-modelo-prevencion-delitos.md sección 6"
+    },
+    "gov-auditoria": {
+      "status": "fail",
+      "evidence": "sin supervisión externa anual del MPD contratada",
+      "remediation": "Contratar tercero independiente (~UF 3-5); no self-service"
+    },
+    "gov-disciplinario": {
+      "status": "partial",
+      "evidence": "referencia genérica a reglamento interno y legislación laboral en 21595-codigo-etica.md y modelo-prevencion-delitos.md",
+      "remediation": "Formalizar régimen disciplinario escrito"
+    },
+    "gov-denuncias": {
+      "status": "partial",
+      "evidence": "contacto@mariohans.cl operativo; 21595-reglamento-canal-denuncias.md generado",
+      "remediation": "Crear alias dedicado denuncias@mariohans.cl"
+    },
+    "ctrl-interno": {
+      "status": "partial",
+      "evidence": "dashboard-worktrees/consolidado/supabase/migrations/0011_operator_role.sql (roles admin/super_admin/operator); operación unipersonal",
+      "remediation": "Formalizar segregación de funciones por escrito en 21595-modelo-prevencion-delitos.md"
+    },
+    "data-licitud": {
+      "status": "partial",
+      "evidence": "checkbox de aceptación de términos en registro del frontend, sin timestamp/versión almacenada",
+      "remediation": "Agregar consent_accepted_at + consent_policy_version a user_profiles"
+    },
+    "data-consent-text": {
+      "status": "partial",
+      "evidence": "21719-consentimiento.md generado; checkbox existe en código pero sin prueba de aceptación almacenada",
+      "remediation": "Igual que data-licitud"
+    },
+    "data-derechos": {
+      "status": "fail",
+      "evidence": "no hay endpoints ARCO; manejo manual por correo (texto 'Solicitar eliminación de mis datos' en cuenta de cliente)",
+      "remediation": "Construir GET /api/account/export y POST /api/account/delete-request (references/build/)"
+    },
+    "data-rights-channel": {
+      "status": "partial",
+      "evidence": "21719-canal-derechos.md generado con procedimiento manual; contacto@mariohans.cl operativo",
+      "remediation": "Automatizar con endpoints de autoservicio"
+    },
+    "data-info": {
+      "status": "partial",
+      "evidence": "frontend/src/pages/privacy.astro:27-80 existente pero desactualizado",
+      "remediation": "Reemplazar por 21719-politica-privacidad.md"
+    },
+    "data-minimizacion": {
+      "status": "fail",
+      "evidence": "sin jobs de retención automatizados; tabla orders_status_backup_20260817 (499 filas) duplica PII; columnas customer_ip_address/customer_user_agent en orders",
+      "remediation": "Job de purga según calendario de retención aprobado; eliminar tabla de respaldo"
+    },
+    "data-dpa": {
+      "status": "partial",
+      "evidence": "21719-dpa.md generado (Yeyson Hans); sin DPAs firmados de Vercel/Cloudflare/Resend/Hostinger",
+      "remediation": "Firmar DPA con Yeyson Hans; aceptar DPA estándar de cada proveedor"
+    },
+    "data-transfer": {
+      "status": "partial",
+      "evidence": "21719-anexo-transferencias.md generado citando cláusulas modelo Min. Economía",
+      "remediation": "Incorporar el anexo formalmente en cada contrato de proveedor"
+    },
+    "data-eipd": {
+      "status": "pass",
+      "evidence": "21719-eipd.md generado; test Art. 15 ter negativo (no obligatoria), documentado con tabla de riesgos",
+      "remediation": ""
+    },
+    "data-privacy-by-design": {
+      "status": "partial",
+      "evidence": "RLS habilitado por defecto en consolidado (migración 0001); sin revisión formal de diseño",
+      "remediation": "Documentar privacy-by-design en decisiones de arquitectura futuras"
+    },
+    "data-pseudonym": {
+      "status": "fail",
+      "evidence": "sin seudonimización de datos (ej. RUT, cédula se guardan en claro)",
+      "remediation": "Evaluar enmascarado parcial de RUT en imágenes de cédula"
+    },
+    "sec-tls": {
+      "status": "pass",
+      "evidence": "Cloudflare delante del frontend; HTTPS en todos los dominios; CSP en frontend/src/middleware.ts",
+      "remediation": ""
+    },
+    "sec-rest": {
+      "status": "unknown",
+      "evidence": "sin verificación de cifrado en reposo a nivel de disco VPS / defaults de R2",
+      "remediation": "Confirmar cifrado en reposo con el proveedor de VPS (Hostinger) y Cloudflare R2"
+    },
+    "sec-passwords": {
+      "status": "pass",
+      "evidence": "Supabase Auth con bcrypt",
+      "remediation": ""
+    },
+    "sec-mfa": {
+      "status": "fail",
+      "evidence": "sin MFA en dashboard-worktrees/consolidado (dashboard admin)",
+      "remediation": "references/build/ receta de MFA"
+    },
+    "sec-logs": {
+      "status": "partial",
+      "evidence": "console.log en dashboard/src/lib/emailService.ts:79,97,138,180; logs de acceso Kong en VPS de retención no confirmada",
+      "remediation": "Audit log con actor/IP (references/build/)"
+    },
+    "sec-tenant": {
+      "status": "partial",
+      "evidence": "RLS habilitado en todas las tablas (migración 0001_m1_grants_rls.sql); pero anon/authenticated retienen INSERT/UPDATE/DELETE/TRUNCATE en user_profiles, admin_users, coupon_usage, shipping_usage (migración 0005 no cubre TRUNCATE)",
+      "remediation": "Migración de seguimiento que revoque privilegios de escritura directa y TRUNCATE"
+    },
+    "sec-secrets": {
+      "status": "partial",
+      "evidence": "secretos en variables de entorno (correcto); pero frontend/src/utils/users.csv y orders.csv con PII completa en commit bf3bd55, pusheado a origin/main y origin/consolidado-web-2027",
+      "remediation": "Eliminar archivos + purgar historial del repo privado; notificar como exposición interna"
+    },
+    "sec-backups": {
+      "status": "partial",
+      "evidence": "pg_dump manual antes de migraciones (ej. /root/backups en el VPS); sin calendario/retención/cifrado documentado",
+      "remediation": "Documentar calendario de backups, retención y cifrado"
+    },
+    "inc-brechas": {
+      "status": "pass",
+      "evidence": "21719-plan-respuesta-brechas.md y 21719-registro-vulneraciones.md generados en esta corrida, con la vulnerabilidad RPC anon como primera entrada",
+      "remediation": ""
+    }
+  },
+  "frameworks": {
+    "ley-21719": {
+      "score": 0.52,
+      "controls_required": 24,
+      "pass": 6,
+      "partial": 13,
+      "fail": 4,
+      "unknown": 1
+    },
+    "ley-21595": {
+      "score": 0.56,
+      "controls_required": 8,
+      "pass": 3,
+      "partial": 3,
+      "fail": 2,
+      "unknown": 0
+    }
+  },
+  "production_delta": {
+    "note": "Hallazgos de esta corrida son sobre el CONSOLIDADO (new.mariohans.cl / supabase-v2). Producción (rental.mariohans.cl / supabase.mariohans.cl) NO fue re-auditada en profundidad, pero se sabe por auditorías previas que comparte y en algunos casos agrava los mismos huecos.",
+    "open_in_production": [
+      "RLS deshabilitado y permisos anon completos en orders/products/categories/order_communications/hermes_* (migraciones 0001/0005 nunca aplicadas en producción) — la misma clase de vulnerabilidad RPC anon ya corregida en consolidado sigue abierta ahí",
+      "Frontend commit 88ac3d6 (endpoints autenticados) no desplegado a main de producción",
+      "Sin MFA en dashboard-rental-mhans.vercel.app (mismo hallazgo que consolidado)",
+      "CSV con PII (users.csv, orders.csv) está en el mismo repositorio de código compartido con producción (commit bf3bd55 en origin/main)"
+    ]
+  }
+}
