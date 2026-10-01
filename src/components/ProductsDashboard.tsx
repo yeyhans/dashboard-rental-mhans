@@ -37,11 +37,34 @@ import {
   AlertDialogTitle,
 } from "./ui/alert-dialog";
 import type { Product, ProductCategory } from "../types/product";
-import { ExternalLink, RefreshCw, Plus, Trash2 } from "lucide-react";
+import {
+  ExternalLink,
+  RefreshCw,
+  Plus,
+  Trash2,
+  Eye,
+  Pencil,
+  List,
+  LayoutGrid,
+} from "lucide-react";
 import React from "react";
 import { PageHeader } from "./shared/PageHeader";
 import { StatusBadge } from "./shared/StatusBadge";
+import { RowActionsMenu, type RowActionItem } from "./shared/RowActionsMenu";
 import { productStockTone, productStockBadgeLabel } from "./productStockBadge";
+import {
+  CATALOG_UNAVAILABLE_COLUMN_VALUE,
+  productBrandSkuLine,
+} from "../lib/catalogProductColumns";
+import {
+  filterCatalogProducts,
+  uniqueBrands,
+} from "../lib/catalogProductFilters";
+import {
+  loadCatalogViewMode,
+  saveCatalogViewMode,
+  type CatalogViewMode,
+} from "../lib/catalogViewPreference";
 
 // Helper function to format currency with thousands separator
 const formatCurrency = (value: string | number) => {
@@ -73,8 +96,21 @@ const ProductsDashboard = ({
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  // D-23 (05e): brand and stock-state filters, client-side over the already-loaded list.
+  const [brandFilter, setBrandFilter] = useState<string>("all");
+  const [stockStatusFilter, setStockStatusFilter] = useState<string>("all");
   const [categories] = useState<ProductCategory[]>(initialCategories);
   const [isMobileView, setIsMobileView] = useState(false);
+  // D-23 (05e): list/grid view toggle, persisted per browser (`localStorage`, wrapped in
+  // try/catch inside `catalogViewPreference.ts`). `useState(loadCatalogViewMode)` is lazy, so
+  // it reads storage once on mount, not on every render.
+  const [viewMode, setViewMode] =
+    useState<CatalogViewMode>(loadCatalogViewMode);
+
+  const handleViewModeChange = (mode: CatalogViewMode) => {
+    setViewMode(mode);
+    saveCatalogViewMode(mode);
+  };
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: "ascending" | "descending";
@@ -115,28 +151,22 @@ const ProductsDashboard = ({
     return categorySet;
   }, [allProducts]);
 
-  // Filter products based on search and category
+  // D-23: filter helper lives in `lib/catalogProductFilters.ts` (pure, unit-tested) so search +
+  // category + brand + stock state are one composed AND, not four separate `.filter()` passes.
   const filteredProducts = React.useMemo(() => {
-    return allProducts.filter((product) => {
-      // Filter by search term
-      const matchesSearch =
-        !searchTerm ||
-        (product.name &&
-          product.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (product.sku &&
-          product.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (product.slug &&
-          product.slug.toLowerCase().includes(searchTerm.toLowerCase()));
-
-      // Filter by category
-      const matchesCategory =
-        categoryFilter === "all" ||
-        (product.categories_name &&
-          product.categories_name.includes(categoryFilter));
-
-      return matchesSearch && matchesCategory;
+    return filterCatalogProducts(allProducts, {
+      search: searchTerm,
+      category: categoryFilter,
+      brand: brandFilter,
+      stockStatus: stockStatusFilter,
     });
-  }, [allProducts, searchTerm, categoryFilter]);
+  }, [allProducts, searchTerm, categoryFilter, brandFilter, stockStatusFilter]);
+
+  // D-23 (05e): brand filter options, derived from the loaded products (no new endpoint).
+  const productBrands = React.useMemo(
+    () => uniqueBrands(allProducts),
+    [allProducts],
+  );
 
   // Calculate pagination
   const totalFilteredProducts = filteredProducts.length;
@@ -157,6 +187,17 @@ const ProductsDashboard = ({
     setCurrentPage(1);
   };
 
+  // D-23 (05e): brand and stock-state filter handlers, same reset-to-page-1 pattern as category.
+  const handleBrandChange = (brand: string) => {
+    setBrandFilter(brand);
+    setCurrentPage(1);
+  };
+
+  const handleStockStatusChange = (stockStatus: string) => {
+    setStockStatusFilter(stockStatus);
+    setCurrentPage(1);
+  };
+
   // Handle page change
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -168,10 +209,10 @@ const ProductsDashboard = ({
     setCurrentPage(1);
   };
 
-  // Reset page when search or category changes
+  // Reset page when any filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, categoryFilter]);
+  }, [searchTerm, categoryFilter, brandFilter, stockStatusFilter]);
 
   // Refresh data - reload the page to get fresh server-side data
   const refreshData = () => {
@@ -248,6 +289,39 @@ const ProductsDashboard = ({
     }
   };
 
+  // Navigate to the product detail page. `ProductDetailController` renders view and edit in the
+  // same page (there is no separate `/products/:id/edit` route), so "Ver ficha" and "Editar"
+  // below share this one destination.
+  const navigateToProduct = (product: Product) => {
+    if (typeof window !== "undefined") {
+      window.location.href = `/products/${product.id}`;
+    }
+  };
+
+  // D-23 (row actions): shared ⋮ menu replacing the "Ver detalles" button + trash icon pair.
+  const buildRowActions = (product: Product): RowActionItem[] => [
+    {
+      id: "view",
+      label: "Ver ficha",
+      icon: Eye,
+      onSelect: () => navigateToProduct(product),
+    },
+    {
+      id: "edit",
+      label: "Editar",
+      icon: Pencil,
+      onSelect: () => navigateToProduct(product),
+    },
+    {
+      id: "delete",
+      label: "Eliminar",
+      icon: Trash2,
+      destructive: true,
+      disabled: deletingProductId === product.id,
+      onSelect: () => confirmDeleteProduct(product),
+    },
+  ];
+
   // Sort function for table columns
   const sortedProducts = React.useMemo(() => {
     let sortableProducts = [...currentProducts];
@@ -317,12 +391,13 @@ const ProductsDashboard = ({
     );
   };
 
-  // D-08: Stock column badge, replaced by the shared StatusBadge (canon: pill + dot, 5 tones)
-  // instead of the two-line split pill this local component rendered before.
+  // D-08/D-23: Stock column badge, the shared StatusBadge (canon: pill + dot, 5 tones).
+  // `whitespace-nowrap` (05c) keeps the pill on one line inside a narrow table cell.
   const StockStatusBadge = ({ status }: { status: string }) => (
     <StatusBadge
       tone={productStockTone(status)}
       label={productStockBadgeLabel(status)}
+      className="whitespace-nowrap"
     />
   );
 
@@ -460,25 +535,8 @@ const ProductsDashboard = ({
                   </div>
                 </div>
 
-                <div className="flex gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 h-7 text-xs"
-                    asChild
-                  >
-                    <a href={`/products/${product.id}`}>Ver detalles</a>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => confirmDeleteProduct(product)}
-                    disabled={deletingProductId === product.id}
-                    title="Eliminar producto"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                <div className="flex justify-end">
+                  <RowActionsMenu items={buildRowActions(product)} />
                 </div>
               </CardContent>
             </Card>
@@ -487,7 +545,61 @@ const ProductsDashboard = ({
       );
     }
 
-    // Desktop view - Table layout
+    // D-23 (05e): grid view — canon cards with image, name, status and price/día. A lighter
+    // layout than the mobile card above (which still carries SKU/slug/categories for D-25).
+    if (viewMode === "grid") {
+      return (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {sortedProducts.map((product) => (
+            <Card
+              key={product.id}
+              className="overflow-hidden shadow-sm hover:shadow"
+            >
+              <CardContent className="p-3 space-y-2">
+                {product.images &&
+                Array.isArray(product.images) &&
+                product.images.length > 0 ? (
+                  <img
+                    src={product.images[0]}
+                    alt={product.name || "Product"}
+                    className="h-24 w-full rounded-sm border object-cover"
+                  />
+                ) : (
+                  <div className="flex h-24 w-full items-center justify-center rounded-sm border bg-card">
+                    <span className="text-2xs text-muted-foreground">N/A</span>
+                  </div>
+                )}
+                <h3 className="truncate text-sm font-medium text-foreground">
+                  <a
+                    href={`/products/${product.id}`}
+                    className="hover:text-primary hover:underline"
+                  >
+                    {product.name}
+                  </a>
+                </h3>
+                <div className="flex items-center justify-between gap-2">
+                  <StockStatusBadge
+                    status={product.stock_status || "outofstock"}
+                  />
+                  <span className="text-sm font-bold text-foreground">
+                    ${formatCurrency(product.price || 0)}
+                  </span>
+                </div>
+                <div className="flex justify-end">
+                  <RowActionsMenu items={buildRowActions(product)} />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      );
+    }
+
+    // Desktop view - Table layout (list view, canon 05b: Equipo/Ubicación/Stock/Disp./Arriendo/
+    // Precio-día. Slug and Categorías moved out of the table — still visible in the detail/edit
+    // page. Ubicación/Disp./Arriendo render the explicit placeholder: `products` has no location
+    // column and there is no serialised-unit table to derive a per-row available/rented split
+    // from (see `catalogProductColumns.ts`).
     return (
       <div className="rounded-md border overflow-hidden">
         <Table>
@@ -497,25 +609,10 @@ const ProductsDashboard = ({
                 className="text-foreground font-medium text-xs cursor-pointer"
                 onClick={() => requestSort("name")}
               >
-                Producto <SortIndicator columnKey="name" />
+                Equipo <SortIndicator columnKey="name" />
               </TableHead>
-              <TableHead
-                className="text-foreground font-medium text-xs cursor-pointer"
-                onClick={() => requestSort("sku")}
-              >
-                SKU <SortIndicator columnKey="sku" />
-              </TableHead>
-              <TableHead
-                className="text-foreground font-medium text-xs cursor-pointer"
-                onClick={() => requestSort("slug")}
-              >
-                Slug <SortIndicator columnKey="slug" />
-              </TableHead>
-              <TableHead
-                className="text-foreground font-medium text-xs text-right cursor-pointer"
-                onClick={() => requestSort("price")}
-              >
-                Precio/día <SortIndicator columnKey="price" />
+              <TableHead className="text-foreground font-medium text-xs">
+                Ubicación
               </TableHead>
               <TableHead
                 className="text-foreground font-medium text-xs cursor-pointer"
@@ -523,8 +620,17 @@ const ProductsDashboard = ({
               >
                 Stock <SortIndicator columnKey="stock_status" />
               </TableHead>
-              <TableHead className="text-foreground font-medium text-xs">
-                Categorías
+              <TableHead className="text-center text-foreground font-medium text-xs">
+                Disp.
+              </TableHead>
+              <TableHead className="text-center text-foreground font-medium text-xs">
+                Arriendo
+              </TableHead>
+              <TableHead
+                className="text-foreground font-medium text-xs text-right cursor-pointer"
+                onClick={() => requestSort("price")}
+              >
+                Precio/día <SortIndicator columnKey="price" />
               </TableHead>
               <TableHead className="text-right text-foreground font-medium text-xs">
                 Acciones
@@ -551,11 +657,11 @@ const ProductsDashboard = ({
                         </span>
                       </div>
                     )}
-                    <div className="font-medium text-sm">
+                    <div className="min-w-0">
                       <div className="flex gap-1 items-center">
                         <a
                           href={`/products/${product.id}`}
-                          className="text-foreground hover:text-primary hover:underline"
+                          className="text-foreground hover:text-primary hover:underline font-medium text-sm"
                         >
                           {product.name}
                         </a>
@@ -568,63 +674,34 @@ const ProductsDashboard = ({
                           <ExternalLink className="h-3 w-3" />
                         </a>
                       </div>
+                      {productBrandSkuLine(product) && (
+                        <p className="truncate text-2xs text-muted-foreground">
+                          {productBrandSkuLine(product)}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="text-foreground text-xs p-2">
-                  {product.sku}
-                </TableCell>
-                <TableCell className="text-foreground text-xs p-2">
-                  {product.slug || "-"}
-                </TableCell>
-                <TableCell className="text-foreground text-right font-bold text-sm p-2">
-                  ${formatCurrency(product.price || 0)}
+                <TableCell className="text-2xs text-muted-foreground p-2">
+                  {CATALOG_UNAVAILABLE_COLUMN_VALUE}
                 </TableCell>
                 <TableCell className="p-2">
                   <StockStatusBadge
                     status={product.stock_status || "outofstock"}
                   />
                 </TableCell>
-                <TableCell className="text-foreground p-2">
-                  <div className="flex flex-wrap gap-0.5">
-                    {product.categories_name ? (
-                      <Badge
-                        variant="outline"
-                        className="text-2xs font-normal py-0 px-1.5"
-                      >
-                        {product.categories_name}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground text-2xs">
-                        Sin categoría
-                      </span>
-                    )}
-                  </div>
+                <TableCell className="text-center text-2xs text-muted-foreground p-2">
+                  {CATALOG_UNAVAILABLE_COLUMN_VALUE}
+                </TableCell>
+                <TableCell className="text-center text-2xs text-muted-foreground p-2">
+                  {CATALOG_UNAVAILABLE_COLUMN_VALUE}
+                </TableCell>
+                <TableCell className="text-foreground text-right font-bold text-sm p-2">
+                  ${formatCurrency(product.price || 0)}
                 </TableCell>
                 <TableCell className="text-right p-2">
-                  <div className="flex gap-1 justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      asChild
-                    >
-                      <a href={`/products/${product.id}`}>Ver detalles</a>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => confirmDeleteProduct(product)}
-                      disabled={deletingProductId === product.id}
-                      title="Eliminar producto"
-                    >
-                      {deletingProductId === product.id ? (
-                        <RefreshCw className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3 w-3" />
-                      )}
-                    </Button>
+                  <div className="flex justify-end">
+                    <RowActionsMenu items={buildRowActions(product)} />
                   </div>
                 </TableCell>
               </TableRow>
@@ -716,6 +793,48 @@ const ProductsDashboard = ({
                 </SelectContent>
               </Select>
 
+              {/* D-23 (05e): brand filter, client-side over the loaded products. */}
+              <Select value={brandFilter} onValueChange={handleBrandChange}>
+                <SelectTrigger className="h-10 text-xs min-w-[160px]">
+                  <SelectValue placeholder="Todas las marcas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs">
+                    Todas las marcas
+                  </SelectItem>
+                  {productBrands.map((brand) => (
+                    <SelectItem key={brand} value={brand} className="text-xs">
+                      {brand}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* D-23 (05e): state filter over `stock_status` — the only per-row state this
+                  schema has (no per-unit "Mantención"/"Bloqueado" table). */}
+              <Select
+                value={stockStatusFilter}
+                onValueChange={handleStockStatusChange}
+              >
+                <SelectTrigger className="h-10 text-xs min-w-[160px]">
+                  <SelectValue placeholder="Todos los estados" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs">
+                    Todos los estados
+                  </SelectItem>
+                  <SelectItem value="instock" className="text-xs">
+                    {productStockBadgeLabel("instock")}
+                  </SelectItem>
+                  <SelectItem value="onbackorder" className="text-xs">
+                    {productStockBadgeLabel("onbackorder")}
+                  </SelectItem>
+                  <SelectItem value="outofstock" className="text-xs">
+                    {productStockBadgeLabel("outofstock")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
               <Select
                 value={
                   sortConfig
@@ -759,12 +878,6 @@ const ProductsDashboard = ({
                   <SelectItem value="sku-descending" className="text-xs">
                     SKU (Z-A)
                   </SelectItem>
-                  <SelectItem value="slug-ascending" className="text-xs">
-                    Slug (A-Z)
-                  </SelectItem>
-                  <SelectItem value="slug-descending" className="text-xs">
-                    Slug (Z-A)
-                  </SelectItem>
                 </SelectContent>
               </Select>
 
@@ -779,6 +892,39 @@ const ProductsDashboard = ({
                 />
                 {loading ? "Actualizando..." : "Actualizar"}
               </Button>
+
+              {/* D-23 (05e): list/grid view toggle (canon `.view-toggle`), hidden on the
+                  auto-detected mobile card layout the same way the canon hides it on mobile. */}
+              {!isMobileView && (
+                <div className="inline-flex h-10 overflow-hidden rounded-md border">
+                  <button
+                    type="button"
+                    aria-label="Vista de lista"
+                    aria-pressed={viewMode === "list"}
+                    onClick={() => handleViewModeChange("list")}
+                    className={`flex h-full w-9 items-center justify-center ${
+                      viewMode === "list"
+                        ? "bg-foreground text-background"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    <List className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Vista de tarjetas"
+                    aria-pressed={viewMode === "grid"}
+                    onClick={() => handleViewModeChange("grid")}
+                    className={`flex h-full w-9 items-center justify-center ${
+                      viewMode === "grid"
+                        ? "bg-foreground text-background"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

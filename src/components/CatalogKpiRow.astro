@@ -1,5 +1,7 @@
 ---
+import { Package, CheckCircle2, Truck, Wrench } from "lucide-react";
 import type { CatalogKpis } from "../lib/catalogAvailability";
+import { KpiCard } from "./shared/KpiCard";
 
 /**
  * `.kpi-strip` del canónico de Catálogo de Equipos, cuyo subtítulo es "Inventario de activos
@@ -10,7 +12,14 @@ import type { CatalogKpis } from "../lib/catalogAvailability";
  * existe. Por lo mismo se informan unidades EN USO, nunca "3 de 5 disponibles": sin tabla de
  * unidades no hay denominador, y esa razón sería inventada.
  *
- * Componente Astro y no React: no tiene estado ni interacción.
+ * D-23 (05d): las cuatro tarjetas usan el `KpiCard` compartido (ícono circular, patrón canónico
+ * P7) en vez del markup propio que tenía antes, y la cuarta se llama "Mantención / Bloqueadas"
+ * (el canon de Catálogo, no "Bloqueados") porque agrupa productos sin stock y bajo pedido, no
+ * solo bloqueados. El tinte de color por valor (ok/info/warn) que tenía el markup anterior no se
+ * replicó: `KpiCard` no expone un prop de tono, y pasar un `<span>` coloreado como `value` desde
+ * un componente Astro a un componente React no es un patrón soportado de forma confiable. El
+ * ícono de cada tarjeta ya es la señal visual (P7); el color semántico sigue vivo en `StatusBadge`
+ * para el resto del catálogo.
  */
 interface Props {
   kpis: CatalogKpis;
@@ -20,37 +29,33 @@ const { kpis } = Astro.props;
 ---
 
 <div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-  <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-    <div class="text-xs text-[var(--color-text-secondary)]">Modelos Publicados</div>
-    <div class="mt-1 font-mono text-2xl font-semibold">{kpis.modelosPublicados}</div>
-    <div class="mt-1 text-[11px] text-[var(--color-text-faint)]">En el catálogo</div>
-  </div>
+  <KpiCard
+    icon={Package}
+    label="Modelos Publicados"
+    value={kpis.modelosPublicados}
+    footer="En el catálogo"
+  />
 
-  <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-    <div class="text-xs text-[var(--color-text-secondary)]">Disponibles Hoy</div>
-    <div class="mt-1 font-mono text-2xl font-semibold text-[var(--color-ok)]">
-      {kpis.disponiblesHoy}
-    </div>
-    <div class="mt-1 text-[11px] text-[var(--color-text-faint)]">
-      {kpis.porcentajeDisponible}% del catálogo
-    </div>
-  </div>
+  <KpiCard
+    icon={CheckCircle2}
+    label="Disponibles Hoy"
+    value={kpis.disponiblesHoy}
+    footer={`${kpis.porcentajeDisponible}% del catálogo`}
+  />
 
-  <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-    <div class="text-xs text-[var(--color-text-secondary)]">En Arriendo</div>
-    <div class="mt-1 font-mono text-2xl font-semibold text-[var(--color-info)]">
-      {kpis.modelosEnArriendo}
-    </div>
-    <div class="mt-1 text-[11px] text-[var(--color-text-faint)]">
-      {kpis.unidadesEnArriendo} {kpis.unidadesEnArriendo === 1 ? "unidad" : "unidades"} en uso
-    </div>
-  </div>
+  <KpiCard
+    icon={Truck}
+    label="En Arriendo"
+    value={kpis.modelosEnArriendo}
+    footer={`${kpis.unidadesEnArriendo} ${
+      kpis.unidadesEnArriendo === 1 ? "unidad" : "unidades"
+    } en uso`}
+  />
 
-  <div class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-    <div class="text-xs text-[var(--color-text-secondary)]">Bloqueados</div>
-    <div class="mt-1 font-mono text-2xl font-semibold text-[var(--color-warn)]">
-      {kpis.bloqueados}
-    </div>
-    <div class="mt-1 text-[11px] text-[var(--color-text-faint)]">Sin stock o bajo pedido</div>
-  </div>
+  <KpiCard
+    icon={Wrench}
+    label="Mantención / Bloqueadas"
+    value={kpis.bloqueados}
+    footer="Sin stock o bajo pedido"
+  />
 </div>
