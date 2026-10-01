@@ -40,7 +40,7 @@ def _row(
     fecha_inicio=None,
     fecha_termino=None,
     total: int = 150000,
-    status: str = "on-hold",
+    status: str = "request",
     created_at=None,
 ) -> dict:
     return {
@@ -131,8 +131,8 @@ class TestFormatOrderMessage:
         assert "Ana" in msg
 
     def test_contains_status(self):
-        msg = format_order_message(_row(status="on-hold"))
-        assert "on-hold" in msg
+        msg = format_order_message(_row(status="request"))
+        assert "request" in msg
 
     def test_total_integer_clp(self):
         """Total must be rendered as integer CLP (no decimals)."""
@@ -320,7 +320,7 @@ def _detail_row(**overrides) -> dict:
         "calculated_subtotal": 360000,
         "calculated_iva": 68400,
         "calculated_total": 428400,
-        "status": "on-hold",
+        "status": "request",
     }
     row.update(overrides)
     return row

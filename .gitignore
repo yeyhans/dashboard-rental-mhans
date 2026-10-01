@@ -20,3 +20,14 @@ pnpm-debug.log*
 
 # macOS-specific files
 .DS_Store
+
+# raw pg_dump scratch output (schema-baseline authoring, not the committed migration)
+supabase/migrations/_raw/
+.env.local
+.env.*.local
+.env.local.produccion.bak
+.vercel
+.env*
+
+# Logs del dev server lanzado en segundo plano durante auditorias
+.dev.*.log

@@ -1,0 +1,97 @@
+---
+import type { AgendaDay, AgendaEntry } from "../lib/agenda";
+
+/**
+ * Agenda Operacional del Centro de Control.
+ *
+ * Estructura del canónico `MarioHans_OS_Area01_Centro_Control_Canonical_RC2.1.2.html`: cinco días
+ * y, en cada uno, tres filas — Preparaciones, Entregas, Devoluciones.
+ *
+ * El canónico imprime "Sin entregas programadas" cuando una fila está vacía en vez de esconderla,
+ * y ese detalle es el sentido del componente: una fila ausente se lee como "todavía no cargó",
+ * mientras que un "sin entregas" explícito es una afirmación sobre la que se puede planificar.
+ *
+ * Es un componente Astro y no React porque no tiene estado ni interacción: enviarlo como island
+ * sería mandar JavaScript al navegador para pintar una tabla estática.
+ */
+interface Props {
+  agenda: AgendaDay[];
+}
+
+const { agenda } = Astro.props;
+
+const WEEKDAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+function dayLabel(iso: string) {
+  const [y, m, d] = iso.split("-").map(Number);
+  // Se construye en UTC y se lee en UTC: `new Date('2026-06-15')` sería medianoche UTC y en Chile
+  // (UTC-4) el getDay() local devolvería el día anterior.
+  const date = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1));
+  return {
+    weekday: WEEKDAYS[date.getUTCDay()] ?? "",
+    short: `${String(d).padStart(2, "0")} ${MONTHS[(m ?? 1) - 1] ?? ""}`,
+  };
+}
+
+const ROWS: Array<{ key: keyof Pick<AgendaDay, "preparaciones" | "entregas" | "devoluciones">; label: string; empty: string }> = [
+  { key: "preparaciones", label: "Preparaciones", empty: "Sin preparaciones" },
+  { key: "entregas", label: "Entregas", empty: "Sin entregas programadas" },
+  { key: "devoluciones", label: "Devoluciones", empty: "Sin devoluciones" },
+];
+---
+
+<section class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)]">
+  <div class="flex items-baseline justify-between border-b border-[var(--color-border)] p-4">
+    <h2 class="text-sm font-semibold">Agenda Operacional</h2>
+    <span class="text-xs text-[var(--color-text-secondary)]">Próximos 5 días</span>
+  </div>
+
+  <div class="divide-y divide-[var(--color-border-soft)]">
+    {agenda.map((day) => {
+      const label = dayLabel(day.date);
+      return (
+        <div class="grid gap-3 p-4 sm:grid-cols-[110px_minmax(0,1fr)]">
+          <div>
+            <div class="text-xs font-semibold">{label.weekday}</div>
+            <div class="font-mono text-[11px] text-[var(--color-text-secondary)]">{label.short}</div>
+          </div>
+
+          <dl class="space-y-2">
+            {ROWS.map((row) => {
+              const entries = day[row.key] as AgendaEntry[];
+              return (
+                <div class="grid gap-1 sm:grid-cols-[120px_minmax(0,1fr)]">
+                  <dt class="text-[11px] font-medium text-[var(--color-text-secondary)]">
+                    {row.label}
+                  </dt>
+                  <dd class="text-xs">
+                    {entries.length === 0 ? (
+                      <span class="text-[var(--color-text-faint)]">{row.empty}</span>
+                    ) : (
+                      <ul class="space-y-0.5">
+                        {entries.map((entry) => (
+                          <li>
+                            <a
+                              href={`/orders/${entry.orderId}`}
+                              class="inline-flex flex-wrap items-baseline gap-1.5 underline-offset-2 hover:underline"
+                            >
+                              <span>{entry.client}</span>
+                              <span class="font-mono text-[10px] text-[var(--color-text-faint)]">
+                                {entry.reference}
+                              </span>
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+        </div>
+      );
+    })}
+  </div>
+</section>

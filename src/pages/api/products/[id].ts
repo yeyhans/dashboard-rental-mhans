@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { parseValuationUpdates } from '../../../lib/productValuation';
 import { ProductService } from '../../../services/productService';
 import { withAuth } from '../../../middleware/auth';
 // withCors removed - global middleware handles CORS
@@ -87,8 +88,27 @@ export const PUT: APIRoute = withAuth(async (context) => {
       });
     }
 
+    // Valuation fields (0010) are the one part of the body validated here: a negative or decimal
+    // value would otherwise hit the CHECK constraint and surface as a bare 500. Only the keys
+    // present are touched, blanks clear the value, and a derived `total_value_clp` is never
+    // written — it is computed from quantity × used value and has no column.
+    const { total_value_clp: _ignoredTotal, ...forwarded } = updates as Record<string, unknown>;
+    const valuation = parseValuationUpdates(forwarded);
+    if (valuation.error) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: valuation.error
+      }), {
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
     const updatedProduct = await ProductService.updateProduct(productId, {
-      ...updates,
+      ...forwarded,
+      ...valuation.values,
       updated_at: new Date().toISOString()
     });
 

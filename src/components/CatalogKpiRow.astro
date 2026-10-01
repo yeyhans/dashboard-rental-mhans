@@ -1,0 +1,61 @@
+---
+import { Package, CheckCircle2, Truck, Wrench } from "lucide-react";
+import type { CatalogKpis } from "../lib/catalogAvailability";
+import { KpiCard } from "./shared/KpiCard";
+
+/**
+ * `.kpi-strip` del canónico de Catálogo de Equipos, cuyo subtítulo es "Inventario de activos
+ * físicos con disponibilidad en tiempo real".
+ *
+ * La disponibilidad se calcula cruzando los arriendos activos de hoy contra el catálogo: el
+ * esquema no tiene inventario serializado, así que ese cruce es el único lugar donde la respuesta
+ * existe. Por lo mismo se informan unidades EN USO, nunca "3 de 5 disponibles": sin tabla de
+ * unidades no hay denominador, y esa razón sería inventada.
+ *
+ * D-23 (05d): las cuatro tarjetas usan el `KpiCard` compartido (ícono circular, patrón canónico
+ * P7) en vez del markup propio que tenía antes, y la cuarta se llama "Mantención / Bloqueadas"
+ * (el canon de Catálogo, no "Bloqueados") porque agrupa productos sin stock y bajo pedido, no
+ * solo bloqueados. El tinte de color por valor (ok/info/warn) que tenía el markup anterior no se
+ * replicó: `KpiCard` no expone un prop de tono, y pasar un `<span>` coloreado como `value` desde
+ * un componente Astro a un componente React no es un patrón soportado de forma confiable. El
+ * ícono de cada tarjeta ya es la señal visual (P7); el color semántico sigue vivo en `StatusBadge`
+ * para el resto del catálogo.
+ */
+interface Props {
+  kpis: CatalogKpis;
+}
+
+const { kpis } = Astro.props;
+---
+
+<div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+  <KpiCard
+    icon={Package}
+    label="Modelos Publicados"
+    value={kpis.modelosPublicados}
+    footer="En el catálogo"
+  />
+
+  <KpiCard
+    icon={CheckCircle2}
+    label="Disponibles Hoy"
+    value={kpis.disponiblesHoy}
+    footer={`${kpis.porcentajeDisponible}% del catálogo`}
+  />
+
+  <KpiCard
+    icon={Truck}
+    label="En Arriendo"
+    value={kpis.modelosEnArriendo}
+    footer={`${kpis.unidadesEnArriendo} ${
+      kpis.unidadesEnArriendo === 1 ? "unidad" : "unidades"
+    } en uso`}
+  />
+
+  <KpiCard
+    icon={Wrench}
+    label="Mantención / Bloqueadas"
+    value={kpis.bloqueados}
+    footer="Sin stock o bajo pedido"
+  />
+</div>

@@ -1,7 +1,9 @@
 import type { APIRoute } from 'astro';
+import { withAuth } from '../../../middleware/auth';
 import { ShippingService } from '../../../services/shippingService';
 
-export const GET: APIRoute = async () => {
+// Solo lo consume el dashboard autenticado; el middleware global resuelve CORS, no autenticación.
+export const GET: APIRoute = withAuth(async () => {
   try {
     const stats = await ShippingService.getShippingStats();
 
@@ -12,10 +14,11 @@ export const GET: APIRoute = async () => {
       },
     });
   } catch (error) {
-    console.error('Error fetching shipping stats:', error);
-    return new Response(JSON.stringify({ 
-      error: 'Error al obtener estadísticas de envío',
-      details: error instanceof Error ? error.message : 'Error desconocido'
+    // El detalle queda solo en el servidor: `error.message` viene de Postgres y puede filtrar
+    // nombres de columnas, constraints o fragmentos de la consulta.
+    console.error('[GET /api/shipping/stats] Error al obtener estadísticas de envío:', error);
+    return new Response(JSON.stringify({
+      error: 'Error al obtener estadísticas de envío'
     }), {
       status: 500,
       headers: {
@@ -23,4 +26,4 @@ export const GET: APIRoute = async () => {
       },
     });
   }
-};
+});

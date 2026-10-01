@@ -6,7 +6,8 @@ Rules:
 - Server starts even if DB is down; tools report errors per-call.
 - SQL ALWAYS parametrized with %s (psycopg3 style). NEVER f-strings with input.
 - Logs go to stderr only.
-- Includes ensure_pending_writes_table() for the hermes_pending_writes DDL.
+- NEVER issues DDL. Schema objects belong to
+  dashboard/supabase/migrations/0000_baseline.sql (ADR-D5); this layer only asserts.
 """
 from __future__ import annotations
 
@@ -28,19 +29,7 @@ logger = logging.getLogger(__name__)
 _ro_pool: AsyncConnectionPool | None = None
 _rw_pool: AsyncConnectionPool | None = None
 
-HERMES_PENDING_WRITES_DDL = """
-CREATE TABLE IF NOT EXISTS hermes_pending_writes (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  action text NOT NULL,
-  plan_json jsonb NOT NULL,
-  confirmation_token text NOT NULL,
-  bound_user text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  expires_at timestamptz NOT NULL,
-  consumed_at timestamptz,
-  note text
-);
-"""
+PENDING_WRITES_TABLE = "public.hermes_pending_writes"
 
 
 async def _get_ro_pool() -> AsyncConnectionPool:
@@ -68,15 +57,22 @@ async def _get_rw_pool() -> AsyncConnectionPool:
         if not url:
             raise RuntimeError("DATABASE_URL_RW no configurada — escrituras no habilitadas")
         logger.info("Creando pool RW hacia base de datos")
-        _rw_pool = AsyncConnectionPool(
+        pool = AsyncConnectionPool(
             conninfo=url,
             min_size=1,
             max_size=3,
             kwargs={"row_factory": dict_row},
             open=False,
         )
-        await _rw_pool.open()
-        await ensure_pending_writes_table()
+        await pool.open()
+        try:
+            await assert_pending_writes_table(pool)
+        except BaseException:
+            # Do not cache a pool whose preconditions failed: the next call must
+            # re-check instead of handing out a silently unusable pool.
+            await pool.close()
+            raise
+        _rw_pool = pool
     return _rw_pool
 
 
@@ -96,13 +92,30 @@ async def rw_conn() -> AsyncGenerator[psycopg.AsyncConnection, None]:
         yield conn
 
 
-async def ensure_pending_writes_table() -> None:
-    """CREATE TABLE IF NOT EXISTS hermes_pending_writes."""
-    pool = await _get_rw_pool()
+async def assert_pending_writes_table(pool: AsyncConnectionPool | None = None) -> None:
+    """Assert that hermes_pending_writes exists. Never issues DDL.
+
+    hermes_rw has no CREATE on schema public and must not have it (ADR-D8,
+    least privilege). An IF NOT EXISTS guard would not help: PostgreSQL checks
+    the schema privilege before the existence short-circuit, so any DDL here
+    aborts the whole write path even when the table is already in place.
+    """
+    pool = pool or await _get_rw_pool()
     async with pool.connection() as conn:
-        await conn.execute(HERMES_PENDING_WRITES_DDL)
-        await conn.commit()
-    logger.info("hermes_pending_writes table ensured")
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                "SELECT to_regclass(%s) IS NOT NULL AS table_exists",
+                (PENDING_WRITES_TABLE,),
+            )
+            row = await cur.fetchone()
+
+    if not (row and row.get("table_exists")):
+        raise RuntimeError(
+            f"{PENDING_WRITES_TABLE} no existe — el patrón confirm-before-write no puede "
+            "operar. La tabla la crea dashboard/supabase/migrations/0000_baseline.sql: "
+            "aplicar la cadena de migraciones antes de habilitar las escrituras de Hermes."
+        )
+    logger.info("hermes_pending_writes verificada")
 
 
 async def fetch_one(

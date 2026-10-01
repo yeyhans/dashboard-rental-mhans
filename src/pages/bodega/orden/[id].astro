@@ -1,0 +1,55 @@
+---
+import Bodega from "../../../layout/Bodega.astro";
+import BodegaScanner from "../../../components/bodega/BodegaScanner";
+import { clearAuthCookies, getServerAdmin } from "../../../lib/supabase";
+import { BodegaService, type ScanSheet } from "../../../services/bodegaService";
+
+export const prerender = false;
+
+// The scan screen for one order (batch 3). Same session gate as the board.
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+
+const orderId = Number(Astro.params.id);
+if (!Number.isInteger(orderId) || orderId <= 0) {
+  return Astro.redirect("/bodega");
+}
+
+let sheet: ScanSheet | null = null;
+let loadError: string | null = null;
+
+try {
+  sheet = await BodegaService.getScanSheet(orderId);
+} catch (error) {
+  console.error('[bodega/orden] Error al cargar la orden:', { orderId, admin: adminSession.admin.email, error });
+  loadError = 'No se pudo cargar la orden. Revisa la conexión y vuelve a intentarlo.';
+}
+
+if (!sheet && !loadError) {
+  Astro.response.status = 404;
+}
+
+const title = sheet ? `${sheet.order.reference} | Bodega` : 'Orden | Bodega';
+---
+
+<Bodega title={title} email={adminSession.admin.email}>
+  {loadError ? (
+    <div
+      role="alert"
+      class="rounded-[10px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-4 text-sm text-[var(--color-crit)]"
+    >
+      {loadError}
+    </div>
+  ) : sheet ? (
+    <BodegaScanner client:load sheet={sheet} />
+  ) : (
+    <div class="rounded-[10px] border border-[var(--color-border)] p-6 text-center">
+      <p class="font-medium">No existe una orden con ese número.</p>
+      <a href="/bodega" class="mt-3 inline-block text-sm underline">Volver al tablero</a>
+    </div>
+  )}
+</Bodega>

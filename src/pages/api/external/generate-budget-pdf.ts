@@ -152,7 +152,7 @@ export const POST: APIRoute = async ({ request }) => {
       const supabaseOrderData = {
         id: orderData.order_id,
         customer_id: validCustomerId,
-        status: orderData.status || 'on-hold',
+        status: orderData.status || 'request',
         currency: 'CLP',
         date_created: orderData.created_at || new Date().toISOString(),
         date_modified: new Date().toISOString(),

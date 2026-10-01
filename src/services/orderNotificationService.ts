@@ -1,4 +1,15 @@
 import { communicationsService } from './communicationsService';
+import { canonicalStatus, statusLabel } from '../lib/orderStatus';
+
+/**
+ * Runs in the browser: `ProcessOrder.tsx` reaches it through the `useOrderNotifications` hook.
+ * It therefore writes through `communicationsService`, i.e. the admin-gated API route, and must
+ * never import the service-role client.
+ *
+ * The three `sendMessage` calls below used to pass their arguments in the wrong positions
+ * (`messageType` where `userName` goes, the display name where `fileUrl` goes). Production still
+ * holds ~669 rows with `user_name = 'text'` and an emoji-prefixed name in `file_url`.
+ */
 
 export interface OrderNotificationData {
   orderId: number;
@@ -48,23 +59,15 @@ class OrderNotificationService {
         email: orderData.adminEmail || this.defaultAdminInfo.email
       };
 
-      let message = '';
-      let messageType: 'text' | 'image' | 'file' = 'text';
-
-      if (emailData.success) {
-        message = this.buildSuccessEmailMessage(emailData);
-      } else {
-        message = this.buildFailedEmailMessage(emailData);
-      }
+      const message = emailData.success
+        ? this.buildSuccessEmailMessage(emailData)
+        : this.buildFailedEmailMessage(emailData);
 
       await communicationsService.sendMessage(
         orderData.orderId,
         adminInfo.id,
         'admin',
         message,
-        messageType,
-        undefined,
-        undefined,
         `📧 ${adminInfo.name}`,
         adminInfo.email
       );
@@ -97,9 +100,6 @@ class OrderNotificationService {
         adminInfo.id,
         'admin',
         message,
-        'text',
-        undefined,
-        undefined,
         `🔄 ${adminInfo.name}`,
         adminInfo.email
       );
@@ -146,9 +146,6 @@ class OrderNotificationService {
         adminInfo.id,
         'admin',
         message,
-        'text',
-        undefined,
-        undefined,
         `📄 ${adminInfo.name}`,
         adminInfo.email
       );
@@ -207,37 +204,13 @@ class OrderNotificationService {
    * Construir mensaje para cambio de estado (compacto)
    */
   private buildStatusChangeMessage(statusData: StatusChangeNotificationData): string {
-    const statusNames: { [key: string]: string } = {
-      'pending': 'Pendiente',
-      'processing': 'En Proceso',
-      'on-hold': 'En Espera',
-      'completed': 'Completado',
-      'cancelled': 'Cancelado',
-      'failed': 'Fallido',
-      'refunded': 'Reembolsado'
-    };
+    const oldStatusName = statusLabel(statusData.oldStatus);
+    const newStatusName = statusLabel(statusData.newStatus);
 
-    const oldStatusName = statusNames[statusData.oldStatus] || statusData.oldStatus;
-    const newStatusName = statusNames[statusData.newStatus] || statusData.newStatus;
-
-    // Determinar emoji según el nuevo estado
-    let emoji = '🔄';
-    switch (statusData.newStatus) {
-      case 'completed':
-        emoji = '✅';
-        break;
-      case 'failed':
-        emoji = '❌';
-        break;
-      case 'cancelled':
-        emoji = '❌';
-        break;
-      case 'refunded':
-        emoji = '💸';
-        break;
-      default:
-        emoji = '🔄';
-    }
+    // El emoji sale de la etapa canónica: `failed` y `refunded` eran casos propios y después de
+    // 0003 ninguno vuelve a llegar, así que el aviso saldría siempre con el genérico.
+    const destino = canonicalStatus(statusData.newStatus);
+    const emoji = destino === 'completed' ? '✅' : destino === 'cancelled' ? '❌' : '🔄';
 
     const reasonText = statusData.reason ? ` - ${statusData.reason}` : '';
     return `${emoji} **Estado:** ${oldStatusName} → ${newStatusName}${reasonText}`;

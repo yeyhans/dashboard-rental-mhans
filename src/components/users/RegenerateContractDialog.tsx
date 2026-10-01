@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -6,9 +6,9 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '../ui/dialog';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
+} from "../ui/dialog";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
 import {
   RefreshCw,
   CheckCircle2,
@@ -17,30 +17,43 @@ import {
   Loader2,
   AlertTriangle,
   FileText,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import type { UserProfile } from '../../types/user';
-import { enhanceUser } from './utils/userUtils';
+} from "lucide-react";
+import { toast } from "sonner";
+import type { UserProfile } from "../../types/user";
+import { enhanceUser } from "./utils/userUtils";
+import { useControllableOpen } from "../shared/useControllableOpen";
 
 interface RegenerateContractDialogProps {
   user: UserProfile;
   onUserUpdated: (user: UserProfile) => void;
   sessionToken: string;
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
+  /**
+   * Controlled open state (D-18): when given, a parent (e.g. `UserTableView`) decides when the
+   * dialog is open instead of an internal `useState`. Lets the dialog be rendered outside a
+   * `DropdownMenuContent`, which Radix unmounts on menu close along with anything nested in it.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-type DialogState = 'idle' | 'loading' | 'success' | 'error';
+type DialogState = "idle" | "loading" | "success" | "error";
 
 const RegenerateContractDialog = ({
   user,
   onUserUpdated,
   sessionToken,
   trigger,
+  open: openProp,
+  onOpenChange,
 }: RegenerateContractDialogProps) => {
-  const [open, setOpen] = useState(false);
-  const [state, setState] = useState<DialogState>('idle');
+  const [open, setOpen, isControlled] = useControllableOpen(
+    openProp,
+    onOpenChange,
+  );
+  const [state, setState] = useState<DialogState>("idle");
   const [contractUrl, setContractUrl] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
   const enhanced = enhanceUser(user);
   const hasContract = !!user.url_user_contrato;
@@ -50,19 +63,19 @@ const RegenerateContractDialog = ({
   const handleOpen = (value: boolean) => {
     setOpen(value);
     if (!value) {
-      setState('idle');
+      setState("idle");
       setContractUrl(null);
-      setErrorMessage('');
+      setErrorMessage("");
     }
   };
 
   const handleRegenerate = async () => {
-    setState('loading');
+    setState("loading");
     try {
-      const response = await fetch('/api/contracts/generate-pdf', {
-        method: 'POST',
+      const response = await fetch("/api/contracts/generate-pdf", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: `Bearer ${sessionToken}`,
         },
         body: JSON.stringify({
@@ -74,9 +87,9 @@ const RegenerateContractDialog = ({
             rut: user.rut,
             direccion: user.direccion,
             ciudad: user.ciudad,
-            pais: user.pais ?? 'Chile',
+            pais: user.pais ?? "Chile",
             telefono: user.telefono,
-            tipo_cliente: user.tipo_cliente ?? 'natural',
+            tipo_cliente: user.tipo_cliente ?? "natural",
             empresa_nombre: user.empresa_nombre,
             empresa_rut: user.empresa_rut,
             empresa_ciudad: user.empresa_ciudad,
@@ -94,33 +107,36 @@ const RegenerateContractDialog = ({
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || result.error || 'Error al generar el contrato');
+        throw new Error(
+          result.message || result.error || "Error al generar el contrato",
+        );
       }
 
       const newContractUrl = result.contractUrl || result.pdfUrl;
       setContractUrl(newContractUrl);
       onUserUpdated({ ...user, url_user_contrato: newContractUrl });
-      setState('success');
-      toast.success('Contrato regenerado exitosamente', {
+      setState("success");
+      toast.success("Contrato regenerado exitosamente", {
         description: `Se envió un email a ${user.email}`,
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Error desconocido';
+      const msg = err instanceof Error ? err.message : "Error desconocido";
       setErrorMessage(msg);
-      setState('error');
-      console.error('[RegenerateContractDialog] Error:', { userId: user.user_id, error: err });
+      setState("error");
+      console.error("[RegenerateContractDialog] Error:", {
+        userId: user.user_id,
+        error: err,
+      });
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
-      <div
-        onClick={() => handleOpen(true)}
-        className="cursor-pointer"
-      >
-        {trigger}
-      </div>
-
+      {(trigger !== undefined || !isControlled) && (
+        <div onClick={() => handleOpen(true)} className="cursor-pointer">
+          {trigger}
+        </div>
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -133,7 +149,7 @@ const RegenerateContractDialog = ({
         </DialogHeader>
 
         {/* Estado: idle */}
-        {state === 'idle' && (
+        {state === "idle" && (
           <div className="space-y-4">
             {/* Resumen del usuario */}
             <div className="rounded-lg border bg-muted/30 p-4 space-y-1">
@@ -146,11 +162,13 @@ const RegenerateContractDialog = ({
 
             {/* Estado del contrato actual */}
             <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">Contrato actual</p>
+              <p className="text-sm font-medium text-foreground">
+                Contrato actual
+              </p>
               {hasContract ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <Badge className="bg-emerald-100 text-emerald-800">
                       <FileText className="h-3 w-3 mr-1" />
                       Contrato existente
                     </Badge>
@@ -164,15 +182,15 @@ const RegenerateContractDialog = ({
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   </div>
-                  <div className="flex items-start gap-2 rounded-md border border-yellow-200 bg-yellow-50 dark:border-yellow-900/50 dark:bg-yellow-900/10 px-3 py-2">
-                    <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                  <div className="flex items-start gap-2 rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2">
+                    <AlertTriangle className="h-4 w-4 text-yellow-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-yellow-700">
                       Se generará un nuevo PDF y reemplazará el contrato actual.
                     </p>
                   </div>
                 </div>
               ) : (
-                <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                <Badge className="bg-yellow-100 text-yellow-800">
                   Sin contrato — se generará el primero
                 </Badge>
               )}
@@ -181,20 +199,22 @@ const RegenerateContractDialog = ({
             {/* Advertencias de datos faltantes */}
             {(missingSignature || missingIdDocs) && (
               <div className="space-y-2">
-                <p className="text-sm font-medium text-foreground">Advertencias</p>
+                <p className="text-sm font-medium text-foreground">
+                  Advertencias
+                </p>
                 <div className="space-y-1.5">
                   {missingSignature && (
-                    <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 dark:border-orange-900/50 dark:bg-orange-900/10 px-3 py-2">
+                    <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2">
                       <AlertCircle className="h-4 w-4 text-orange-500 shrink-0" />
-                      <p className="text-xs text-orange-700 dark:text-orange-400">
+                      <p className="text-xs text-orange-700">
                         No tiene firma digital registrada
                       </p>
                     </div>
                   )}
                   {missingIdDocs && (
-                    <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 dark:border-orange-900/50 dark:bg-orange-900/10 px-3 py-2">
+                    <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2">
                       <AlertCircle className="h-4 w-4 text-orange-500 shrink-0" />
-                      <p className="text-xs text-orange-700 dark:text-orange-400">
+                      <p className="text-xs text-orange-700">
                         Faltan documentos de identidad (RUT)
                       </p>
                     </div>
@@ -206,7 +226,7 @@ const RegenerateContractDialog = ({
         )}
 
         {/* Estado: loading */}
-        {state === 'loading' && (
+        {state === "loading" && (
           <div className="flex flex-col items-center justify-center py-8 gap-3 text-muted-foreground">
             <Loader2 className="h-8 w-8 animate-spin" />
             <p className="text-sm">Generando PDF y enviando email...</p>
@@ -214,14 +234,16 @@ const RegenerateContractDialog = ({
         )}
 
         {/* Estado: success */}
-        {state === 'success' && (
+        {state === "success" && (
           <div className="space-y-4">
             <div className="flex flex-col items-center justify-center py-4 gap-2">
               <CheckCircle2 className="h-10 w-10 text-emerald-500" />
               <p className="font-medium text-foreground">¡Contrato generado!</p>
               <p className="text-sm text-muted-foreground text-center">
-                Se envió un email con el PDF a{' '}
-                <span className="text-foreground font-medium">{user.email}</span>
+                Se envió un email con el PDF a{" "}
+                <span className="text-foreground font-medium">
+                  {user.email}
+                </span>
               </p>
             </div>
             {contractUrl && (
@@ -240,11 +262,13 @@ const RegenerateContractDialog = ({
         )}
 
         {/* Estado: error */}
-        {state === 'error' && (
+        {state === "error" && (
           <div className="space-y-3">
             <div className="flex flex-col items-center justify-center py-4 gap-2">
               <AlertCircle className="h-10 w-10 text-destructive" />
-              <p className="font-medium text-foreground">Error al generar el contrato</p>
+              <p className="font-medium text-foreground">
+                Error al generar el contrato
+              </p>
             </div>
             <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3">
               <p className="text-sm text-destructive">{errorMessage}</p>
@@ -253,22 +277,24 @@ const RegenerateContractDialog = ({
         )}
 
         <DialogFooter className="gap-2 sm:gap-0">
-          {(state === 'idle' || state === 'error') && (
+          {(state === "idle" || state === "error") && (
             <>
               <Button
                 variant="outline"
                 onClick={() => handleOpen(false)}
-                disabled={state === 'loading'}
+                disabled={state === "loading"}
                 className="cursor-pointer"
               >
                 Cancelar
               </Button>
               <Button
-                onClick={state === 'error' ? handleRegenerate : handleRegenerate}
-                disabled={state === 'loading'}
+                onClick={
+                  state === "error" ? handleRegenerate : handleRegenerate
+                }
+                disabled={state === "loading"}
                 className="cursor-pointer"
               >
-                {state === 'error' ? (
+                {state === "error" ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Reintentar
@@ -282,7 +308,7 @@ const RegenerateContractDialog = ({
               </Button>
             </>
           )}
-          {state === 'success' && (
+          {state === "success" && (
             <Button
               onClick={() => handleOpen(false)}
               variant="outline"

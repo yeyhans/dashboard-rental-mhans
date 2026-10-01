@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
+import { secretsMatch } from '../../../lib/timingSafe';
 import { UserService } from '../../../services/userService';
 import type { Database } from '../../../types/database';
 
@@ -7,7 +8,10 @@ import type { Database } from '../../../types/database';
  * External API endpoint para actualizar datos de clientes desde Hermes (agente Telegram).
  *
  * Auth: X-API-Key debe igualar HERMES_API_SECRET (secreto dedicado para Hermes).
- * Fallback a FRONTEND_API_SECRET si HERMES_API_SECRET no está configurado en Vercel.
+ * NO hay fallback a FRONTEND_API_SECRET: ese secreto se comparte con el frontend público
+ * y no debe otorgar autoridad para editar perfiles de clientes
+ * (external-endpoint-authentication/spec.md, "Hermes uses a dedicated API secret without a
+ * frontend fallback").
  *
  * CORS: manejado por el middleware global (src/middleware/index.ts).
  */
@@ -64,18 +68,15 @@ function isValidRut(rut: string): boolean {
   return dv === expectedDv;
 }
 
-/** Valida la X-API-Key contra HERMES_API_SECRET con fallback a FRONTEND_API_SECRET */
+/** Valida la X-API-Key contra HERMES_API_SECRET. Sin fallback: si no está configurado, nadie pasa. */
 function validateApiKey(request: Request): boolean {
   const providedKey = request.headers.get('X-API-Key');
   if (!providedKey) return false;
 
   const hermesSecret = import.meta.env.HERMES_API_SECRET;
-  if (hermesSecret && providedKey === hermesSecret) return true;
+  if (!hermesSecret) return false;
 
-  const frontendSecret = import.meta.env.FRONTEND_API_SECRET;
-  if (frontendSecret && providedKey === frontendSecret) return true;
-
-  return false;
+  return secretsMatch(providedKey, hermesSecret);
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────────

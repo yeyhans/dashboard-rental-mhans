@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { reserveAmount as computeReserveAmount } from '../../lib/finance';
 import { 
   Card, 
   CardContent, 
@@ -92,11 +93,9 @@ const getPaymentStatusKey = (status: boolean | string): string => {
   return status === 'true' ? 'true' : 'false';
 };
 
-// Calculate reserve amount based on type and value
-const calculateReserveAmount = (total: number, reserveType: string, reserveValue: number): number => {
-  if (reserveType === 'fixed') return Math.round(reserveValue);
-  return Math.round(total * (reserveValue / 100));
-};
+// Reserve amount: single rule in finance.ts (rounded and clamped to [0, total]).
+const calculateReserveAmount = (total: number, reserveType: string, reserveValue: number): number =>
+  computeReserveAmount({ total, reserveType, reserveValue });
 
 interface PaymentsTableProps {
   initialOrders: Order[];

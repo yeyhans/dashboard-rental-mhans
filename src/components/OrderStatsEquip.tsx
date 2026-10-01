@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { isBookingStatus } from '../lib/orderStatus';
 import { 
   Card, 
   CardContent, 
@@ -57,7 +58,9 @@ const OrderStatsEquip: React.FC<OrderStatsEquipProps> = ({ orders }) => {
       if (!order.line_items) return;
       
       // Solo considerar pedidos completados o en proceso
-      if (!['completed', 'processing'].includes(order.status)) return;
+      // Todo pedido no cancelado consumio el equipo. El literal anterior era
+      // ['completed','processing']: post-0003 deja fuera las cuatro etapas operacionales.
+      if (!isBookingStatus(order.status)) return;
       
       const metadata = order.metadata || {};
       const days = parseInt(metadata.num_jornadas || '1', 10);
@@ -127,7 +130,9 @@ const OrderStatsEquip: React.FC<OrderStatsEquipProps> = ({ orders }) => {
     
     orders.forEach(order => {
       // Solo considerar pedidos completados o en proceso
-      if (!['completed', 'processing'].includes(order.status)) return;
+      // Todo pedido no cancelado consumio el equipo. El literal anterior era
+      // ['completed','processing']: post-0003 deja fuera las cuatro etapas operacionales.
+      if (!isBookingStatus(order.status)) return;
       
       const metadata = order.metadata || {};
       
@@ -169,7 +174,9 @@ const OrderStatsEquip: React.FC<OrderStatsEquipProps> = ({ orders }) => {
     
     orders.forEach(order => {
       // Solo considerar pedidos completados o en proceso
-      if (!['completed', 'processing'].includes(order.status)) return;
+      // Todo pedido no cancelado consumio el equipo. El literal anterior era
+      // ['completed','processing']: post-0003 deja fuera las cuatro etapas operacionales.
+      if (!isBookingStatus(order.status)) return;
       
       const metadata = order.metadata || {};
       

@@ -1,0 +1,56 @@
+---
+import Base from "../../layout/Base.astro";
+import MovementsFeed from "../../components/inventory/MovementsFeed";
+import { clearAuthCookies, getServerAdmin } from "../../lib/supabase";
+import { AssetMovementService, type MovementsFeed as MovementsFeedData } from "../../services/assetMovementService";
+
+export const prerender = false;
+
+// Movimientos (batch 3): the admin's live view of the garage. admin + super_admin; an operator is
+// redirected to /bodega by the global middleware before this runs.
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+
+let feed: MovementsFeedData = {
+  movements: [],
+  kpis: { unitsOutNow: 0, unitsOverdue: 0, movementsToday: 0 },
+  operators: [],
+  generatedAt: new Date().toISOString(),
+};
+let loadError: string | null = null;
+
+try {
+  feed = await AssetMovementService.listFeed({}, new Date());
+} catch (error) {
+  console.error('[inventory/movements] Error al cargar el feed:', { admin: adminSession.admin.email, error });
+  loadError = 'No se pudieron cargar los movimientos. Recarga la página o inténtalo en unos minutos.';
+}
+
+const title = `Movimientos de bodega | ${adminSession.admin.email}`;
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    <header class="mb-5 border-b border-[var(--color-border)] pb-4">
+      <h1 class="text-xl font-semibold tracking-tight">Movimientos de bodega</h1>
+      <p class="mt-1 text-sm text-[var(--color-text-secondary)]">
+        Salidas y entradas escaneadas, en vivo
+      </p>
+    </header>
+
+    {loadError ? (
+      <div
+        role="alert"
+        class="rounded-[10px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-4 text-sm text-[var(--color-crit)]"
+      >
+        {loadError}
+      </div>
+    ) : (
+      <MovementsFeed client:load initialFeed={feed} />
+    )}
+  </div>
+</Base>

@@ -1,7 +1,9 @@
 import type { APIRoute } from 'astro';
 import { OrderService } from '../../../services/orderService';
 import { withAuth } from '../../../middleware/auth';
-import { isFrontendApiKeyOrAdmin, unauthorizedResponse } from '../../../lib/serverApiAuth';
+import { isFrontendApiKeyOrAdmin, unauthorizedResponse, validateFrontendApiKey } from '../../../lib/serverApiAuth';
+import { PricingError } from '../../../lib/pricing';
+import { ORDER_STATUSES, canonicalStatus } from '../../../lib/orderStatus';
 
 export const GET: APIRoute = withAuth(async (context) => {
   try {
@@ -80,18 +82,58 @@ export const POST: APIRoute = async (context) => {
       });
     }
 
+    // Normalizacion de vocabulario. Este endpoint es la costura entre los dos repositorios: el
+    // frontend de clientes crea aqui cada reserva y su `backendOrderService.ts` manda
+    // `status: 'on-hold'` por defecto. La migracion 0003 saca `on-hold` del CHECK, asi que en el
+    // instante en que se aplique ese insert empieza a fallar y ningun cliente puede reservar.
+    //
+    // Se arregla aca y no en el frontend a proposito: alla exigiria que el despliegue y el apply
+    // de la migracion cayeran en el mismo instante — adelantar el cambio a `request` hace que el
+    // CHECK viejo lo rechace, el mismo corte en espejo. Normalizando en el servidor los dos
+    // ordenes de eventos son seguros y cada repositorio despliega cuando quiera.
+    const requestedStatus = orderData.status ?? 'request';
+    const normalizedStatus = canonicalStatus(requestedStatus);
+
+    if (!normalizedStatus) {
+      // No se cae por defecto a `request`: `paid`, `reviewing`, `preparing` y `delivering`
+      // aparecen en la documentacion y en el timeline del frontend, pero ningun CHECK los admitio
+      // nunca. Convertirlos en silencio esconderia un bug real del llamador detras de un 201.
+      console.error('[POST /api/orders] Estado desconocido en la creacion:', {
+        status: requestedStatus,
+        customerId: orderData.customer_id,
+      });
+      return new Response(JSON.stringify({
+        success: false,
+        error: `Estado inválido: "${requestedStatus}". Debe ser uno de: ${ORDER_STATUSES.join(', ')}`
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    if (normalizedStatus !== requestedStatus) {
+      console.log('[POST /api/orders] Estado legado normalizado:', {
+        recibido: requestedStatus,
+        persistido: normalizedStatus,
+      });
+    }
+
     console.log('✅ Order data validated:', {
       customer_id: orderData.customer_id,
       billing_email: orderData.billing_email,
-      status: orderData.status || 'on-hold'
+      status: normalizedStatus
     });
+
+    // Los montos los recalcula el servicio; aquí solo se identifica quién llama. La clave de API
+    // la usa el frontend de clientes, una sesión admin no la envía.
+    const origin = validateFrontendApiKey(context.request) ? 'frontend' : 'admin';
 
     const order = await OrderService.createOrder({
       ...orderData,
       date_created: new Date().toISOString(),
       date_modified: new Date().toISOString(),
-      status: orderData.status || 'on-hold'
-    });
+      status: normalizedStatus
+    }, origin);
 
     console.log('✅ Order created successfully:', order.id);
     console.log('📋 PDF generation will be handled by frontend via /api/orders/:id/generate-budget');
@@ -107,6 +149,16 @@ export const POST: APIRoute = async (context) => {
       }
     });
   } catch (error) {
+    if (error instanceof PricingError) {
+      console.error('[POST /api/orders] Orden con montos inválidos:', { error: error.message });
+      return new Response(JSON.stringify({
+        success: false,
+        error: error.message
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
     console.error('❌ Error in POST /api/orders:', error);
     return new Response(JSON.stringify({
       success: false,

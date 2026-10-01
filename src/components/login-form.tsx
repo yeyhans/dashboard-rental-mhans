@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { cn } from "@/lib/utils"
+import { resolveLanding } from "@/lib/accessControl"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -29,6 +30,7 @@ type LoginFormData = z.infer<typeof loginSchema>
 interface LoginResponse {
   success: boolean
   data?: {
+    redirect_to?: string
     user: {
       id: string
       email: string
@@ -153,9 +155,11 @@ export function LoginForm({
       onSuccess?.(result.data)
       
 
-      // Redirect after short delay to show success message
+      // Redirect after short delay to show success message. The server names the landing page
+      // (`/bodega` for operators); the prop is the fallback for older responses (R3-103).
+      const landing = resolveLanding(result.data?.redirect_to, redirectUrl)
       setTimeout(() => {
-        window.location.href = redirectUrl
+        window.location.href = landing
       }, 1500)
 
     } catch (err) {

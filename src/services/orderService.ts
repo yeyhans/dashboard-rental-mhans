@@ -1,5 +1,8 @@
 import { supabaseAdmin } from '../lib/supabase';
+import { ORDER_STATUSES, bookingStatusFilter, canonicalStatus, expandStatusFilter } from '../lib/orderStatus';
 import type { Database } from '../types/database';
+import { OrderPricingService, type OrderCallerOrigin } from './orderPricingService';
+import { CouponService, type OrderCouponSnapshot } from './couponService';
 
 type Order = Database['public']['Tables']['orders']['Row'];
 type OrderInsert = Database['public']['Tables']['orders']['Insert'];
@@ -64,6 +67,8 @@ export class OrderService {
           correo_enviado,
           pago_reserva,
           pago_completo,
+          reserve_type,
+          reserve_value,
           is_editable,
           needs_payment,
           needs_processing,
@@ -175,6 +180,8 @@ export class OrderService {
           correo_enviado,
           pago_reserva,
           pago_completo,
+          reserve_type,
+          reserve_value,
           is_editable,
           needs_payment,
           needs_processing,
@@ -198,8 +205,11 @@ export class OrderService {
         `, { count: 'exact' })
         .order('date_created', { ascending: false });
 
-      if (status) {
-        query = query.eq('status', status);
+      // El listado filtra por una etapa canónica, pero durante la ventana la fila puede seguir
+      // escrita en vocabulario legado: un `.eq()` literal devolvería la lista vacía sin error.
+      const statusFilter = expandStatusFilter(status ? [status] : undefined);
+      if (statusFilter) {
+        query = query.in('status', statusFilter);
       }
 
       const { data, error, count } = await query
@@ -287,6 +297,8 @@ export class OrderService {
           correo_enviado,
           pago_reserva,
           pago_completo,
+          reserve_type,
+          reserve_value,
           is_editable,
           needs_payment,
           needs_processing,
@@ -342,19 +354,65 @@ export class OrderService {
   }
 
   /**
+   * Keeps `coupon_usage` in step with an order write, and never lets that bookkeeping undo the
+   * write itself. `CouponService` already swallows its own failures; this second net catches
+   * anything unexpected (a missing RPC, a mocked module, a programming error) so that a coupon
+   * problem can never turn a created or updated order into a 500.
+   */
+  private static async syncCouponUsage(
+    order: OrderCouponSnapshot,
+    options?: { isNew?: boolean }
+  ): Promise<void> {
+    try {
+      await CouponService.syncOrderCouponUsage(order, options);
+    } catch (error) {
+      console.error('[OrderService] No se pudo sincronizar el uso del cupón de la orden:', {
+        orderId: order?.id ?? null,
+        error,
+      });
+    }
+  }
+
+  /** Same contract as `syncCouponUsage`, for the cancellation path. */
+  private static async releaseCouponUsage(orderId: number): Promise<void> {
+    try {
+      await CouponService.releaseOrderCouponUsage(orderId);
+    } catch (error) {
+      console.error('[OrderService] No se pudo liberar el uso del cupón de la orden:', {
+        orderId,
+        error,
+      });
+    }
+  }
+
+  /**
    * Crear nueva orden
    */
-  static async createOrder(orderData: OrderInsert): Promise<Order> {
+  static async createOrder(
+    orderData: OrderInsert & { apply_iva?: boolean },
+    origin: OrderCallerOrigin = 'admin'
+  ): Promise<Order> {
     try {
+      // The money is always recomputed here: client-sent calculated_* values are never persisted.
+      const pricedFields = await OrderPricingService.priceNewOrder(orderData, origin);
+      // `apply_iva` is a pricing input only; `orders` has no such column.
+      const { apply_iva: _applyIva, ...insertable } = orderData;
+
       const { data, error } = await supabaseAdmin
         .from('orders')
-        .insert([orderData])
+        .insert([{ ...insertable, ...pricedFields }])
         .select()
         .single();
 
       if (error) {
         throw error;
       }
+
+      // El uso del cupón se registra DESPUÉS de que la fila existe, y no puede deshacerla: una
+      // orden es venta, una fila de `coupon_usage` que falta es una conciliación. Se hace aquí y
+      // no en la ruta porque `POST /api/orders` sirve a los dos orígenes (panel y sitio de
+      // clientes con la API key) y ambos pasan por este método.
+      await OrderService.syncCouponUsage(data, { isNew: true });
 
       // Ensure the created order has required calculated fields
       const orderWithCalculatedFields = {
@@ -396,6 +454,13 @@ export class OrderService {
 
       if (error) {
         throw error;
+      }
+
+      // Si la edición tocó el cupón o el estado, el uso registrado tiene que seguirla: cambiar de
+      // cupón mueve la fila, quitarlo o cancelar la orden la libera. Se decide sobre la orden ya
+      // persistida (`data`), no sobre el payload, que puede traer solo parte de los campos.
+      if (updates.coupon_lines !== undefined || updates.status !== undefined) {
+        await OrderService.syncCouponUsage(data);
       }
 
       // Ensure the updated order has required calculated fields
@@ -494,6 +559,8 @@ export class OrderService {
           correo_enviado,
           pago_reserva,
           pago_completo,
+          reserve_type,
+          reserve_value,
           is_editable,
           needs_payment,
           needs_processing,
@@ -604,6 +671,8 @@ export class OrderService {
           correo_enviado,
           pago_reserva,
           pago_completo,
+          reserve_type,
+          reserve_value,
           is_editable,
           needs_payment,
           needs_processing,
@@ -714,6 +783,8 @@ export class OrderService {
           correo_enviado,
           pago_reserva,
           pago_completo,
+          reserve_type,
+          reserve_value,
           is_editable,
           needs_payment,
           needs_processing,
@@ -801,6 +872,12 @@ export class OrderService {
         throw error;
       }
 
+      // Solo `cancelled` libera el cupón, y `failed` es su forma legada (0003 la pliega ahí). El
+      // resto de las transiciones no lo tocan: una orden en curso sigue consumiendo su uso.
+      if (canonicalStatus(status) === 'cancelled') {
+        await OrderService.releaseCouponUsage(orderId);
+      }
+
       // Ensure the status updated order has required calculated fields
       const orderWithCalculatedFields = {
         ...data,
@@ -841,10 +918,13 @@ export class OrderService {
 
       if (statusError) throw statusError;
 
-      const statusCounts = statusData.reduce((acc: any, order) => {
-        acc[order.status] = (acc[order.status] || 0) + 1;
+      // Se cuenta por etapa canónica: mientras la ventana tenga filas legadas, contar por el
+      // valor crudo parte cada etapa en dos claves y ninguna refleja el total real.
+      const statusCounts = statusData.reduce((acc: Record<string, number>, order) => {
+        const bucket = canonicalStatus(order.status);
+        if (bucket) acc[bucket] = (acc[bucket] || 0) + 1;
         return acc;
-      }, {});
+      }, Object.fromEntries(ORDER_STATUSES.map(s => [s, 0])) as Record<string, number>);
 
       // Ingresos totales
       const { data: revenueData, error: revenueError } = await supabaseAdmin
@@ -877,8 +957,6 @@ export class OrderService {
         totalRevenue: totalRevenue.toFixed(2),
         monthlyOrders: monthlyOrders || 0,
         averageOrderValue,
-        pendingOrders: statusCounts['pending'] || 0,
-        processingOrders: statusCounts['processing'] || 0,
         completedOrders: statusCounts['completed'] || 0,
         cancelledOrders: statusCounts['cancelled'] || 0
       };
@@ -917,7 +995,11 @@ export class OrderService {
           billing_email
         `)
         .neq('id', currentOrderId) // Excluir la orden actual
-        .in('status', ['processing', 'completed', 'on-hold']) // Solo órdenes activas
+        // Toda orden no cancelada retiene su equipo en su rango de fechas. La lista literal que
+        // habia aqui era ['processing','completed','on-hold']: despues de 0003 esos tres valores
+        // solo coinciden con `completed`, y la consulta habria devuelto menos filas sin ningun
+        // error — la deteccion de conflictos dejaria de ver las ordenes que tienen el equipo.
+        .in('status', bookingStatusFilter())
         .not('order_fecha_inicio', 'is', null)
         .not('order_fecha_termino', 'is', null);
 

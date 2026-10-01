@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trash2, Plus, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { STATUS_OPTIONS, enteredStatus, statusBadgeClass } from '@/lib/orderStatus';
+import { computeOrderTotals } from '@/lib/pricing';
 
 // Types
 interface LineItem {
@@ -59,6 +61,9 @@ interface OrderData {
   calculated_discount?: number;
   calculated_iva?: number;
   calculated_total?: number;
+  shipping_total?: number | string;
+  reserve_type?: string | null;
+  reserve_value?: number | string | null;
   
   // Line items
   line_items?: LineItem[];
@@ -81,15 +86,11 @@ interface EditOrderFormProps {
   loading?: boolean;
 }
 
-// Status options
-const statusOptions = [
-  { value: 'on-hold', label: 'En espera', color: 'bg-gray-100 text-gray-800' },
-  { value: 'processing', label: 'En proceso', color: 'bg-blue-100 text-blue-800' },
-  { value: 'completed', label: 'Completado', color: 'bg-green-100 text-green-800' },
-  { value: 'cancelled', label: 'Cancelado', color: 'bg-red-100 text-red-800' },
-  { value: 'refunded', label: 'Reembolsado', color: 'bg-purple-100 text-purple-800' },
-  { value: 'failed', label: 'Fallido', color: 'bg-red-100 text-red-800' }
-];
+// Las ocho etapas del canónico, con el color de estado que les corresponde.
+const statusOptions = STATUS_OPTIONS.map(option => ({
+  ...option,
+  color: statusBadgeClass(option.value),
+}));
 
 const EditOrderForm: React.FC<EditOrderFormProps> = ({ order, onSave, onCancel, loading = false }) => {
   const [formData, setFormData] = useState<OrderData>(order);
@@ -117,58 +118,36 @@ const EditOrderForm: React.FC<EditOrderFormProps> = ({ order, onSave, onCancel, 
   // Calculate totals when line items or dates change
   useEffect(() => {
     calculateTotals();
-  }, [formData.line_items, formData.order_fecha_inicio, formData.order_fecha_termino]);
+  }, [formData.line_items, formData.order_fecha_inicio, formData.order_fecha_termino, formData.shipping_total]);
 
-  const calculateDays = (startDate: string, endDate: string): number => {
-    if (!startDate || !endDate) return 1;
-    
-    try {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        return 1;
-      }
-      
-      const diffTime = Math.abs(end.getTime() - start.getTime());
-      const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      return Math.max(1, days);
-    } catch (error) {
-      console.error('Error calculating days:', error);
-      return 1;
-    }
-  };
+  // `apply_iva` has no column: an order that already had a taxable base but no IVA is exempt.
+  const applyIva = (Number(order.calculated_iva) || 0) > 0 || (Number(order.calculated_subtotal) || 0) <= 0;
 
+  // Preview only: the server recomputes and persists these figures with the same pricing module.
   const calculateTotals = () => {
-    const lineItems = formData.line_items || [];
-    const numDays = calculateDays(formData.order_fecha_inicio || '', formData.order_fecha_termino || '');
-    
-    // Calculate base subtotal (before multiplying by days)
-    const baseSubtotal = lineItems.reduce((sum, item) => {
-      const price = typeof item.price === 'string' ? parseFloat(item.price) : (item.price || 0);
-      return sum + (price * item.quantity);
-    }, 0);
-    
-    // Calculate subtotal (after multiplying by days)
-    const subtotal = Math.round((baseSubtotal * numDays) * 100) / 100;
-    
-    // Get current discount
-    const discount = formData.calculated_discount || 0;
-    
-    // Calculate IVA (19%)
-    const iva = Math.round((subtotal * 0.19) * 100) / 100;
-    
-    // Calculate total
-    const total = Math.round((subtotal - discount + iva) * 100) / 100;
-    
-    setFormData(prev => ({
-      ...prev,
-      num_jornadas: numDays,
-      calculated_subtotal: subtotal,
-      calculated_iva: iva,
-      calculated_total: total,
-      total: total
-    }));
+    try {
+      const totals = computeOrderTotals({
+        lineItems: (formData.line_items || []).map(item => ({ price: item.price ?? 0, quantity: item.quantity })),
+        startDate: formData.order_fecha_inicio || null,
+        endDate: formData.order_fecha_termino || null,
+        jornadas: formData.num_jornadas || 1,
+        shippingTotal: formData.shipping_total ?? 0,
+        discount: formData.calculated_discount ?? 0,
+        applyIva,
+      });
+
+      setFormData(prev => ({
+        ...prev,
+        num_jornadas: totals.jornadas,
+        calculated_subtotal: totals.net,
+        calculated_discount: totals.discount,
+        calculated_iva: totals.iva,
+        calculated_total: totals.total,
+        total: totals.total
+      }));
+    } catch (error) {
+      console.error('[EditOrderForm] No se pudieron calcular los montos:', { orderId: formData.id, error });
+    }
   };
 
   const handleInputChange = (field: keyof OrderData, value: any) => {
@@ -181,14 +160,10 @@ const EditOrderForm: React.FC<EditOrderFormProps> = ({ order, onSave, onCancel, 
 
   const handleSave = async () => {
     try {
-      // Check if status is being changed to 'completed' or 'failed'
-      const wasCompleted = order.status === 'completed';
-      const isNowCompleted = formData.status === 'completed';
-      const statusChangedToCompleted = !wasCompleted && isNowCompleted;
-
-      const wasFailed = order.status === 'failed';
-      const isNowFailed = formData.status === 'failed';
-      const statusChangedToFailed = !wasFailed && isNowFailed;
+      // El pedido ENTRA a una etapa terminal. `failed` era el literal de la salida fallida y
+      // después de 0003 no vuelve a existir: su etapa es `cancelled`.
+      const statusChangedToCompleted = enteredStatus(order.status, formData.status, 'completed');
+      const statusChangedToFailed = enteredStatus(order.status, formData.status, 'cancelled');
 
       // Save the order first
       await onSave(formData);

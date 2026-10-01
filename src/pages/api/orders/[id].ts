@@ -1,6 +1,9 @@
 import type { APIRoute } from 'astro';
 import { OrderService } from '../../../services/orderService';
 import { withAuth } from '../../../middleware/auth';
+import { OrderPricingService } from '../../../services/orderPricingService';
+import { validateReserveInput } from '../../../lib/finance';
+import { PricingError } from '../../../lib/pricing';
 // withCors removed - global middleware handles CORS
 
 export const GET: APIRoute = withAuth(async (context) => {
@@ -91,9 +94,44 @@ export const PUT: APIRoute = withAuth(async (context) => {
       });
     }
 
+    // Reserva configurable (`orders.reserve_type` / `reserve_value`, migración 0008). Misma
+    // validación que `PUT /api/orders/update/:id`: sin ella un porcentaje fuera de rango llegaba
+    // a la CHECK de Postgres y volvía al panel como un 500 con detalle interno.
+    const reserveError = validateReserveInput(updates);
+    if (reserveError) {
+      return new Response(JSON.stringify({ success: false, error: reserveError }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (updates.reserve_value !== undefined) {
+      updates.reserve_value = Number(updates.reserve_value);
+    }
+
+    // Montos: se recalculan en el servidor desde la orden guardada + el cambio. Los calculated_*
+    // del cliente se sobrescriben y `apply_iva` es solo un insumo (no existe como columna).
+    let pricedFields;
+    try {
+      pricedFields = await OrderPricingService.priceOrderUpdate(existingOrder, updates);
+    } catch (pricingError) {
+      if (pricingError instanceof PricingError) {
+        console.error('[PUT /api/orders/:id] Montos inválidos:', { orderId, error: pricingError.message });
+        return new Response(JSON.stringify({
+          success: false,
+          error: pricingError.message
+        }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      throw pricingError;
+    }
+    const { apply_iva: _applyIva, ...persistableUpdates } = updates;
+
     console.log('🔄 Llamando OrderService.updateOrder...');
     const updatedOrder = await OrderService.updateOrder(orderId, {
-      ...updates,
+      ...persistableUpdates,
+      ...(pricedFields ?? {}),
       date_modified: new Date().toISOString()
     });
     

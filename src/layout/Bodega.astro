@@ -1,0 +1,84 @@
+---
+import "../styles/globals.css";
+import { LogOut, Warehouse } from "lucide-react";
+
+/**
+ * Shell for the garage screens (`/bodega/*`). Deliberately NOT `Base.astro`: no sidebar, no
+ * alert bell, no module navigation — an operator has one job and a phone in one hand. Large
+ * targets, a fixed top bar with the way back to the board and the way out, and the page below.
+ *
+ * Same tokens as the rest of the dashboard (`globals.css`): white first, colour only for state.
+ */
+interface Props {
+  title: string;
+  email: string;
+  /** Show the link back to the board (false on the board itself). */
+  showBoardLink?: boolean;
+}
+
+const { title, email, showBoardLink = true } = Astro.props;
+---
+
+<html lang="es" class="h-full w-full">
+  <head>
+    <title>{title}</title>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="generator" content="Astro" />
+    <meta name="robots" content="noindex, nofollow" />
+    <style is:inline>
+      body { background-color: hsl(0 0% 100%); color: hsl(0 0% 3.9%); }
+      .bodega-bar { border-bottom: 1px solid var(--color-border, #EAEAEA); }
+      .bodega-btn {
+        display: inline-flex; align-items: center; gap: 0.5rem;
+        min-height: 44px; padding: 0 0.875rem; border-radius: 10px;
+        border: 1px solid var(--color-border, #EAEAEA); background: #fff;
+        font-size: 0.875rem; font-weight: 500; color: inherit; text-decoration: none;
+      }
+      .bodega-btn:active { background: var(--color-surface-2, #F7F7F6); }
+    </style>
+  </head>
+  <body class="min-h-full antialiased">
+    <header class="bodega-bar sticky top-0 z-20 bg-white">
+      <div class="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-2">
+        <div class="flex min-w-0 items-center gap-2">
+          {showBoardLink ? (
+            <a href="/bodega" class="bodega-btn" aria-label="Volver al tablero de bodega">
+              <Warehouse className="h-5 w-5" />
+              <span>Bodega</span>
+            </a>
+          ) : (
+            <span class="inline-flex items-center gap-2 text-base font-semibold">
+              <Warehouse className="h-5 w-5" />
+              Bodega
+            </span>
+          )}
+        </div>
+        <div class="flex min-w-0 items-center gap-2">
+          <span class="hidden truncate text-xs text-[var(--color-text-secondary)] sm:inline" title={email}>{email}</span>
+          <button type="button" class="bodega-btn" onclick="handleBodegaLogout()" aria-label="Cerrar sesión">
+            <LogOut className="h-5 w-5" />
+            <span class="hidden sm:inline">Salir</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="main-content" class="mx-auto w-full max-w-3xl px-4 py-4">
+      <slot />
+    </main>
+
+    <script is:inline>
+      window.handleBodegaLogout = async function () {
+        if (!confirm('¿Cerrar sesión?')) return;
+        try {
+          await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        } catch (e) {
+          console.error('[Auth] Error en logout:', e);
+        }
+        window.location.href = '/';
+      };
+    </script>
+  </body>
+</html>

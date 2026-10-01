@@ -1,10 +1,10 @@
 # PDF y Email — Dashboard
 
-## Sistema de PDFs: Dos Enfoques
+## Sistema de PDFs: Un Solo Enfoque
 
-### 1. @react-pdf/renderer (Componentes React → PDF)
+### @react-pdf/renderer (Componentes React → PDF)
 
-Para documentos con diseño complejo que se generan server-side como Response.
+Todos los PDFs se generan server-side, en proceso, como Response. No hay una segunda vía.
 
 ```typescript
 // src/lib/pdf/core/pdfService.ts
@@ -27,6 +27,7 @@ src/lib/pdf/
   components/
     budget/BudgetDocument.tsx      # Presupuesto
     contract/ContractDocument.tsx  # Contrato
+    contract/UserContractDocument.tsx  # Contrato de usuario
     processing/ProcessingDocument.tsx  # Orden de procesamiento
     common/
       Header.tsx         # Header compartido
@@ -39,16 +40,10 @@ src/lib/pdf/
     svgToReactPdf.ts    # Conversión SVG → react-pdf
 ```
 
-### 2. Templates Astro + Puppeteer (HTML → PDF)
-
-Para PDFs que se sirven desde URL pública y se suben a R2.
+### Flujo completo
 
 ```
-Trigger (cambio de estado) → API Route → budgetGenerationService.ts
-    ↓
-Fetch template: GET /budget-pdf/[orderId] (Astro page renderizada como HTML)
-    ↓
-Puppeteer + @sparticuz/chromium (optimizado para Vercel serverless)
+Trigger (cambio de estado) → API Route → generatePdfBuffer(<Documento />)
     ↓
 PDF Buffer → Cloudflare R2 (/upload-pdf-only)
     ↓
@@ -57,16 +52,35 @@ Actualizar orden en DB (new_pdf_on_hold_url / new_pdf_processing_url)
 Enviar email con PDF adjunto (Resend)
 ```
 
-**Templates Astro**:
-- `src/pages/budget-pdf/[orderId].astro` — Presupuesto
-- `src/pages/order-pdf/[orderId].astro` — Orden de procesamiento
-- `src/pages/contract-pdf/[userId].astro` — Contrato de usuario
+Las cinco rutas que generan PDF (`/api/order/generate-budget-pdf`,
+`/api/order/generate-processing-pdf`, `/api/order/generate-contract-pdf`,
+`/api/contracts/generate-pdf`, `/api/budget/generate-pdf`) importan todas
+`generatePdfBuffer` de `src/lib/pdf/core/pdfService.ts` y su componente React
+correspondiente. Ninguna hace fetch de una página Astro.
+
+### NO existe un pipeline Puppeteer
+
+No hay `puppeteer`, `@sparticuz/chromium` ni `playwright` en `package.json`, y **no existe
+`src/lib/pdfService.ts`** (el servicio real es `src/lib/pdf/core/pdfService.ts`). Documentación
+previa describía un pipeline "template Astro → HTML → headless Chrome" que este código nunca
+tuvo; se corrigió el 2026-08-18.
+
+### Las páginas Astro son vistas para humanos, no destinos de render
+
+- `src/pages/budget-pdf/[orderId].astro` — vista del presupuesto
+- `src/pages/order-pdf/[orderId].astro` — vista de la orden de procesamiento
+- `src/pages/contract-pdf/[userId].astro` — vista del contrato de usuario
+
+Se abren desde el enlace que `api/order/generate-budget-pdf.ts` incluye en el email al cliente.
+**Requieren sesión y verifican propiedad** vía `src/lib/pdfPageAuth.ts`; ningún proceso interno
+las visita, así que no necesitan (ni deben tener) ninguna vía de acceso por header o secreto.
 
 **Archivos críticos** (no modificar sin revisión):
-- `src/lib/pdfService.ts` — Puppeteer configurado para Vercel (timeout 7-8s, headless, args específicos)
+- `src/lib/pdf/core/pdfService.ts` — `generatePdfBuffer`, render con `renderToBuffer`
 - `src/lib/budgetGenerationService.ts` — Workflow completo budget
 
-**Timeout crítico**: Vercel tiene límite de 10 segundos. Los PDFs deben generarse en máximo 7-8s.
+**Timeout**: Vercel limita la ejecución de la función serverless, así que la generación debe
+mantenerse rápida. No hay `maxDuration` configurado en el proyecto.
 
 ---
 

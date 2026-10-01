@@ -1,10 +1,14 @@
 import type { APIRoute } from 'astro';
+import { withAuth } from '../../../middleware/auth';
 import { supabaseAdmin } from '../../../lib/supabase';
 import type { Database } from '../../../types/database';
 
 type Product = Database['public']['Tables']['products']['Row'];
 
-export const POST: APIRoute = async ({ request }) => {
+// Reads full product rows through the service-role client, so it requires an authenticated
+// admin like the catalogue writes do (F3, external-endpoint-authentication/spec.md). Only
+// caller is the admin UI (ProcessOrder.tsx via apiClient, which sends credentials).
+export const POST: APIRoute = withAuth(async ({ request }) => {
   try {
     const body = await request.json();
     const { ids } = body;
@@ -142,7 +146,7 @@ export const POST: APIRoute = async ({ request }) => {
       }
     );
   }
-};
+});
 
 // Support other HTTP methods with proper responses
 export const GET: APIRoute = async () => {

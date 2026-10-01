@@ -101,7 +101,7 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class: cn(
-          'prose prose-sm max-w-none focus:outline-none text-foreground dark:prose-invert',
+          'prose prose-sm max-w-none focus:outline-none text-foreground',
           'prose-headings:text-foreground prose-headings:font-semibold',
           'prose-p:text-foreground prose-p:leading-relaxed',
           'prose-strong:text-foreground prose-li:text-foreground',

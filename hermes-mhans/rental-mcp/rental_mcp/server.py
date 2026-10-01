@@ -26,13 +26,21 @@ from pydantic import BaseModel
 from rental_mcp import db
 from rental_mcp import dashboard_client
 from rental_mcp.validators import (
+    ACTIVE_ORDER_STATUSES,
+    DB_ORDER_STATUSES,
+    DEFAULT_NEW_ORDER_STATUS,
+    PAYMENT_GATE_STATUS,
     SAFE_CLIENT_FIELDS,
+    VALID_TRANSITIONS,
     _filter_client_fields,
     _validate_email,          # used directly in draft_create_client
     _validate_rut as _validate_rut_impl,
+    is_valid_status,
+    is_valid_transition,
 )
 from rental_mcp.domain import pricing as domain_pricing
 from rental_mcp.domain import availability as domain_avail
+from rental_mcp.domain.orders import build_order_insert_params, order_insert_sql
 from rental_mcp.models import (
     AvailabilityResult,
     ClientDetail,
@@ -73,7 +81,9 @@ def _now() -> datetime:
 
 
 def _half_up(x: float) -> int:
-    return int(x + 0.5)
+    # Delegated so every amount in this process rounds the same way as the dashboard
+    # (Decimal ROUND_HALF_UP; Python's built-in round() is banker's rounding).
+    return domain_pricing.round_half_up(x)
 
 
 def _coerce_price(val: Any) -> float:
@@ -93,21 +103,10 @@ def _validate_rut(rut: str) -> bool:
     return _validate_rut_impl(rut)
 
 
-# Workflow transition map
-_VALID_TRANSITIONS: dict[str, list[str]] = {
-    "on-hold":     ["reviewing", "failed"],
-    "reviewing":   ["processing", "failed"],
-    "processing":  ["preparing", "failed"],
-    "preparing":   ["delivering", "failed"],
-    "delivering":  ["completed", "failed"],
-    "completed":   ["paid", "failed"],
-    "paid":        ["failed"],
-    "failed":      [],
-}
-
-
-def _is_valid_transition(current: str, new: str) -> bool:
-    return new in _VALID_TRANSITIONS.get(current, [])
+# Workflow transition map — lives in validators.py (pure, testable).
+# Aliased here so existing call-sites inside server.py don't need to change.
+_VALID_TRANSITIONS = VALID_TRANSITIONS
+_is_valid_transition = is_valid_transition
 
 
 async def _fetch_coupon(code: str) -> dict[str, Any] | None:
@@ -127,8 +126,15 @@ async def _quote_internal(
     coupon_code: str | None,
     shipping_total: float,
     apply_iva: bool,
+    reserve_type: str | None = None,
+    reserve_value: float | str | None = None,
 ) -> dict[str, Any]:
-    """Shared logic for quoting (used by tool and draft_create_order)."""
+    """
+    Shared logic for quoting (used by tool and draft_create_order).
+
+    `reserve_type` / `reserve_value` mirror `orders.reserve_type` / `orders.reserve_value`.
+    When they are absent the module falls back to the business default (percent 25).
+    """
     jornadas = domain_pricing.num_jornadas(start_date, end_date)
     qtys = quantities or {}
 
@@ -168,6 +174,7 @@ async def _quote_internal(
     # Coupon resolution
     coupon_type: str | None = None
     coupon_amount: float = 0.0
+    coupon_maximum_amount: float | None = None
     coupon_info: dict[str, Any] | None = None
 
     if coupon_code:
@@ -184,11 +191,16 @@ async def _quote_internal(
             else:
                 coupon_type = coupon_row["discount_type"]
                 coupon_amount = float(coupon_row["amount"])
+                # coupons.maximum_amount caps a percentage discount; ignoring it overcharged
+                # the discount against the dashboard.
+                raw_maximum = coupon_row.get("maximum_amount")
+                coupon_maximum_amount = float(raw_maximum) if raw_maximum is not None else None
                 coupon_info = {
                     "code": coupon_code,
                     "valid": True,
                     "discount_type": coupon_type,
                     "amount": coupon_amount,
+                    "maximum_amount": coupon_maximum_amount,
                 }
 
     calc = domain_pricing.calculate_quote(
@@ -198,6 +210,9 @@ async def _quote_internal(
         coupon_type=coupon_type,
         coupon_amount=coupon_amount,
         apply_iva=apply_iva,
+        coupon_maximum_amount=coupon_maximum_amount,
+        reserve_type=reserve_type,
+        reserve_value=reserve_value,
     )
 
     return {
@@ -210,8 +225,11 @@ async def _quote_internal(
         "calculated_subtotal": calc["calculated_subtotal"],
         "calculated_iva": calc["calculated_iva"],
         "calculated_total": calc["calculated_total"],
-        "reserva_25": calc["reserva_25"],
-        "saldo_75": calc["saldo_75"],
+        "reserva": calc["reserva"],
+        "saldo": calc["saldo"],
+        "reserva_label": calc["reserva_label"],
+        "reserve_type": calc["reserve_type"],
+        "reserve_value": calc["reserve_value"],
         "presented_total": calc["presented_total"],
         "presented_iva": calc["presented_iva"],
         "presented_reserva": calc["presented_reserva"],
@@ -234,15 +252,28 @@ async def quote_rental(
     coupon_code: str | None = None,
     shipping_total: float = 0,
     apply_iva: bool = True,
+    reserve_type: str | None = None,
+    reserve_value: float | None = None,
 ) -> dict[str, Any]:
     """
     Cotiza un arriendo fotográfico para los productos indicados.
-    Calcula jornadas, subtotales, IVA, reserva 25% y saldo 75%.
-    Valida cupón (existencia, vigencia, límite de uso).
+    Calcula jornadas, subtotales, IVA (19%), reserva y saldo, en pesos enteros.
+    La reserva NO es siempre 25%: se toma de reserve_type ('percent' | 'fixed')
+    y reserve_value; si no se indican, se usa el default del negocio (25%).
+    El campo `reserva_label` trae la etiqueta exacta que hay que mostrar al cliente.
+    Valida cupón (existencia, vigencia, límite de uso, tope maximum_amount).
     """
     try:
         return await _quote_internal(
-            product_ids, start_date, end_date, quantities, coupon_code, shipping_total, apply_iva
+            product_ids,
+            start_date,
+            end_date,
+            quantities,
+            coupon_code,
+            shipping_total,
+            apply_iva,
+            reserve_type,
+            reserve_value,
         )
     except ValueError as e:
         return {"error": str(e)}
@@ -263,10 +294,11 @@ async def check_availability(
 ) -> dict[str, Any]:
     """
     Verifica disponibilidad de productos para un rango de fechas.
-    Detecta solapamientos con órdenes activas (on-hold → delivering).
+    Detecta solapamientos con órdenes activas (las etapas no terminales del
+    vocabulario de estados activo — ver ORDER_STATUS_VOCABULARY).
     """
     try:
-        active_statuses = ("on-hold", "reviewing", "processing", "preparing", "delivering")
+        active_statuses = ACTIVE_ORDER_STATUSES
         placeholders_p = ",".join(["%s"] * len(product_ids))
         placeholders_s = ",".join(["%s"] * len(active_statuses))
 
@@ -414,13 +446,28 @@ async def get_order_status(order_id: int) -> dict[str, Any]:
                 o.order_fecha_inicio, o.order_fecha_termino, o.num_jornadas,
                 o.calculated_total, o.new_pdf_on_hold_url, o.new_pdf_processing_url,
                 o.date_created, o.date_modified,
-                o.billing_first_name, o.billing_last_name
+                o.billing_first_name, o.billing_last_name,
+                -- Read through to_jsonb so the query still runs on an instance where
+                -- migration 0008 (reserve_type / reserve_value) has not been applied yet:
+                -- a missing key yields NULL instead of "column does not exist".
+                to_jsonb(o) ->> 'reserve_type'  AS reserve_type,
+                to_jsonb(o) ->> 'reserve_value' AS reserve_value
             FROM orders o WHERE o.id = %s
             """,
             (order_id,),
         )
         if not row:
             return {"error": f"Orden {order_id} no encontrada"}
+
+        # The reserve is the order's own, never a hardcoded 25%: orders negotiated at another
+        # share would otherwise be quoted wrong to the customer.
+        reserve_type = row.get("reserve_type")
+        reserve_value = row.get("reserve_value")
+        total = _coerce_price(row.get("calculated_total"))
+        reserva = domain_pricing.reserve_amount(
+            domain_pricing.round_half_up(total), reserve_type, reserve_value
+        )
+
         return {
             "id": row["id"],
             "status": row["status"],
@@ -430,6 +477,16 @@ async def get_order_status(order_id: int) -> dict[str, Any]:
             "order_fecha_termino": row["order_fecha_termino"].isoformat() if row.get("order_fecha_termino") else None,
             "num_jornadas": row.get("num_jornadas"),
             "calculated_total": row.get("calculated_total"),
+            "reserve_type": reserve_type or domain_pricing.DEFAULT_RESERVE_TYPE,
+            # to_jsonb ->> yields text ('25.00'); the agent must receive a number.
+            "reserve_value": (
+                _coerce_price(reserve_value)
+                if reserve_value is not None
+                else domain_pricing.DEFAULT_RESERVE_VALUE
+            ),
+            "reserva": reserva,
+            "saldo": domain_pricing.round_half_up(total) - reserva,
+            "reserva_label": domain_pricing.reserve_label(reserve_type, reserve_value),
             "pdf_on_hold": row.get("new_pdf_on_hold_url"),
             "pdf_processing": row.get("new_pdf_processing_url"),
             "date_created": row["date_created"].isoformat() if row.get("date_created") else None,
@@ -606,7 +663,7 @@ async def list_pickups_today(target_date: date | None = None) -> dict[str, Any]:
     try:
         today = target_date or _now().date()
         yesterday = today - timedelta(days=1)
-        active = ("on-hold", "reviewing", "processing", "preparing", "delivering")
+        active = ACTIVE_ORDER_STATUSES
         placeholders = ",".join(["%s"] * len(active))
 
         base_sql = f"""
@@ -952,9 +1009,13 @@ async def draft_create_order(
     coupon_code: str | None = None,
     shipping_total: float = 0,
     apply_iva: bool = True,
+    reserve_type: str | None = None,
+    reserve_value: float | None = None,
 ) -> dict[str, Any]:
     """
     Prepara un borrador de orden de arriendo (requiere confirmación).
+    La reserva del borrador usa reserve_type / reserve_value; sin ellos rige
+    el default del negocio (25%).
     Valida: cliente existe, tiene contrato firmado, fechas válidas,
     disponibilidad (conflictos = advertencia), y cotiza.
     Devuelve plan_id + preview + confirmation_token (válido 15 minutos).
@@ -988,7 +1049,15 @@ async def draft_create_order(
 
         # Quote
         quote = await _quote_internal(
-            product_ids, start_date, end_date, quantities, coupon_code, shipping_total, apply_iva
+            product_ids,
+            start_date,
+            end_date,
+            quantities,
+            coupon_code,
+            shipping_total,
+            apply_iva,
+            reserve_type,
+            reserve_value,
         )
         if "error" in quote:
             return quote
@@ -1034,6 +1103,7 @@ async def draft_create_order(
                 "num_jornadas": quote["num_jornadas"],
                 "total_presentado": quote["presented_total"],
                 "reserva_presentada": quote["presented_reserva"],
+                "reserva_label": quote["reserva_label"],
                 "saldo_presentado": quote["presented_saldo"],
                 "iva_presentado": quote["presented_iva"],
                 "moneda": "CLP",
@@ -1054,10 +1124,23 @@ async def draft_create_order(
 async def update_order_status_draft(order_id: int, new_status: str) -> dict[str, Any]:
     """
     Prepara un cambio de estado de orden (requiere confirmación).
-    Valida la transición de workflow. Si new_status='processing', advierte
-    que se requiere confirmar pago de reserva antes de proceder.
+    Los estados válidos dependen del vocabulario activo (ORDER_STATUS_VOCABULARY):
+    legacy = pending, on-hold, processing, completed, cancelled, refunded,
+    failed; v12 = request, evaluation, confirmed, preparation, in-rental,
+    return, completed, cancelled. Valida la transición de workflow. Si el nuevo
+    estado es la etapa gateada por pago ('processing' en legacy, 'confirmed'
+    en v12), advierte que se requiere confirmar pago de reserva antes de
+    proceder.
     """
     try:
+        # Reject values the CHECK constraint would refuse here, not on confirm:
+        # a draft that can never commit only wastes the operator's time.
+        if not is_valid_status(new_status):
+            return {
+                "error": f"Estado '{new_status}' no existe en la base de datos. "
+                         f"Estados válidos: {sorted(DB_ORDER_STATUSES)}"
+            }
+
         order = await db.fetch_one(
             "SELECT id, status, pago_completo FROM orders WHERE id = %s",
             (order_id,),
@@ -1074,10 +1157,10 @@ async def update_order_status_draft(order_id: int, new_status: str) -> dict[str,
             }
 
         advertencias: list[str] = []
-        if new_status == "processing" and not order.get("pago_completo"):
+        if new_status == PAYMENT_GATE_STATUS and not order.get("pago_completo"):
             advertencias.append(
                 "ATENCIÓN: La orden no tiene pago_completo=true. "
-                "El estado 'processing' SOLO debe activarse si el pago de reserva está confirmado. "
+                f"El estado '{PAYMENT_GATE_STATUS}' SOLO debe activarse si el pago de reserva está confirmado. "
                 "Confirmar esta acción es responsabilidad del operador."
             )
 
@@ -1420,7 +1503,10 @@ async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]
         if action == "create_order":
             customer_id = plan["customer_id"]
             product_ids = plan["product_ids"]
-            quantities = plan["quantities"]
+            # JSONB object keys are always strings, but `_quote_internal` looks them up with
+            # int product ids. Without this the lookup misses, every line silently falls back to
+            # quantity 1, and the CAS guard rejects the confirmation (rehearsal 0002, F-6).
+            quantities = {int(pid): qty for pid, qty in plan["quantities"].items()}
             start_date = date.fromisoformat(plan["start_date"])
             end_date = date.fromisoformat(plan["end_date"])
             order_proyecto = plan["order_proyecto"]
@@ -1470,10 +1556,15 @@ async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]
             q = new_quote
             jornadas = q["num_jornadas"]
 
-            # Billing data: columnas NOT NULL sin default en orders (verificado
-            # contra information_schema) — obligatorio poblarlas desde el perfil.
+            # Billing data: orders tiene 11 columnas NOT NULL sin default y
+            # siete de ellas se pueblan desde el perfil. La lista completa y el
+            # mapeo viven en domain/orders.py.
             billing_row = await db.fetch_one(
-                "SELECT nombre, apellido, email, telefono FROM user_profiles WHERE user_id = %s",
+                """
+                SELECT nombre, apellido, email, telefono, direccion, ciudad, rut
+                  FROM user_profiles
+                 WHERE user_id = %s
+                """,
                 (customer_id,),
                 pool="rw",
             ) or {}
@@ -1533,37 +1624,23 @@ async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]
                         await conn.rollback()
                         return {"error": "Este plan ya fue ejecutado por otro proceso (race condition evitada)"}
 
-                    # Insert order. Sin columna apply_iva (NO existe en esta DB:
-                    # el branch apply_iva ya quedo reflejado en calculated_iva).
                     await cur.execute(
-                        """
-                        INSERT INTO orders (
-                            status, customer_id, order_proyecto,
-                            order_fecha_inicio, order_fecha_termino, num_jornadas,
-                            calculated_subtotal, calculated_discount, calculated_iva, calculated_total,
-                            shipping_total, pago_completo, line_items,
-                            billing_first_name, billing_last_name, billing_email, billing_phone
-                        ) VALUES (
-                            'on-hold', %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s, %s, false, %s::jsonb,
-                            %s, %s, %s, %s
-                        ) RETURNING id
-                        """,
-                        (
-                            customer_id, order_proyecto,
-                            start_date, end_date, jornadas,
-                            q["calculated_subtotal"], q["descuento_cupon"],
-                            q["calculated_iva"], q["calculated_total"],
-                            q["shipping_total"],
-                            line_items_json,
-                            str(billing_row.get("nombre") or ""),
-                            str(billing_row.get("apellido") or ""),
-                            str(billing_row.get("email") or ""),
-                            str(billing_row.get("telefono") or ""),
+                        order_insert_sql(),
+                        build_order_insert_params(
+                            customer_id=customer_id,
+                            order_proyecto=order_proyecto,
+                            fecha_inicio=start_date,
+                            fecha_termino=end_date,
+                            num_jornadas=jornadas,
+                            quote=q,
+                            line_items_json=line_items_json,
+                            profile=billing_row,
                         ),
                     )
                     order_row = await cur.fetchone()
-                    order_id = order_row[0] if order_row else None
+                    # Both pools set row_factory=dict_row (db.py), so fetchone() yields a dict:
+                    # order_row[0] raised KeyError(0) and surfaced as the bare message "0".
+                    order_id = order_row["id"] if order_row else None
 
                     if not order_id:
                         await conn.rollback()
@@ -1580,7 +1657,7 @@ async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]
             return {
                 "applied": True,
                 "order_id": order_id,
-                "status": "on-hold",
+                "status": DEFAULT_NEW_ORDER_STATUS,
                 "pdf_result": pdf_result,
                 "mensaje": nota or "Orden creada exitosamente",
             }
@@ -1615,7 +1692,10 @@ async def confirm_write(plan_id: str, confirmation_token: str) -> dict[str, Any]
                     await conn.commit()
 
             pdf_result = None
-            if new_status == "processing":
+            # Al pasar la etapa gateada por pago ('processing' en legacy,
+            # 'confirmed' en v1.2 — heredero según mapeo 0003) se genera el
+            # PDF de orden de procesamiento.
+            if new_status == PAYMENT_GATE_STATUS:
                 pdf_result = await dashboard_client.generate_processing_pdf(oid)
 
             return {

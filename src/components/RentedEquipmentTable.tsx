@@ -21,6 +21,7 @@ import {
   Eye,
   Filter
 } from 'lucide-react';
+import { STATUS_OPTIONS, canonicalStatus, statusBadgeClass, statusLabel, statusTone } from '../lib/orderStatus';
 
 interface RentedEquipment {
   productName: string;
@@ -51,42 +52,33 @@ export default function RentedEquipmentTable({
       item.orderProject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.orderId.toString().includes(searchTerm);
 
-    const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+    // Comparar por etapa canónica: durante la ventana una fila legada y la opción v1.2 son la
+    // misma etapa escrita distinto, y una comparación literal la dejaría fuera del listado.
+    const matchesStatus = statusFilter === 'all' || canonicalStatus(item.status) === statusFilter;
 
     return matchesSearch && matchesStatus;
   });
 
+  // El `switch` anterior tenía tres casos — `completed`, `processing`, `on-hold` — y ningún
+  // `default` útil: cinco de las ocho etapas caían al genérico y se mostraban con el slug crudo.
+  // El tono decide el icono y el color; las clases se escriben literales para que el JIT las vea.
   const getStatusConfig = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return {
-          label: 'Completado',
-          variant: 'default' as const,
-          color: 'text-green-600',
-          icon: CheckCircle
-        };
-      case 'processing':
-        return {
-          label: 'Procesando',
-          variant: 'secondary' as const,
-          color: 'text-blue-600',
-          icon: Clock
-        };
-      case 'on-hold':
-        return {
-          label: 'En Espera',
-          variant: 'destructive' as const,
-          color: 'text-orange-600',
-          icon: AlertTriangle
-        };
-      default:
-        return {
-          label: status,
-          variant: 'outline' as const,
-          color: 'text-gray-600',
-          icon: Package
-        };
-    }
+    const tone = statusTone(status);
+    const byTone = {
+      ok: { color: 'text-[var(--color-ok)]', icon: CheckCircle },
+      info: { color: 'text-[var(--color-info)]', icon: Clock },
+      warn: { color: 'text-[var(--color-warn)]', icon: AlertTriangle },
+      crit: { color: 'text-[var(--color-crit)]', icon: AlertTriangle },
+      neutral: { color: 'text-[var(--color-neutral)]', icon: Package },
+      muted: { color: 'text-[var(--color-muted)]', icon: Package },
+    }[tone];
+
+    return {
+      label: statusLabel(status),
+      badgeClass: statusBadgeClass(status),
+      color: byTone.color,
+      icon: byTone.icon,
+    };
   };
 
   const getDaysRemainingConfig = (days: number) => {
@@ -141,9 +133,7 @@ export default function RentedEquipmentTable({
 
   const statusOptions = [
     { value: 'all', label: 'Todos los estados' },
-    { value: 'processing', label: 'Procesando' },
-    { value: 'completed', label: 'Completado' },
-    { value: 'on-hold', label: 'En Espera' }
+    ...STATUS_OPTIONS,
   ];
 
   // Estadísticas rápidas
@@ -312,7 +302,7 @@ export default function RentedEquipmentTable({
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <StatusIcon className={`h-4 w-4 ${statusConfig.color}`} />
-                            <Badge variant={statusConfig.variant}>
+                            <Badge className={statusConfig.badgeClass}>
                               {statusConfig.label}
                             </Badge>
                           </div>

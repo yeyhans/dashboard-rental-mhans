@@ -18,6 +18,8 @@ import { Plus, Search, FileText, Mail, Truck, CheckCircle, MapPin } from 'lucide
 import type { Database } from '../../types/database';
 import type { Product } from '../../types/product';
 import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliveryTime } from '../../services/shippingService';
+import { isBudgetStatus } from '../../lib/orderStatus';
+import { PricingError, computeOrderTotals, countJornadas } from '../../lib/pricing';
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
 
@@ -46,6 +48,11 @@ interface CreateOrderFormProps {
   onOrderCreated: (order: any) => void;
   sessionData?: SessionData;
   initialUsers?: UserProfile[]; // Users loaded from Astro
+  /**
+   * D-25: lets the caller pair this trigger with a sibling action at equal width on mobile
+   * (default keeps the original desktop-only spacing untouched).
+   */
+  triggerClassName?: string;
 }
 
 interface NewOrderForm {
@@ -66,6 +73,7 @@ interface NewOrderForm {
     num_jornadas: string;
     company_rut: string;
     calculated_subtotal: string;
+    calculated_discount: string;
     calculated_iva: string;
     calculated_total: string;
     shipping_total: string;
@@ -101,6 +109,7 @@ const initialFormState: NewOrderForm = {
     num_jornadas: '',
     company_rut: '',
     calculated_subtotal: '0',
+    calculated_discount: '0',
     calculated_iva: '0',
     calculated_total: '0',
     shipping_total: '0',
@@ -118,7 +127,7 @@ const initialFormState: NewOrderForm = {
   }>
 };
 
-const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOrderFormProps) => {
+const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers, triggerClassName }: CreateOrderFormProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +137,6 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
   const [products, setProducts] = useState<Product[]>([]);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
-  const [couponDiscountAmount, setCouponDiscountAmount] = useState(0);
   const [budgetLoading, setBudgetLoading] = useState(false);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [budgetSuccess, setBudgetSuccess] = useState<string | null>(null);
@@ -280,7 +288,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           }
         } catch (shippingError) {
           console.error('Error loading shipping methods:', shippingError);
-          console.warn('⚠️ Using fallback shipping method - configure proper methods in /orders/shipping');
+          console.warn('⚠️ Using fallback shipping method - configure proper methods in /delivery');
           // No mostrar error crítico, usar métodos por defecto
           const defaultMethods: ShippingMethod[] = [
             {
@@ -351,75 +359,62 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
     return lineItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   };
 
-  const calculateProductsSubtotal = (lineItems: NewOrderForm['line_items'], numDays: number) => {
-    // 1. Subtotal de productos (precio × cantidad × días)
-    const dailySubtotal = calculateBaseSubtotal(lineItems);
-    return dailySubtotal * numDays;
-  };
-
-  const calculateCalculatedSubtotal = (
-    productsSubtotal: number, 
-    shippingTotal: number, 
-    couponDiscount: number
-  ) => {
-    // 2. CALCULATED_SUBTOTAL = subtotal productos + envío - descuento cupón
-    return productsSubtotal + shippingTotal - couponDiscount;
-  };
-
-  const calculateCalculatedIVA = (calculatedSubtotal: number, applyIva: boolean) => {
-    // 3. CALCULATED_IVA = calculated_subtotal × 0.19 (solo si apply_iva es true)
-    return applyIva ? calculatedSubtotal * 0.19 : 0;
-  };
-
-  const calculateCalculatedTotal = (calculatedSubtotal: number, calculatedIva: number) => {
-    // 4. CALCULATED_TOTAL = calculated_subtotal + calculated_iva
-    return calculatedSubtotal + calculatedIva;
-  };
-
-  // Función para actualizar todos los cálculos siguiendo la fórmula correcta
-  const updateAllCalculations = (
-    lineItems: NewOrderForm['line_items'], 
+  // Preview of the order money with the shared pricing module. The server recomputes and
+  // persists the same figures on POST /api/orders, so this is never the source of truth.
+  const computeTotals = (
+    lineItems: NewOrderForm['line_items'],
     numDays: number,
     shipping: string = '0',
-    couponDiscount: number = 0
+    coupon: Coupon | null = null,
+    applyIva: boolean = formData.metadata.apply_iva
   ) => {
-    // 1. Subtotal de productos
-    const productsSubtotal = calculateProductsSubtotal(lineItems, numDays);
-    
-    // 2. Parsear valores
-    const shippingAmount = parseFloat(shipping) || 0;
-    
-    // 3. CALCULATED_SUBTOTAL = productos + envío - descuento cupón
-    const calculatedSubtotal = calculateCalculatedSubtotal(productsSubtotal, shippingAmount, couponDiscount);
-    
-    // 4. CALCULATED_IVA = calculated_subtotal × 0.19
-    const calculatedIva = calculateCalculatedIVA(calculatedSubtotal, formData.metadata.apply_iva);
-    
-    // 5. CALCULATED_TOTAL = calculated_subtotal + calculated_iva
-    const calculatedTotal = calculateCalculatedTotal(calculatedSubtotal, calculatedIva);
+    try {
+      return computeOrderTotals({
+        lineItems,
+        jornadas: Math.max(1, numDays),
+        shippingTotal: parseFloat(shipping) || 0,
+        coupon,
+        applyIva,
+      });
+    } catch (error) {
+      console.error('[CreateOrderForm] No se pudieron calcular los montos:', error);
+      return null;
+    }
+  };
+
+  const calculateProductsSubtotal = (lineItems: NewOrderForm['line_items'], numDays: number) =>
+    computeTotals(lineItems, numDays)?.productsSubtotal ?? 0;
+
+  // Función para actualizar todos los cálculos siguiendo la fórmula canónica (src/lib/pricing.ts)
+  const updateAllCalculations = (
+    lineItems: NewOrderForm['line_items'],
+    numDays: number,
+    shipping: string = '0',
+    coupon: Coupon | null = null,
+    applyIva: boolean = formData.metadata.apply_iva
+  ) => {
+    const totals = computeTotals(lineItems, numDays, shipping, coupon, applyIva);
+    const discount = totals?.discount ?? 0;
 
     return {
-      calculated_subtotal: calculatedSubtotal.toString(),
-      calculated_iva: calculatedIva.toString(),
-      calculated_total: calculatedTotal.toString(),
+      calculated_subtotal: String(totals?.net ?? 0),
+      calculated_discount: String(discount),
+      calculated_iva: String(totals?.iva ?? 0),
+      calculated_total: String(totals?.total ?? 0),
+      coupon_discount_amount: discount,
       shipping_total: shipping
     };
   };
 
-  // Función para calcular días entre fechas
+  // Jornadas inclusivas por día calendario (UTC), inmunes al cambio de horario de Chile.
   const calculateDays = (startDate: string, endDate: string) => {
     if (!startDate || !endDate) return 0;
-    
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-    
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    return diffDays + 1;
+    try {
+      return countJornadas(startDate, endDate);
+    } catch (error) {
+      if (!(error instanceof PricingError)) throw error;
+      return 0;
+    }
   };
 
   // Función para actualizar fechas y calcular jornadas
@@ -441,7 +436,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           prev.line_items,
           days,
           newMetadata.shipping_total,
-          couponDiscountAmount
+          appliedCoupon
         );
 
         return {
@@ -490,7 +485,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
         prev.line_items,
         numDays,
         value,
-        couponDiscountAmount
+        appliedCoupon
       );
 
       return {
@@ -507,9 +502,9 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
   };
 
   // Manejar aplicación de cupón
-  const handleCouponApplied = (coupon: Coupon, discountAmount: number) => {
+  const handleCouponApplied = (coupon: Coupon, _discountAmount: number) => {
+    // The amount is recomputed from the coupon itself, over the products subtotal.
     setAppliedCoupon(coupon);
-    setCouponDiscountAmount(discountAmount);
     
     setFormData(prev => {
       const numDays = parseInt(prev.metadata.num_jornadas) || 1;
@@ -517,16 +512,15 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
         prev.line_items,
         numDays,
         prev.metadata.shipping_total,
-        discountAmount
+        coupon
       );
 
       return {
         ...prev,
         metadata: {
           ...prev.metadata,
-          applied_coupon: coupon,
-          coupon_discount_amount: discountAmount,
-          ...calculations
+          ...calculations,
+          applied_coupon: coupon
         }
       };
     });
@@ -535,7 +529,6 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
   // Manejar remoción de cupón
   const handleCouponRemoved = () => {
     setAppliedCoupon(null);
-    setCouponDiscountAmount(0);
     
     setFormData(prev => {
       const numDays = parseInt(prev.metadata.num_jornadas) || 1;
@@ -543,16 +536,15 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
         prev.line_items,
         numDays,
         prev.metadata.shipping_total,
-        0
+        null
       );
 
       return {
         ...prev,
         metadata: {
           ...prev.metadata,
-          applied_coupon: null,
-          coupon_discount_amount: 0,
-          ...calculations
+          ...calculations,
+          applied_coupon: null
         }
       };
     });
@@ -617,7 +609,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
       const budgetData = {
         order_id: Date.now(), // ID temporal solo para el PDF de vista previa
         customer_id: formData.customer_id,
-        status: 'on-hold',
+        status: 'request',
         billing: {
           first_name: formData.billing.first_name,
           last_name: formData.billing.last_name,
@@ -634,7 +626,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           num_jornadas: formData.metadata.num_jornadas,
           company_rut: formData.metadata.company_rut,
           calculated_subtotal: formData.metadata.calculated_subtotal,
-          calculated_discount: '0',
+          calculated_discount: formData.metadata.calculated_discount,
           calculated_iva: formData.metadata.calculated_iva,
           calculated_total: formData.metadata.calculated_total
         },
@@ -738,8 +730,9 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
         num_jornadas: parseInt(formData.metadata.num_jornadas) || 1,
         company_rut: formData.metadata.company_rut,
         calculated_subtotal: parseFloat(formData.metadata.calculated_subtotal) || 0,
-        calculated_discount: 0,
+        calculated_discount: parseFloat(formData.metadata.calculated_discount) || 0,
         calculated_iva: parseFloat(formData.metadata.calculated_iva) || 0,
+        apply_iva: formData.metadata.apply_iva,
         calculated_total: parseFloat(formData.metadata.calculated_total) || 0,
         shipping_total: parseFloat(formData.metadata.shipping_total) || 0,
         // Shipping lines profesional usando el método seleccionado
@@ -774,7 +767,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           }
         }] : [],
         line_items: formData.line_items,
-        status: 'on-hold' // Cambiar a on-hold para generar presupuesto automáticamente
+        status: 'request' // Etapa inicial: dispara la generación automática del presupuesto
       };
 
       const response = await fetch('/api/orders', {
@@ -793,8 +786,11 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
       if (data.success) {
         console.log('✅ Order created successfully:', data.data);
         
-        // Generar presupuesto automáticamente para órdenes 'on-hold'
-        if (data.data.status === 'on-hold') {
+        // Generar presupuesto automáticamente si el pedido nace en la etapa que lo amerita.
+        // Antes esto comparaba contra el literal `'on-hold'`. Dejó de funcionar en cuanto
+        // `POST /api/orders` empezó a normalizar el vocabulario: el endpoint responde `request`,
+        // así que la comparación no se cumplía y la generación automática se caía en silencio.
+        if (isBudgetStatus(data.data.status)) {
           console.log('🚀 Triggering budget generation for on-hold order...');
           // No esperar la generación del presupuesto para no bloquear el cierre del formulario
           generateBudgetForCreatedOrder(data.data).catch(err => {
@@ -837,7 +833,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
-        <Button className="ml-3">
+        <Button className={triggerClassName ?? "ml-3"}>
           <Plus className="h-4 w-4 mr-2" />
           Nuevo Pedido
         </Button>
@@ -1049,7 +1045,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
                     updatedLineItems,
                     numDays,
                     prev.metadata.shipping_total,
-                    couponDiscountAmount
+                    appliedCoupon
                   );
 
                   return {
@@ -1070,7 +1066,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
                     updatedLineItems,
                     numDays,
                     prev.metadata.shipping_total,
-                    couponDiscountAmount
+                    appliedCoupon
                   );
 
                   return {
@@ -1257,7 +1253,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
           {/* Resumen de Costos */}
           <OrderCostSummary
             baseSubtotal={calculateBaseSubtotal(formData.line_items).toString()}
-            subtotal={formData.metadata.calculated_subtotal}
+            subtotal={String(calculateProductsSubtotal(formData.line_items, parseInt(formData.metadata.num_jornadas) || 1))}
             discount="0"
             iva={formData.metadata.calculated_iva}
             total={formData.metadata.calculated_total}
@@ -1267,16 +1263,23 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers }: CreateOr
             onCouponApplied={handleCouponApplied}
             onCouponRemoved={handleCouponRemoved}
             appliedCoupon={appliedCoupon}
-            couponDiscountAmount={couponDiscountAmount}
+            couponDiscountAmount={formData.metadata.coupon_discount_amount ?? 0}
             userId={selectedUserId ? parseInt(selectedUserId) : undefined}
             accessToken={sessionData?.access_token}
-            onTotalChange={(newTotal, newIva) => {
+            applyIva={formData.metadata.apply_iva}
+            onApplyIvaChange={(applyIva) => {
               setFormData(prev => ({
                 ...prev,
                 metadata: {
                   ...prev.metadata,
-                  calculated_total: newTotal,
-                  calculated_iva: newIva
+                  apply_iva: applyIva,
+                  ...updateAllCalculations(
+                    prev.line_items,
+                    parseInt(prev.metadata.num_jornadas) || 1,
+                    prev.metadata.shipping_total,
+                    appliedCoupon,
+                    applyIva
+                  )
                 }
               }));
             }}

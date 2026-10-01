@@ -47,14 +47,14 @@ const title = `Analytics Avanzados - Rental Mario Hans | ${adminSession.admin.em
 <Base title={title}>
   <div class="container py-6">
     {error && (
-      <div class="mb-6 p-4 border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/50 rounded-lg">
+      <div class="mb-6 p-4 border border-red-200 bg-red-50 rounded-lg">
         <div class="flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p class="text-red-700 dark:text-red-400 font-medium">Error al cargar analytics</p>
+          <p class="text-red-700 font-medium">Error al cargar analytics</p>
         </div>
-        <p class="text-red-600 dark:text-red-300 text-sm mt-1">{error}</p>
+        <p class="text-red-600 text-sm mt-1">{error}</p>
       </div>
     )}
 

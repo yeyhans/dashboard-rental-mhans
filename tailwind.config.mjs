@@ -1,7 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}"],
-  darkMode: ["media", "class"],
+  // Sin tema oscuro: el sistema de diseño del cliente fija "white-first" como no negociable.
+  // Antes era ["media", "class"], que activaba las utilidades `dark:` con la preferencia del
+  // sistema operativo mientras las variables CSS solo cambiaban con la clase — un tema mezclado
+  // que nadie habría visto en revisión. No se usa ninguna utilidad `dark:` en el codigo.
+  darkMode: "class",
   theme: {
   	container: {
   		center: true,

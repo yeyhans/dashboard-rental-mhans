@@ -1,7 +1,9 @@
 import type { APIRoute } from 'astro';
+import { withAuth } from '../../../middleware/auth';
 import { ProductService } from '../../../services/productService';
 
-export const POST: APIRoute = async ({ request }) => {
+// Catalogue writes require an authenticated admin (F3, external-endpoint-authentication/spec.md).
+export const POST: APIRoute = withAuth(async ({ request }) => {
   try {
     const contentType = request.headers.get('content-type');
     if (!contentType || !contentType.includes('application/json')) {
@@ -117,4 +119,4 @@ export const POST: APIRoute = async ({ request }) => {
       }
     );
   }
-};
+});

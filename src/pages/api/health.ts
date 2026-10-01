@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { supabaseAdmin } from '../../lib/supabase';
 
 /**
  * Health Check Endpoint for External Frontend Services
@@ -9,17 +10,18 @@ export const GET: APIRoute = async () => {
     // Basic health check - verify we can respond
     const startTime = Date.now();
     
-    // Check if we can connect to Supabase (optional but recommended)
+    // Probe the database with the same client the dashboard actually uses.
+    // The old probe built a JWT-less anon client and selected from `orders`; under the RLS
+    // policies added by migration 0001 that returns zero rows for a table it cannot see, and any
+    // revoked grant pins this endpoint to a permanent `error`. `products` keeps a broad SELECT
+    // policy, so it stays a meaningful connectivity signal for either client.
     let supabaseStatus = 'unknown';
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(
-        import.meta.env.PUBLIC_SUPABASE_URL!,
-        import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
-      );
-      
-      // Simple query to test connection
-      const { error } = await supabase.from('orders').select('id').limit(1);
+      if (!supabaseAdmin) {
+        throw new Error('supabaseAdmin no está inicializado');
+      }
+
+      const { error } = await supabaseAdmin.from('products').select('id').limit(1);
       supabaseStatus = error ? 'error' : 'healthy';
     } catch (supabaseError) {
       supabaseStatus = 'error';

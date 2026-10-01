@@ -22,6 +22,9 @@ import { createEventFromOrder, openGoogleCalendar } from '@/lib/simpleCalendar';
 import { sendManualEmail, validateManualEmailData, type ManualEmailData } from '@/services/manualEmailService';
 import { AdminCommunications } from './AdminCommunications';
 import { useOrderNotifications } from '../../hooks/useOrderNotifications';
+import { statusBadgeClass, statusLabel } from '../../lib/orderStatus';
+import { computeOrderTotals } from '../../lib/pricing';
+import { reserveAmount as computeReserveAmount } from '../../lib/finance';
 
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
@@ -437,25 +440,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   }, [orderData.pago_completo]);
 
   // Status translations and colors
-  const statusTranslations: { [key: string]: string } = {
-    'pending': 'Pendiente',
-    'processing': 'En proceso',
-    'on-hold': 'En espera',
-    'completed': 'Completado',
-    'cancelled': 'Cancelado',
-    'refunded': 'Reembolsado',
-    'failed': 'Fallido'
-  };
 
-  const statusColors: { [key: string]: string } = {
-    'pending': 'bg-yellow-100 text-yellow-800',
-    'processing': 'bg-blue-100 text-blue-800',
-    'on-hold': 'bg-gray-100 text-gray-800',
-    'completed': 'bg-green-100 text-green-800',
-    'cancelled': 'bg-red-100 text-red-800',
-    'refunded': 'bg-purple-100 text-purple-800',
-    'failed': 'bg-red-100 text-red-800'
-  };
 
   const handleSaveOrder = async (updatedOrder: any) => {
     try {
@@ -506,66 +491,48 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     toast.info('Cupón removido');
   };
 
-  // Funciones de cálculo siguiendo la misma lógica que CreateOrderForm.tsx
-  const calculateProductsSubtotal = (lineItems: any[], numDays: number) => {
-    // 1. Subtotal de productos (precio × cantidad × días)
-    const dailySubtotal = lineItems.reduce((sum, item) => {
-      const price = parseFloat(item.price?.toString() || '0');
-      const quantity = parseInt(item.quantity?.toString() || '0');
-      return sum + (price * quantity);
-    }, 0);
-    return dailySubtotal * numDays;
-  };
+  // Manual discount stored on the order (no coupon). A stored coupon discount is not manual: it is
+  // recomputed from the coupon, so removing the coupon removes its discount.
+  const storedManualDiscount = (() => {
+    const lines = typeof orderData?.coupon_lines === 'string'
+      ? (() => { try { return JSON.parse(orderData.coupon_lines); } catch { return []; } })()
+      : orderData?.coupon_lines;
+    const hasStoredCoupon = Array.isArray(lines) && lines.length > 0;
+    return hasStoredCoupon ? 0 : parseFloat(String(orderData?.calculated_discount ?? 0)) || 0;
+  })();
 
-  const calculateCalculatedSubtotal = (
-    productsSubtotal: number,
-    shippingTotal: number,
-    couponDiscount: number
-  ) => {
-    // 2. CALCULATED_SUBTOTAL = subtotal productos + envío - descuento cupón
-    return productsSubtotal + shippingTotal - couponDiscount;
-  };
-
-  const calculateCalculatedIVA = (calculatedSubtotal: number, applyIva: boolean = true) => {
-    // 3. CALCULATED_IVA = calculated_subtotal × 0.19 (solo si apply_iva es true)
-    return applyIva ? calculatedSubtotal * 0.19 : 0;
-  };
-
-  const calculateCalculatedTotal = (calculatedSubtotal: number, calculatedIva: number) => {
-    // 4. CALCULATED_TOTAL = calculated_subtotal + calculated_iva
-    return calculatedSubtotal + calculatedIva;
-  };
-
-  // Función para actualizar todos los cálculos siguiendo la fórmula correcta
+  // Order money with the shared pricing module (src/lib/pricing.ts). Preview only: the server
+  // recomputes and persists the same figures when the order is saved.
   const updateAllCalculations = (
     lineItems: any[],
     numDays: number,
     shipping: number = 0,
-    couponDiscount: number = 0,
+    _couponDiscount: number = 0,
     applyIva: boolean = true
   ) => {
-    // 1. Subtotal de productos
-    const productsSubtotal = calculateProductsSubtotal(lineItems, numDays);
-
-    // 2. CALCULATED_SUBTOTAL = productos + envío - descuento cupón
-    const calculatedSubtotal = calculateCalculatedSubtotal(productsSubtotal, shipping, couponDiscount);
-
-    // 3. CALCULATED_IVA = calculated_subtotal × 0.19 (solo si applyIva es true)
-    const calculatedIva = calculateCalculatedIVA(calculatedSubtotal, applyIva);
-
-    // 4. CALCULATED_TOTAL = calculated_subtotal + calculated_iva
-    const calculatedTotal = calculateCalculatedTotal(calculatedSubtotal, calculatedIva);
-
-
-
-    return {
-      products_subtotal: productsSubtotal,
-      calculated_subtotal: calculatedSubtotal,
-      calculated_discount: couponDiscount, // El descuento aplicado (principalmente cupones)
-      calculated_iva: calculatedIva,
-      calculated_total: calculatedTotal
-    };
+    try {
+      const totals = computeOrderTotals({
+        lineItems: lineItems.map(item => ({ price: item.price ?? 0, quantity: item.quantity ?? 0 })),
+        jornadas: Math.max(1, numDays || 1),
+        shippingTotal: shipping,
+        coupon: appliedCoupon,
+        discount: appliedCoupon ? null : storedManualDiscount,
+        applyIva,
+      });
+      return {
+        products_subtotal: totals.productsSubtotal,
+        calculated_subtotal: totals.net,
+        calculated_discount: totals.discount,
+        calculated_iva: totals.iva,
+        calculated_total: totals.total
+      };
+    } catch {
+      return { products_subtotal: 0, calculated_subtotal: 0, calculated_discount: 0, calculated_iva: 0, calculated_total: 0 };
+    }
   };
+
+  const calculateProductsSubtotal = (lineItems: any[], numDays: number) =>
+    updateAllCalculations(lineItems, numDays).products_subtotal;
 
   const calculateEditedSubtotal = () => {
     // Para compatibilidad con código existente - solo subtotal de productos
@@ -687,6 +654,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         calculated_subtotal: calculations.calculated_subtotal,
         calculated_discount: calculations.calculated_discount, // Descuento aplicado (cupones)
         calculated_iva: calculations.calculated_iva,
+        apply_iva: applyIva,
         shipping_total: deliveryMethod === 'pickup' ? 0 : shipping,
         coupon_lines: appliedCoupon ? [{
           id: appliedCoupon.id,
@@ -1700,8 +1668,20 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     const oldStatus = orderData.status || 'unknown';
 
     try {
-      // Aquí iría la lógica para actualizar el estado en la base de datos
-      // Por ahora solo notificamos el cambio
+      // Antes esto solo notificaba: el comentario decía "aquí iría la lógica para actualizar el
+      // estado" y el toast anunciaba un cambio que nunca ocurría. Al recargar, el admin veía el
+      // estado anterior y volvía a intentarlo. El endpoint valida además la transición contra la
+      // cadena del canónico, así que un salto ilegal se rechaza con un mensaje en español.
+      const response = await fetch(`/api/orders/${orderData.id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus, reason }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'No se pudo actualizar el estado de la orden');
+      }
 
       await notifyStatusChange(
         oldStatus,
@@ -1710,7 +1690,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         `Cambio realizado desde el panel administrativo por ${sessionData?.user?.name || 'Administrador'}`
       );
 
-      toast.success(`Estado cambiado de ${oldStatus} a ${newStatus}`);
+      toast.success(`Estado cambiado de ${statusLabel(oldStatus)} a ${statusLabel(newStatus)}`);
 
       // Recargar la página para mostrar el nuevo estado
       setTimeout(() => {
@@ -1718,8 +1698,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       }, 1500);
 
     } catch (error) {
-      console.error('Error changing order status:', error);
-      toast.error('Error al cambiar el estado de la orden');
+      console.error('[ProcessOrder] Error al cambiar el estado de la orden:', {
+        orderId: orderData.id, oldStatus, newStatus, error,
+      });
+      toast.error(error instanceof Error ? error.message : 'Error al cambiar el estado de la orden');
     }
   };
 
@@ -1734,7 +1716,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   const handleMarkAsFailed = async () => {
     const reason = prompt('Ingresa el motivo por el cual la orden falló:');
     if (reason) {
-      await handleStatusChange('failed', reason);
+      // `failed` sale del CHECK con 0003; la salida terminal por fallo es `cancelled`.
+      await handleStatusChange('cancelled', reason);
     }
   };
 
@@ -1945,8 +1928,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             <CardTitle>Estado del Pedido</CardTitle>
           </CardHeader>
           <CardContent>
-            <Badge className={statusColors[orderData.status] || 'bg-gray-100 text-gray-800'}>
-              {statusTranslations[orderData.status] || orderData.status}
+            <Badge className={statusBadgeClass(orderData.status)}>
+              {statusLabel(orderData.status)}
             </Badge>
           </CardContent>
         </Card>
@@ -2156,10 +2139,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           {(() => {
             const total = parseFloat(String(orderData.calculated_total || 0));
             const numValue = parseFloat(reserveValue) || 0;
-            const reserveAmount = reserveType === 'fixed'
-              ? Math.round(numValue)
-              : Math.round(total * (numValue / 100));
-            const pending = Math.max(0, Math.round(total - reserveAmount));
+            const reserveAmount = computeReserveAmount({ total, reserveType, reserveValue: numValue });
+            const pending = total - reserveAmount;
             return (
               <div className="rounded-md bg-muted p-3 space-y-1 text-sm">
                 <div className="flex justify-between">
@@ -2902,8 +2883,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                                         <a href={`/orders/${conflict.orderId}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-700 font-medium font-bold mr-1">
                                           Orden #{conflict.orderId}
                                         </a>
-                                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 leading-none uppercase align-middle ${statusColors[conflict.status] || ''}`}>
-                                          {statusTranslations[conflict.status] || conflict.status}
+                                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 leading-none uppercase align-middle ${statusBadgeClass(conflict.status)}`}>
+                                          {statusLabel(conflict.status)}
                                         </Badge>
                                         ) entre las fechas {formatConflictDate(conflict.startDate)} y {formatConflictDate(conflict.endDate)}.
                                       </div>
@@ -2959,7 +2940,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       </Card>
 
       {/* Enhanced Financial Summary with Editable Coupons and Shipping */}
-      {(orderData.calculated_subtotal || orderData.calculated_discount || orderData.calculated_iva || orderData.shipping_total || orderData.coupon_lines) && (
+      {Boolean(orderData.calculated_subtotal || orderData.calculated_discount || orderData.calculated_iva || orderData.shipping_total || orderData.coupon_lines) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
@@ -3183,7 +3164,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
               )}
 
               {/* Subtotal de Productos (solo mostrar en modo lectura) */}
-              {!isEditingFinancials && orderData.calculated_subtotal && (
+              {!isEditingFinancials && Boolean(orderData.calculated_subtotal) && (
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Subtotal de Productos:</span>
                   <span className="font-medium">${(() => {
@@ -3276,7 +3257,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   ) : null;
                 } else {
                   // En modo lectura, mostrar el descuento calculado original si existe
-                  return orderData.calculated_discount && parseFloat(orderData.calculated_discount.toString()) > 0 ? (
+                  return parseFloat(String(orderData.calculated_discount ?? 0)) > 0 ? (
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Descuento Total Aplicado:</span>
                       <span className="font-medium text-orange-600">
@@ -3614,13 +3595,13 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                 </div>
               ) : (
                 // Display shipping cost (read-only)
-                orderData.shipping_total && parseFloat(orderData.shipping_total.toString()) > 0 && (
+                parseFloat(String(orderData.shipping_total ?? 0)) > 0 && (
                   <div className="flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-200">
                     <div className="flex items-center gap-2">
                       <span className="text-blue-700">🚚 Costo de Envío:</span>
                     </div>
                     <span className="font-medium text-blue-600">
-                      +${parseFloat(orderData.shipping_total.toString()).toLocaleString('es-CL')}
+                      +${parseFloat(String(orderData.shipping_total ?? 0)).toLocaleString('es-CL')}
                     </span>
                   </div>
                 )
@@ -3694,7 +3675,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   );
                   return calculations.calculated_iva > 0;
                 } else {
-                  return orderData.calculated_iva && parseFloat(orderData.calculated_iva.toString()) > 0;
+                  return parseFloat(String(orderData.calculated_iva ?? 0)) > 0;
                 }
               })() && (
                   <div className="flex justify-between items-center">
@@ -3727,7 +3708,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
               <div className="flex justify-between items-center font-bold text-lg bg-gray-50 p-3 rounded-lg">
                 <span className="text-gray-900">💵 Total Final:</span>
                 <span className="text-green-600 text-xl">
-                  ${calculateUpdatedTotal().toLocaleString('es-CL')}
+                  ${(isEditingFinancials
+                    ? calculateUpdatedTotal()
+                    : parseFloat(String(orderData.calculated_total ?? 0)) || 0
+                  ).toLocaleString('es-CL')}
                 </span>
               </div>
 

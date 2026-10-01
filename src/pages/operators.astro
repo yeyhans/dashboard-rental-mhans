@@ -1,0 +1,60 @@
+---
+import Base from "../layout/Base.astro";
+import OperatorsTable from "../components/operators/OperatorsTable";
+import { clearAuthCookies, getServerAdmin } from "../lib/supabase";
+import { ADMIN_HOME } from "../lib/accessControl";
+import { OperatorService, type Operator } from "../services/operatorService";
+
+export const prerender = false;
+
+// Operator accounts (batch 3, migration 0011). super_admin only — the API behind the table says
+// the same with `requireRole('super_admin')`; this check keeps a plain admin from seeing a page
+// whose every action would answer 403.
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+
+if (adminSession.admin.role !== 'super_admin') {
+  return Astro.redirect(ADMIN_HOME);
+}
+
+let operators: Operator[] = [];
+let loadError: string | null = null;
+
+try {
+  operators = await OperatorService.list();
+} catch (error) {
+  console.error('[operators] Error al cargar los operarios:', {
+    admin: adminSession.admin.email,
+    error,
+  });
+  loadError = 'No se pudieron cargar los operarios. Recarga la página o inténtalo en unos minutos.';
+}
+
+const title = `Operarios | ${adminSession.admin.email}`;
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    <header class="mb-5 border-b border-[var(--color-border)] pb-4">
+      <h1 class="text-xl font-semibold tracking-tight">Operarios</h1>
+      <p class="mt-1 text-sm text-[var(--color-text-secondary)]">
+        Cuentas de bodega para escanear salidas y entradas
+      </p>
+    </header>
+
+    {loadError ? (
+      <div
+        role="alert"
+        class="rounded-[10px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-4 text-sm text-[var(--color-crit)]"
+      >
+        {loadError}
+      </div>
+    ) : (
+      <OperatorsTable client:load initialOperators={operators} />
+    )}
+  </div>
+</Base>

@@ -1,7 +1,20 @@
-import type { APIRoute } from 'astro';
-import { supabaseAdmin } from '../../../lib/supabase';
-import { withCors } from '../../../middleware/auth';
-import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
+import type { APIRoute } from "astro";
+import {
+  supabaseAdmin,
+  createEphemeralAuthClient,
+} from "../../../lib/supabase";
+import { withCors } from "../../../middleware/auth";
+import {
+  checkRateLimit,
+  getClientIp,
+  rateLimitResponse,
+  RATE_LIMITS,
+} from "../../../lib/rateLimit";
+import {
+  ADMIN_ROLES,
+  INACTIVE_ACCOUNT_ERROR,
+  homeFor,
+} from "../../../lib/accessControl";
 
 interface LoginRequest {
   email: string;
@@ -21,7 +34,10 @@ const LOCKOUT_MAX_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutos
 let attemptCounter = 0;
 
-function checkAccountLockout(email: string): { locked: boolean; retryAfterMs: number } {
+function checkAccountLockout(email: string): {
+  locked: boolean;
+  retryAfterMs: number;
+} {
   // Limpieza periódica: cada 100 intentos, eliminar entradas expiradas
   attemptCounter++;
   if (attemptCounter % 100 === 0) {
@@ -51,7 +67,9 @@ function recordFailedAttempt(email: string): number {
   entry.count++;
   if (entry.count >= LOCKOUT_MAX_ATTEMPTS) {
     entry.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
-    console.log(`[Auth] Cuenta bloqueada por intentos fallidos: ${email}, desbloqueada en ${new Date(entry.lockedUntil).toISOString()}`);
+    console.log(
+      `[Auth] Cuenta bloqueada por intentos fallidos: ${email}, desbloqueada en ${new Date(entry.lockedUntil).toISOString()}`,
+    );
   }
   loginAttempts.set(email, entry);
   return entry.count;
@@ -72,13 +90,16 @@ export const POST: APIRoute = withCors(async (context) => {
 
     // Basic validation
     if (!email || !password) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Email y contraseña son requeridos'
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Email y contraseña son requeridos",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -87,149 +108,190 @@ export const POST: APIRoute = withCors(async (context) => {
     const lockout = checkAccountLockout(normalizedEmail);
     if (lockout.locked) {
       const minutesRemaining = Math.ceil(lockout.retryAfterMs / 60000);
-      return new Response(JSON.stringify({
-        success: false,
-        error: `Cuenta temporalmente bloqueada. Intenta nuevamente en ${minutesRemaining} minuto${minutesRemaining !== 1 ? 's' : ''}.`
-      }), {
-        status: 429,
-        headers: {
-          'Content-Type': 'application/json',
-          'Retry-After': String(Math.ceil(lockout.retryAfterMs / 1000))
-        }
-      });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `Cuenta temporalmente bloqueada. Intenta nuevamente en ${minutesRemaining} minuto${minutesRemaining !== 1 ? "s" : ""}.`,
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(Math.ceil(lockout.retryAfterMs / 1000)),
+          },
+        },
+      );
     }
 
-    // Authenticate with Supabase
-    const { data: authData, error: authError } = await supabaseAdmin.auth.signInWithPassword({
-      email: normalizedEmail,
-      password
-    });
+    // Autenticar en un cliente propio, nunca en `supabaseAdmin` (D-20: la sesión del usuario
+    // quedaba en el singleton y las consultas admin dejaban de correr como service_role).
+    const { data: authData, error: authError } =
+      await createEphemeralAuthClient().auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
 
     if (authError || !authData.user) {
       const failCount = recordFailedAttempt(normalizedEmail);
       const attemptsLeft = Math.max(0, LOCKOUT_MAX_ATTEMPTS - failCount);
-      const errorMessage = attemptsLeft === 0
-        ? 'Cuenta bloqueada por múltiples intentos fallidos. Intenta en 30 minutos.'
-        : `Credenciales inválidas. ${attemptsLeft} intento${attemptsLeft !== 1 ? 's' : ''} restante${attemptsLeft !== 1 ? 's' : ''} antes del bloqueo.`;
-      return new Response(JSON.stringify({
-        success: false,
-        error: errorMessage
-      }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      const errorMessage =
+        attemptsLeft === 0
+          ? "Cuenta bloqueada por múltiples intentos fallidos. Intenta en 30 minutos."
+          : `Credenciales inválidas. ${attemptsLeft} intento${attemptsLeft !== 1 ? "s" : ""} restante${attemptsLeft !== 1 ? "s" : ""} antes del bloqueo.`;
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: errorMessage,
+        }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Login exitoso — resetear contador de intentos fallidos para este email
     resetLockout(normalizedEmail);
 
-    // Verify admin user exists in admin_users table
+    // Verify admin user exists in admin_users table.
+    // .in() en vez de .eq('role', 'admin'): los super_admin quedaban excluidos
+    // (misma regresión ya corregida en lib/supabase.ts). `ADMIN_ROLES` incluye `operator`
+    // (0011): el operario de bodega inicia sesión aquí mismo y el middleware lo lleva a /bodega.
     const { data: adminUser, error: adminError } = await supabaseAdmin
-      .from('admin_users')
-      .select('*')
-      .eq('user_id', authData.user.id)
-      .eq('role', 'admin')
+      .from("admin_users")
+      .select("*")
+      .eq("user_id", authData.user.id)
+      .in("role", [...ADMIN_ROLES])
       .single();
 
     if (adminError || !adminUser) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Acceso denegado. Permisos de administrador requeridos.'
-      }), {
-        status: 403,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Acceso denegado. Permisos de administrador requeridos.",
+        }),
+        {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // Cuenta desactivada (0011): las credenciales son correctas, pero la cuenta está cerrada.
+    // Se rechaza ANTES de emitir cookies para que no quede ninguna sesión que el middleware
+    // tenga que expulsar después.
+    if (adminUser.is_active === false) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: INACTIVE_ACCOUNT_ERROR,
+        }),
+        {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Configurar sesión extendida para administradores (30 días)
     if (authData.session) {
       const { access_token, refresh_token } = authData.session;
-      
+
       // Configuración profesional de cookies para sesión extendida
       const EXTENDED_SESSION_DAYS = 30;
       const extendedMaxAge = 60 * 60 * 24 * EXTENDED_SESSION_DAYS; // 30 días en segundos
       const isProduction = import.meta.env.PROD;
-      
+
       // Configuración base de cookies
       const cookieConfig = {
-        path: '/',
+        path: "/",
         maxAge: extendedMaxAge,
         httpOnly: true,
         secure: isProduction,
-        sameSite: 'strict' as const,
+        sameSite: "strict" as const,
       };
-      
+
       // Tokens de autenticación
-      context.cookies.set('sb-access-token', access_token, cookieConfig);
-      context.cookies.set('sb-refresh-token', refresh_token, cookieConfig);
-      
+      context.cookies.set("sb-access-token", access_token, cookieConfig);
+      context.cookies.set("sb-refresh-token", refresh_token, cookieConfig);
+
       // Marcador de sesión administrativa extendida
       const expiryDate = new Date(Date.now() + extendedMaxAge * 1000);
-      context.cookies.set('sb-admin-session', 'true', {
+      context.cookies.set("sb-admin-session", "true", {
         ...cookieConfig,
         httpOnly: true,
       });
 
       // Fecha de expiración (solo para uso servidor)
-      context.cookies.set('sb-session-expiry', expiryDate.toISOString(), {
+      context.cookies.set("sb-session-expiry", expiryDate.toISOString(), {
         ...cookieConfig,
         httpOnly: true,
       });
-      
-      console.log('✅ Sesión extendida configurada hasta:', expiryDate.toLocaleDateString());
+
+      console.log(
+        "✅ Sesión extendida configurada hasta:",
+        expiryDate.toLocaleDateString(),
+      );
     }
 
     // Preparar respuesta con información de sesión extendida
     const sessionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    
-    return new Response(JSON.stringify({
-      success: true,
-      data: {
-        user: {
-          id: authData.user.id,
-          email: authData.user.email,
-          role: adminUser.role,
-          admin_id: adminUser.id
-        },
-        session: {
-          access_token: authData.session?.access_token,
-          expires_at: sessionExpiry.toISOString(),
-          is_extended: true,
-          duration_days: 30
-        },
-        admin: {
-          verified: true,
-          role: adminUser.role,
-          email: adminUser.email
-        }
-      },
-      message: `✅ Bienvenido ${adminUser.email} - Sesión configurada hasta ${sessionExpiry.toLocaleDateString('es-ES')}`
-    }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
 
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: {
+          user: {
+            id: authData.user.id,
+            email: authData.user.email,
+            role: adminUser.role,
+            admin_id: adminUser.id,
+          },
+          session: {
+            access_token: authData.session?.access_token,
+            expires_at: sessionExpiry.toISOString(),
+            is_extended: true,
+            duration_days: 30,
+          },
+          admin: {
+            verified: true,
+            role: adminUser.role,
+            email: adminUser.email,
+          },
+          // Where the form sends the browser next: /bodega for operators, /dashboard otherwise.
+          redirect_to: homeFor(adminUser.role),
+        },
+        message: `✅ Bienvenido ${adminUser.email} - Sesión configurada hasta ${sessionExpiry.toLocaleDateString("es-ES")}`,
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+      },
+    );
   } catch (error) {
-    console.error('Login error:', error);
-    return new Response(JSON.stringify({
-      success: false,
-      error: 'Error interno del servidor'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    console.error("Login error:", error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: "Error interno del servidor",
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 });
 
 export const OPTIONS: APIRoute = withCors(async () => {
-  return new Response(null, { 
+  return new Response(null, {
     status: 200,
     headers: {
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-    }
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
   });
 });

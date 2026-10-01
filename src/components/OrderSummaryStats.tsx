@@ -1,71 +1,59 @@
 import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { Calendar, CheckCircle, Clock, AlertCircle, Package, Filter } from 'lucide-react';
-
-interface MonthlyStats {
-  totalOrders: number;
-  completedOrders: number;
-  createdOrders: number;
-  pendingOrders: number;
-  processingOrders: number;
-  onHoldOrders: number;
-}
+import { Calendar, Filter } from 'lucide-react';
+import { ORDER_LIST_TABS, statusBadgeClass, type OrderStatus } from '../lib/orderStatus';
+import type { MonthlyOrderStats } from '../services/dashboardService';
 
 interface OrderSummaryStatsProps {
-  monthlyStats: MonthlyStats;
+  monthlyStats: MonthlyOrderStats;
   isFiltered?: boolean;
   filterInfo?: string;
 }
 
-export default function OrderSummaryStats({ 
-  monthlyStats, 
-  isFiltered = false, 
-  filterInfo = '' 
+/**
+ * Descripción por estado. Las etiquetas salen de `ORDER_LIST_TABS` (plural, porque cada tarjeta
+ * cuenta una colección); esto solo agrega la línea de apoyo, que el canónico no fija.
+ */
+const STAT_DESCRIPTIONS: Record<OrderStatus, string> = {
+  request: 'Esperando revisión',
+  evaluation: 'Verificando disponibilidad',
+  confirmed: 'Reserva confirmada',
+  preparation: 'Asignando equipos en bodega',
+  'in-rental': 'Equipos con el cliente',
+  return: 'En revisión de check-in',
+  completed: 'Cerrados este mes',
+  cancelled: 'No prosperaron',
+};
+
+export default function OrderSummaryStats({
+  monthlyStats,
+  isFiltered = false,
+  filterInfo = ''
 }: OrderSummaryStatsProps) {
 
+  // Antes había cinco tarjetas fijas nombrando estados legados; tres de ellos
+  // (`pending`, `processing`, `on-hold`) dejan de existir después de 0003 y habrían quedado
+  // marcando cero para siempre, mientras las cuatro etapas operacionales reales no se contaban.
+  // Se muestran solo las tarjetas con pedidos: una fila de ocho ceros no informa nada.
+  const statusCards = ORDER_LIST_TABS
+    .filter((tab) => tab.value !== 'todos')
+    .map((tab) => ({
+      title: tab.label,
+      value: monthlyStats.byStatus[tab.value as OrderStatus] ?? 0,
+      description: STAT_DESCRIPTIONS[tab.value as OrderStatus],
+      badgeClass: statusBadgeClass(tab.value),
+    }))
+    .filter((card) => card.value > 0);
 
   const stats = [
     {
       title: 'Órdenes Creadas',
       value: monthlyStats.createdOrders,
       description: `Nuevas órdenes del mes`,
-      icon: Package,
-      color: 'bg-blue-500',
-      textColor: 'text-blue-600'
+      badgeClass: statusBadgeClass('request'),
     },
-    {
-      title: 'Órdenes Completadas',
-      value: monthlyStats.completedOrders,
-      description: 'Órdenes finalizadas este mes',
-      icon: CheckCircle,
-      color: 'bg-green-500',
-      textColor: 'text-green-600'
-    },
-    {
-      title: 'Órdenes Pendientes',
-      value: monthlyStats.pendingOrders,
-      description: 'Esperando procesamiento',
-      icon: Clock,
-      color: 'bg-yellow-500',
-      textColor: 'text-yellow-600'
-    },
-    {
-      title: 'Órdenes Procesando',
-      value: monthlyStats.processingOrders,
-      description: 'En proceso activo',
-      icon: Clock,
-      color: 'bg-blue-500',
-      textColor: 'text-blue-600'
-    },
-    {
-      title: 'Órdenes En Espera',
-      value: monthlyStats.onHoldOrders,
-      description: 'Retenidas temporalmente',
-      icon: AlertCircle,
-      color: 'bg-orange-500',
-      textColor: 'text-orange-600'
-    }
+    ...statusCards,
   ];
 
   return (
@@ -81,30 +69,21 @@ export default function OrderSummaryStats({
         )}
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {stats.map((stat, index) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={index} className="relative overflow-hidden">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {stat.title}
-                </CardTitle>
-                <div className={`p-2 rounded-full ${stat.color} bg-opacity-10`}>
-                  <Icon className={`h-4 w-4 ${stat.textColor}`} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value.toLocaleString()}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {stat.description}
-                </p>
-              </CardContent>
-              {/* Decorative element */}
-              <div className={`absolute top-0 right-0 w-20 h-20 ${stat.color} opacity-5 rounded-full -mr-10 -mt-10`}></div>
-            </Card>
-          );
-        })}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((stat) => (
+          <Card key={stat.title}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+              {/* Punto de color del tono del estado, no un icono decorativo: el sistema de
+                  diseño reserva el color al lenguaje funcional de estado. */}
+              <span className={`h-2.5 w-2.5 rounded-full border ${stat.badgeClass}`} aria-hidden="true" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stat.value.toLocaleString('es-CL')}</div>
+              <p className="text-xs text-muted-foreground mt-1">{stat.description}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
     </div>

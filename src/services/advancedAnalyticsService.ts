@@ -1,5 +1,7 @@
 import { supabaseAdmin } from '../lib/supabase';
+import { canonicalStatus } from '../lib/orderStatus';
 import type { Database } from '../types/database';
+import { reserveAmount } from '../lib/finance';
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 type Order = Database['public']['Tables']['orders']['Row'];
@@ -871,8 +873,11 @@ export class AdvancedAnalyticsService {
         .slice(0, 10);
 
       // Tasas de completación y cancelación
-      const completedCount = orders?.filter(o => o.status === 'completed').length || 0;
-      const canceledCount = orders?.filter(o => o.status === 'cancelled' || o.status === 'failed').length || 0;
+      // Se normaliza antes de contar: `failed` y `refunded` se pliegan sobre `cancelled` en
+      // 0003, asi que compararlos como literales dejaria de sumarlos despues de la migracion y
+      // la tasa de cancelacion caeria sola, sin que nada haya cambiado en el negocio.
+      const completedCount = orders?.filter(o => canonicalStatus(o.status) === 'completed').length || 0;
+      const canceledCount = orders?.filter(o => canonicalStatus(o.status) === 'cancelled').length || 0;
 
       const completionRate = totalOrders > 0 ? (completedCount / totalOrders) * 100 : 0;
       const cancelationRate = totalOrders > 0 ? (canceledCount / totalOrders) * 100 : 0;
@@ -1108,7 +1113,7 @@ export class AdvancedAnalyticsService {
     try {
       const { data: orders, error } = await supabaseAdmin!
         .from('orders')
-        .select('id, status, calculated_total, pago_reserva, pago_completo, date_created')
+        .select('id, status, calculated_total, pago_reserva, pago_completo, reserve_type, reserve_value, date_created')
         .gte('date_created', startDate.toISOString())
         .lte('date_created', endDate.toISOString());
 
@@ -1123,8 +1128,11 @@ export class AdvancedAnalyticsService {
         date_created: string;
       }>;
 
-      const completedStatuses = ['completed', 'paid'];
-      const completedOrders = allOrders.filter(o => completedStatuses.includes(o.status));
+      // `paid` no está en el CHECK de ningún vocabulario — ni el legado ni el v1.2 — así que
+      // esa mitad del filtro nunca coincidió con nada. Se compara por etapa canónica para que
+      // una fila legada sin migrar siga contando como ingreso realizado.
+      const isCompleted = (status: string) => canonicalStatus(status) === 'completed';
+      const completedOrders = allOrders.filter(o => isCompleted(o.status));
 
       // --- KPIs ---
       const totalRevenue = completedOrders.reduce((sum, o) => sum + (o.calculated_total || 0), 0);
@@ -1134,11 +1142,16 @@ export class AdvancedAnalyticsService {
       let totalCollected = 0;
       allOrders.forEach(o => {
         const total = o.calculated_total || 0;
-        if (completedStatuses.includes(o.status)) {
+        if (isCompleted(o.status)) {
           if (o.pago_completo) {
             totalCollected += total;
           } else if (o.pago_reserva) {
-            totalCollected += total * 0.25;
+            // La reserva de este pedido, no un 25% fijo.
+            totalCollected += reserveAmount({
+              total,
+              reserveType: (o as any).reserve_type,
+              reserveValue: (o as any).reserve_value,
+            });
           }
         }
       });
@@ -1160,7 +1173,7 @@ export class AdvancedAnalyticsService {
       // --- Monthly Revenue ---
       const monthlyGroups = groupByMonth(allOrders);
       const monthlyRevenue = monthlyGroups.map(([month, monthOrders]) => {
-        const completed = monthOrders.filter(o => completedStatuses.includes(o.status));
+        const completed = monthOrders.filter(o => isCompleted(o.status));
         return {
           month,
           revenue: completed.reduce((sum, o) => sum + (o.calculated_total || 0), 0),
@@ -1174,12 +1187,17 @@ export class AdvancedAnalyticsService {
         let pending = 0;
         monthOrders.forEach(o => {
           const total = o.calculated_total || 0;
-          if (completedStatuses.includes(o.status)) {
+          if (isCompleted(o.status)) {
             if (o.pago_completo) {
               collected += total;
             } else if (o.pago_reserva) {
-              collected += total * 0.25;
-              pending += total * 0.75;
+              const reserva = reserveAmount({
+                total,
+                reserveType: (o as any).reserve_type,
+                reserveValue: (o as any).reserve_value,
+              });
+              collected += reserva;
+              pending += total - reserva;
             } else {
               pending += total;
             }
@@ -1195,13 +1213,18 @@ export class AdvancedAnalyticsService {
         let reservesPaid = 0;
         let finalPaymentsPending = 0;
         let fullyPaid = 0;
-        monthOrders.filter(o => completedStatuses.includes(o.status)).forEach(o => {
+        monthOrders.filter(o => isCompleted(o.status)).forEach(o => {
           const total = o.calculated_total || 0;
           if (o.pago_completo) {
             fullyPaid += total;
           } else if (o.pago_reserva) {
-            reservesPaid += total * 0.25;
-            finalPaymentsPending += total * 0.75;
+            const reserva = reserveAmount({
+              total,
+              reserveType: (o as any).reserve_type,
+              reserveValue: (o as any).reserve_value,
+            });
+            reservesPaid += reserva;
+            finalPaymentsPending += total - reserva;
           }
         });
         return {

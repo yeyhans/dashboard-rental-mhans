@@ -1,6 +1,20 @@
 import type { APIRoute } from 'astro';
 import { DashboardService } from '../../../services/dashboardService';
 import { withAuth } from '../../../middleware/auth';
+import { collectedAmount, outstandingAmount, type FinanceOrderLike } from '../../../lib/finance';
+
+/** Adapta una fila de `orders` al contrato de `lib/finance`, la única fuente de la reserva. */
+function toFinanceOrder(order: any): FinanceOrderLike {
+  return {
+    status: order.status,
+    total: Number(order.calculated_total) || 0,
+    reservePaid: !!order.pago_reserva,
+    fullyPaid: !!order.pago_completo,
+    endDate: order.order_fecha_termino ?? null,
+    reserveType: order.reserve_type,
+    reserveValue: order.reserve_value,
+  };
+}
 
 export const POST: APIRoute = withAuth(async ({ request }) => {
   try {
@@ -50,7 +64,7 @@ export const POST: APIRoute = withAuth(async ({ request }) => {
     const filteredOrders = await DashboardService.getOrdersByDateRange(
       actualDateRange.start,
       actualDateRange.end,
-      status?.length > 0 ? status[0] : undefined // Por ahora solo el primer status
+      status // La selección completa; el service la expande y la aplica con `.in()`
     );
 
     // Aplicar filtros adicionales en memoria
@@ -104,24 +118,14 @@ export const POST: APIRoute = withAuth(async ({ request }) => {
       }, {}),
       financialBreakdown: {
         totalSales: processedOrders.reduce((sum, order) => sum + (order.calculated_total || 0), 0),
+        // Ambas cifras salen de `lib/finance`, la única fuente de la reserva: respeta el
+        // `reserve_type`/`reserve_value` de cada orden en vez de multiplicar por un 0.25 propio,
+        // que es lo que hacía divergir esta tarjeta del portal del cliente y del PDF.
         totalPaid: processedOrders
           .filter(order => order.status === 'completed')
-          .reduce((sum, order) => {
-            const total = order.calculated_total || 0;
-            if (order.pago_completo) return sum + total;
-            if (order.pago_reserva) return sum + total * 0.25;
-            return sum;
-          }, 0),
+          .reduce((sum, order) => sum + collectedAmount(toFinanceOrder(order)), 0),
         totalPending: processedOrders
-          .reduce((sum, order) => {
-            const total = order.calculated_total || 0;
-            if (order.status !== 'completed') {
-              return sum + total;
-            }
-            if (order.pago_completo) return sum;
-            if (order.pago_reserva) return sum + total * 0.75;
-            return sum + total;
-          }, 0)
+          .reduce((sum, order) => sum + outstandingAmount(toFinanceOrder(order)), 0)
       }
     };
 

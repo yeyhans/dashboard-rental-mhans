@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Badge } from '../ui/badge';
 import { ShoppingCart, TrendingUp, Clock, CreditCard, Users, BarChart3, Calendar, CheckCircle, XCircle } from 'lucide-react';
 import type { OrderAnalytics } from '../../services/advancedAnalyticsService';
+import { statusBadgeClass, statusLabel } from '../../lib/orderStatus';
 
 interface OrderAnalyticsCardProps {
   data: OrderAnalytics;
@@ -13,28 +14,11 @@ export default function OrderAnalyticsCard({ data }: OrderAnalyticsCardProps) {
   const formatCurrency = (num: number) => `$${num.toLocaleString('es-CL')}`;
   const formatPercentage = (num: number) => `${num.toFixed(1)}%`;
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'processing': return 'bg-blue-100 text-blue-800';
-      case 'on-hold': return 'bg-yellow-100 text-yellow-800';
-      case 'cancelled': 
-      case 'failed': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'completed': return 'Completadas';
-      case 'processing': return 'En Proceso';
-      case 'on-hold': return 'En Espera';
-      case 'cancelled': return 'Canceladas';
-      case 'failed': return 'Fallidas';
-      case 'pending': return 'Pendientes';
-      default: return status.charAt(0).toUpperCase() + status.slice(1);
-    }
-  };
+  // Colores y etiquetas vienen de `src/lib/orderStatus.ts`. Antes esta tarjeta tenia su propio
+  // par de `switch` con la paleta de Tailwind y etiquetas en plural femenino ("Completadas"),
+  // que nombraban el mismo estado distinto de como lo ve el cliente en su portal.
+  const getStatusColor = (status: string) => statusBadgeClass(status.toLowerCase());
+  const getStatusLabel = (status: string) => statusLabel(status.toLowerCase());
 
   return (
     <div className="space-y-6">

@@ -9,18 +9,18 @@ export const prerender = false;
 const adminSession = await getServerAdmin(Astro);
 
 if (!adminSession) {
-  console.log('🚫 Acceso denegado a users - Usuario no es administrador');
+  console.log("🚫 Acceso denegado a users - Usuario no es administrador");
   clearAuthCookies(Astro);
   return Astro.redirect("/");
 }
 
-console.log('✅ Admin autenticado en users:', adminSession.admin.email);
+console.log("✅ Admin autenticado en users:", adminSession.admin.email);
 
 // Obtener el token de sesión de las cookies para pasarlo al componente
-const sessionToken = Astro.cookies.get('sb-access-token')?.value || '';
+const sessionToken = Astro.cookies.get("sb-access-token")?.value || "";
 
 if (!sessionToken) {
-  console.warn('⚠️ No se encontró token de sesión en cookies');
+  console.warn("⚠️ No se encontró token de sesión en cookies");
 }
 
 // Los usuarios se cargan client-side desde /api/users para evitar problemas
@@ -31,16 +31,21 @@ const usersData = {
   adminInfo: {
     email: adminSession.admin.email,
     role: adminSession.admin.role,
-    sessionExpiry: adminSession.expiresAt.toISOString()
-  }
+    sessionExpiry: adminSession.expiresAt.toISOString(),
+  },
 };
 
-const title = `Gestión de Usuarios | ${adminSession.admin.email}`;
+const title = `Clientes & Documentos | ${adminSession.admin.email}`;
 ---
 
 <Base title={title}>
   <div class="container py-6">
-    <UsersDashboardWithToaster 
+    <!--
+      D-09: el header (PageHeader + "+ Nuevo Cliente") vive dentro de UsersDashboard, no aquí —
+      mismo patrón que D-08 (Catálogo). Q-4 (resuelta): sin tarjetas KPI en Clientes, el canon
+      no las tiene.
+    -->
+    <UsersDashboardWithToaster
       client:load
       initialUsers={usersData.users}
       initialTotal={usersData.total}
