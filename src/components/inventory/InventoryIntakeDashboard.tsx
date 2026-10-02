@@ -15,6 +15,7 @@ import type {
 } from '../../types/inventory';
 import { DataQualityTable } from './DataQualityTable';
 import { IntakeProgressCard } from './IntakeProgressCard';
+import { InventoryGuideDialog } from './InventoryGuideDialog';
 import { SerialisedAssetForm } from './SerialisedAssetForm';
 import { conditionLabel } from './intakeForm';
 
@@ -98,7 +99,8 @@ export function InventoryIntakeDashboard({
             Registro de equipos unidad por unidad para el conteo físico.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <InventoryGuideDialog />
           <Button variant="outline" size="sm" asChild>
             <a href="/inventory/labels">
               <Tags className="mr-2 h-4 w-4" aria-hidden="true" />

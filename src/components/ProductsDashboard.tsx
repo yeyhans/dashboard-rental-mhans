@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import React from "react";
 import { PageHeader } from "./shared/PageHeader";
+import { InventoryGuideDialog } from "./inventory/InventoryGuideDialog";
 import { StatusBadge } from "./shared/StatusBadge";
 import { RowActionsMenu, type RowActionItem } from "./shared/RowActionsMenu";
 import { productStockTone, productStockBadgeLabel } from "./productStockBadge";
@@ -705,10 +706,13 @@ const ProductsDashboard = ({
         title="Catálogo de Equipos"
         subtitle="Inventario de activos físicos con disponibilidad en tiempo real"
         actions={
-          <Button className="h-10 text-xs" onClick={handleNavigateToCreate}>
-            <Plus className="h-3 w-3 mr-1" />
-            Nuevo Equipo
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <InventoryGuideDialog />
+            <Button className="h-10 text-xs" onClick={handleNavigateToCreate}>
+              <Plus className="h-3 w-3 mr-1" />
+              Nuevo Equipo
+            </Button>
+          </div>
         }
       />
 
