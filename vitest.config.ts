@@ -29,6 +29,9 @@ export default defineConfig({
       // job red on every commit regardless of the real suite. Excluded rather than deleted
       // because the script is still used by hand.
       "src/tests/conflict-detection.test.js",
+      // `pnpm build` copies src/ (tests included) into the Vercel function bundle; without this
+      // exclude a local build makes vitest collect every suite twice and the stale copies fail.
+      ".vercel/**",
     ],
   },
 });

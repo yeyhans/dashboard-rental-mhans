@@ -1,5 +1,11 @@
 import React from "react";
-import type { BudgetDocumentData, LineItem } from "../core/types";
+import type {
+  BudgetDocumentData,
+  LineItem,
+  ProcessingDocumentData,
+  ProcessingSignerInfo,
+} from "../core/types";
+import { PICKUP_ADDRESS } from "../content/annexCopy";
 import { generatePdfBuffer } from "../core/pdfService";
 import { orderBreakdown } from "../../orderBreakdown";
 import { reserveAmount } from "../../finance";
@@ -166,6 +172,52 @@ export const budgetFixtures: Record<string, BudgetDocumentData> = {
   longNamed: longNamedOrder,
   plain: plainOrder,
   company: companyOrder,
+};
+
+/** Wraps a budget fixture with the annex facts and signer the processing document prints. */
+function toProcessing(
+  budget: BudgetDocumentData,
+  signer: ProcessingSignerInfo,
+): ProcessingDocumentData {
+  return {
+    ...budget,
+    annex: {
+      startDate: budget.reservation.startDate,
+      endDate: budget.reservation.endDate,
+      deliveryDate: "31-01-2026",
+      totalNet: budget.totals.subtotal,
+      reservePct: 25,
+      reserveLabel: budget.totals.reserveLabel,
+      pickupAddress: PICKUP_ADDRESS,
+    },
+    signer,
+  };
+}
+
+/** Short order: the annex starts mid first page. */
+export const processingNatural = toProcessing(shortOrder, {
+  name: shortOrder.client.name,
+  rut: shortOrder.client.rut,
+});
+
+/** Empresa client: the signature block adds company name and RUT. */
+export const processingEmpresa = toProcessing(companyOrder, {
+  name: companyOrder.client.name,
+  rut: "13.456.789-0",
+  company: "Productora Los Andes SpA",
+  companyRut: "76.543.210-K",
+});
+
+/** 18 items with discount and shipping: the annex starts mid-page and spans pages. */
+export const processingLong = toProcessing(longNamedOrder, {
+  name: longNamedOrder.client.name,
+  rut: longNamedOrder.client.rut,
+});
+
+export const processingFixtures: Record<string, ProcessingDocumentData> = {
+  natural: processingNatural,
+  empresa: processingEmpresa,
+  long: processingLong,
 };
 
 /** Renders any react-pdf document element to a PDF buffer through the production helper. */

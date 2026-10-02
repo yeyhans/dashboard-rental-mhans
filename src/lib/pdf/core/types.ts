@@ -81,29 +81,6 @@ export interface ContractDocumentData {
   empresaRut?: string;
 }
 
-// Processing PDF specific
-export interface ProcessingDocumentData {
-  orderId: number;
-  customerName: string;
-  customerEmail: string;
-  customerRut: string;
-  customerCompany: string;
-  customerPhone: string;
-  projectName: string;
-  startDate: string;
-  endDate: string;
-  numJornadas: number;
-  companyRut: string;
-  retireName: string;
-  comments: string;
-  lineItems: LineItem[];
-  totals: TotalsInfo;
-  hasCoupon: boolean;
-  hasShipping: boolean;
-  shippingInfo?: ShippingInfo;
-  couponCode?: string;
-}
-
 // Budget PDF (redesign "MarioHans OS"): everything the template prints, already formatted for display
 // where the template shows text (dates are DD-MM-AAAA), raw numbers (CLP) where it shows money.
 export interface BudgetClientInfo {
@@ -163,4 +140,32 @@ export interface BudgetDocumentData {
   discount: BudgetDiscountInfo;
   shipping: BudgetShippingInfo;
   totals: BudgetTotals;
+}
+
+// Processing PDF (confirmed order): the budget sheet plus the contract annex and signatures.
+export interface ProcessingAnnexInfo {
+  /** DD-MM-AAAA */
+  startDate: string;
+  endDate: string;
+  /** Start date minus 1 day, DD-MM-AAAA. */
+  deliveryDate: string;
+  /** Net CLP "valor total del arriendo" (calculated_subtotal), printed "+ IVA". */
+  totalNet: number;
+  /** Reserve percentage when the order reserve is percent-typed. */
+  reservePct?: number;
+  reserveLabel: string;
+  pickupAddress: string;
+}
+
+export interface ProcessingSignerInfo {
+  name: string;
+  rut: string;
+  /** Only for tipo_cliente = empresa. */
+  company?: string;
+  companyRut?: string;
+}
+
+export interface ProcessingDocumentData extends BudgetDocumentData {
+  annex: ProcessingAnnexInfo;
+  signer: ProcessingSignerInfo;
 }

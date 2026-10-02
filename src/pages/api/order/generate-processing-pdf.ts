@@ -1,11 +1,8 @@
 import type { APIRoute } from 'astro';
-import { reserveAmount } from '../../../lib/finance';
-import { reserveLabel } from '../../../lib/pricing';
 import React from 'react';
 import { ProcessingDocument } from '../../../lib/pdf/components/processing/ProcessingDocument';
-import type { ProcessingDocumentData } from '../../../lib/pdf/core/types';
+import { buildProcessingDocumentData } from '../../../lib/pdf/mappers/processingData';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
-import { formatDateDDMMAAAA, getOrderStatusInSpanish } from '../../../lib/pdf/utils/formatters';
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -74,83 +71,33 @@ export const POST: APIRoute = async ({ request }) => {
 
     let pdfBuffer: Buffer;
     try {
-      // Fetch customer RUT from user_profiles table
-      let customerRut = '';
-      let companyRut = '';
+      // Client profile: RUT and company data for the annex signature block
+      const profileColumns = 'rut, tipo_cliente, empresa_nombre, empresa_rut';
+      let profile: {
+        rut?: string | null;
+        tipo_cliente?: string | null;
+        empresa_nombre?: string | null;
+        empresa_rut?: string | null;
+      } | null = null;
       if (orderData.customer_id) {
-        const { data: customerProfile } = await supabase
+        const { data: byUserId } = await supabase
           .from('user_profiles')
-          .select('rut, empresa_rut')
+          .select(profileColumns)
           .eq('user_id', parseInt(orderData.customer_id))
           .single();
-
-        if (!customerProfile) {
-          // Try with auth_uid
-          const { data: customerProfile2 } = await supabase
+        if (byUserId) {
+          profile = byUserId;
+        } else {
+          const { data: byAuthUid } = await supabase
             .from('user_profiles')
-            .select('rut, empresa_rut')
+            .select(profileColumns)
             .eq('auth_uid', orderData.customer_id)
             .single();
-
-          customerRut = customerProfile2?.rut || '';
-          companyRut = customerProfile2?.empresa_rut || '';
-        } else {
-          customerRut = customerProfile.rut || '';
-          companyRut = customerProfile.empresa_rut || '';
+          profile = byAuthUid;
         }
       }
 
-      // Process shipping information
-      const shippingInfoData = orderData.shipping_lines && orderData.shipping_lines.length > 0 ? {
-        method: orderData.shipping_lines[0].method_title || orderData.shipping_lines[0].method_id || 'Delivery',
-        total: parseFloat(orderData.shipping_lines[0].total || '0'),
-        deliveryMethod: orderData.shipping_lines[0].meta_data?.delivery_method ||
-                       (orderData.shipping_lines[0].method_id === 'pickup' ? 'pickup' : 'shipping'),
-        shippingAddress: orderData.shipping_lines[0].meta_data?.shipping_address,
-        shippingPhone: orderData.shipping_lines[0].meta_data?.shipping_phone,
-      } : undefined;
-
-      // Transform orderData to ProcessingDocumentData
-      const documentData: ProcessingDocumentData = {
-        orderId: orderData.id,
-        customerName: `${orderData.billing?.first_name || orderData.billing_first_name || ''} ${orderData.billing?.last_name || orderData.billing_last_name || ''}`.trim(),
-        customerEmail: orderData.billing?.email || orderData.billing_email || '',
-        customerRut: customerRut,
-        customerCompany: orderData.billing?.company || orderData.billing_company || '',
-        customerPhone: orderData.billing?.phone || orderData.billing_phone || '',
-        projectName: orderData.metadata?.order_proyecto || orderData.order_proyecto || 'Proyecto de Arriendo',
-        startDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_inicio || orderData.order_fecha_inicio || ''),
-        endDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_termino || orderData.order_fecha_termino || ''),
-        numJornadas: parseInt(orderData.metadata?.num_jornadas || orderData.num_jornadas?.toString() || '1'),
-        companyRut: companyRut || orderData.metadata?.company_rut || orderData.company_rut || '',
-        retireName: orderData.metadata?.order_retire_name || orderData.order_retire_name || '',
-        comments: orderData.metadata?.order_comments || orderData.order_comments || '',
-        lineItems: (orderData.line_items || []).map((item: any) => ({
-          name: item.name,
-          sku: item.sku,
-          price: parseFloat(item.price),
-          quantity: item.quantity,
-        })),
-        totals: {
-          subtotal: parseFloat(orderData.metadata?.calculated_subtotal || orderData.calculated_subtotal?.toString() || '0'),
-          discount: parseFloat(orderData.metadata?.calculated_discount || orderData.calculated_discount?.toString() || '0'),
-          iva: parseFloat(orderData.metadata?.calculated_iva || orderData.calculated_iva?.toString() || '0'),
-          total: parseFloat(orderData.metadata?.calculated_total || orderData.calculated_total?.toString() || '0'),
-          // La reserva sale de `lib/finance`, la unica fuente: respeta el reserve_type/
-          // reserve_value del pedido, de modo que el PDF, el portal del cliente y las
-          // tablas de cobranza citen siempre la misma cifra.
-          reserve: reserveAmount({
-            total: parseFloat(orderData.metadata?.calculated_total || orderData.calculated_total?.toString() || '0'),
-            reserveType: orderData.reserve_type,
-            reserveValue: orderData.reserve_value,
-          }),
-          reserveLabel: reserveLabel(orderData.reserve_type, orderData.reserve_value),
-        },
-        hasCoupon: (orderData.coupon_lines?.length || 0) > 0,
-        hasShipping: (orderData.shipping_lines?.length || 0) > 0,
-        ...(shippingInfoData && { shippingInfo: shippingInfoData }),
-        couponCode: orderData.coupon_code,
-      };
+      const documentData = buildProcessingDocumentData(orderData, profile);
 
       // Generate PDF using React-PDF
       pdfBuffer = await generatePdfBuffer({
