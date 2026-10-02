@@ -60,14 +60,14 @@ Reference renders of the HTML (Chrome headless, 2026-10-02) live in the session 
 
 ## Tasks
 
-- [ ] T1 — Foundations: fonts (TTF + `Font.register`), local logo asset, design tokens in `utils/styles.ts`,
+- [x] T1 — Foundations: fonts (TTF + `Font.register`), local logo asset, design tokens in `utils/styles.ts`,
       shared blocks under `components/common/` (DocHeader, PartiesGrid, NoteBox, ItemsTable, TotalsBlock,
       ReserveBox, BankAndTerms, SignatureLines, AnnexSection), fixtures + smoke-test harness. Route: delegated writer.
-- [ ] T2 — `BudgetDocument` rewrite on the shared blocks + `api/order/generate-budget-pdf.ts` and
+- [x] T2 — `BudgetDocument` rewrite on the shared blocks + `api/order/generate-budget-pdf.ts` and
       `api/budget/generate-pdf.ts` mapping (devolución, retiro, nota, rut, discount pct). Same writer as T1.
-- [ ] T3 — `ProcessingDocument` rewrite (= budget + annex + signatures), reserve bug fix,
+- [x] T3 — `ProcessingDocument` rewrite (= budget + annex + signatures), reserve bug fix,
       `api/order/generate-processing-pdf.ts` mapping. Delegated writer.
-- [ ] T4 — `UserContractDocument` rewrite from the contract HTML (clauses as a data file, natural/empresa
+- [x] T4 — `UserContractDocument` rewrite from the contract HTML (clauses as a data file, natural/empresa
       variants, signature images, running header with page numbers), `api/contracts/generate-pdf.ts` mapping.
       Delegated writer.
 - [ ] T5 — Visual verification: render the three PDFs with real-shaped fixtures (long product names, discount,
@@ -90,3 +90,36 @@ Reference renders of the HTML (Chrome headless, 2026-10-02) live in the session 
   installed, so text assertions walk the element tree.
 - Known gaps: `/api/budget/generate-pdf` (legacy) has no profile → RUT blank unless `billing.rut`;
   discount % only when `coupon_lines` carries a percent coupon.
+- RDD: assess `high` (process_boundary: `scripts/render-pdf-fixtures.ts` spawns a shell) → consent
+  granted → 4 lenses (risk, resilience, readability, reliability) → approved → acknowledged
+  (target `sha256:d799300d…`). Reviewed boundary = `01dfd09`.
+
+### T3 — done 2026-10-02, commit `89ad81b` (14 files, +813 −748)
+
+- Route: delegated writer (sonnet); parent spot check of `tmp/pdf/processing-{long-3,long-5,empresa-3}.png`
+  against `tpl-Presupuesto_MarioHans.png`; parent added the `.vercel/**` vitest exclude (a local
+  build duplicated every suite).
+- TDD: RED 2 suites failing to load → GREEN `PASS (43) FAIL (0)` for `src/lib/pdf`; full suite
+  `PASS (1687) FAIL (0)`; `pnpm build` complete.
+- `BudgetDocument` body moved into `BudgetSheet` (shared with processing; output unchanged).
+- Copy deviations recorded: "Cédula N°" / "RUT N°" labels; non-percentage reserves print the CLP
+  amount; last annex title is "Legislación aplicable y notificaciones" as in the HTML.
+- Known cosmetic gap: the gray annex band starts below the page padding when it continues on a
+  new page (white strip at the top).
+- RDD: assess `high` (same process_boundary signal) → consent granted → 4 lenses → approved →
+  acknowledged (target `sha256:2c3a563a…`). Reviewed boundary = `89ad81b`.
+
+### T4 — done 2026-10-02 (contract), committed right after this entry
+
+- Route: delegated writer (sonnet); parent spot check of `tmp/pdf/contract-{empresa-1,natural-14}.png`
+  against `tpl-Contrato_Arrendamiento.dc.png`: fixed header on every page, H1, comparecencia with
+  the empresa and natural variants, clause headings with top border, signature grid with the
+  client's `url_firma` image, no attachments page.
+- TDD: RED 2 suites failing to load → GREEN `Test Files 7 passed`, `Tests 56 passed` for
+  `src/lib/pdf`; full suite `PASS (1700) FAIL (0)`; `pnpm build` complete.
+- Copy: all 17 clauses from the HTML as data (`content/contractClauses.ts`); "DÉCIMA:
+  RESPONSABILIDAD" promoted from `<p>` to a heading; bank data replaced by Cuenta Corriente
+  8140915407; site URL unified to https://rental.mariohans.cl; 0.75 pt/px scale for this document.
+- OPEN: `https://media.mariohans.cl/firmas/firma_mario_hans.png` returns 404 (also referenced by the
+  legacy `ContractDocument.tsx:522`), so the landlord signature image is silently absent. Needs the
+  file re-uploaded or a new URL in `content/contractCopy.ts` (`LANDLORD_SIGNATURE_URL`).

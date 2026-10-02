@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import React from 'react';
 import { UserContractDocument } from '../../../lib/pdf/components/contract/UserContractDocument';
-import type { UserContractData } from '../../../lib/pdf/components/contract/UserContractDocument';
+import { buildUserContractData } from '../../../lib/pdf/mappers/contractData';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
 import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
 import { getServerAdmin } from '../../../lib/supabase';
@@ -193,33 +193,12 @@ export const POST: APIRoute = async (context) => {
     console.log('📄 Generating contract PDF with React-PDF...');
 
     // Prepare contract data
-    const contractData: UserContractData = {
-      user_id: userData.user_id,
-      nombre: userData.nombre || '',
-      apellido: userData.apellido || '',
-      email: userData.email || '',
-      rut: userData.rut || '',
-      direccion: userData.direccion || '',
-      ciudad: userData.ciudad || '',
-      pais: userData.pais || 'Chile',
-      telefono: userData.telefono || '',
-      instagram: userData.instagram,
-      fecha_nacimiento: userData.fecha_nacimiento,
-      tipo_cliente: userData.tipo_cliente || 'natural',
-      empresa_nombre: userData.empresa_nombre,
-      empresa_rut: userData.empresa_rut,
-      empresa_ciudad: userData.empresa_ciudad,
-      empresa_direccion: userData.empresa_direccion,
-      url_firma: userData.url_firma,
-      terminos_aceptados: userData.terminos_aceptados || false,
-    };
+    const contractData = buildUserContractData(userData);
 
     console.log('📋 Contract data prepared:', {
-      user_id: contractData.user_id,
-      nombre: contractData.nombre,
-      apellido: contractData.apellido,
-      tipo_cliente: contractData.tipo_cliente,
-      terminos_aceptados: contractData.terminos_aceptados
+      user_id: contractData.userId,
+      isCompany: contractData.isCompany,
+      hasSignature: !!contractData.signatureImageUrl
     });
 
     // Generate PDF using React-PDF

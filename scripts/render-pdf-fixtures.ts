@@ -7,8 +7,10 @@ import path from "node:path";
 import React from "react";
 import { BudgetDocument } from "../src/lib/pdf/components/budget/BudgetDocument";
 import { ProcessingDocument } from "../src/lib/pdf/components/processing/ProcessingDocument";
+import { UserContractDocument } from "../src/lib/pdf/components/contract/UserContractDocument";
 import {
   budgetFixtures,
+  contractFixtures,
   processingFixtures,
   renderToBufferForTest,
 } from "../src/lib/pdf/__tests__/fixtures";
@@ -30,6 +32,15 @@ for (const [name, data] of Object.entries(processingFixtures)) {
     React.createElement(ProcessingDocument, { data }),
   );
   const file = path.join(outDir, `processing-${name}.pdf`);
+  writeFileSync(file, buffer);
+  console.log(`wrote ${file} (${buffer.byteLength} bytes)`);
+}
+
+for (const [name, data] of Object.entries(contractFixtures)) {
+  const buffer = await renderToBufferForTest(
+    React.createElement(UserContractDocument, { data }),
+  );
+  const file = path.join(outDir, `contract-${name}.pdf`);
   writeFileSync(file, buffer);
   console.log(`wrote ${file} (${buffer.byteLength} bytes)`);
 }

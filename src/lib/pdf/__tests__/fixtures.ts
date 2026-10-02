@@ -259,3 +259,53 @@ export function collectText(node: unknown): string[] {
   }
   return [];
 }
+
+// Contract fixtures (redesign "MarioHans OS").
+import type { UserContractDocumentData } from "../core/types";
+import { getLogoSource } from "../core/fonts";
+import { buildUserContractData } from "../mappers/contractData";
+
+/** Offline stand-in for a client signature image (the bundled logo as a data URI). */
+function signatureDataUri(): string {
+  return `data:image/png;base64,${getLogoSource().data.toString("base64")}`;
+}
+
+const contractNow = new Date("2026-10-02T15:00:00Z");
+
+export const contractNatural: UserContractDocumentData = buildUserContractData(
+  {
+    user_id: 1,
+    nombre: "Camila Fernanda",
+    apellido: "Rojas Valdivia",
+    email: "camila.rojas@productora.cl",
+    rut: "12.345.678-5",
+    direccion: "Av. Providencia 1234, depto 56",
+    ciudad: "Providencia",
+    tipo_cliente: "natural",
+    url_firma: signatureDataUri(),
+  },
+  contractNow,
+);
+
+export const contractEmpresa: UserContractDocumentData = buildUserContractData(
+  {
+    user_id: 2,
+    nombre: "Camila Fernanda",
+    apellido: "Rojas Valdivia",
+    email: "camila.rojas@productora.cl",
+    rut: "12.345.678-5",
+    direccion: "Av. Providencia 1234",
+    ciudad: "Providencia",
+    tipo_cliente: "empresa",
+    empresa_nombre: "Productora Los Andes SpA",
+    empresa_rut: "76.543.210-K",
+    empresa_direccion: "Los Leones 99, oficina 402",
+    empresa_ciudad: "Providencia",
+  },
+  contractNow,
+);
+
+export const contractFixtures: Record<string, UserContractDocumentData> = {
+  natural: contractNatural,
+  empresa: contractEmpresa,
+};

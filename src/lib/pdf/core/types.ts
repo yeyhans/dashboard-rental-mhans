@@ -169,3 +169,42 @@ export interface ProcessingDocumentData extends BudgetDocumentData {
   annex: ProcessingAnnexInfo;
   signer: ProcessingSignerInfo;
 }
+
+// Contract PDF (redesign "MarioHans OS"): facts the contract text and the signature block print.
+export interface ContractTenantInfo {
+  /** Natural person, or the legal representative when the client is a company. */
+  name: string;
+  /** Personal cédula (RUT) of `name`. */
+  rut: string;
+  /** Already joined "street, city"; empresa fields first, personal fields as fallback. */
+  address: string;
+  email: string;
+  /** Only for tipo_cliente = empresa. */
+  company: string;
+  companyRut: string;
+}
+
+export interface ContractSignerInfo {
+  name: string;
+  /** Full line, e.g. "Cédula de identidad nacional N° 12.345.678-5". */
+  cedula: string;
+  company?: string;
+  /** Full line, e.g. "RUT N° 76.543.210-K". */
+  companyRut?: string;
+}
+
+export interface UserContractDocumentData {
+  userId: number;
+  isCompany: boolean;
+  /** Header subtitle: "persona jurídica" | "persona natural". */
+  subtitle: string;
+  /** "2 de octubre de 2026" */
+  issueDateLong: string;
+  tenant: ContractTenantInfo;
+  signer: ContractSignerInfo;
+  /** Client signature image (remote URL), printed above the right-hand rule when present. */
+  signatureImageUrl?: string;
+}
+
+/** @deprecated kept as an alias for existing imports. */
+export type UserContractData = UserContractDocumentData;

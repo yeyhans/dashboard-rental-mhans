@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Image, StyleSheet, Text, View } from "@react-pdf/renderer";
 import { REPRESENTATION_LABEL } from "../../content/annexCopy";
 import {
   PDF_COLORS,
@@ -12,6 +12,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", marginTop: px(40) },
   slot: { flex: 1 },
   gap: { marginRight: 48 },
+  imageSlot: { height: 50, justifyContent: "flex-end" },
+  image: { width: 120, height: 50, objectFit: "contain", objectPosition: "left bottom" },
   rule: { height: 1, backgroundColor: PDF_COLORS.ink, marginBottom: px(10) },
   name: {
     fontFamily: "Montserrat",
@@ -59,10 +61,21 @@ export interface SignatureParty {
 export const SignatureLines: React.FC<{
   left: SignatureParty;
   right: SignatureParty;
-}> = ({ left, right }) => (
+  /** Optional signature image above each rule (remote URL). */
+  images?: { left?: string; right?: string };
+}> = ({ left, right, images }) => {
+  const hasImages = Boolean(images?.left || images?.right);
+  return (
   <View style={styles.row} wrap={false}>
-    {[left, right].map((party, index) => (
+    {[left, right].map((party, index) => {
+      const image = index === 0 ? images?.left : images?.right;
+      return (
       <View key={index} style={[styles.slot, index === 0 ? styles.gap : {}]}>
+        {hasImages ? (
+          <View style={styles.imageSlot}>
+            {image ? <Image src={image} style={styles.image} /> : null}
+          </View>
+        ) : null}
         <View style={styles.rule} />
         <Text style={styles.name}>{party.name}</Text>
         <Text style={[styles.mono, { marginTop: px(2) }]}>{party.cedula}</Text>
@@ -78,6 +91,8 @@ export const SignatureLines: React.FC<{
           </>
         ) : null}
       </View>
-    ))}
+      );
+    })}
   </View>
-);
+  );
+};
