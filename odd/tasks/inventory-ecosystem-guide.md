@@ -31,7 +31,7 @@ validated by the operator until units exist for the ordered products.
 - [x] G-1 Map: SKU (products.sku), serialised_assets (asset_tag, serial_number), label page, bodega flow.
 - [x] G-2 Guide component + button on /inventory and /products.
 - [x] G-3 Tests for any extracted logic; pnpm test and pnpm build green.
-- [ ] G-4 Deploy dashboard to Vercel consolidado project after owner approval; verify in browser.
+- [x] G-4 Deploy dashboard to Vercel consolidado project after owner approval; verify in browser.
 
 ## TDD / checks
 
@@ -53,3 +53,5 @@ Mapping and writing delegated to one writer (preparation trigger).
   no UI to mark damage or change condition after registration (scanner sends no condition_notes);
   scanner does not check condition; no code gate links order approval to unit existence.
   Browser check at 1280 and 390 px: pending (G-4).
+
+- G-4: deployed with vercel deploy --prod to project dash-consolidado-mhans from commit 7afd759. Parent re-ran pnpm test = 162 files / 1782 tests passed. Browser check at desktop width: button visible on /inventory and dialog opens with section 1; 390 px check still pending.
