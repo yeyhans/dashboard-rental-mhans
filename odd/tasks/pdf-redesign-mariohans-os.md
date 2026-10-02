@@ -70,7 +70,7 @@ Reference renders of the HTML (Chrome headless, 2026-10-02) live in the session 
 - [x] T4 — `UserContractDocument` rewrite from the contract HTML (clauses as a data file, natural/empresa
       variants, signature images, running header with page numbers), `api/contracts/generate-pdf.ts` mapping.
       Delegated writer.
-- [ ] T5 — Visual verification: render the three PDFs with real-shaped fixtures (long product names, discount,
+- [x] T5 — DONE 2026-10-02 on dash-consolidado (deployment `dash-consolidado-mhans-9qambqdbe…`, HEAD `03fb299`): contract regenerated for test profile 462 via the admin dialog → `462_contract_1790924427227.pdf` (14 pages, fonts embedded, client signature image on the rule); budget for test order #1573 via `POST /api/orders/1573/generate-budget` → `new_pdf_on_hold_url` set (RUT from profile, retiro fallback, devolución 23-09-2026, Móvil rental $15.000, reserva 25 %); processing via `POST /api/order/generate-processing-pdf` → `new_pdf_processing_url` set (3 pages, annex and signatures). Renders in `tmp/pdf/real-*.png`. Side finding (out of scope): `/api/order/generate-processing-pdf` has no `withAuth`/API-key check. Visual verification: render the three PDFs with real-shaped fixtures (long product names, discount,
       shipping, 15+ rows spanning pages, empresa and natural clients), compare against `tpl-*.png`, fix spacing.
       Then generate one real budget/contract on dash-consolidado and open it.
 
