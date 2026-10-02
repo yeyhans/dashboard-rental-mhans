@@ -1,11 +1,9 @@
 import type { APIRoute } from 'astro';
-import { reserveAmount } from '../../../lib/finance';
-import { reserveLabel } from '../../../lib/pricing';
 import React from 'react';
 import { BudgetDocument } from '../../../lib/pdf/components/budget/BudgetDocument';
 import type { BudgetDocumentData } from '../../../lib/pdf/core/types';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
-import { formatDateDDMMAAAA, getOrderStatusInSpanish } from '../../../lib/pdf/utils/formatters';
+import { buildBudgetDocumentData } from '../../../lib/pdf/mappers/budgetData';
 import { createEmailWorkerHeaders, getEmailWorkerUrl } from '../../../lib/emailWorkerService';
 import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 
@@ -118,64 +116,8 @@ export const POST: APIRoute = async (context) => {
         }
       }
 
-      // Transform orderData to BudgetDocumentData
-      const shippingInfoData = orderData.shipping_lines && orderData.shipping_lines.length > 0 ? {
-        method: orderData.shipping_lines[0].method_title || orderData.shipping_lines[0].method_id || 'Delivery',
-        total: parseFloat(orderData.shipping_lines[0].total || '0'),
-        deliveryMethod: orderData.shipping_lines[0].meta_data?.delivery_method ||
-                       (orderData.shipping_lines[0].method_id === 'pickup' ? 'pickup' : 'shipping'),
-        shippingAddress: orderData.shipping_lines[0].meta_data?.shipping_address,
-        shippingPhone: orderData.shipping_lines[0].meta_data?.shipping_phone,
-      } : undefined;
-
-      const documentData: BudgetDocumentData = {
-        orderId: orderData.id,
-        billing: {
-          firstName: orderData.billing?.first_name || orderData.billing_first_name || '',
-          lastName: orderData.billing?.last_name || orderData.billing_last_name || '',
-          email: orderData.billing?.email || orderData.billing_email || '',
-          phone: orderData.billing?.phone || orderData.billing_phone,
-          company: orderData.billing?.company || orderData.billing_company,
-          address: orderData.billing?.address_1 || orderData.billing_address_1,
-          city: orderData.billing?.city || orderData.billing_city,
-          rut: customerRut,
-        },
-        project: {
-          name: orderData.metadata?.order_proyecto || orderData.order_proyecto || 'Proyecto de Arriendo',
-          startDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_inicio || orderData.order_fecha_inicio || ''),
-          endDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_termino || orderData.order_fecha_termino || ''),
-          numJornadas: parseInt(orderData.metadata?.num_jornadas || orderData.num_jornadas?.toString() || '1'),
-          companyRut: orderData.metadata?.company_rut || orderData.company_rut,
-          retireName: orderData.metadata?.order_retire_name || orderData.order_retire_name,
-          retirePhone: orderData.metadata?.order_retire_phone || orderData.order_retire_phone,
-          retireRut: orderData.metadata?.order_retire_rut || orderData.order_retire_rut,
-          comments: orderData.metadata?.order_comments || orderData.order_comments,
-        },
-        lineItems: (orderData.line_items || []).map((item: any) => ({
-          name: item.name,
-          sku: item.sku,
-          price: parseFloat(item.price),
-          quantity: item.quantity,
-        })),
-        totals: {
-          subtotal: parseFloat(orderData.metadata?.calculated_subtotal || orderData.calculated_subtotal?.toString() || '0'),
-          discount: parseFloat(orderData.metadata?.calculated_discount || orderData.calculated_discount?.toString() || '0'),
-          iva: parseFloat(orderData.metadata?.calculated_iva || orderData.calculated_iva?.toString() || '0'),
-          total: parseFloat(orderData.metadata?.calculated_total || orderData.calculated_total?.toString() || '0'),
-          // La reserva sale de `lib/finance`, la unica fuente: respeta el reserve_type/
-          // reserve_value del pedido, de modo que el PDF, el portal del cliente y las
-          // tablas de cobranza citen siempre la misma cifra.
-          reserve: reserveAmount({
-            total: parseFloat(orderData.metadata?.calculated_total || orderData.calculated_total?.toString() || '0'),
-            reserveType: orderData.reserve_type,
-            reserveValue: orderData.reserve_value,
-          }),
-          reserveLabel: reserveLabel(orderData.reserve_type, orderData.reserve_value),
-        },
-        couponCode: orderData.coupon_code,
-        status: getOrderStatusInSpanish(orderData.status || 'request'),
-        ...(shippingInfoData && { shippingInfo: shippingInfoData }),
-      };
+      // Map the order (+ profile RUT) to what the redesigned budget prints
+      const documentData: BudgetDocumentData = buildBudgetDocumentData(orderData, { rut: customerRut });
 
       // Generate PDF using React-PDF
       pdfBuffer = await generatePdfBuffer({

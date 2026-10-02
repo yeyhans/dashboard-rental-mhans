@@ -6,7 +6,7 @@ import React from 'react';
 import { BudgetDocument } from '../../../lib/pdf/components/budget/BudgetDocument';
 import type { BudgetDocumentData } from '../../../lib/pdf/core/types';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
-import { formatDateDDMMAAAA, getOrderStatusInSpanish } from '../../../lib/pdf/utils/formatters';
+import { buildBudgetDocumentData } from '../../../lib/pdf/mappers/budgetData';
 import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 
 // Interface for the budget data
@@ -711,54 +711,7 @@ async function generateBudgetPDFWithReactPDF(orderData: BudgetData): Promise<{
     console.log('📄 Generating budget PDF with React-PDF');
 
     // Transform orderData to BudgetDocumentData
-    const documentData: BudgetDocumentData = {
-      orderId: orderData.order_id,
-      billing: {
-        firstName: orderData.billing?.first_name || '',
-        lastName: orderData.billing?.last_name || '',
-        email: orderData.billing?.email || '',
-        phone: orderData.billing?.phone,
-        company: orderData.billing?.company,
-        address: orderData.billing?.address_1,
-        city: orderData.billing?.city,
-        rut: (orderData.billing as any)?.rut || '',
-      },
-      project: {
-        name: orderData.metadata?.order_proyecto || 'Proyecto de Arriendo',
-        startDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_inicio || ''),
-        endDate: formatDateDDMMAAAA(orderData.metadata?.order_fecha_termino || ''),
-        numJornadas: parseInt(orderData.metadata?.num_jornadas || '1'),
-        companyRut: orderData.metadata?.company_rut,
-        retireName: orderData.metadata?.order_retire_name,
-        retirePhone: orderData.metadata?.order_retire_phone,
-        retireRut: orderData.metadata?.order_retire_rut,
-        comments: orderData.metadata?.order_comments,
-      },
-      lineItems: orderData.line_items.map(item => ({
-        name: item.name,
-        sku: item.sku,
-        price: parseFloat(item.price),
-        quantity: item.quantity,
-      })),
-      totals: {
-        subtotal: parseFloat(orderData.metadata?.calculated_subtotal || '0'),
-        discount: parseFloat(orderData.metadata?.calculated_discount || '0'),
-        iva: parseFloat(orderData.metadata?.calculated_iva || '0'),
-        total: parseFloat(orderData.metadata?.calculated_total || '0'),
-        reserve: reserveAmount({
-          total: parseFloat(orderData.metadata?.calculated_total || '0'),
-          reserveType: orderData.reserve_type,
-          reserveValue: orderData.reserve_value,
-        }),
-        reserveLabel: reserveLabel(orderData.reserve_type, orderData.reserve_value),
-      },
-      couponCode: orderData.coupon_code,
-      status: getOrderStatusInSpanish(orderData.status || 'request'),
-      shippingInfo: orderData.shipping_lines && orderData.shipping_lines.length > 0 ? {
-        method: orderData.shipping_lines[0].method_title || 'Delivery',
-        total: parseFloat(orderData.shipping_lines[0].total || '0'),
-      } : undefined,
-    };
+    const documentData: BudgetDocumentData = buildBudgetDocumentData(orderData);
 
     // Generate PDF using React-PDF
     const pdfBuffer = await generatePdfBuffer({

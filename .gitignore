@@ -31,3 +31,6 @@ supabase/migrations/_raw/
 
 # Logs del dev server lanzado en segundo plano durante auditorias
 .dev.*.log
+
+# Local PDF render output (scripts/render-pdf-fixtures.ts)
+tmp/

@@ -3,7 +3,7 @@ import { reserveAmount } from '../../../lib/finance';
 import { reserveLabel } from '../../../lib/pricing';
 import React from 'react';
 import { ContractDocument } from '../../../lib/pdf/components/contract/ContractDocument';
-import type { BudgetDocumentData } from '../../../lib/pdf/core/types';
+import type { OrderPdfData as BudgetDocumentData } from '../../../lib/pdf/core/types';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
 import { formatDateDDMMAAAA, getOrderStatusInSpanish } from '../../../lib/pdf/utils/formatters';
 

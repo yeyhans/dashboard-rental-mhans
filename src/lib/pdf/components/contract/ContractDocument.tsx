@@ -1,6 +1,6 @@
 import React from 'react';
 import { Document, Page, View, Text, Image } from '@react-pdf/renderer';
-import type { BudgetDocumentData } from '../../core/types';
+import type { OrderPdfData as BudgetDocumentData } from '../../core/types';
 import { commonStyles, budgetStyles } from '../../utils/styles';
 import { formatCLP, getCurrentDateFormatted } from '../../utils/formatters';
 import { CompanyInfo } from '../common/CompanyInfo';
