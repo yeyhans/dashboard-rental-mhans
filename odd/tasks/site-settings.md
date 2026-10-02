@@ -105,3 +105,9 @@ email }`, `contact { email, adminNotificationEmail, phone, whatsapp, website }`,
   email HTML bodies.
 - User decision 2026-10-02: production DB (`supabase-9cd8-db`) is frozen — the consolidado DB will
   replace it — so `0001/0005/0014/0015` are applied on the consolidado only.
+- RDD slice `7803169..3146ab0` (`high`, 47 files): consent granted → 4 lenses → `review-reliability`
+  raised R4-001 (CRITICAL, deterministic, introduced): `update()` seeded its merge from the tolerant
+  reader, so a transient read error would overwrite saved settings with defaults. One bounded
+  correction (budget 40 lines): strict reader for the write path, two fail-closed tests
+  (RED `PASS (10) FAIL (2)` → GREEN), commit `35c3c45`; targeted validation approved; acknowledged.
+  Full suite `PASS (1777)`.
