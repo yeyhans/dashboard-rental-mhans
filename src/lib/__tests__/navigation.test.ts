@@ -31,8 +31,13 @@ describe('NAV_GROUPS', () => {
       'Catálogo Equipos',
       'Clientes & Documentos',
     ]);
-    // Operarios (lote 3) es la única entrada fuera del canónico; sólo la ve super_admin.
-    expect(NAV_GROUPS[2]?.items.map(i => i.label)).toEqual(['Finanzas & Cobranza', 'Rentabilidad', 'Operarios']);
+    // Operarios (lote 3) y Configuración del sitio son las únicas entradas fuera del canónico; sólo las ve super_admin.
+    expect(NAV_GROUPS[2]?.items.map(i => i.label)).toEqual([
+      'Finanzas & Cobranza',
+      'Rentabilidad',
+      'Operarios',
+      'Configuración del sitio',
+    ]);
   });
 
   it('no deja ningún módulo sin ruta ni con ruta duplicada', () => {
@@ -91,9 +96,10 @@ describe('visibleNavGroups', () => {
     expect(groups.flatMap(g => g.items)).toHaveLength(9);
   });
 
-  it('un super_admin ve además Operarios', () => {
+  it('un super_admin ve además Operarios y Configuración del sitio', () => {
     const groups = visibleNavGroups('super_admin');
     expect(groups[2]?.items.map(i => i.label)).toContain('Operarios');
+    expect(groups[2]?.items.map(i => i.label)).toContain('Configuración del sitio');
   });
 
   it('un operator no ve ningún grupo: su shell no tiene barra lateral', () => {

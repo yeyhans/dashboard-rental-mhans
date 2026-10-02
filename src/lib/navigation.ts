@@ -69,6 +69,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       // Not in the canonical: operator accounts arrived with batch 3 (0011). Minting logins is
       // the one thing a plain admin must not do, so only super_admin sees the entry.
       { label: 'Operarios', href: '/operators', icon: 'UserCog', roles: ['super_admin'] },
+      // Business data used by contracts, budgets and emails (0015). Same gate as Operarios.
+      { label: 'Configuración del sitio', href: '/settings', icon: 'Settings', roles: ['super_admin'] },
     ],
   },
 ];
