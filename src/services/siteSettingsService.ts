@@ -97,6 +97,27 @@ export class SiteSettingsService {
     }
   }
 
+  /**
+   * Strict reader for the write path: a read error or invalid stored data throws instead of
+   * degrading to the defaults, so a transient failure can never seed a merge that overwrites the
+   * saved settings. Only a genuinely missing row resolves to the defaults.
+   */
+  private static async readStrict(): Promise<SiteSettings> {
+    const client = this.ensureSupabaseAdmin();
+    const { data, error } = await client
+      .from("site_settings")
+      .select("data")
+      .eq("id", ROW_ID)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return withDefaults(undefined);
+
+    const parsed = parseSiteSettings(data.data);
+    if (parsed.error) throw new SiteSettingsValidationError(parsed.error);
+    return parsed.settings;
+  }
+
   /** Settings merged over the defaults, cached for 60 s. */
   static async get(): Promise<SiteSettings> {
     const now = Date.now();
@@ -112,7 +133,7 @@ export class SiteSettingsService {
     patch: SiteSettingsPatch,
     updatedBy: string,
   ): Promise<SiteSettings> {
-    const current = await this.read();
+    const current = await this.readStrict();
     const merged: Record<string, unknown> = { ...current };
     for (const [key, value] of Object.entries(patch)) {
       if (value === undefined) continue;
@@ -157,4 +178,3 @@ export class SiteSettingsService {
     );
   }
 }
-

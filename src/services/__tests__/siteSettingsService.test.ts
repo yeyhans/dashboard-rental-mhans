@@ -156,6 +156,32 @@ describe("SiteSettingsService.update", () => {
   });
 });
 
+describe("SiteSettingsService.update fails closed on a degraded read", () => {
+  // R4-001: the write path must never seed its merge from the defaults fallback, or a transient
+  // read error would overwrite every saved value with DEFAULT_SETTINGS + patch.
+  it("rejects and does not upsert when the row cannot be read", async () => {
+    state.read = {
+      data: null,
+      error: { code: "57P01", message: "terminating" },
+    };
+    await expect(
+      SiteSettingsService.update({ reserve: { defaultPct: 30 } }, "admin@x.cl"),
+    ).rejects.toThrow();
+    expect(state.calls.some((c) => c.op === "upsert")).toBe(false);
+  });
+
+  it("rejects and does not upsert when the stored data fails validation", async () => {
+    state.read = { data: { data: { contact: { email: "bad" } } }, error: null };
+    await expect(
+      SiteSettingsService.setSignatureUrl(
+        "https://media.mariohans.cl/x.png",
+        "admin@x.cl",
+      ),
+    ).rejects.toThrow();
+    expect(state.calls.some((c) => c.op === "upsert")).toBe(false);
+  });
+});
+
 describe("SiteSettingsService.setSignatureUrl", () => {
   it("stores the url and a timestamp in the representative section", async () => {
     const saved = await SiteSettingsService.setSignatureUrl(
