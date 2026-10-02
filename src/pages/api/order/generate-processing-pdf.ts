@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import React from 'react';
 import { ProcessingDocument } from '../../../lib/pdf/components/processing/ProcessingDocument';
+import { SiteSettingsService } from '../../../services/siteSettingsService';
 import { buildProcessingDocumentData } from '../../../lib/pdf/mappers/processingData';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
 
@@ -97,7 +98,8 @@ export const POST: APIRoute = async ({ request }) => {
         }
       }
 
-      const documentData = buildProcessingDocumentData(orderData, profile);
+      const settings = await SiteSettingsService.get();
+      const documentData = buildProcessingDocumentData(orderData, profile, new Date(), settings);
 
       // Generate PDF using React-PDF
       pdfBuffer = await generatePdfBuffer({

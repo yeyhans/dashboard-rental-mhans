@@ -43,7 +43,7 @@ export interface TotalsInfo {
 export interface ShippingInfo {
   method: string;
   total: number;
-  deliveryMethod?: 'pickup' | 'shipping';
+  deliveryMethod?: "pickup" | "shipping";
   shippingAddress?: string;
   shippingPhone?: string;
 }
@@ -128,6 +128,35 @@ export interface BudgetTotals {
   balance: number;
 }
 
+/** Transfer data printed in the budget and in contract clause QUINTA (from `SiteSettings.bank`). */
+export interface PdfBankInfo {
+  holder: string;
+  rut: string;
+  bankName: string;
+  accountType: string;
+  accountNumber: string;
+  email: string;
+}
+
+/** The landlord (company + legal representative) as the signature blocks print it. */
+export interface PdfLandlordInfo {
+  /** Legal representative. */
+  name: string;
+  cedula: string;
+  domicilio: string;
+  /** Company legal name. */
+  company: string;
+  companyRut: string;
+  /** Remote or data-URI image printed above the left-hand signature rule; "" when unset. */
+  signatureUrl: string;
+}
+
+export interface PdfPolicies {
+  /** Template with the `{reserva}` placeholder. */
+  acceptance: string;
+  footer: string;
+}
+
 export interface BudgetDocumentData {
   orderId: number;
   /** DD-MM-AAAA */
@@ -140,6 +169,8 @@ export interface BudgetDocumentData {
   discount: BudgetDiscountInfo;
   shipping: BudgetShippingInfo;
   totals: BudgetTotals;
+  bank: PdfBankInfo;
+  policies: PdfPolicies;
 }
 
 // Processing PDF (confirmed order): the budget sheet plus the contract annex and signatures.
@@ -166,6 +197,7 @@ export interface ProcessingSignerInfo {
 }
 
 export interface ProcessingDocumentData extends BudgetDocumentData {
+  landlord: PdfLandlordInfo;
   annex: ProcessingAnnexInfo;
   signer: ProcessingSignerInfo;
 }
@@ -202,6 +234,14 @@ export interface UserContractDocumentData {
   issueDateLong: string;
   tenant: ContractTenantInfo;
   signer: ContractSignerInfo;
+  landlord: PdfLandlordInfo;
+  bank: PdfBankInfo;
+  /** Reserve percentage printed in clause QUINTA (site default). */
+  reservePct: number;
+  /** Landlord notification e-mail (clause DÉCIMO CUARTA). */
+  landlordEmail: string;
+  /** Site URL printed in the clauses. */
+  website: string;
   /** Client signature image (remote URL), printed above the right-hand rule when present. */
   signatureImageUrl?: string;
 }

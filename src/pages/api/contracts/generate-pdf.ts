@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import React from 'react';
 import { UserContractDocument } from '../../../lib/pdf/components/contract/UserContractDocument';
+import { SiteSettingsService } from '../../../services/siteSettingsService';
 import { buildUserContractData } from '../../../lib/pdf/mappers/contractData';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
 import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
@@ -193,7 +194,8 @@ export const POST: APIRoute = async (context) => {
     console.log('📄 Generating contract PDF with React-PDF...');
 
     // Prepare contract data
-    const contractData = buildUserContractData(userData);
+    const settings = await SiteSettingsService.get();
+    const contractData = buildUserContractData(userData, new Date(), settings);
 
     console.log('📋 Contract data prepared:', {
       user_id: contractData.userId,

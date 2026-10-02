@@ -6,6 +6,7 @@ import React from 'react';
 import { BudgetDocument } from '../../../lib/pdf/components/budget/BudgetDocument';
 import type { BudgetDocumentData } from '../../../lib/pdf/core/types';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
+import { SiteSettingsService } from '../../../services/siteSettingsService';
 import { buildBudgetDocumentData } from '../../../lib/pdf/mappers/budgetData';
 import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 
@@ -711,7 +712,8 @@ async function generateBudgetPDFWithReactPDF(orderData: BudgetData): Promise<{
     console.log('📄 Generating budget PDF with React-PDF');
 
     // Transform orderData to BudgetDocumentData
-    const documentData: BudgetDocumentData = buildBudgetDocumentData(orderData);
+    const settings = await SiteSettingsService.get();
+    const documentData: BudgetDocumentData = buildBudgetDocumentData(orderData, null, new Date(), settings);
 
     // Generate PDF using React-PDF
     const pdfBuffer = await generatePdfBuffer({

@@ -166,8 +166,6 @@ interface BudgetEmailRequest {
   customMessage?: string;
 }
 
-// Admin email configuration
-const ADMIN_EMAIL = 'rental.mariohans@gmail.com';
 
 // Fallback template generator
 const generateBudgetEmailTemplate = (data: BudgetEmailData, budgetUrl: string, customMessage?: string): string => {

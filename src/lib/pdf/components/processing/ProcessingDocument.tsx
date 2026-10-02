@@ -4,7 +4,6 @@ import "../../core/fonts";
 import type { ProcessingDocumentData } from "../../core/types";
 import {
   ANNEX_TITLE,
-  LANDLORD,
   annexIntro,
   annexSections,
 } from "../../content/annexCopy";
@@ -21,13 +20,10 @@ export const ProcessingDocument: React.FC<{ data: ProcessingDocumentData }> = ({
   data,
 }) => {
   const facts = { ...data.annex, reserveAmount: data.totals.reserve };
-  const { signer } = data;
+  const { signer, landlord } = data;
 
   return (
-    <Document
-      title={`Pedido #${data.orderId}`}
-      author="MarioHans FotoRental"
-    >
+    <Document title={`Pedido #${data.orderId}`} author="MarioHans FotoRental">
       <Page size="A4" style={pdfStyles.page}>
         <BudgetSheet data={data} />
         <AnnexSection
@@ -37,11 +33,14 @@ export const ProcessingDocument: React.FC<{ data: ProcessingDocumentData }> = ({
         >
           <SignatureLines
             left={{
-              name: LANDLORD.name,
-              cedula: `Cédula N° ${LANDLORD.cedula}`,
-              company: LANDLORD.company,
-              companyRut: `RUT N° ${LANDLORD.rut}`,
+              name: landlord.name,
+              cedula: `Cédula N° ${landlord.cedula}`,
+              company: landlord.company,
+              companyRut: `RUT N° ${landlord.companyRut}`,
             }}
+            {...(landlord.signatureUrl
+              ? { images: { left: landlord.signatureUrl } }
+              : {})}
             right={{
               name: signer.name,
               cedula: signer.rut ? `Cédula N° ${signer.rut}` : "",

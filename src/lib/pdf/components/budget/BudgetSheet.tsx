@@ -67,8 +67,14 @@ export const BudgetSheet: React.FC<{ data: BudgetDocumentData }> = ({
           balance={data.totals.balance}
         />
       </View>
-      <BankAndTerms reserveLabel={data.totals.reserveLabel} />
-      <FooterPolicy />
+      <BankAndTerms
+        bank={data.bank}
+        acceptance={data.policies.acceptance}
+        reserveLabel={data.totals.reserveLabel}
+      />
+      {data.policies.footer ? (
+        <FooterPolicy text={data.policies.footer} />
+      ) : null}
     </>
   );
 };

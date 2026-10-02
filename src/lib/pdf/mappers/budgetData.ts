@@ -2,6 +2,8 @@ import type { BudgetDocumentData, LineItem } from "../core/types";
 import { orderBreakdown } from "../../orderBreakdown";
 import { reserveAmount } from "../../finance";
 import { reserveLabel } from "../../pricing";
+import { DEFAULT_SETTINGS, type SiteSettings } from "../../siteSettings";
+import { pdfBank, pdfPolicies } from "./settingsData";
 
 /**
  * Loose order record. Both budget routes hand over different shapes of the same order: the DB row
@@ -98,6 +100,7 @@ export function buildBudgetDocumentData(
   order: BudgetOrderInput,
   profile?: BudgetProfileInput | null,
   now: Date = new Date(),
+  settings: SiteSettings = DEFAULT_SETTINGS,
 ): BudgetDocumentData {
   const billing: BudgetOrderInput = order.billing ?? {};
   const flat = (key: string): string =>
@@ -147,10 +150,20 @@ export function buildBudgetDocumentData(
     calculatedIva,
   });
 
+  // An order without reserve configuration takes the site default (a percentage).
+  const hasReserveConfig =
+    order.reserve_value !== undefined &&
+    order.reserve_value !== null &&
+    order.reserve_value !== "";
+  const reserveType = hasReserveConfig ? order.reserve_type : "percent";
+  const reserveValue = hasReserveConfig
+    ? order.reserve_value
+    : settings.reserve.defaultPct;
+
   const reserve = reserveAmount({
     total: calculatedTotal,
-    reserveType: order.reserve_type,
-    reserveValue: order.reserve_value,
+    reserveType,
+    reserveValue,
   });
 
   const pct = discountPercent(order);
@@ -191,8 +204,10 @@ export function buildBudgetDocumentData(
       iva: calculatedIva,
       total: calculatedTotal,
       reserve,
-      reserveLabel: reserveLabel(order.reserve_type, order.reserve_value),
+      reserveLabel: reserveLabel(reserveType, reserveValue),
       balance: Math.max(0, calculatedTotal - reserve),
     },
+    bank: pdfBank(settings),
+    policies: pdfPolicies(settings),
   };
 }

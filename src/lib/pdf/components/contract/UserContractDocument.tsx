@@ -1,15 +1,19 @@
 import React from "react";
-import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import {
+  Document,
+  Image,
+  Page,
+  StyleSheet,
+  Text,
+  View,
+} from "@react-pdf/renderer";
 import "../../core/fonts";
 import { getLogoSource } from "../../core/fonts";
 import type { UserContractDocumentData } from "../../core/types";
 import {
-  HEADER_COMPANY_LINE,
-  LANDLORD_SIGNATURE_URL,
   buildContractCopy,
   type ContractClause,
 } from "../../content/contractCopy";
-import { LANDLORD } from "../../content/annexCopy";
 import { PDF_COLORS } from "../../utils/styles";
 import { PageNumber } from "../budget/BudgetSheet";
 import { SignatureLines } from "../common/SignatureLines";
@@ -91,11 +95,16 @@ const styles = StyleSheet.create({
   },
 });
 
-const ContractHeader: React.FC<{ subtitle: string }> = ({ subtitle }) => (
+const ContractHeader: React.FC<{ subtitle: string; companyLine: string }> = ({
+  subtitle,
+  companyLine,
+}) => (
   <View fixed style={styles.header}>
     <Image src={getLogoSource()} style={styles.logo} />
-    <Text style={styles.headerText}>{HEADER_COMPANY_LINE}</Text>
-    <Text style={styles.headerText}>{`Contrato de arriendo — ${subtitle}`}</Text>
+    <Text style={styles.headerText}>{companyLine}</Text>
+    <Text
+      style={styles.headerText}
+    >{`Contrato de arriendo — ${subtitle}`}</Text>
   </View>
 );
 
@@ -141,12 +150,15 @@ export const UserContractDocument: React.FC<{
   data: UserContractDocumentData;
 }> = ({ data }) => {
   const copy = buildContractCopy(data);
-  const { signer } = data;
+  const { signer, landlord } = data;
 
   return (
     <Document title="Contrato de arriendo" author="MarioHans FotoRental">
       <Page size="A4" style={styles.page}>
-        <ContractHeader subtitle={data.subtitle} />
+        <ContractHeader
+          subtitle={data.subtitle}
+          companyLine={`${data.landlord.company} · FotoRental`}
+        />
         <Text style={styles.h1}>{copy.title}</Text>
         <Paragraph>{copy.comparecencia}</Paragraph>
         <Paragraph>{copy.preamble}</Paragraph>
@@ -164,10 +176,10 @@ export const UserContractDocument: React.FC<{
               <ClauseView clause={clause} />
               <SignatureLines
                 left={{
-                  name: LANDLORD.name,
-                  cedula: `Cédula de identidad nacional N° ${LANDLORD.cedula}`,
-                  company: LANDLORD.company,
-                  companyRut: `RUT N° ${LANDLORD.rut}`,
+                  name: landlord.name,
+                  cedula: `Cédula de identidad nacional N° ${landlord.cedula}`,
+                  company: landlord.company,
+                  companyRut: `RUT N° ${landlord.companyRut}`,
                 }}
                 right={{
                   name: signer.name,
@@ -178,7 +190,9 @@ export const UserContractDocument: React.FC<{
                     : {}),
                 }}
                 images={{
-                  left: LANDLORD_SIGNATURE_URL,
+                  ...(landlord.signatureUrl
+                    ? { left: landlord.signatureUrl }
+                    : {}),
                   ...(data.signatureImageUrl
                     ? { right: data.signatureImageUrl }
                     : {}),

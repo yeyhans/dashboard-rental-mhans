@@ -10,8 +10,11 @@ import { ProcessingDocument } from "../src/lib/pdf/components/processing/Process
 import { UserContractDocument } from "../src/lib/pdf/components/contract/UserContractDocument";
 import {
   budgetFixtures,
+  budgetOverride,
   contractFixtures,
+  contractOverride,
   processingFixtures,
+  processingOverride,
   renderToBufferForTest,
 } from "../src/lib/pdf/__tests__/fixtures";
 
@@ -41,6 +44,23 @@ for (const [name, data] of Object.entries(contractFixtures)) {
     React.createElement(UserContractDocument, { data }),
   );
   const file = path.join(outDir, `contract-${name}.pdf`);
+  writeFileSync(file, buffer);
+  console.log(`wrote ${file} (${buffer.byteLength} bytes)`);
+}
+
+// Same documents built from the `settingsOverride` fixture (different bank, representative,
+// pickup addresses and reserve), to check visually that the settings reach every block.
+const overrides = [
+  ["budget-override", BudgetDocument, budgetOverride],
+  ["processing-override", ProcessingDocument, processingOverride],
+  ["contract-override", UserContractDocument, contractOverride],
+] as const;
+
+for (const [name, component, data] of overrides) {
+  const buffer = await renderToBufferForTest(
+    React.createElement(component as React.FC<{ data: unknown }>, { data }),
+  );
+  const file = path.join(outDir, `${name}.pdf`);
   writeFileSync(file, buffer);
   console.log(`wrote ${file} (${buffer.byteLength} bytes)`);
 }

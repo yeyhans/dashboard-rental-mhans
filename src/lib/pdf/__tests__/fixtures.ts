@@ -5,7 +5,13 @@ import type {
   ProcessingDocumentData,
   ProcessingSignerInfo,
 } from "../core/types";
-import { PICKUP_ADDRESS } from "../content/annexCopy";
+import { DEFAULT_SETTINGS, type SiteSettings } from "../../siteSettings";
+import {
+  joinPickupAddresses,
+  pdfBank,
+  pdfLandlord,
+  pdfPolicies,
+} from "../mappers/settingsData";
 import { generatePdfBuffer } from "../core/pdfService";
 import { orderBreakdown } from "../../orderBreakdown";
 import { reserveAmount } from "../../finance";
@@ -88,6 +94,8 @@ function build(options: BuildOptions): BudgetDocumentData {
       reserveLabel: reserveLabel("percent", 25),
       balance: total - reserve,
     },
+    bank: pdfBank(DEFAULT_SETTINGS),
+    policies: pdfPolicies(DEFAULT_SETTINGS),
   };
 }
 
@@ -181,6 +189,7 @@ function toProcessing(
 ): ProcessingDocumentData {
   return {
     ...budget,
+    landlord: pdfLandlord(DEFAULT_SETTINGS),
     annex: {
       startDate: budget.reservation.startDate,
       endDate: budget.reservation.endDate,
@@ -188,7 +197,7 @@ function toProcessing(
       totalNet: budget.totals.subtotal,
       reservePct: 25,
       reserveLabel: budget.totals.reserveLabel,
-      pickupAddress: PICKUP_ADDRESS,
+      pickupAddress: joinPickupAddresses(DEFAULT_SETTINGS.pickupAddresses),
     },
     signer,
   };
@@ -309,3 +318,104 @@ export const contractFixtures: Record<string, UserContractDocumentData> = {
   natural: contractNatural,
   empresa: contractEmpresa,
 };
+
+// Settings override: every value the settings page manages differs from the defaults.
+import { buildBudgetDocumentData } from "../mappers/budgetData";
+import { buildProcessingDocumentData } from "../mappers/processingData";
+
+export const settingsOverride: SiteSettings = {
+  company: {
+    ...DEFAULT_SETTINGS.company,
+    legalName: "Luz y Cámara Rental SpA",
+    rut: "76.111.222-3",
+  },
+  representative: {
+    name: "Valentina Paz Orrego Díaz",
+    cedula: "15.222.333-4",
+    domicilio: "Av. Italia 1500, Ñuñoa",
+    signatureUrl: signatureDataUri(),
+    signatureUpdatedAt: "",
+  },
+  bank: {
+    holder: "Luz y Cámara Rental SpA",
+    rut: "76.111.222-3",
+    bankName: "Banco Estado",
+    accountType: "Cuenta Vista",
+    accountNumber: "99887766",
+    email: "pagos@luzcamara.cl",
+  },
+  contact: {
+    ...DEFAULT_SETTINGS.contact,
+    email: "hola@luzcamara.cl",
+    adminNotificationEmail: "admin@luzcamara.cl",
+    website: "https://luzcamara.cl",
+  },
+  pickupAddresses: ["Av. Italia 1500, Ñuñoa", "Los Leones 300, Providencia"],
+  reserve: { defaultPct: 30 },
+  policies: {
+    ...DEFAULT_SETTINGS.policies,
+    acceptance:
+      "Con el abono de {reserva} aceptas las condiciones de Luz y Cámara.",
+    footer: "Retiro y devolución según lo coordinado con Luz y Cámara Rental.",
+  },
+};
+
+/** Order without reserve configuration, so the settings default reserve applies. */
+const overrideOrder = {
+  id: 777,
+  billing: {
+    first_name: "Camila",
+    last_name: "Rojas",
+    email: "camila.rojas@productora.cl",
+  },
+  line_items: [{ name: "Sony A7 IV cuerpo", price: 45000, quantity: 1 }],
+  metadata: {
+    num_jornadas: 2,
+    order_fecha_inicio: "2026-02-01",
+    order_fecha_termino: "2026-02-02",
+    calculated_subtotal: 90000,
+    calculated_iva: 17100,
+    calculated_total: 107100,
+  },
+};
+
+const overrideNow = new Date("2026-05-16T15:00:00Z");
+
+export const budgetOverride: BudgetDocumentData = buildBudgetDocumentData(
+  overrideOrder,
+  null,
+  overrideNow,
+  settingsOverride,
+);
+export const processingOverride: ProcessingDocumentData =
+  buildProcessingDocumentData(
+    overrideOrder,
+    null,
+    overrideNow,
+    settingsOverride,
+  );
+export const contractOverride: UserContractDocumentData = buildUserContractData(
+  {
+    user_id: 3,
+    nombre: "Camila Fernanda",
+    apellido: "Rojas Valdivia",
+    email: "camila.rojas@productora.cl",
+    rut: "12.345.678-5",
+    direccion: "Av. Providencia 1234",
+    ciudad: "Providencia",
+    tipo_cliente: "natural",
+  },
+  contractNow,
+  settingsOverride,
+);
+
+/** Strings of the default settings that must never appear in an override document. */
+export const DEFAULT_ONLY_STRINGS = [
+  "8140915407",
+  "Banco de Chile",
+  "Mario Alberto Hans Salinas",
+  "16.135.586-0",
+  "Purísima 25",
+  "Bellavista 77",
+  "rental.mariohans@gmail.com",
+];

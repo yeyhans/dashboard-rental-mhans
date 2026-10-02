@@ -1,6 +1,5 @@
 import React from "react";
 import { StyleSheet, Text, View } from "@react-pdf/renderer";
-import { FOOTER_POLICY } from "../../content/budgetCopy";
 import { PDF_COLORS, px } from "../../utils/styles";
 
 const styles = StyleSheet.create({
@@ -20,9 +19,8 @@ const styles = StyleSheet.create({
 });
 
 /** Pickup / return policy paragraph closing the document. */
-export const FooterPolicy: React.FC = () => (
+export const FooterPolicy: React.FC<{ text: string }> = ({ text }) => (
   <View style={styles.wrapper} wrap={false}>
-    <Text style={styles.text}>{FOOTER_POLICY}</Text>
+    <Text style={styles.text}>{text}</Text>
   </View>
 );
-

@@ -5,15 +5,6 @@ import { formatCLP } from "../utils/formatters";
 
 export const ANNEX_TITLE = "Anexo de contrato";
 
-export const PICKUP_ADDRESS = "Purísima 25 o Bellavista 77, Recoleta";
-
-export const LANDLORD = {
-  name: "Mario Alberto Hans Salinas",
-  cedula: "16.135.586-0",
-  company: "Hans Salinas SpA",
-  rut: "77.892.569-9",
-} as const;
-
 export const REPRESENTATION_LABEL = "En representación de";
 
 export interface AnnexSectionCopy {

@@ -1,5 +1,6 @@
 import type { ProcessingDocumentData } from "../core/types";
-import { PICKUP_ADDRESS } from "../content/annexCopy";
+import { DEFAULT_SETTINGS, type SiteSettings } from "../../siteSettings";
+import { joinPickupAddresses, pdfLandlord } from "./settingsData";
 import {
   addDaysDDMMAAAA,
   buildBudgetDocumentData,
@@ -21,14 +22,21 @@ export function buildProcessingDocumentData(
   order: BudgetOrderInput,
   profile?: ProcessingProfileInput | null,
   now: Date = new Date(),
+  settings: SiteSettings = DEFAULT_SETTINGS,
 ): ProcessingDocumentData {
-  const budget = buildBudgetDocumentData(order, profile, now);
+  const budget = buildBudgetDocumentData(order, profile, now, settings);
   const startRaw = clean(
     order.metadata?.order_fecha_inicio ?? order.order_fecha_inicio,
   );
-  const reservePct = Number(order.reserve_value);
+  const hasReserveConfig =
+    order.reserve_value !== undefined &&
+    order.reserve_value !== null &&
+    order.reserve_value !== "";
+  const reservePct = hasReserveConfig
+    ? Number(order.reserve_value)
+    : settings.reserve.defaultPct;
   const hasPct =
-    order.reserve_type === "percent" &&
+    (hasReserveConfig ? order.reserve_type === "percent" : true) &&
     Number.isFinite(reservePct) &&
     reservePct > 0;
 
@@ -40,6 +48,7 @@ export function buildProcessingDocumentData(
 
   return {
     ...budget,
+    landlord: pdfLandlord(settings),
     annex: {
       startDate: budget.reservation.startDate,
       endDate: budget.reservation.endDate,
@@ -47,7 +56,7 @@ export function buildProcessingDocumentData(
       totalNet: budget.totals.subtotal,
       ...(hasPct ? { reservePct } : {}),
       reserveLabel: budget.totals.reserveLabel,
-      pickupAddress: PICKUP_ADDRESS,
+      pickupAddress: joinPickupAddresses(settings.pickupAddresses),
     },
     signer: {
       name: budget.client.name,

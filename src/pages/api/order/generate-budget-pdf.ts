@@ -4,6 +4,8 @@ import { BudgetDocument } from '../../../lib/pdf/components/budget/BudgetDocumen
 import type { BudgetDocumentData } from '../../../lib/pdf/core/types';
 import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
 import { buildBudgetDocumentData } from '../../../lib/pdf/mappers/budgetData';
+import { SiteSettingsService } from '../../../services/siteSettingsService';
+import { DEFAULT_SETTINGS } from '../../../lib/siteSettings';
 import { createEmailWorkerHeaders, getEmailWorkerUrl } from '../../../lib/emailWorkerService';
 import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 
@@ -91,6 +93,8 @@ export const POST: APIRoute = async (context) => {
     // Generate PDF using React-PDF (replaces Puppeteer)
     console.log('📄 Generating PDF with React-PDF...');
 
+    // Business settings (bank, representative, admin e-mail), resolved once per request.
+    const settings = await SiteSettingsService.get();
     let pdfBuffer: Buffer;
     try {
       // Fetch customer RUT from user_profiles table
@@ -117,7 +121,7 @@ export const POST: APIRoute = async (context) => {
       }
 
       // Map the order (+ profile RUT) to what the redesigned budget prints
-      const documentData: BudgetDocumentData = buildBudgetDocumentData(orderData, { rut: customerRut });
+      const documentData: BudgetDocumentData = buildBudgetDocumentData(orderData, { rut: customerRut }, new Date(), settings);
 
       // Generate PDF using React-PDF
       pdfBuffer = await generatePdfBuffer({
@@ -485,7 +489,7 @@ Descarga el detalle del pedido aquí
             method: 'POST',
             headers: createEmailWorkerHeaders(requestId),
             body: JSON.stringify({
-              to: 'rental.mariohans@gmail.com',
+              to: settings.contact.adminNotificationEmail || DEFAULT_SETTINGS.contact.adminNotificationEmail,
               subject: adminSubject,
               html: emailHtml
             })

@@ -1,4 +1,6 @@
 import type { UserContractDocumentData } from "../core/types";
+import { DEFAULT_SETTINGS, type SiteSettings } from "../../siteSettings";
+import { pdfBank, pdfLandlord } from "./settingsData";
 
 export interface ContractProfileInput {
   user_id?: number | string | null;
@@ -52,6 +54,7 @@ export function formatLongDateEs(date: Date): string {
 export function buildUserContractData(
   profile: ContractProfileInput,
   now: Date = new Date(),
+  settings: SiteSettings = DEFAULT_SETTINGS,
 ): UserContractDocumentData {
   const isCompany = clean(profile.tipo_cliente) === "empresa";
   const name = [clean(profile.nombre), clean(profile.apellido)]
@@ -89,6 +92,11 @@ export function buildUserContractData(
       ...(company ? { company } : {}),
       ...(companyRut ? { companyRut: `RUT N° ${companyRut}` } : {}),
     },
+    landlord: pdfLandlord(settings),
+    bank: pdfBank(settings),
+    reservePct: settings.reserve.defaultPct,
+    landlordEmail: settings.contact.email || DEFAULT_SETTINGS.contact.email,
+    website: settings.contact.website || DEFAULT_SETTINGS.contact.website,
     ...(signature ? { signatureImageUrl: signature } : {}),
   };
 }

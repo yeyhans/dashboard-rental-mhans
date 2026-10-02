@@ -40,8 +40,6 @@ interface FailedOrderEmailRequest {
   failureReason?: string;
 }
 
-// Admin email configuration
-const ADMIN_EMAIL = 'rental.mariohans@gmail.com';
 
 // Format currency helper
 const formatCLP = (amount: string | number) => {

@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "@react-pdf/renderer";
-import { BANK_DETAILS, acceptanceTerms } from "../../content/budgetCopy";
+import type { PdfBankInfo } from "../../core/types";
+import { acceptanceTerms } from "../../content/budgetCopy";
 import { PDF_COLORS, PDF_SIZES, pdfStyles, px } from "../../utils/styles";
 
 const styles = StyleSheet.create({
@@ -26,26 +27,33 @@ const styles = StyleSheet.create({
 });
 
 /** DATOS DE TRANSFERENCIA | ACEPTACIÓN DE CONDICIONES. */
-export const BankAndTerms: React.FC<{ reserveLabel: string }> = ({
-  reserveLabel,
-}) => (
+export const BankAndTerms: React.FC<{
+  bank: PdfBankInfo;
+  /** Acceptance template with the `{reserva}` placeholder. */
+  acceptance: string;
+  reserveLabel: string;
+}> = ({ bank, acceptance, reserveLabel }) => (
   <View style={styles.wrapper} wrap={false}>
     <View style={[styles.column, styles.columnGap]}>
       <Text style={styles.heading}>Datos de transferencia</Text>
-      <Text style={[styles.body, styles.strong]}>
-        {BANK_DETAILS.razonSocial}
-      </Text>
-      <Text style={styles.body}>RUT {BANK_DETAILS.rut}</Text>
-      <Text style={styles.body}>{BANK_DETAILS.banco}</Text>
-      <Text style={styles.body}>{BANK_DETAILS.tipoCuenta}</Text>
-      <Text style={[styles.body, styles.mono]}>
-        {BANK_DETAILS.numeroCuenta}
-      </Text>
-      <Text style={styles.body}>{BANK_DETAILS.email}</Text>
+      {bank.holder ? (
+        <Text style={[styles.body, styles.strong]}>{bank.holder}</Text>
+      ) : null}
+      {bank.rut ? <Text style={styles.body}>RUT {bank.rut}</Text> : null}
+      {bank.bankName ? <Text style={styles.body}>{bank.bankName}</Text> : null}
+      {bank.accountType ? (
+        <Text style={styles.body}>{bank.accountType}</Text>
+      ) : null}
+      {bank.accountNumber ? (
+        <Text style={[styles.body, styles.mono]}>{bank.accountNumber}</Text>
+      ) : null}
+      {bank.email ? <Text style={styles.body}>{bank.email}</Text> : null}
     </View>
     <View style={styles.column}>
       <Text style={styles.heading}>Aceptación de condiciones</Text>
-      <Text style={styles.body}>{acceptanceTerms(reserveLabel)}</Text>
+      <Text style={styles.body}>
+        {acceptanceTerms(acceptance, reserveLabel)}
+      </Text>
     </View>
   </View>
 );

@@ -56,17 +56,52 @@ email }`, `contact { email, adminNotificationEmail, phone, whatsapp, website }`,
 
 ## Tasks
 
-- [ ] T1 — Migration `0015_site_settings` (+down +test), `src/lib/siteSettings.ts` (schema, defaults, parse/merge),
+- [x] T1 — Migration `0015_site_settings` (+down +test), `src/lib/siteSettings.ts` (schema, defaults, parse/merge),
       `SiteSettingsService` (get cached / update / setSignatureUrl), API `GET|PUT /api/admin/site-settings` and
       `POST /api/admin/site-settings/signature`, tests. Delegated writer.
-- [ ] T2 — Page `src/pages/settings.astro` + `components/settings/SiteSettingsForm.tsx` (tabs: Empresa,
+- [x] T2 — Page `src/pages/settings.astro` + `components/settings/SiteSettingsForm.tsx` (tabs: Empresa,
       Representante y firma, Banco, Contacto, Direcciones, Reserva y políticas; signature preview + upload),
       nav entry + icon + navigation test. Same writer as T1.
-- [ ] T3 — Wire PDFs and emails to settings: mappers + routes + React-PDF blocks + parameterised copy; render
+- [x] T3 — Wire PDFs and emails to settings: mappers + routes + React-PDF blocks + parameterised copy; render
       fixtures; tests. Delegated writer.
 - [ ] T4 — Apply `0015` on consolidado, deploy dash-consolidado, upload the real signature (file from the user),
       regenerate the contract for profile 462 and check the image appears.
 
 ## Progress / evidence
 
-(empty)
+### T1 + T2 — done 2026-10-02, commit `1b91e1b`
+
+- Route: delegated writer (sonnet); parent spot check: `requireRole('super_admin')` on both routes,
+  PNG/JPEG magic bytes + 1 MB cap in `signature.ts`, `settings.astro` redirects non-super_admin.
+- TDD: RED observed for the migration test, `siteSettings.test.ts` and the route tests; the service,
+  `siteSettingsClient` and form tests were written after their implementation (no observed RED —
+  recorded honestly). Scoped run `PASS (1228) FAIL (0)`; full `PASS (1765) FAIL (0)`; lint-chain
+  0 findings (35 migrations); `pnpm build` OK.
+- Deviations: component interaction tests are pure-function tests (`siteSettingsClient.ts`) because
+  the repo has no jsdom/testing-library; `company.giro`/`domicilio` defaults were guessed
+  ("Arriendo de equipos fotográficos", "Santiago, Chile") — editable from the page.
+- Also shipped in the same deploy: `7803169` fixes the dashboard CSP (`vercel.json`) so the
+  consolidado admin can reach `supabase-v2` and `workers.mariohans.cl` from the browser (user-reported
+  "Procesar" failure on order 1574).
+- `0015` applied on the consolidado DB (backup `/root/backups/mhans-stg-pre-0015-20261002-1355.dump`,
+  `BEGIN…COMMIT`, exit 0). Deployed `dash-consolidado-mhans-rjxjnxwha…`; `/settings` → 302 without
+  session, `GET /api/admin/site-settings` → 401 without session.
+
+### T3 — done 2026-10-02 (committed right after this entry)
+
+- Route: delegated writer (sonnet). Mappers take `settings = DEFAULT_SETTINGS`; copy modules are
+  functions of settings (`{{placeholders}}` in clause QUINTA); React-PDF blocks read from document
+  data; the four PDF routes call `SiteSettingsService.get()` once; admin copy of budget emails uses
+  `contact.adminNotificationEmail`. Parent spot check: `budget-override-1.png` shows the overridden
+  bank, reserve 30 % and policy texts in place.
+- Parent fix: `generate-budget-pdf.test.ts` failed to load (the route now imports the settings
+  service → service-role Supabase client at import time); mocked the service in that suite.
+- TDD: RED `Tests 10 failed | 304 passed` → GREEN `PASS (312) FAIL (0)` for `src/lib/pdf src/pages/api`;
+  full suite `PASS (1775) FAIL (0)`; `pnpm build` complete.
+- Default output deltas (intentional): bank RUT printed with dots; comparecencia address shortened to
+  "…N° 83, Santiago"; QUINTA holder "Hans Salinas SpA".
+- Not routed yet (follow-ups): annex 13:00 return paragraph and `policies.pickupWindow/returnDeadline`;
+  DÉCIMO SEXTA "ciudad de Santiago"; legacy `ContractDocument.tsx`/`CompanyInfo.tsx` (unused);
+  email HTML bodies.
+- User decision 2026-10-02: production DB (`supabase-9cd8-db`) is frozen — the consolidado DB will
+  replace it — so `0001/0005/0014/0015` are applied on the consolidado only.
