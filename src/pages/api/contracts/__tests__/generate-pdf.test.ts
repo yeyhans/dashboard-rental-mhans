@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock('../../../../lib/supabase', () => ({
+vi.mock("../../../../lib/supabase", () => ({
   getServerAdmin: vi.fn(async () => null),
   // `withAuth` asks for the reason a session was refused (batch 3, `is_active`).
   resolveAdminSession: vi.fn(async () => ({ session: null, inactive: false })),
@@ -13,29 +13,35 @@ vi.mock('../../../../lib/supabase', () => ({
  * suite fallaba de forma intermitente con `STACK_TRACE_ERROR` en la línea del `it`, sin relación
  * con la aserción. En serie siempre pasaba, que es la firma de una contención, no de un bug.
  */
-vi.mock('../../../../lib/pdf/core/pdfService', () => ({
-  generatePdfBuffer: vi.fn(async () => Buffer.from('')),
+vi.mock("../../../../lib/pdf/core/pdfService", () => ({
+  generatePdfBuffer: vi.fn(async () => Buffer.from("")),
 }));
 
-describe('contract PDF generation authorization', () => {
+describe("contract PDF generation authorization", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
 
-  it('rejects generic Supabase bearer tokens before reading JSON', async () => {
-    const json = vi.fn(async () => ({ userData: { user_id: 1, email: 'cliente@example.com' } }));
-    const { POST } = await import('../generate-pdf');
-    const request = new Request('https://dashboard.mariohans.cl/api/contracts/generate-pdf', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer customer-token' },
-      body: '{}',
-    });
-    Object.defineProperty(request, 'json', { value: json });
+  it("rejects generic Supabase bearer tokens before reading JSON", async () => {
+    const json = vi.fn(async () => ({
+      userData: { user_id: 1, email: "cliente@example.com" },
+    }));
+    const { POST } = await import("../generate-pdf");
+    const request = new Request(
+      "https://dashboard.mariohans.cl/api/contracts/generate-pdf",
+      {
+        method: "POST",
+        headers: { Authorization: "Bearer customer-token" },
+        body: "{}",
+      },
+    );
+    Object.defineProperty(request, "json", { value: json });
 
     const response = await POST({ request } as never);
 
     expect(response.status).toBe(401);
     expect(json).not.toHaveBeenCalled();
-  });
+    // The first dynamic import of the PDF route is slow under a loaded full-suite run (5 s default).
+  }, 30_000);
 });
