@@ -7,6 +7,7 @@ import { buildBudgetDocumentData } from '../../../lib/pdf/mappers/budgetData';
 import { SiteSettingsService } from '../../../services/siteSettingsService';
 import { DEFAULT_SETTINGS } from '../../../lib/siteSettings';
 import { createEmailWorkerHeaders, getEmailWorkerUrl } from '../../../lib/emailWorkerService';
+import { budgetUploadFields } from '../../../lib/budgetUpload';
 import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 
 export function getBudgetEmailRequestId(request: Request): string {
@@ -182,7 +183,10 @@ export const POST: APIRoute = async (context) => {
         try {
           // Create FormData for Cloudflare Worker with proper PDF content
           const formData = new FormData();
-          const fileName = `Presupuesto_${orderId}_${Date.now()}.pdf`;
+          // Named and stored as a budget (A-05): without `filePath` the worker files it under
+          // `contracts/contract_<userId>_...`.
+          const upload = budgetUploadFields({ customerId: orderData.customer_id });
+          const fileName = upload.fileName;
           
           // Create blob with explicit PDF content type and proper buffer
           const pdfBlob = new Blob([pdfBuffer], { 
@@ -192,7 +196,9 @@ export const POST: APIRoute = async (context) => {
           console.log('📦 Blob created - size:', pdfBlob.size, 'type:', pdfBlob.type);
           
           formData.append('file', pdfBlob, fileName);
-          formData.append('userId', orderData.customer_id.toString());
+          formData.append('userId', upload.userId);
+          formData.append('documentType', upload.documentType);
+          formData.append('filePath', upload.filePath);
           
           // Upload to Cloudflare Worker with proper headers
           const uploadResponse = await fetch(`${cloudflareWorkerUrl}/upload-pdf-only`, {
