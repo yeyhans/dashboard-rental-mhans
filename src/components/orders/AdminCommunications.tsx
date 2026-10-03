@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { formatBusinessDate, formatBusinessDateTime, formatBusinessTime } from '../../lib/businessDay';
 import DOMPurify from 'dompurify';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -293,18 +294,11 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
     if (diffInHours < 1) {
       return 'Ahora';
     } else if (diffInHours < 24) {
-      return date.toLocaleTimeString('es-CL', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      return formatBusinessTime(timestamp);
     } else if (diffInDays < 7) {
-      return date.toLocaleDateString('es-CL', {
-        weekday: 'short',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      return formatBusinessDateTime(timestamp);
     } else {
-      return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+      return `${formatBusinessDate(timestamp)} ${formatBusinessTime(timestamp)}`;
     }
   };
 

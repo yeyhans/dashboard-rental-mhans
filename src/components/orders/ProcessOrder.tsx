@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye, Settings, Calendar, AlertTriangle, Percent, DollarSign } from 'lucide-react';
 import EditOrderForm from './EditOrderForm';
 import { apiErrorMessage } from '../../lib/apiError';
+import { formatBusinessDate, formatBusinessDateTimeFull } from '../../lib/businessDay';
 import { FetchTimeoutError, fetchWithTimeout } from '../../lib/fetchWithTimeout';
 import { CouponSelector } from './CouponSelector';
 import { ProductSelector } from './ProductSelector';
@@ -1979,10 +1980,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             </div>
             <div className="flex justify-between">
               <span className="font-medium">Fecha Creación:</span>
-              <span>{(() => {
-                const d = new Date(orderData.date_created);
-                return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
-              })()}</span>
+              <span>{formatBusinessDate(orderData.date_created)}</span>
             </div>
             <div className="flex justify-between">
               <span className="font-medium">Total:</span>
@@ -3736,10 +3734,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
               {/* Currency Information */}
               <div className="text-xs text-muted-foreground text-center pt-2 border-t">
                 💱 Moneda: {orderData.currency || 'CLP'} |
-                📅 Última actualización: {(() => {
-                  const d = new Date(orderData.date_modified);
-                  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-                })()}</div>
+                📅 Última actualización: {formatBusinessDateTimeFull(orderData.date_modified)}</div>
             </div>
           </CardContent>
         </Card>

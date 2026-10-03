@@ -1,4 +1,5 @@
 import { Label } from "../ui/label";
+import { formatBusinessDateTimeFull } from '../../lib/businessDay';
 import { Button } from "../ui/button";
 import { STATUS_OPTIONS, canTransition, isOrderStatus } from "../../lib/orderStatus";
 
@@ -20,10 +21,8 @@ const FileCheckIcon = () => (
 // admitio: elegirlos producia una violacion de constraint que el endpoint devolvia como 500.
 
 // Format date
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
-};
+// Business-zone formatter: the island is server-rendered in UTC and hydrated in Santiago (D-5).
+const formatDate = (dateString: string) => formatBusinessDateTimeFull(dateString);
 
 interface OrderEstadoProps {
   order: {

@@ -104,7 +104,7 @@ const EMPTY_TIME = '—';
  * assembled by hand rather than taken from `format()` so ICU punctuation differences between
  * Node and Chrome cannot leak into the markup either.
  */
-function wallClock(iso: string, timeZone: string): Record<'year' | 'month' | 'day' | 'hour' | 'minute', string> | null {
+function wallClock(iso: string, timeZone: string): Record<'year' | 'month' | 'day' | 'hour' | 'minute' | 'second', string> | null {
   const instant = new Date(iso);
   if (Number.isNaN(instant.getTime())) return null;
   const parts = Object.fromEntries(
@@ -119,6 +119,7 @@ function wallClock(iso: string, timeZone: string): Record<'year' | 'month' | 'da
     day: parts.day ?? '',
     hour: parts.hour ?? '',
     minute: parts.minute ?? '',
+    second: parts.second ?? '',
   };
 }
 
@@ -145,6 +146,16 @@ export function formatBusinessDateTime(iso: string, timeZone: string = BUSINESS_
 export function formatBusinessDate(iso: string, timeZone: string = BUSINESS_TIME_ZONE): string {
   const wall = wallClock(iso, timeZone);
   return wall ? `${wall.day}-${wall.month}-${wall.year}` : EMPTY_TIME;
+}
+
+/**
+ * `dd-mm-yyyy HH:mm:ss` in the business zone; `—` when `iso` does not parse. The order screen's
+ * "Última actualización" (D-5): server and browser must print the same bytes or React discards the
+ * server HTML (#418/#423/#425).
+ */
+export function formatBusinessDateTimeFull(iso: string, timeZone: string = BUSINESS_TIME_ZONE): string {
+  const wall = wallClock(iso, timeZone);
+  return wall ? `${wall.day}-${wall.month}-${wall.year} ${wall.hour}:${wall.minute}:${wall.second}` : EMPTY_TIME;
 }
 
 const dayLabelFormatter = new Map<string, Intl.DateTimeFormat>();
