@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MOVEMENT_TRANSITION_ERRORS, validateMovementTransition } from '../../lib/assetMovements';
+import { CHECKOUT_ORDER_ERRORS, MOVEMENT_TRANSITION_ERRORS, validateMovementTransition } from '../../lib/assetMovements';
 
 /**
  * `assetMovementService.ts` against `asset_movements` (T-026 gap 1/4). The migration
@@ -11,11 +11,17 @@ import { MOVEMENT_TRANSITION_ERRORS, validateMovementTransition } from '../../li
 const state = vi.hoisted(() => ({
   history: { data: [] as any[] | null, error: null as any },
   insert: { data: null as any, error: null as any },
+  order: { data: { status: 'confirmed' } as any, error: null as any },
 }));
 
 vi.mock('../../lib/supabase', () => ({
   supabaseAdmin: {
     from: (table: string) => {
+      if (table === 'orders') {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve(state.order) }) }),
+        };
+      }
       if (table !== 'asset_movements') throw new Error(`unexpected table: ${table}`);
       return {
         select: () => ({
@@ -38,6 +44,7 @@ const { AssetMovementService } = await import('../assetMovementService');
 beforeEach(() => {
   state.history = { data: [], error: null };
   state.insert = { data: null, error: null };
+  state.order = { data: { status: 'confirmed' }, error: null };
 });
 
 describe('AssetMovementService.recordMovement', () => {
@@ -128,5 +135,39 @@ describe('AssetMovementService.recordMovement', () => {
     await expect(
       AssetMovementService.recordMovement({ asset_id: 1, order_id: 10, direction: 'checkout' })
     ).rejects.toMatchObject({ message: 'permission denied for table asset_movements' });
+  });
+});
+
+describe('AssetMovementService.recordMovement — Salida order gate', () => {
+  it.each(['request', 'evaluation', 'return', 'completed', 'cancelled'])(
+    'rejects a checkout on a %s order before inserting',
+    async (status) => {
+      state.order.data = { status };
+      await expect(
+        AssetMovementService.recordMovement({ asset_id: 1, order_id: 10, direction: 'checkout' })
+      ).rejects.toThrow(CHECKOUT_ORDER_ERRORS.NOT_CONFIRMED);
+    }
+  );
+
+  it('rejects a checkout on an order that does not exist', async () => {
+    state.order.data = null;
+    await expect(
+      AssetMovementService.recordMovement({ asset_id: 1, order_id: 10, direction: 'checkout' })
+    ).rejects.toThrow(CHECKOUT_ORDER_ERRORS.ORDER_NOT_FOUND);
+  });
+
+  it('does not gate a checkin on the order status (Entrada has no status gate)', async () => {
+    state.order.data = { status: 'completed' };
+    state.history.data = [{ asset_id: 1, direction: 'checkout', checked_at: '2026-08-01T10:00:00Z' }];
+    state.insert.data = { id: 9, asset_id: 1, order_id: 10, direction: 'checkin' };
+    const result = await AssetMovementService.recordMovement({ asset_id: 1, order_id: 10, direction: 'checkin' });
+    expect(result.direction).toBe('checkin');
+  });
+
+  it('propagates an order lookup error instead of allowing the checkout', async () => {
+    state.order = { data: null, error: { message: 'permission denied for table orders' } };
+    await expect(
+      AssetMovementService.recordMovement({ asset_id: 1, order_id: 10, direction: 'checkout' })
+    ).rejects.toMatchObject({ message: 'permission denied for table orders' });
   });
 });

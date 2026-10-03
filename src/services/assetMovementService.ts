@@ -1,4 +1,9 @@
-import { MOVEMENT_TRANSITION_ERRORS, validateMovementTransition } from '../lib/assetMovements';
+import {
+  CHECKOUT_ORDER_ERRORS,
+  MOVEMENT_TRANSITION_ERRORS,
+  validateCheckoutOrderStatus,
+  validateMovementTransition,
+} from '../lib/assetMovements';
 import { isOverdueRow, kpis, overdueOrderIds, startOfBusinessDay, type MovementsKpis } from '../lib/movementsFeed';
 import { clientName, isoDay, projectLabel } from '../lib/bodega';
 import { supabaseAdmin } from '../lib/supabase';
@@ -108,6 +113,19 @@ export class AssetMovementService {
     return (data as AssetMovement[]) || [];
   }
 
+  /** Salida gate: the order must exist and be confirmed by the admin (`validateCheckoutOrderStatus`). */
+  private static async assertOrderAllowsCheckout(orderId: number): Promise<void> {
+    const client = this.ensureSupabaseAdmin();
+    const { data, error } = await client.from('orders').select('status').eq('id', orderId).maybeSingle();
+    if (error) {
+      console.error('[AssetMovementService] Error al leer el estado de la orden:', { orderId, error });
+      throw error;
+    }
+    if (!data) throw new Error(CHECKOUT_ORDER_ERRORS.ORDER_NOT_FOUND);
+    const gate = validateCheckoutOrderStatus((data as { status?: string }).status);
+    if (!gate.valid) throw new Error(gate.error);
+  }
+
   /**
    * Records a checkout or checkin against an asset, after validating the transition against that
    * asset's own history. Rejects before hitting the database if `direction` is not one of the
@@ -132,6 +150,10 @@ export class AssetMovementService {
     }
     if (!Number.isInteger(input.order_id) || input.order_id <= 0) {
       throw new Error('Debes indicar una orden válida');
+    }
+
+    if (input.direction === 'checkout') {
+      await this.assertOrderAllowsCheckout(input.order_id);
     }
 
     const history = await this.getHistoryForAsset(input.asset_id);

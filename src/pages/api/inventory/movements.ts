@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { MOVEMENT_TRANSITION_ERRORS } from '../../../lib/assetMovements';
+import { CHECKOUT_ORDER_ERRORS, MOVEMENT_TRANSITION_ERRORS } from '../../../lib/assetMovements';
 import { parseInstant } from '../../../lib/movementsFeed';
 import { withAuth } from '../../../middleware/auth';
 import { AssetMovementService, FEED_DEFAULT_LIMIT, FEED_MAX_LIMIT } from '../../../services/assetMovementService';
@@ -19,6 +19,8 @@ import { isMovementDirection, type MovementDirection } from '../../../types/asse
 const CLIENT_ERRORS: Array<{ match: string; status: number }> = [
   { match: MOVEMENT_TRANSITION_ERRORS.OPEN_CHECKOUT_EXISTS, status: 409 },
   { match: MOVEMENT_TRANSITION_ERRORS.NO_OPEN_CHECKOUT, status: 409 },
+  { match: CHECKOUT_ORDER_ERRORS.NOT_CONFIRMED, status: 409 },
+  { match: CHECKOUT_ORDER_ERRORS.ORDER_NOT_FOUND, status: 404 },
   { match: 'Dirección inválida', status: 400 },
   { match: 'Debes indicar un equipo válido', status: 400 },
   { match: 'Debes indicar una orden válida', status: 400 },

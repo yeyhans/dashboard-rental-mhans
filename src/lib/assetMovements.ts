@@ -40,6 +40,25 @@ export function hasOpenCheckout(history: readonly AssetMovementLike[]): boolean 
   return latest?.direction === 'checkout';
 }
 
+/**
+ * Salida (checkout) order gate — owner decision 2026-10-02: a unit may leave the warehouse only
+ * when the admin has confirmed the order. Nothing else (payment, shipping rows, dates) is checked.
+ * Entrada (checkin) has no status gate: a unit must always be able to come back.
+ */
+export const CHECKOUT_ALLOWED_ORDER_STATUSES = ['confirmed', 'preparation', 'in-rental'] as const;
+
+export const CHECKOUT_ORDER_ERRORS = {
+  NOT_CONFIRMED: 'La orden aún no está confirmada. Confírmala en el panel antes de registrar una salida.',
+  ORDER_NOT_FOUND: 'La orden no existe',
+} as const;
+
+export function validateCheckoutOrderStatus(status: string | null | undefined): MovementTransitionResult {
+  if (typeof status === 'string' && (CHECKOUT_ALLOWED_ORDER_STATUSES as readonly string[]).includes(status)) {
+    return { valid: true };
+  }
+  return { valid: false, error: CHECKOUT_ORDER_ERRORS.NOT_CONFIRMED };
+}
+
 export interface MovementTransitionResult {
   valid: boolean;
   error?: string;

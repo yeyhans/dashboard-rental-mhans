@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MOVEMENT_TRANSITION_ERRORS } from '../../../../lib/assetMovements';
+import { CHECKOUT_ORDER_ERRORS, MOVEMENT_TRANSITION_ERRORS } from '../../../../lib/assetMovements';
 
 /**
  * T-026 gap 1/4. See `assetMovementService.test.ts` for the transition-rule coverage; this suite
@@ -98,6 +98,28 @@ describe('POST /api/inventory/movements', () => {
 
     expect(response.status).toBe(409);
     expect(payload.error).toBe(MOVEMENT_TRANSITION_ERRORS.NO_OPEN_CHECKOUT);
+  });
+
+  it('maps a Salida on an unconfirmed order to 409 with the Spanish gate message', async () => {
+    recordMovement.mockRejectedValue(new Error(CHECKOUT_ORDER_ERRORS.NOT_CONFIRMED));
+    const request = postRequest({ asset_id: 1, order_id: 10, direction: 'checkout' });
+    const { POST } = await import('../movements');
+
+    const response = await POST({ request, ...admin } as never);
+    const payload = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(payload.error).toBe(CHECKOUT_ORDER_ERRORS.NOT_CONFIRMED);
+  });
+
+  it('maps a Salida on a missing order to 404', async () => {
+    recordMovement.mockRejectedValue(new Error(CHECKOUT_ORDER_ERRORS.ORDER_NOT_FOUND));
+    const request = postRequest({ asset_id: 1, order_id: 10, direction: 'checkout' });
+    const { POST } = await import('../movements');
+
+    const response = await POST({ request, ...admin } as never);
+
+    expect(response.status).toBe(404);
   });
 
   it('rejects a missing asset_id with a Spanish 400 and no service call', async () => {
