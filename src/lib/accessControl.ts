@@ -95,8 +95,16 @@ const OPERATOR_API_EXACT: ReadonlyArray<readonly [string, string]> = [
 /** Any method under these prefixes. */
 const OPERATOR_API_PREFIXES = ['/api/bodega', '/api/auth'];
 
+/**
+ * The order status endpoint, in its two URL shapes (`/api/orders/<id>/status` and the alias
+ * `/api/orders/status/<id>`), numeric id only. PUT only. The endpoint narrows what the operator may
+ * actually change to the forward-only allowlist in `lib/operatorOrderStatus.ts`.
+ */
+const OPERATOR_ORDER_STATUS_PATHS = [/^\/api\/orders\/\d+\/status$/, /^\/api\/orders\/status\/\d+$/];
+
 function operatorApiAccess(pathname: string, method: string): AccessDecision {
   const verb = method.toUpperCase();
+  if (verb === 'PUT' && OPERATOR_ORDER_STATUS_PATHS.some((pattern) => pattern.test(pathname))) return 'allow';
   if (OPERATOR_API_EXACT.some(([m, p]) => m === verb && p === pathname)) return 'allow';
   if (OPERATOR_API_PREFIXES.some((prefix) => isUnder(pathname, prefix))) return 'allow';
   return 'forbidden';

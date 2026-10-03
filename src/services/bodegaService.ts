@@ -32,6 +32,8 @@ const MOVEMENT_COLUMNS = 'asset_id, order_id, direction, checked_at';
 
 export interface ScanSheetOrder {
   id: number;
+  /** `orders.status`, for the forward-only status step on the sheet (null if unreadable). */
+  status: string | null;
   reference: string;
   client: string;
   project: string;
@@ -149,6 +151,7 @@ export class BodegaService {
     return {
       order: {
         id: typedOrder.id,
+        status: typedOrder.status ?? null,
         reference: orderReference(typedOrder),
         client: clientName(typedOrder),
         project: projectLabel(typedOrder),

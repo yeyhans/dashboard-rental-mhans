@@ -41,6 +41,7 @@ const NOW = new Date('2026-09-08T12:00:00Z');
 
 const orderRow = {
   id: 1,
+  status: 'confirmed',
   order_key: 'PED-1',
   order_proyecto: 'Spot',
   order_fecha_inicio: '2026-09-09',
@@ -145,6 +146,7 @@ describe('BodegaService.getScanSheet', () => {
 
     expect(sheet?.order).toEqual({
       id: 1,
+      status: 'confirmed',
       reference: 'PED-1',
       client: 'Ana Pérez',
       project: 'Spot',

@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { validateOperatorStatusChange } from '../../../../lib/operatorOrderStatus';
 import { withAuth } from '../../../../middleware/auth';
 import { OrderService } from '../../../../services/orderService';
 import {
@@ -73,6 +74,15 @@ export const PUT: APIRoute = withAuth(async (context) => {
 
   if (!current) {
     return json({ success: false, error: 'La orden no existe' }, 404);
+  }
+
+  // Un operario (bodega) solo avanza un paso hacia adelante: confirmed -> preparation -> in-rental
+  // -> return. Nunca completa, cancela ni retrocede (decisión del dueño, 2026-10-02).
+  if (context.user?.role === 'operator') {
+    const operatorGate = validateOperatorStatusChange(current.status, body.status);
+    if (!operatorGate.valid) {
+      return json({ success: false, error: operatorGate.error, code: 'OPERATOR_TRANSITION_FORBIDDEN' }, 403);
+    }
   }
 
   // Durante la ventana, entre el despliegue del código y el apply de 0003, hay filas vivas con el

@@ -19,6 +19,7 @@ import {
 } from '../../lib/bodegaScan';
 import { apiClient } from '../../services/apiClient';
 import type { ScanSheet } from '../../services/bodegaService';
+import BodegaOrderStatus from './BodegaOrderStatus';
 
 /**
  * The scan screen. One input, always focused: scan → Enter → recorded → cleared → focused again.
@@ -164,6 +165,7 @@ export default function BodegaScanner({ sheet }: BodegaScannerProps) {
         <p className="text-xs text-[var(--color-text-secondary)]">
           {formatDay(sheet.order.startDate)} → {formatDay(sheet.order.endDate)}
         </p>
+        <BodegaOrderStatus orderId={sheet.order.id} initialStatus={sheet.order.status} />
       </header>
 
       <div role="radiogroup" aria-label="Dirección del movimiento" className="grid grid-cols-2 gap-2">
