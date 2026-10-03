@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Loader2, PackageSearch, Printer, RefreshCw, Tags } from 'lucide-react';
 import { Toaster } from 'sonner';
 
@@ -18,6 +18,7 @@ import { IntakeProgressCard } from './IntakeProgressCard';
 import { InventoryGuideDialog } from './InventoryGuideDialog';
 import { SerialisedAssetForm } from './SerialisedAssetForm';
 import { conditionLabel } from './intakeForm';
+import { bumpTotalAssets, createLatestGate, fetchIntakeProgress } from './intakeProgress';
 
 interface InventoryIntakeDashboardProps {
   products: IntakeProduct[];
@@ -75,11 +76,22 @@ export function InventoryIntakeDashboard({
     }
   }, []);
 
+  const progressGate = useRef(createLatestGate());
+
   const handleAssetCreated = useCallback((asset: SerialisedAsset) => {
     setRecentAssets((previous) => [asset, ...previous].slice(0, 20));
-    // The denominator only moves when a product goes from zero assets to one, so the summary is
-    // nudged optimistically and reconciled by the explicit refresh.
-    setProgress((previous) => ({ ...previous, total_assets: previous.total_assets + 1 }));
+    // The unit total moves for sure, so it is nudged right away; whether a product just went from
+    // zero units to one (the card's headline) only the server knows, so the summary is re-read
+    // after every registered unit (A-17). A slower, older answer never overwrites a newer one.
+    setProgress(bumpTotalAssets);
+    const ticket = progressGate.current.next();
+    fetchIntakeProgress()
+      .then((fresh) => {
+        if (progressGate.current.isLatest(ticket)) setProgress(fresh);
+      })
+      .catch((error) => {
+        console.error('[InventoryIntakeDashboard] No se pudo actualizar el avance:', error);
+      });
   }, []);
 
   // Reprint for one unit — a torn sticker, or a unit registered before the roll existed. New tab
