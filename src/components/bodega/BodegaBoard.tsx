@@ -1,7 +1,17 @@
-import React, { useState } from 'react';
-import { ArrowDownToLine, ArrowUpFromLine, ChevronRight, Loader2, RefreshCw } from 'lucide-react';
-import { formatDay, type BodegaBoard as BodegaBoardData, type BodegaCard } from '../../lib/bodega';
-import { apiClient } from '../../services/apiClient';
+import React, { useState } from "react";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  ChevronRight,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
+import {
+  formatDay,
+  type BodegaBoard as BodegaBoardData,
+  type BodegaCard,
+} from "../../lib/bodega";
+import { apiClient } from "../../services/apiClient";
 
 /**
  * The garage board: Retiros (every admin-confirmed order with units still to take out) and Devoluciones (due back today or
@@ -16,7 +26,10 @@ interface BodegaBoardProps {
   todayLabel: string;
 }
 
-export default function BodegaBoard({ initialBoard, todayLabel }: BodegaBoardProps) {
+export default function BodegaBoard({
+  initialBoard,
+  todayLabel,
+}: BodegaBoardProps) {
   const [board, setBoard] = useState<BodegaBoardData>(initialBoard);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,14 +38,16 @@ export default function BodegaBoard({ initialBoard, todayLabel }: BodegaBoardPro
     setRefreshing(true);
     setError(null);
     try {
-      const response = await apiClient.get('/api/bodega/board');
+      const response = await apiClient.get("/api/bodega/board");
       const result = await response.json();
       if (!response.ok || !result.success) {
-        throw new Error(result.error || 'No se pudo actualizar el tablero');
+        throw new Error(result.error || "No se pudo actualizar el tablero");
       }
       setBoard(result.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo actualizar el tablero');
+      setError(
+        err instanceof Error ? err.message : "No se pudo actualizar el tablero",
+      );
     } finally {
       setRefreshing(false);
     }
@@ -43,7 +58,9 @@ export default function BodegaBoard({ initialBoard, todayLabel }: BodegaBoardPro
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">{todayLabel}</h1>
-          <p className="text-sm text-[var(--color-text-secondary)]">Toca una orden para escanear</p>
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            Toca una orden para escanear
+          </p>
         </div>
         <button
           type="button"
@@ -52,13 +69,20 @@ export default function BodegaBoard({ initialBoard, todayLabel }: BodegaBoardPro
           className="inline-flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[var(--color-border)] bg-white px-4 text-sm font-medium disabled:opacity-60"
           aria-label="Actualizar tablero"
         >
-          {refreshing ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
+          {refreshing ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-5 w-5" />
+          )}
           <span className="hidden sm:inline">Actualizar</span>
         </button>
       </div>
 
       {error && (
-        <p role="alert" className="rounded-[10px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-3 text-sm text-[var(--color-crit)]">
+        <p
+          role="alert"
+          className="rounded-[10px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-3 text-sm text-[var(--color-crit)]"
+        >
           {error}
         </p>
       )}
@@ -89,7 +113,10 @@ interface BoardSectionProps {
 function BoardSection({ title, icon, cards, empty }: BoardSectionProps) {
   return (
     <section aria-labelledby={`bodega-${title}`}>
-      <h2 id={`bodega-${title}`} className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+      <h2
+        id={`bodega-${title}`}
+        className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]"
+      >
         {icon}
         {title}
         <span className="ml-auto rounded-full bg-[var(--color-neutral-bg)] px-2 py-0.5 text-xs font-medium text-[var(--color-neutral)]">
@@ -128,15 +155,24 @@ function OrderCard({ card }: { card: BodegaCard }) {
               Atrasada
             </span>
           )}
+          {card.late && (
+            <span className="rounded-full bg-[var(--color-warn-bg)] px-2 py-0.5 text-xs font-medium text-[var(--color-warn)]">
+              Atrasado
+            </span>
+          )}
         </div>
         <p className="truncate text-sm">{card.client}</p>
-        <p className="truncate text-sm text-[var(--color-text-secondary)]">{card.project}</p>
+        <p className="truncate text-sm text-[var(--color-text-secondary)]">
+          {card.project}
+        </p>
         <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
           {formatDay(card.startDate)} → {formatDay(card.endDate)}
         </p>
       </div>
       <div className="text-right">
-        <p className={`text-lg font-semibold tabular-nums ${complete ? 'text-[var(--color-ok)]' : ''}`}>
+        <p
+          className={`text-lg font-semibold tabular-nums ${complete ? "text-[var(--color-ok)]" : ""}`}
+        >
           {card.scannedUnits}/{card.totalUnits}
         </p>
         <p className="text-xs text-[var(--color-text-secondary)]">unidades</p>

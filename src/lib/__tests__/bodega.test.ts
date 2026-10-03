@@ -131,25 +131,52 @@ describe('openCheckoutsByOrder', () => {
 });
 
 describe('pickupCards — every admin-confirmed order with units still to take out', () => {
-  it('lists confirmed and preparation orders regardless of dates, soonest start first', () => {
+  it('lists today-or-later first (ascending), then past starts flagged late (ascending), undated last of the upcoming', () => {
     const cards = pickupCards(
       [
         order({ id: 5, status: 'confirmed', order_fecha_inicio: '2026-12-24' }), // far in the future
         order({ id: 2, status: 'preparation', order_fecha_inicio: '2026-09-09' }),
         order({ id: 1, status: 'confirmed', order_fecha_inicio: '2026-09-01' }), // start already behind us
-        order({ id: 6, status: 'confirmed', order_fecha_inicio: null }), // no date: last
+        order({ id: 7, status: 'confirmed', order_fecha_inicio: '2026-04-15' }), // very old
+        order({ id: 4, status: 'confirmed', order_fecha_inicio: TODAY }), // starts today: not late
+        order({ id: 6, status: 'confirmed', order_fecha_inicio: null }), // no date: last upcoming
       ],
-      new Map([[1, new Set([100])]])
+      new Map([[1, new Set([100])]]),
+      TODAY
     );
-    expect(cards.map((c) => c.orderId)).toEqual([1, 2, 5, 6]);
-    expect(cards[0]).toMatchObject({ reference: 'PED-1', scannedUnits: 1, totalUnits: 3, overdue: false });
-    expect(cards[1]?.scannedUnits).toBe(0);
+    expect(cards.map((c) => c.orderId)).toEqual([4, 2, 5, 6, 7, 1]);
+    expect(cards.map((c) => [c.orderId, c.late])).toEqual([
+      [4, false],
+      [2, false],
+      [5, false],
+      [6, false],
+      [7, true],
+      [1, true],
+    ]);
+    const old = cards.find((c) => c.orderId === 1);
+    expect(old).toMatchObject({ reference: 'PED-1', scannedUnits: 1, totalUnits: 3, overdue: false });
+    expect(cards.find((c) => c.orderId === 2)?.scannedUnits).toBe(0);
+  });
+
+  it('boundary: start == today is not late, the day before is', () => {
+    const cards = pickupCards(
+      [
+        order({ id: 1, status: 'confirmed', order_fecha_inicio: '2026-09-07' }),
+        order({ id: 2, status: 'confirmed', order_fecha_inicio: '2026-09-08' }),
+      ],
+      new Map(),
+      TODAY
+    );
+    expect(cards.map((c) => [c.orderId, c.late])).toEqual([
+      [2, false],
+      [1, true],
+    ]);
   });
 
   it.each(['request', 'evaluation', 'in-rental', 'return', 'completed', 'cancelled', null, undefined, 'bogus'])(
     'excludes an order in status %s',
     (status) => {
-      const cards = pickupCards([order({ id: 1, status: status as never })], new Map());
+      const cards = pickupCards([order({ id: 1, status: status as never })], new Map(), TODAY);
       expect(cards).toEqual([]);
     }
   );
@@ -164,7 +191,8 @@ describe('pickupCards — every admin-confirmed order with units still to take o
       new Map([
         [1, new Set([1, 2, 3])],
         [3, new Set([4, 5])],
-      ])
+      ]),
+      TODAY
     );
     expect(cards.map((c) => c.orderId)).toEqual([3]);
     expect(cards[0]).toMatchObject({ scannedUnits: 2, totalUnits: 3 });
@@ -177,7 +205,8 @@ describe('pickupCards — every admin-confirmed order with units still to take o
         order({ id: 3, status: 'confirmed', order_fecha_inicio: '2026-09-09' }),
         order({ id: 3, status: 'confirmed', order_fecha_inicio: '2026-09-09' }),
       ],
-      new Map()
+      new Map(),
+      TODAY
     );
     expect(cards.map((c) => c.orderId)).toEqual([3, 9]);
   });
