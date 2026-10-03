@@ -470,10 +470,15 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       const result = await response.json().catch(() => null);
 
       if (response.ok && result?.success) {
-        toast.success('Pedido actualizado correctamente');
+        if (typeof result.warning === 'string' && result.warning) {
+          // Saved, but the customer email did not go out: a warning, never an error (D-9).
+          toast.warning(result.warning, { duration: 8000 });
+        } else {
+          toast.success('Pedido actualizado correctamente');
+        }
         setIsEditing(false);
         // Reload the page to show updated data
-        setTimeout(() => window.location.reload(), 800);
+        setTimeout(() => window.location.reload(), result.warning ? 2500 : 800);
       } else {
         toast.error(apiErrorMessage(result, 'No se pudo actualizar el pedido'));
       }

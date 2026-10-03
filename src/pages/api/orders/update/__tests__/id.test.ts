@@ -81,7 +81,7 @@ describe('admin order update relay boundary', () => {
     }));
   });
 
-  it('does not persist status update when required notification fails', async () => {
+  it('still persists the status update and warns when the notification fails', async () => {
     vi.stubEnv('FRONTEND_API_SECRET', 'frontend-secret');
     const currentOrder = { id: 123, status: 'processing', billing_email: 'cliente@example.com' };
     const updatedOrder = { ...currentOrder, status: 'failed' };
@@ -103,11 +103,11 @@ describe('admin order update relay boundary', () => {
 
     const response = await PUT({ params: { id: '123' }, request, locals: { user: { id: 'admin-1' } } } as never);
 
-    expect(response.status).toBe(502);
-    expect(updateOrder).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(updateOrder).toHaveBeenCalledTimes(1);
     await expect(response.json()).resolves.toEqual(expect.objectContaining({
-      success: false,
-      notificationError: 'required_notification_failed',
+      success: true,
+      warning: expect.stringContaining('correo'),
     }));
   });
 

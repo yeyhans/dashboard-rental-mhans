@@ -9,9 +9,10 @@ import { FetchTimeoutError, fetchWithTimeout } from '../../../../lib/fetchWithTi
 import { createInternalApiHeaders } from '../../../../lib/serverApiAuth';
 import { withAuth } from '../../../../middleware/auth';
 
-// The email hop runs before the order is saved and itself waits on the mail worker. Without a
+// The email hop runs after the order is saved and itself waits on the mail worker. Without a
 // deadline a slow hop froze the admin's tab (A-03); the worker call inside is bounded tighter.
 const NOTIFICATION_TIMEOUT_MS = 20_000;
+const NOTIFICATION_WARNING = 'La orden se guardó, pero no se pudo enviar el correo al cliente.';
 
 export const PUT: APIRoute = withAuth(async ({ params, request }) => {
   try {
@@ -171,6 +172,13 @@ export const PUT: APIRoute = withAuth(async ({ params, request }) => {
         ? { path: '/api/emails/send-order-failed-notification', emailType: 'order_failed' }
         : null;
 
+    console.log('Updating order with data:', sanitizedData);
+
+    // The status change is saved FIRST. The customer email is best effort: if it fails or times out
+    // the order stays saved and the response carries a non-fatal warning (D-9).
+    const updatedOrder = await OrderService.updateOrder(Number(orderId), sanitizedData);
+
+    let warning: string | undefined;
     if (notificationTarget) {
       const notificationOrder = { ...currentOrder, ...sanitizedData };
       const notificationUrl = new URL(notificationTarget.path, request.url).toString();
@@ -180,9 +188,8 @@ export const PUT: APIRoute = withAuth(async ({ params, request }) => {
         notificationUrl,
       });
 
-      let notificationResponse: Response;
       try {
-        notificationResponse = await fetchWithTimeout(
+        const notificationResponse = await fetchWithTimeout(
           notificationUrl,
           {
             method: 'POST',
@@ -194,53 +201,35 @@ export const PUT: APIRoute = withAuth(async ({ params, request }) => {
           },
           NOTIFICATION_TIMEOUT_MS
         );
-      } catch (notificationError) {
-        if (!(notificationError instanceof FetchTimeoutError)) throw notificationError;
-        console.error('❌ [Order Update] Notification email timed out:', { orderId, newStatus });
-        const timeoutMessage = 'El envío del correo tardó demasiado. La orden no fue actualizada; intenta de nuevo.';
-        return new Response(JSON.stringify({
-          success: false,
-          error: timeoutMessage,
-          message: timeoutMessage,
-          notificationError: 'notification_timeout'
-        }), {
-          status: 504,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
 
-      if (!notificationResponse.ok) {
-        const errorText = await notificationResponse.text();
-        console.error('❌ [Order Update] Required notification email failed:', {
+        if (!notificationResponse.ok) {
+          const errorText = await notificationResponse.text().catch(() => '');
+          console.error('❌ [Order Update] Notification email failed (order already saved):', {
+            orderId,
+            newStatus,
+            status: notificationResponse.status,
+            error: errorText,
+          });
+          warning = NOTIFICATION_WARNING;
+        } else {
+          console.log('✅ [Order Update] Notification email sent successfully');
+        }
+      } catch (notificationError) {
+        console.error('❌ [Order Update] Notification email did not go out (order already saved):', {
           orderId,
           newStatus,
-          status: notificationResponse.status,
-          error: errorText,
+          timedOut: notificationError instanceof FetchTimeoutError,
+          error: notificationError instanceof Error ? notificationError.message : notificationError,
         });
-
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'No se pudo enviar el correo requerido del flujo. La orden no fue actualizada.',
-          message: 'No se pudo enviar el correo requerido del flujo. La orden no fue actualizada.',
-          notificationError: 'required_notification_failed'
-        }), {
-          status: 502,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        warning = NOTIFICATION_WARNING;
       }
-
-      console.log('✅ [Order Update] Required notification email sent successfully');
     }
-
-    console.log('Updating order with data:', sanitizedData);
-
-    // Update the order using the service only after required status notifications succeed.
-    const updatedOrder = await OrderService.updateOrder(Number(orderId), sanitizedData);
 
     return new Response(JSON.stringify({
       success: true,
       message: 'Orden actualizada correctamente',
-      data: updatedOrder
+      data: updatedOrder,
+      ...(warning ? { warning } : {})
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
