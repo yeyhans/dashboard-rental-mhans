@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye, Settings, Calendar, AlertTriangle, Percent, DollarSign } from 'lucide-react';
 import EditOrderForm from './EditOrderForm';
+import { apiErrorMessage } from '../../lib/apiError';
+import { FetchTimeoutError, fetchWithTimeout } from '../../lib/fetchWithTimeout';
 import { CouponSelector } from './CouponSelector';
 import { ProductSelector } from './ProductSelector';
 import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliveryTime, getShippingTypeLabel } from '../../services/shippingService';
@@ -25,6 +27,9 @@ import { useOrderNotifications } from '../../hooks/useOrderNotifications';
 import { statusBadgeClass, statusLabel } from '../../lib/orderStatus';
 import { computeOrderTotals } from '../../lib/pricing';
 import { reserveAmount as computeReserveAmount } from '../../lib/finance';
+
+// Above the server-side budget (20 s email hop + 12 s worker) so the server's own error wins.
+const SAVE_ORDER_TIMEOUT_MS = 45_000;
 
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
@@ -446,27 +451,38 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     try {
       setLoading(true);
 
-      const response = await fetch(`/api/orders/update/${orderData.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
+      // Bounded and without native dialogs (A-03): a blocking `alert()` raised while `loading` was
+      // still true froze the tab on "Guardando..." whenever the server answered with an error, and
+      // a request that never answered kept it there for ever.
+      const response = await fetchWithTimeout(
+        `/api/orders/update/${orderData.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(updatedOrder)
         },
-        body: JSON.stringify(updatedOrder)
-      });
+        SAVE_ORDER_TIMEOUT_MS
+      );
 
-      const result = await response.json();
+      const result = await response.json().catch(() => null);
 
-      if (result.success) {
-        alert('Pedido actualizado correctamente');
+      if (response.ok && result?.success) {
+        toast.success('Pedido actualizado correctamente');
         setIsEditing(false);
         // Reload the page to show updated data
-        window.location.reload();
+        setTimeout(() => window.location.reload(), 800);
       } else {
-        alert(`Error al actualizar: ${result.message}`);
+        toast.error(apiErrorMessage(result, 'No se pudo actualizar el pedido'));
       }
     } catch (error) {
       console.error('Error updating order:', error);
-      alert('Error al actualizar el pedido');
+      toast.error(
+        error instanceof FetchTimeoutError
+          ? 'El servidor tardó demasiado en responder. Revisa el estado del pedido antes de reintentar.'
+          : 'Error al actualizar el pedido'
+      );
     } finally {
       setLoading(false);
     }

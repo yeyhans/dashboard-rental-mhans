@@ -5,8 +5,13 @@ import { OrderPricingService } from '../../../../services/orderPricingService';
 import { PricingError } from '../../../../lib/pricing';
 import { validateReserveInput } from '../../../../lib/finance';
 import { supabaseAdmin } from '../../../../lib/supabase';
+import { FetchTimeoutError, fetchWithTimeout } from '../../../../lib/fetchWithTimeout';
 import { createInternalApiHeaders } from '../../../../lib/serverApiAuth';
 import { withAuth } from '../../../../middleware/auth';
+
+// The email hop runs before the order is saved and itself waits on the mail worker. Without a
+// deadline a slow hop froze the admin's tab (A-03); the worker call inside is bounded tighter.
+const NOTIFICATION_TIMEOUT_MS = 20_000;
 
 export const PUT: APIRoute = withAuth(async ({ params, request }) => {
   try {
@@ -175,14 +180,34 @@ export const PUT: APIRoute = withAuth(async ({ params, request }) => {
         notificationUrl,
       });
 
-      const notificationResponse = await fetch(notificationUrl, {
-        method: 'POST',
-        headers: createInternalApiHeaders(crypto.randomUUID()),
-        body: JSON.stringify({
-          orderData: notificationOrder,
-          emailType: notificationTarget.emailType
-        })
-      });
+      let notificationResponse: Response;
+      try {
+        notificationResponse = await fetchWithTimeout(
+          notificationUrl,
+          {
+            method: 'POST',
+            headers: createInternalApiHeaders(crypto.randomUUID()),
+            body: JSON.stringify({
+              orderData: notificationOrder,
+              emailType: notificationTarget.emailType
+            })
+          },
+          NOTIFICATION_TIMEOUT_MS
+        );
+      } catch (notificationError) {
+        if (!(notificationError instanceof FetchTimeoutError)) throw notificationError;
+        console.error('❌ [Order Update] Notification email timed out:', { orderId, newStatus });
+        const timeoutMessage = 'El envío del correo tardó demasiado. La orden no fue actualizada; intenta de nuevo.';
+        return new Response(JSON.stringify({
+          success: false,
+          error: timeoutMessage,
+          message: timeoutMessage,
+          notificationError: 'notification_timeout'
+        }), {
+          status: 504,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
 
       if (!notificationResponse.ok) {
         const errorText = await notificationResponse.text();
@@ -195,6 +220,7 @@ export const PUT: APIRoute = withAuth(async ({ params, request }) => {
 
         return new Response(JSON.stringify({
           success: false,
+          error: 'No se pudo enviar el correo requerido del flujo. La orden no fue actualizada.',
           message: 'No se pudo enviar el correo requerido del flujo. La orden no fue actualizada.',
           notificationError: 'required_notification_failed'
         }), {

@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { EmailTemplateService } from '../../../lib/emailTemplateService';
 import { createEmailWorkerHeaders, getEmailWorkerUrl } from '../../../lib/emailWorkerService';
+import { fetchWithTimeout } from '../../../lib/fetchWithTimeout';
 import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 
 // Order Data Interface for completed orders
@@ -50,6 +51,8 @@ const formatCLP = (amount: string | number) => {
     maximumFractionDigits: 0
   }).format(numAmount);
 };
+
+const EMAIL_WORKER_TIMEOUT_MS = 12_000;
 
 export const POST: APIRoute = async (context) => {
   const { request } = context;
@@ -192,13 +195,18 @@ async function sendViaWorker(
 
     console.log('📤 [Backend] Sending via Cloudflare Worker', { requestId, deliveryType: emailType });
 
-    const response = await fetch(`${workerUrl}/send-email`, {
-      method: 'POST',
-      headers: {
-        ...createEmailWorkerHeaders(requestId),
+    // Bounded (A-03): the caller is the order update route, which is waiting on this answer.
+    const response = await fetchWithTimeout(
+      `${workerUrl}/send-email`,
+      {
+        method: 'POST',
+        headers: {
+          ...createEmailWorkerHeaders(requestId),
+        },
+        body: JSON.stringify(emailPayload)
       },
-      body: JSON.stringify(emailPayload)
-    });
+      EMAIL_WORKER_TIMEOUT_MS
+    );
 
     if (!response.ok) {
       console.error('❌ [Backend] Cloudflare Worker error:', {
