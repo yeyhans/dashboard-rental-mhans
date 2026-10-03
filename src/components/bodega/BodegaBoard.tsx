@@ -4,7 +4,7 @@ import { formatDay, type BodegaBoard as BodegaBoardData, type BodegaCard } from 
 import { apiClient } from '../../services/apiClient';
 
 /**
- * The garage board: Retiros (leaving today or tomorrow) and Devoluciones (due back today or
+ * The garage board: Retiros (every admin-confirmed order with units still to take out) and Devoluciones (due back today or
  * overdue). Each card is one big link to the order's scan screen — the whole card is the tap
  * target, because the worker is holding a phone in one hand and a gun in the other.
  *
@@ -67,7 +67,7 @@ export default function BodegaBoard({ initialBoard, todayLabel }: BodegaBoardPro
         title="Retiros"
         icon={<ArrowUpFromLine className="h-5 w-5" />}
         cards={board.pickups}
-        empty="No hay retiros para hoy ni mañana."
+        empty="No hay pedidos confirmados con equipos por retirar."
       />
       <BoardSection
         title="Devoluciones"

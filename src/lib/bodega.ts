@@ -1,5 +1,4 @@
 import { businessDay } from './businessDay';
-import { isAwaitingDispatch } from './delivery';
 import type { ScanLine } from './bodegaScan';
 import type { AssetMovementLike } from '../types/assetMovements';
 import type { LineItem } from '../types/order';
@@ -7,11 +6,11 @@ import type { LineItem } from '../types/order';
 /**
  * Bodega — the garage worker's board, as pure derivations.
  *
- * Two lists, both keyed on "what has to move through the door today":
+ * Two lists, keyed on "what has to move through the door":
  *
- *   - RETIROS: shipments still awaiting dispatch (`shipping_usage.status` pending/processing)
- *     whose order starts today or tomorrow. Equipment is picked up the day before the rental
- *     starts (15:00–20:00), so "tomorrow" is today's work.
+ *   - RETIROS: every order the admin has confirmed (`confirmed` or `preparation`) that still has
+ *     units to take out, soonest start first. Independent of `shipping_usage` rows and of dates
+ *     (owner decision 2026-10-02): the operator must see all confirmed work, not a two-day window.
  *   - DEVOLUCIONES: orders with at least one unit still out (an open checkout) whose end date is
  *     today or earlier. Past the end date the return is `Atrasada`.
  *
@@ -24,8 +23,16 @@ import type { LineItem } from '../types/order';
  * `now` is injected everywhere so the board is deterministic under test.
  */
 
+/** Order statuses the operator sees on Retiros: confirmed by the admin, not yet out. */
+export const PICKUP_ORDER_STATUSES = ['confirmed', 'preparation'] as const;
+
+export function isPickupStatus(status: unknown): boolean {
+  return typeof status === 'string' && (PICKUP_ORDER_STATUSES as readonly string[]).includes(status);
+}
+
 export interface BodegaOrderLike {
   readonly id: number;
+  readonly status?: string | null;
   readonly order_key?: string | null;
   readonly order_proyecto?: string | null;
   readonly order_fecha_inicio?: string | null;
@@ -34,11 +41,6 @@ export interface BodegaOrderLike {
   readonly billing_last_name?: string | null;
   readonly billing_company?: string | null;
   readonly line_items?: readonly LineItem[] | null;
-}
-
-export interface BodegaShipmentLike {
-  readonly status: string;
-  readonly order: BodegaOrderLike | null;
 }
 
 /** One movement with its order, the minimum needed to know which order a unit is out on. */
@@ -77,13 +79,6 @@ export function addDays(day: string, delta: number): string {
   const date = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1));
   date.setUTCDate(date.getUTCDate() + delta);
   return date.toISOString().slice(0, 10);
-}
-
-/** Today or tomorrow, inclusive on both ends. */
-export function isPickupDue(startDate: string | null | undefined, today: string): boolean {
-  if (!startDate) return false;
-  const start = isoDay(startDate);
-  return start === today || start === addDays(today, 1);
 }
 
 /** The end date is today or already behind us. */
@@ -155,25 +150,27 @@ function card(order: BodegaOrderLike, scannedUnits: number, overdue: boolean): B
 }
 
 /**
- * Retiros: one card per order (a second shipment row for the same order does not make a second
- * pickup), soonest start first. Progress = units already out on that order.
+ * Retiros: one card per admin-confirmed order (`confirmed` / `preparation`) that still has units
+ * to take out (listed units minus units already out), soonest start first; orders without a start
+ * date go last. Progress = units already out on that order.
  */
 export function pickupCards(
-  shipments: readonly BodegaShipmentLike[],
-  openByOrder: ReadonlyMap<number, ReadonlySet<number>>,
-  today: string
+  orders: readonly BodegaOrderLike[],
+  openByOrder: ReadonlyMap<number, ReadonlySet<number>>
 ): BodegaCard[] {
   const seen = new Set<number>();
   const cards: BodegaCard[] = [];
-  for (const shipment of shipments) {
-    const order = shipment.order;
-    if (!order || seen.has(order.id)) continue;
-    if (!isAwaitingDispatch(shipment.status)) continue;
-    if (!isPickupDue(order.order_fecha_inicio, today)) continue;
+  for (const order of orders) {
+    if (seen.has(order.id) || !isPickupStatus(order.status)) continue;
+    const out = openByOrder.get(order.id)?.size ?? 0;
+    if (unitsInOrder(order.line_items) - out <= 0) continue;
     seen.add(order.id);
-    cards.push(card(order, openByOrder.get(order.id)?.size ?? 0, false));
+    cards.push(card(order, out, false));
   }
-  return cards.sort((a, b) => (a.startDate ?? '').localeCompare(b.startDate ?? '') || a.orderId - b.orderId);
+  return cards.sort((a, b) => {
+    if (!a.startDate !== !b.startDate) return a.startDate ? -1 : 1;
+    return (a.startDate ?? '').localeCompare(b.startDate ?? '') || a.orderId - b.orderId;
+  });
 }
 
 /**
@@ -203,7 +200,7 @@ export function returnCards(
 }
 
 export function buildBodegaBoard(input: {
-  shipments: readonly BodegaShipmentLike[];
+  pickupOrders: readonly BodegaOrderLike[];
   orders: readonly BodegaOrderLike[];
   movements: readonly BodegaMovementLike[];
   now: Date;
@@ -211,7 +208,7 @@ export function buildBodegaBoard(input: {
   const today = isoDay(input.now);
   const openByOrder = openCheckoutsByOrder(input.movements);
   return {
-    pickups: pickupCards(input.shipments, openByOrder, today),
+    pickups: pickupCards(input.pickupOrders, openByOrder),
     returns: returnCards(input.orders, openByOrder, today),
   };
 }

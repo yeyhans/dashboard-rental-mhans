@@ -3,6 +3,7 @@ import {
   clientName,
   isoDay,
   orderReference,
+  PICKUP_ORDER_STATUSES,
   projectLabel,
   scanSheetLines,
   type BodegaBoard,
@@ -24,7 +25,7 @@ import { supabaseAdmin } from '../lib/supabase';
  * latest movement, resolved in the database — never by a bounded window of rows (R3-101).
  */
 const ORDER_COLUMNS =
-  'id, order_key, order_proyecto, order_fecha_inicio, order_fecha_termino, ' +
+  'id, status, order_key, order_proyecto, order_fecha_inicio, order_fecha_termino, ' +
   'billing_first_name, billing_last_name, billing_company, line_items';
 
 const MOVEMENT_COLUMNS = 'asset_id, order_id, direction, checked_at';
@@ -69,25 +70,22 @@ export class BodegaService {
   static async getBoard(now: Date = new Date()): Promise<BodegaBoard> {
     const client = this.ensureSupabaseAdmin();
 
-    const [{ data: usage, error: usageError }, movements] = await Promise.all([
+    const [{ data: pickupRows, error: pickupError }, movements] = await Promise.all([
       client
-        .from('shipping_usage')
-        .select(`id, order_id, status, orders (${ORDER_COLUMNS})`)
-        .in('status', ['pending', 'processing'])
-        .order('created_at', { ascending: false })
-        .limit(200),
+        .from('orders')
+        .select(ORDER_COLUMNS)
+        .in('status', [...PICKUP_ORDER_STATUSES])
+        .order('order_fecha_inicio', { ascending: true, nullsFirst: false })
+        .limit(500),
       this.openCheckouts(client),
     ]);
 
-    if (usageError) {
-      console.error('[BodegaService] Error al cargar los retiros pendientes:', { error: usageError });
-      throw usageError;
+    if (pickupError) {
+      console.error('[BodegaService] Error al cargar los retiros pendientes:', { error: pickupError });
+      throw pickupError;
     }
 
-    const shipments = ((usage as any[]) || []).map((row) => ({
-      status: String(row.status ?? ''),
-      order: (row.orders as BodegaOrderLike | null) ?? null,
-    }));
+    const pickupOrders = (pickupRows as BodegaOrderLike[] | null) || [];
 
     // Orders with something out — only those can be returns. Fetched by id, so a closed order
     // with a unit still out (the case that matters most) is on the board regardless of status.
@@ -102,7 +100,7 @@ export class BodegaService {
       orders = (data as BodegaOrderLike[]) || [];
     }
 
-    return buildBodegaBoard({ shipments, orders, movements, now });
+    return buildBodegaBoard({ pickupOrders, orders, movements, now });
   }
 
   /** The order as the worker scans it: header plus one line per product. `null` if it does not exist. */

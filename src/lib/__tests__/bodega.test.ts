@@ -5,7 +5,6 @@ import {
   buildBodegaBoard,
   clientName,
   formatDay,
-  isPickupDue,
   isReturnDue,
   isReturnOverdue,
   isoDay,
@@ -20,7 +19,7 @@ import {
 } from '../bodega';
 
 /**
- * The garage board. Boundaries are the whole test: "today or tomorrow" for pickups, "today or
+ * The garage board. Pickups are every admin-confirmed order (status filter, never dates); "today or
  * earlier" for returns, and a return past its end date flagged `Atrasada`. Days are strings so a
  * UTC-4 midnight cannot move a date by one.
  */
@@ -68,22 +67,6 @@ describe('day helpers', () => {
   it('formatDay is DD/MM/YYYY without parsing', () => {
     expect(formatDay('2026-09-08')).toBe('08/09/2026');
     expect(formatDay(null)).toBe('—');
-  });
-});
-
-describe('isPickupDue — today or tomorrow, inclusive', () => {
-  it.each([
-    ['2026-09-08', true],
-    ['2026-09-09', true],
-    ['2026-09-10', false],
-    ['2026-09-07', false],
-  ])('start %s → %s', (start, expected) => {
-    expect(isPickupDue(start, TODAY)).toBe(expected);
-  });
-
-  it('is false without a start date', () => {
-    expect(isPickupDue(null, TODAY)).toBe(false);
-    expect(isPickupDue(undefined, TODAY)).toBe(false);
   });
 });
 
@@ -147,23 +130,56 @@ describe('openCheckoutsByOrder', () => {
   });
 });
 
-describe('pickupCards', () => {
-  it('lists awaiting-dispatch shipments starting today or tomorrow, soonest first, one per order', () => {
+describe('pickupCards — every admin-confirmed order with units still to take out', () => {
+  it('lists confirmed and preparation orders regardless of dates, soonest start first', () => {
     const cards = pickupCards(
       [
-        { status: 'pending', order: order({ id: 2, order_fecha_inicio: '2026-09-09' }) },
-        { status: 'processing', order: order({ id: 1, order_fecha_inicio: '2026-09-08' }) },
-        { status: 'pending', order: order({ id: 1, order_fecha_inicio: '2026-09-08' }) }, // duplicate shipment row
-        { status: 'shipped', order: order({ id: 3, order_fecha_inicio: '2026-09-08' }) }, // already out
-        { status: 'pending', order: order({ id: 4, order_fecha_inicio: '2026-09-10' }) }, // too early
-        { status: 'pending', order: null },
+        order({ id: 5, status: 'confirmed', order_fecha_inicio: '2026-12-24' }), // far in the future
+        order({ id: 2, status: 'preparation', order_fecha_inicio: '2026-09-09' }),
+        order({ id: 1, status: 'confirmed', order_fecha_inicio: '2026-09-01' }), // start already behind us
+        order({ id: 6, status: 'confirmed', order_fecha_inicio: null }), // no date: last
       ],
-      new Map([[1, new Set([100])]]),
-      TODAY
+      new Map([[1, new Set([100])]])
     );
-    expect(cards.map((c) => c.orderId)).toEqual([1, 2]);
+    expect(cards.map((c) => c.orderId)).toEqual([1, 2, 5, 6]);
     expect(cards[0]).toMatchObject({ reference: 'PED-1', scannedUnits: 1, totalUnits: 3, overdue: false });
     expect(cards[1]?.scannedUnits).toBe(0);
+  });
+
+  it.each(['request', 'evaluation', 'in-rental', 'return', 'completed', 'cancelled', null, undefined, 'bogus'])(
+    'excludes an order in status %s',
+    (status) => {
+      const cards = pickupCards([order({ id: 1, status: status as never })], new Map());
+      expect(cards).toEqual([]);
+    }
+  );
+
+  it('drops orders whose units are all out already, or that list no units', () => {
+    const cards = pickupCards(
+      [
+        order({ id: 1, status: 'preparation' }), // 3 units, 3 out
+        order({ id: 2, status: 'confirmed', line_items: [] }), // nothing to take
+        order({ id: 3, status: 'confirmed' }), // 3 units, 2 out: one still to take
+      ],
+      new Map([
+        [1, new Set([1, 2, 3])],
+        [3, new Set([4, 5])],
+      ])
+    );
+    expect(cards.map((c) => c.orderId)).toEqual([3]);
+    expect(cards[0]).toMatchObject({ scannedUnits: 2, totalUnits: 3 });
+  });
+
+  it('breaks start-date ties by order id and lists each order once', () => {
+    const cards = pickupCards(
+      [
+        order({ id: 9, status: 'confirmed', order_fecha_inicio: '2026-09-09' }),
+        order({ id: 3, status: 'confirmed', order_fecha_inicio: '2026-09-09' }),
+        order({ id: 3, status: 'confirmed', order_fecha_inicio: '2026-09-09' }),
+      ],
+      new Map()
+    );
+    expect(cards.map((c) => c.orderId)).toEqual([3, 9]);
   });
 });
 
@@ -254,18 +270,18 @@ describe('scanSheetLines', () => {
 });
 
 describe('buildBodegaBoard — Santiago day boundary (R3-104)', () => {
-  const shipments = [{ status: 'pending', order: order({ id: 1, order_fecha_inicio: '2026-09-09' }) }];
+  const pickupOrders = [order({ id: 1, status: 'confirmed', order_fecha_inicio: '2026-09-09' })];
   const orders = [order({ id: 2, order_fecha_termino: '2026-09-08' })];
   const movements = [movement(7, 2, 'checkout', '2026-09-04T12:00:00Z')];
 
   it('at 23:30 Santiago on 8 Sep: pickup for the 9th is "tomorrow", return due the 8th is not overdue', () => {
-    const board = buildBodegaBoard({ now: new Date('2026-09-09T02:30:00Z'), shipments, orders, movements });
+    const board = buildBodegaBoard({ now: new Date('2026-09-09T02:30:00Z'), pickupOrders, orders, movements });
     expect(board.pickups.map((c) => c.orderId)).toEqual([1]);
     expect(board.returns.map((c) => [c.orderId, c.overdue])).toEqual([[2, false]]);
   });
 
   it('at 00:00 Santiago on 9 Sep: the pickup is "today" and the return is overdue', () => {
-    const board = buildBodegaBoard({ now: new Date('2026-09-09T03:00:00Z'), shipments, orders, movements });
+    const board = buildBodegaBoard({ now: new Date('2026-09-09T03:00:00Z'), pickupOrders, orders, movements });
     expect(board.pickups.map((c) => c.orderId)).toEqual([1]);
     expect(board.returns.map((c) => [c.orderId, c.overdue])).toEqual([[2, true]]);
   });
@@ -275,7 +291,7 @@ describe('buildBodegaBoard', () => {
   it('derives both lists from raw rows and the injected clock', () => {
     const board = buildBodegaBoard({
       now: NOW,
-      shipments: [{ status: 'pending', order: order({ id: 1, order_fecha_inicio: '2026-09-09' }) }],
+      pickupOrders: [order({ id: 1, status: 'preparation', order_fecha_inicio: '2026-09-09' })],
       orders: [order({ id: 2, order_fecha_termino: '2026-09-06' })],
       movements: [movement(7, 2, 'checkout', '2026-09-04T12:00:00Z')],
     });

@@ -57,9 +57,9 @@ beforeEach(() => {
 });
 
 describe('BodegaService.getBoard', () => {
-  it('reads awaiting-dispatch shipments with their order embedded, and the open checkouts from the view', async () => {
+  it('reads confirmed and preparation orders (no shipping_usage, no date filter) and the open checkouts from the view', async () => {
     state.results = {
-      shipping_usage: [{ data: [{ id: 5, order_id: 1, status: 'pending', orders: orderRow }], error: null }],
+      orders: [{ data: [{ ...orderRow, status: 'confirmed' }], error: null }],
       asset_current_state: [{ data: [], error: null }],
     };
 
@@ -68,10 +68,13 @@ describe('BodegaService.getBoard', () => {
     expect(board.pickups.map((c) => c.orderId)).toEqual([1]);
     expect(board.returns).toEqual([]);
 
-    const select = state.calls.find((c) => c.table === 'shipping_usage' && c.op === 'select');
-    expect(select?.args[0]).toContain('orders (id, order_key, order_proyecto, order_fecha_inicio, order_fecha_termino');
+    expect(state.calls.some((c) => c.table === 'shipping_usage')).toBe(false);
+    const select = state.calls.find((c) => c.table === 'orders' && c.op === 'select');
+    expect(select?.args[0]).toContain('id, status, order_key, order_proyecto, order_fecha_inicio, order_fecha_termino');
+    expect(select?.args[0]).toContain('status');
     expect(select?.args[0]).not.toContain('*');
-    expect(state.calls).toContainEqual({ table: 'shipping_usage', op: 'in', args: ['status', ['pending', 'processing']] });
+    expect(state.calls).toContainEqual({ table: 'orders', op: 'in', args: ['status', ['confirmed', 'preparation']] });
+    expect(state.calls.some((c) => c.table === 'orders' && ['gte', 'lte', 'gt', 'lt'].includes(c.op))).toBe(false);
 
     // R3-101: the state comes from the view, filtered in SQL, with NO row window.
     const stateSelect = state.calls.find((c) => c.table === 'asset_current_state' && c.op === 'select');
@@ -79,14 +82,12 @@ describe('BodegaService.getBoard', () => {
     expect(state.calls).toContainEqual({ table: 'asset_current_state', op: 'eq', args: ['direction', 'checkout'] });
     expect(state.calls.some((c) => c.table === 'asset_current_state' && c.op === 'limit')).toBe(false);
     expect(state.calls.some((c) => c.table === 'asset_movements')).toBe(false);
-    // No open checkouts → no orders query at all.
-    expect(state.calls.some((c) => c.table === 'orders')).toBe(false);
   });
 
   it('fetches the orders behind open checkouts by id and builds the returns list', async () => {
     const outOrder = { ...orderRow, id: 2, order_key: 'PED-2', order_fecha_termino: '2026-09-07' };
     state.results = {
-      shipping_usage: [{ data: [], error: null }],
+      orders: [{ data: [], error: null }, { data: [outOrder], error: null }],
       asset_current_state: [
         {
           // An old checkout: the view reports it regardless of how much has moved since (R3-101).
@@ -94,7 +95,6 @@ describe('BodegaService.getBoard', () => {
           error: null,
         },
       ],
-      orders: [{ data: [outOrder], error: null }],
     };
 
     const board = await BodegaService.getBoard(NOW);
@@ -105,9 +105,9 @@ describe('BodegaService.getBoard', () => {
     ]);
   });
 
-  it('rethrows a shipping_usage error', async () => {
+  it('rethrows a pickup orders error', async () => {
     state.results = {
-      shipping_usage: [{ data: null, error: new Error('boom') }],
+      orders: [{ data: null, error: new Error('boom') }],
       asset_current_state: [{ data: [], error: null }],
     };
     await expect(BodegaService.getBoard(NOW)).rejects.toThrow('boom');
@@ -115,7 +115,7 @@ describe('BodegaService.getBoard', () => {
 
   it('rethrows a view error', async () => {
     state.results = {
-      shipping_usage: [{ data: [], error: null }],
+      orders: [{ data: [], error: null }],
       asset_current_state: [{ data: null, error: Object.assign(new Error('relation does not exist'), { code: '42P01' }) }],
     };
     await expect(BodegaService.getBoard(NOW)).rejects.toThrow('relation does not exist');
