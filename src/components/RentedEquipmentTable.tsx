@@ -21,6 +21,8 @@ import {
   Eye,
   Filter
 } from 'lucide-react';
+import { StatusBadge } from './shared/StatusBadge';
+import type { BadgeTone } from './shared/statusBadgeTones';
 import { STATUS_OPTIONS, canonicalStatus, statusBadgeClass, statusLabel, statusTone } from '../lib/orderStatus';
 
 interface RentedEquipment {
@@ -37,6 +39,16 @@ interface RentedEquipmentTableProps {
   rentedEquipment: RentedEquipment[];
   isFiltered?: boolean;
   filterInfo?: string;
+}
+
+/**
+ * 01b.1: "Tiempo restante" is a single-tone state badge. Overdue or due within 3 days is crit,
+ * within a week warn, anything later ok.
+ */
+export function daysRemainingTone(days: number): BadgeTone {
+  if (days <= 3) return 'crit';
+  if (days <= 7) return 'warn';
+  return 'ok';
 }
 
 export default function RentedEquipmentTable({
@@ -81,33 +93,10 @@ export default function RentedEquipmentTable({
     };
   };
 
-  const getDaysRemainingConfig = (days: number) => {
-    if (days < 0) {
-      return {
-        label: `Vencido (${Math.abs(days)} días)`,
-        variant: 'destructive' as const,
-        color: 'text-red-600'
-      };
-    } else if (days <= 3) {
-      return {
-        label: `${days} días`,
-        variant: 'destructive' as const,
-        color: 'text-red-600'
-      };
-    } else if (days <= 7) {
-      return {
-        label: `${days} días`,
-        variant: 'secondary' as const,
-        color: 'text-yellow-600'
-      };
-    } else {
-      return {
-        label: `${days} días`,
-        variant: 'default' as const,
-        color: 'text-green-600'
-      };
-    }
-  };
+  const getDaysRemainingConfig = (days: number) => ({
+    label: days < 0 ? `Vencido (${Math.abs(days)} días)` : `${days} días`,
+    tone: daysRemainingTone(days),
+  });
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'N/A';
@@ -160,7 +149,7 @@ export default function RentedEquipmentTable({
                 <p className="text-sm font-medium text-muted-foreground">Total Equipos</p>
                 <p className="text-2xl font-bold">{stats.total}</p>
               </div>
-              <Package className="h-8 w-8 text-blue-500" />
+              <Package className="h-8 w-8 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
@@ -170,9 +159,9 @@ export default function RentedEquipmentTable({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Activos</p>
-                <p className="text-2xl font-bold text-green-600">{stats.active}</p>
+                <p className="text-2xl font-bold">{stats.active}</p>
               </div>
-              <CheckCircle className="h-8 w-8 text-green-500" />
+              <CheckCircle className="h-8 w-8 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
@@ -182,9 +171,9 @@ export default function RentedEquipmentTable({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Por Vencer</p>
-                <p className="text-2xl font-bold text-yellow-600">{stats.expiring}</p>
+                <p className="text-2xl font-bold">{stats.expiring}</p>
               </div>
-              <Clock className="h-8 w-8 text-yellow-500" />
+              <Clock className="h-8 w-8 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
@@ -194,9 +183,9 @@ export default function RentedEquipmentTable({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Vencidos</p>
-                <p className="text-2xl font-bold text-red-600">{stats.expired}</p>
+                <p className="text-2xl font-bold">{stats.expired}</p>
               </div>
-              <AlertTriangle className="h-8 w-8 text-red-500" />
+              <AlertTriangle className="h-8 w-8 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
@@ -263,7 +252,7 @@ export default function RentedEquipmentTable({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nombre del Equipo</TableHead>
-                    <TableHead>Order ID</TableHead>
+                    <TableHead>ID</TableHead>
                     <TableHead>Proyecto</TableHead>
                     <TableHead>Fecha Término</TableHead>
                     <TableHead>Estado</TableHead>
@@ -279,27 +268,27 @@ export default function RentedEquipmentTable({
 
                     return (
                       <TableRow key={index}>
-                        <TableCell className="font-medium">
+                        <TableCell className="whitespace-nowrap font-medium">
                           <div className="flex items-center gap-2">
                             <img src={item.productImage} alt={item.productName} className="h-8 w-8" />
                             {item.productName}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">#{item.orderId}</Badge>
+                        <TableCell className="whitespace-nowrap font-mono text-sm">
+                          #{item.orderId}
                         </TableCell>
                         <TableCell>
                           <span className="max-w-[200px] truncate block">
                             {item.orderProject}
                           </span>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap">
                           <div className="flex items-center gap-1">
                             <Calendar className="h-4 w-4 text-muted-foreground" />
                             {formatDate(item.endDate)}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <StatusIcon className={`h-4 w-4 ${statusConfig.color}`} />
                             <Badge className={statusConfig.badgeClass}>
@@ -307,12 +296,10 @@ export default function RentedEquipmentTable({
                             </Badge>
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant={daysConfig.variant} className={daysConfig.color}>
-                            {daysConfig.label}
-                          </Badge>
+                        <TableCell className="whitespace-nowrap">
+                          <StatusBadge tone={daysConfig.tone} label={daysConfig.label} />
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="whitespace-nowrap text-center">
                           <Button
                             variant="outline"
                             size="sm"

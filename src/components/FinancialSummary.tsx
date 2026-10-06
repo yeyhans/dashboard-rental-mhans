@@ -70,9 +70,7 @@ export default function FinancialSummary({
       value: financialSummary.totalSales,
       description: 'Ingresos totales generados',
       icon: DollarSign,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      borderColor: 'border-blue-200',
+      color: 'text-foreground',
       trend: null
     },
     {
@@ -80,9 +78,7 @@ export default function FinancialSummary({
       value: financialSummary.totalPaid,
       description: 'Dinero efectivamente cobrado',
       icon: CreditCard,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-      borderColor: 'border-green-200',
+      color: 'text-foreground',
       trend: `${metrics.collectionRate.toFixed(1)}% del total`
     },
     {
@@ -90,9 +86,8 @@ export default function FinancialSummary({
       value: financialSummary.totalPending,
       description: 'Dinero por cobrar',
       icon: AlertCircle,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
-      borderColor: 'border-orange-200',
+      // Canon 01b.3: only the pending amount carries a state colour.
+      color: 'text-[var(--color-crit)]',
       trend: `${metrics.pendingRate.toFixed(1)}% del total`
     }
   ];
@@ -103,15 +98,16 @@ export default function FinancialSummary({
       value: financialSummary.reservationPayments,
       description: 'Reserva acordada en cada orden',
       percentage: formatPercentage(financialSummary.reservationPayments, financialSummary.totalPaid),
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50'
+      color: 'text-foreground',
+      bgColor: 'bg-muted'
     },
     {
       title: 'Pagos Finales',
       value: financialSummary.finalPayments,
       description: 'Saldo de cada orden',
       percentage: formatPercentage(financialSummary.finalPayments, financialSummary.totalPaid),
-      bgColor: 'bg-indigo-50'
+      color: 'text-foreground',
+      bgColor: 'bg-muted'
     }
   ];
 
@@ -151,7 +147,7 @@ export default function FinancialSummary({
         {summaryCards.map((card, index) => {
           const Icon = card.icon;
           return (
-            <Card key={index} className="relative overflow-hidden">
+            <Card key={index} className="overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   {card.title}
@@ -173,8 +169,6 @@ export default function FinancialSummary({
                   </Badge>
                 )}
               </CardContent>
-              {/* Decorative element */}
-              <div className={`absolute top-0 right-0 w-20 h-20 ${card.color.replace('text-', 'bg-')} opacity-10 rounded-full -mr-10 -mt-10`}></div>
             </Card>
           );
         })}
@@ -213,11 +207,11 @@ export default function FinancialSummary({
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                      <div className="w-3 h-3 bg-foreground rounded-full"></div>
                       <span className="text-sm font-medium">Cobrado</span>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-green-600">
+                      <div className="font-bold text-foreground">
                         {formatCurrency(financialSummary.totalPaid)}
                       </div>
                       <div className="text-xs text-muted-foreground">
@@ -228,11 +222,11 @@ export default function FinancialSummary({
                   
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                      <div className="w-3 h-3 bg-[var(--color-crit)] rounded-full"></div>
                       <span className="text-sm font-medium">Pendiente</span>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-orange-600">
+                      <div className="font-bold text-[var(--color-crit)]">
                         {formatCurrency(financialSummary.totalPending)}
                       </div>
                       <div className="text-xs text-muted-foreground">
@@ -242,9 +236,9 @@ export default function FinancialSummary({
                   </div>
 
                   {/* Barra de progreso visual */}
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-muted rounded-full h-2">
                     <div 
-                      className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                      className="bg-foreground h-2 rounded-full transition-all duration-300"
                       style={{ width: `${metrics.collectionRate}%` }}
                     ></div>
                   </div>
@@ -265,25 +259,25 @@ export default function FinancialSummary({
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                     <div>
                       <p className="text-sm font-medium">Tasa de Cobranza</p>
                       <p className="text-xs text-muted-foreground">Dinero cobrado vs ventas</p>
                     </div>
                     <div className="text-right">
-                      <div className="text-xl font-bold text-blue-600">
+                      <div className="text-xl font-bold text-foreground">
                         {metrics.collectionRate.toFixed(1)}%
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                     <div>
                       <p className="text-sm font-medium">Promedio por Venta</p>
                       <p className="text-xs text-muted-foreground">Valor promedio de órdenes</p>
                     </div>
                     <div className="text-right">
-                      <div className="text-xl font-bold text-purple-600">
+                      <div className="text-xl font-bold text-foreground">
                         {formatCurrency(financialSummary.totalSales > 0 ? financialSummary.totalSales / 1 : 0)}
                       </div>
                     </div>
@@ -324,16 +318,16 @@ export default function FinancialSummary({
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div className="p-4 bg-purple-50 rounded-lg">
-                  <h4 className="font-semibold text-purple-800 mb-2">Pagos de Reserva</h4>
-                  <p className="text-purple-700">
+                <div className="p-4 bg-muted rounded-lg">
+                  <h4 className="font-semibold text-foreground mb-2">Pagos de Reserva</h4>
+                  <p className="text-muted-foreground">
                     Órdenes completadas donde el cliente ha pagado solo la reserva acordada para el equipo.
                     El saldo restante queda pendiente de pago.
                   </p>
                 </div>
-                <div className="p-4 bg-indigo-50 rounded-lg">
-                  <h4 className="font-semibold text-indigo-800 mb-2">Pagos Finales (Saldo)</h4>
-                  <p className="text-indigo-700">
+                <div className="p-4 bg-muted rounded-lg">
+                  <h4 className="font-semibold text-foreground mb-2">Pagos Finales (Saldo)</h4>
+                  <p className="text-muted-foreground">
                     Órdenes completadas donde el cliente ha pagado el saldo, completando el 100% del valor total.
                     Estas órdenes están completamente pagadas.
                   </p>
