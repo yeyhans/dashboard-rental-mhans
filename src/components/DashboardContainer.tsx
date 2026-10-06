@@ -3,7 +3,6 @@ import DashboardFilters from "./DashboardFilters";
 import OrderSummaryStats from "./OrderSummaryStats";
 import OrderStatusTables from "./OrderStatusTables";
 import RentedEquipmentTable from "./RentedEquipmentTable";
-import OrderKpiRow from "./OrderKpiRow";
 import FinancialSummary from "./FinancialSummary";
 import { Separator } from "./ui/separator";
 import { Alert, AlertDescription } from "./ui/alert";
@@ -40,6 +39,14 @@ const DASHBOARD_KPI_ICONS: Record<
   devolucionesHoy: RotateCcw,
   ingresosMes: TrendingUp,
   cobrosPendientes: CircleDollarSign,
+};
+
+/** Destino de "Ver detalle" por KPI; Ingresos Mes no tiene pantalla propia todavía. */
+const DASHBOARD_KPI_HREFS: Partial<Record<DashboardKpiKey, string>> = {
+  pedidosActivos: "/orders",
+  proximasEntregas: "/delivery",
+  devolucionesHoy: "/check-in",
+  cobrosPendientes: "/finance",
 };
 
 /**
@@ -365,6 +372,7 @@ export default function DashboardContainer({
             icon={DASHBOARD_KPI_ICONS[kpi.key]}
             label={kpi.label}
             value={kpi.value}
+            href={DASHBOARD_KPI_HREFS[kpi.key]}
           />
         ))}
       </div>
@@ -395,12 +403,6 @@ export default function DashboardContainer({
 
       {/* Contenido del Dashboard */}
       <div className={isLoading ? "opacity-50 pointer-events-none" : ""}>
-        {/* Fila de KPIs del canónico: cada tarjeta salta a su pestaña */}
-        <OrderKpiRow
-          kpis={dashboardData.operationalKpis}
-          onSelectTab={setSelectedTab}
-        />
-
         {/* Estadísticas del Mes */}
         <OrderSummaryStats
           monthlyStats={dashboardData.monthlyOrderStats}

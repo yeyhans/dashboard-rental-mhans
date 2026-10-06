@@ -119,6 +119,38 @@ describe("KpiCard", () => {
     expect(html).not.toContain("<polyline");
   });
 
+  it("keeps the label on up to two lines instead of cutting it (01.1)", () => {
+    const html = renderToStaticMarkup(
+      <KpiCard label="Devoluciones Atrasadas del Mes" value={3} />,
+    );
+    expect(html).not.toMatch(/<p[^>]*class="[^"]*\btruncate\b[^"]*"/);
+    expect(html).toMatch(/line-clamp-2/);
+  });
+
+  it("renders the value in the mono font and lets long figures wrap inside the card", () => {
+    const html = renderToStaticMarkup(
+      <KpiCard label="Cobros Pendientes" value="$12.345.678" />,
+    );
+    expect(html).toMatch(
+      /<p[^>]*class="[^"]*font-mono[^"]*"[^>]*>\$12\.345\.678/,
+    );
+    expect(html).toMatch(/<p[^>]*class="[^"]*break-words[^"]*"/);
+  });
+
+  it("renders a 'Ver detalle' footer link when an href is given", () => {
+    const html = renderToStaticMarkup(
+      <KpiCard label="Pedidos Activos" value={4} href="/orders" />,
+    );
+    expect(html).toMatch(/<a[^>]*href="\/orders"[^>]*>Ver detalle/);
+  });
+
+  it("omits the 'Ver detalle' link when no href is given", () => {
+    const html = renderToStaticMarkup(
+      <KpiCard label="Pedidos Activos" value={4} />,
+    );
+    expect(html).not.toContain("Ver detalle");
+  });
+
   it("omits the sparkline svg for a single-value or empty series", () => {
     const single = renderToStaticMarkup(
       <KpiCard

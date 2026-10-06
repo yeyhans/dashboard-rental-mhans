@@ -20,6 +20,8 @@ interface KpiCardProps {
    * by every existing caller, so this is backward compatible.
    */
   sparkline?: readonly number[];
+  /** 01.1: when the KPI has a destination, the footer shows a "Ver detalle" link to it. */
+  href?: string;
   className?: string;
 }
 
@@ -33,6 +35,7 @@ export function KpiCard({
   value,
   footer,
   sparkline,
+  href,
   className,
 }: KpiCardProps) {
   const points =
@@ -51,10 +54,13 @@ export function KpiCard({
           </span>
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-medium text-muted-foreground">
+          {/* 01.1: the label wraps to two lines instead of being cut mid-word. */}
+          <p className="line-clamp-2 text-xs font-medium leading-tight text-muted-foreground">
             {label}
           </p>
-          <p className="text-lg font-semibold text-foreground">{value}</p>
+          <p className="break-words font-mono text-lg font-semibold text-foreground">
+            {value}
+          </p>
         </div>
         {points && (
           <svg
@@ -75,8 +81,18 @@ export function KpiCard({
           </svg>
         )}
       </div>
-      {hasSlotContent(footer) && (
-        <div className="mt-3 text-xs text-muted-foreground">{footer}</div>
+      {(hasSlotContent(footer) || href) && (
+        <div className="mt-3 text-xs text-muted-foreground">
+          {footer}
+          {href && (
+            <a
+              href={href}
+              className="block font-medium text-foreground underline-offset-2 hover:underline"
+            >
+              Ver detalle
+            </a>
+          )}
+        </div>
       )}
     </div>
   );
