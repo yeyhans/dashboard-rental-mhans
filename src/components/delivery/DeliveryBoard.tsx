@@ -644,7 +644,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
               className="inline-flex items-center gap-1.5 rounded-[6px] border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:bg-[var(--color-surface-2)]"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              Nuevo tipo
+              Nuevo Tipo de Envío
             </button>
           </div>
         </div>

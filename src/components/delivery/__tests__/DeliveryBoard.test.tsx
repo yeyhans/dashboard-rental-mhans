@@ -41,3 +41,11 @@ describe("DeliveryBoard — page header (D-22)", () => {
     expect(html).toMatch(/<h1[^>]*uppercase[^>]*>Delivery<\/h1>/);
   });
 });
+
+describe("DeliveryBoard — new shipping type button (04.1)", () => {
+  it('labels the create button "Nuevo Tipo de Envío" per canon', () => {
+    const html = renderToStaticMarkup(<DeliveryBoard data={makeBoard()} />);
+    expect(html).toContain("Nuevo Tipo de Envío");
+    expect(html).not.toContain("Nuevo tipo<");
+  });
+});
