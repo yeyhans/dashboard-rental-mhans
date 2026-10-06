@@ -50,6 +50,55 @@ function makeData(overrides: Partial<FinanceBoardData> = {}): FinanceBoardData {
   };
 }
 
+describe("FinanceBoard — pagination (07.1) and period control (07.4)", () => {
+  const manyRows = Array.from({ length: 25 }, (_, i) =>
+    row({ id: i + 1, reference: `#R${String(i + 1).padStart(3, "0")}` }),
+  );
+
+  it("shows only 10 pending rows with the 'Mostrando 1 a 10 de N resultados' label", () => {
+    const html = renderToStaticMarkup(
+      <FinanceBoard
+        data={makeData({ pendingRows: manyRows })}
+        periodLabel="septiembre 2026"
+      />,
+    );
+    expect(html).toContain("Mostrando 1 a 10 de 25 resultados");
+    expect(html).toContain("#R010");
+    expect(html).not.toContain("#R011");
+  });
+
+  it("renders prev/next controls, with prev disabled on the first page", () => {
+    const html = renderToStaticMarkup(
+      <FinanceBoard
+        data={makeData({ pendingRows: manyRows })}
+        periodLabel="septiembre 2026"
+      />,
+    );
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Anterior</);
+    expect(html).toMatch(/<button(?![^>]*disabled="")[^>]*>Siguiente</);
+  });
+
+  it("omits the pager controls when everything fits in one page", () => {
+    const html = renderToStaticMarkup(
+      <FinanceBoard
+        data={makeData({ pendingRows: manyRows.slice(0, 3) })}
+        periodLabel="septiembre 2026"
+      />,
+    );
+    expect(html).toContain("Mostrando 1 a 3 de 3 resultados");
+    expect(html).not.toContain(">Siguiente<");
+  });
+
+  it("styles the period selector as a date-range control with a calendar icon", () => {
+    const html = renderToStaticMarkup(
+      <FinanceBoard data={makeData()} periodLabel="septiembre 2026" />,
+    );
+    expect(html).toMatch(
+      /lucide-calendar[^>]*>.*<select[^>]*aria-label="Período"/s,
+    );
+  });
+});
+
 describe("FinanceBoard — period selector + Filtros (D-24 07c)", () => {
   it("renders the period selector with the canon labels", () => {
     const html = renderToStaticMarkup(

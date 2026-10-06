@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  Calendar,
   CheckCircle2,
   Clock,
   Download,
@@ -50,6 +51,7 @@ import {
   type PeriodKey,
 } from "../../lib/periodRange";
 import { monthlyBucketSums } from "../../lib/sparkline";
+import { paginate, paginationLabel, type Page } from "../../lib/pagination";
 
 /**
  * Finanzas & Cobranza.
@@ -85,6 +87,43 @@ function matches(row: FinanceRow, needle: string): boolean {
     row.client.toLowerCase().includes(n) ||
     row.project.toLowerCase().includes(n) ||
     (row.invoiceNumber ?? "").toLowerCase().includes(n)
+  );
+}
+
+/** 07.1: "Mostrando X a Y de N resultados" footer with prev/next, shared by both tables. */
+function Pager({
+  page,
+  onPageChange,
+}: {
+  page: Page<unknown>;
+  onPageChange: (next: number) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-[var(--color-border)] px-3 py-2 text-[11px] text-[var(--color-text-secondary)]">
+      <span>{paginationLabel(page)}</span>
+      {page.totalPages > 1 && (
+        <div className="flex items-center gap-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!page.hasPrev}
+            onClick={() => onPageChange(page.page - 1)}
+          >
+            Anterior
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!page.hasNext}
+            onClick={() => onPageChange(page.page + 1)}
+          >
+            Siguiente
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -126,6 +165,7 @@ export default function FinanceBoard({
   const [period, setPeriod] = useState<PeriodKey>("all");
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilterKey>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [pageNumber, setPageNumber] = useState(1);
   const now = useMemo(() => nowProp ?? new Date(), [nowProp]);
 
   // D-27 (R3-finance-search-hidden-when-collapsed / R3-finance-summary-hidden-filters): the
@@ -178,6 +218,20 @@ export default function FinanceBoard({
     const byPeriod = filterByPeriod(data.paidRows, range, (r) => r.paidAt);
     return byPeriod.filter((r) => matches(r, search.trim()));
   }, [data.paidRows, range, search]);
+
+  // 07.1: any change to what the table lists sends it back to the first page.
+  useEffect(() => {
+    setPageNumber(1);
+  }, [tab, period, paymentFilter, search]);
+
+  const pendingPage = useMemo(
+    () => paginate(pendingRows, pageNumber),
+    [pendingRows, pageNumber],
+  );
+  const paidPage = useMemo(
+    () => paginate(paidRows, pageNumber),
+    [paidRows, pageNumber],
+  );
 
   const pendingKpis = useMemo(
     () => recomputePendingKpis(pendingRows),
@@ -247,18 +301,25 @@ export default function FinanceBoard({
         date={periodLabel}
         actions={
           <div className="flex items-center gap-2">
-            <select
-              value={period}
-              onChange={(e) => setPeriod(e.target.value as PeriodKey)}
-              aria-label="Período"
-              className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs"
-            >
-              {PERIOD_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            {/* 07.4: date-range look (calendar icon + select); behaviour is unchanged. */}
+            <span className="relative inline-flex items-center">
+              <Calendar
+                className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-[var(--color-text-secondary)]"
+                aria-hidden="true"
+              />
+              <select
+                value={period}
+                onChange={(e) => setPeriod(e.target.value as PeriodKey)}
+                aria-label="Período"
+                className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] py-1 pl-7 pr-2 text-xs"
+              >
+                {PERIOD_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </span>
             {tab !== "finanzas" && (
               <Button variant="outline" size="sm" onClick={handleExport}>
                 <Download className="mr-1 h-3.5 w-3.5" />
@@ -483,7 +544,7 @@ export default function FinanceBoard({
                       </td>
                     </tr>
                   )}
-                  {pendingRows.map((row) => {
+                  {pendingPage.items.map((row) => {
                     const payment = financePaymentTone(row);
                     return (
                       <tr
@@ -529,6 +590,7 @@ export default function FinanceBoard({
                 </tbody>
               </table>
             </div>
+            <Pager page={pendingPage} onPageChange={setPageNumber} />
           </section>
         </>
       )}
@@ -609,7 +671,7 @@ export default function FinanceBoard({
                       </td>
                     </tr>
                   )}
-                  {paidRows.map((row) => (
+                  {paidPage.items.map((row) => (
                     <tr
                       key={row.id}
                       className="border-b border-[var(--color-border-soft)]"
@@ -643,6 +705,7 @@ export default function FinanceBoard({
                 </tbody>
               </table>
             </div>
+            <Pager page={paidPage} onPageChange={setPageNumber} />
           </section>
         </>
       )}
