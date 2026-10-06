@@ -34,6 +34,60 @@ describe("OrdersDashboard — source assertions (D-22)", () => {
   });
 });
 
+describe("OrdersDashboard — canon pass (02.1-02.5)", () => {
+  const returned = source.slice(source.lastIndexOf("  return (\n    <div"));
+
+  it("renders the title as an uppercase H1 through PageHeader with the total (02.2)", () => {
+    expect(source).toContain('from "../shared/PageHeader"');
+    expect(returned).toMatch(/<PageHeader[\s\S]*title="Pedidos"/);
+    expect(returned).toMatch(/<PageHeader[\s\S]*date=\{/);
+    expect(returned).toMatch(/<PageHeader[\s\S]*\{total\}/);
+    expect(returned).not.toContain("<CardTitle");
+  });
+
+  it("places the page header before the KPI row (02.1)", () => {
+    expect(returned.indexOf("<PageHeader")).toBeGreaterThan(-1);
+    expect(returned.indexOf("<PageHeader")).toBeLessThan(
+      returned.indexOf("<KpiCard"),
+    );
+  });
+
+  it("underlines the status tabs on a single row with a pill counter (02.3)", () => {
+    const tabsBlock = returned.slice(
+      returned.indexOf("<Tabs "),
+      returned.indexOf("</Tabs>"),
+    );
+    expect(tabsBlock).not.toContain("flex-wrap");
+    expect(tabsBlock).toContain("border-b-2");
+    expect(tabsBlock).toContain("rounded-full");
+    expect(tabsBlock).not.toMatch(/\(\{tabCounts\[tab\.value\]\}\)/);
+  });
+
+  it("adds the Productos column fed by the shared line-items summary (02.4)", () => {
+    expect(source).toContain("summarizeOrderProducts");
+    expect(source).toMatch(/>\s*Productos\s*<\/TableHead>/);
+  });
+
+  it("keeps the Acciones column reachable: sticky actions cell and compact padding (02.4)", () => {
+    const desktop = source.slice(
+      source.indexOf("// Desktop view - Table layout"),
+    );
+    expect(desktop).toContain("sticky right-0");
+    expect(desktop).not.toContain('<div className="border overflow-hidden">');
+  });
+
+  it("never lets the date cells wrap onto extra lines (02.5)", () => {
+    const desktop = source.slice(
+      source.indexOf("// Desktop view - Table layout"),
+    );
+    expect(desktop).toMatch(/whitespace-nowrap/);
+    expect(desktop).toMatch(/Inicio\{" "\}/);
+    expect(desktop).toMatch(/Término\{" "\}/);
+    expect(desktop).not.toContain("Inicio:");
+    expect(desktop).not.toContain("Término:");
+  });
+});
+
 describe("OrdersDashboard — mobile pass (D-25)", () => {
   it("hides the empty 'Proyecto' label on the mobile card instead of showing a blank value", () => {
     const mobileCardBlock = source.slice(

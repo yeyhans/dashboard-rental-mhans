@@ -1,11 +1,5 @@
 import React, { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../ui/card";
+import { Card, CardContent } from "../ui/card";
 import {
   Table,
   TableBody,
@@ -46,6 +40,7 @@ import {
 } from "../../lib/orderStatus";
 import { StatusBadge } from "../shared/StatusBadge";
 import { KpiCard } from "../shared/KpiCard";
+import { PageHeader } from "../shared/PageHeader";
 import { RowActionsMenu } from "../shared/RowActionsMenu";
 import {
   computeOrderListKpis,
@@ -54,7 +49,10 @@ import {
   resolveOrderListTabParam,
   toBadgeTone,
 } from "./orderListMetrics";
-import { formatOrderDateWithWeekday } from "../../lib/orderDateFormat";
+import {
+  formatOrderDateWithWeekday,
+  summarizeOrderProducts,
+} from "../../lib/orderDateFormat";
 
 // Helper function to format currency with thousands separator
 const formatCurrency = (value: string | number) => {
@@ -136,6 +134,20 @@ const OrdersDashboard = ({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [total, setTotal] = useState(parseInt(initialTotal));
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
+
+  // 02.2: today's date for the page header. Resolved after mount: the server render and the
+  // browser would otherwise format different instants and hydrate with a mismatch.
+  const [todayLabel, setTodayLabel] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    setTodayLabel(
+      new Intl.DateTimeFormat("es-CL", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        timeZone: "America/Santiago",
+      }).format(new Date()),
+    );
+  }, []);
 
   // Detect mobile view
   useEffect(() => {
@@ -611,8 +623,10 @@ const OrdersDashboard = ({
 
     // Desktop view - Table layout
     return (
-      <div className="border overflow-hidden">
-        <Table>
+      <div className="border">
+        {/* 02.4: compact cell padding so the 11 columns fit at 1440px; whatever still overflows
+            scrolls inside `Table`'s own wrapper while the actions column stays pinned right. */}
+        <Table className="[&_td]:px-2 [&_th]:px-2">
           <TableHeader>
             <TableRow>
               <TableHead className="text-foreground font-semibold">
@@ -628,6 +642,9 @@ const OrdersDashboard = ({
                 Proyecto
               </TableHead>
               <TableHead className="text-foreground font-semibold">
+                Productos
+              </TableHead>
+              <TableHead className="text-foreground font-semibold whitespace-nowrap">
                 Inicio - Término
               </TableHead>
               <TableHead className="text-foreground font-semibold text-right">
@@ -642,7 +659,7 @@ const OrdersDashboard = ({
               <TableHead className="text-foreground font-semibold text-right">
                 Total
               </TableHead>
-              <TableHead className="text-right text-foreground font-semibold">
+              <TableHead className="sticky right-0 bg-background text-right text-foreground font-semibold">
                 Acciones
               </TableHead>
             </TableRow>
@@ -706,21 +723,25 @@ const OrdersDashboard = ({
                 <TableCell className="text-foreground font-medium">
                   {order.order_proyecto || ""}
                 </TableCell>
-                <TableCell className="text-foreground">
+                <TableCell
+                  className="text-foreground max-w-[14rem] truncate"
+                  title={summarizeOrderProducts(order.line_items).title}
+                >
+                  {summarizeOrderProducts(order.line_items).label || (
+                    <span className="text-xs text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-foreground whitespace-nowrap">
                   {order.order_fecha_inicio && order.order_fecha_termino ? (
                     <div className="flex flex-col gap-1 text-sm">
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-muted-foreground w-12">
-                          Inicio:
-                        </span>
+                      <div className="whitespace-nowrap">
+                        Inicio{" "}
                         <span className="font-medium text-foreground">
                           {formatOrderDateWithWeekday(order.order_fecha_inicio)}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-muted-foreground w-12">
-                          Término:
-                        </span>
+                      <div className="whitespace-nowrap">
+                        Término{" "}
                         <span className="font-medium text-foreground">
                           {formatOrderDateWithWeekday(
                             order.order_fecha_termino,
@@ -734,19 +755,19 @@ const OrdersDashboard = ({
                     </span>
                   )}
                 </TableCell>
-                <TableCell className="text-foreground text-right">
+                <TableCell className="text-foreground text-right whitespace-nowrap">
                   {order.num_jornadas ?? ""}
                 </TableCell>
-                <TableCell className="text-foreground text-right">
+                <TableCell className="text-foreground text-right whitespace-nowrap">
                   ${formatCurrency(order.calculated_subtotal || "0")}
                 </TableCell>
-                <TableCell className="text-foreground text-right">
+                <TableCell className="text-foreground text-right whitespace-nowrap">
                   ${formatCurrency(order.calculated_iva || "0")}
                 </TableCell>
-                <TableCell className="text-foreground text-right font-bold">
+                <TableCell className="text-foreground text-right font-bold whitespace-nowrap">
                   ${formatCurrency(order.calculated_total || "0")}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="sticky right-0 bg-background text-right">
                   <div className="flex flex-row gap-2 justify-end items-center">
                     {order.new_pdf_on_hold_url &&
                       (() => {
@@ -829,6 +850,13 @@ const OrdersDashboard = ({
 
   return (
     <div className="space-y-6">
+      {/* 02.1/02.2: cabecera canónica primero (H1 en mayúsculas, fecha y total), KPI debajo. */}
+      <PageHeader
+        title="Pedidos"
+        subtitle={`Gestiona y visualiza todos los pedidos (${total} en total)`}
+        date={todayLabel}
+      />
+
       {/* D-05: franja de 4 KPI del canon */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard
@@ -855,13 +883,7 @@ const OrdersDashboard = ({
 
       {/* Filters */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-foreground text-xl">Pedidos</CardTitle>
-          <CardDescription>
-            Gestiona y visualiza todos los pedidos ({total} en total)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <div className="space-y-4 mb-6">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
@@ -927,16 +949,20 @@ const OrdersDashboard = ({
               </div>
             </div>
 
-            {/* D-05: pestañas de estado del canon, con contador por pestaña */}
+            {/* D-05/02.3: pestañas de estado del canon, subrayadas en una sola fila, con el
+                contador de cada una en una píldora */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0">
+              <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-4 overflow-x-auto rounded-none border-b border-border bg-transparent p-0">
                 {ORDER_LIST_TABS.map((tab) => (
                   <TabsTrigger
                     key={tab.value}
                     value={tab.value}
-                    className="border border-border data-[state=active]:border-foreground"
+                    className="-mb-px gap-2 rounded-none border-b-2 border-transparent bg-transparent px-1 pb-2 pt-1 data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none"
                   >
-                    {tab.label} ({tabCounts[tab.value]})
+                    {tab.label}
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                      {tabCounts[tab.value]}
+                    </span>
                   </TabsTrigger>
                 ))}
               </TabsList>
