@@ -11,6 +11,7 @@ import {
 import type { ProfitabilityBoard as ProfitabilityBoardData } from "../../services/profitabilityService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { KpiCard } from "../shared/KpiCard";
+import { PageHeader } from "../shared/PageHeader";
 import { Button } from "../ui/button";
 import { PROFITABILITY_TABS, roiDisplay } from "./profitabilityView";
 import { filterMonthlySeries } from "./profitabilityPeriod";
@@ -403,12 +404,45 @@ export default function ProfitabilityBoard({
 
   return (
     <Tabs defaultValue="resumen" className="space-y-5">
-      <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-transparent p-0">
+      {/* 08.1/08.3: shared PageHeader (uppercase H1); the chart's period selector and Exportar
+          live in the header actions, as in the canon. They still drive the chart series below. */}
+      <PageHeader
+        title="Rentabilidad"
+        subtitle="¿Cuánto gana el negocio y qué tan bien trabajan los activos?"
+        actions={
+          <>
+            <select
+              value={chartPeriod}
+              onChange={(e) => setChartPeriod(e.target.value as PeriodKey)}
+              aria-label="Período del gráfico"
+              className="h-9 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 text-xs"
+            >
+              {PERIOD_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={handleExportResultados}
+            >
+              <Download className="mr-1 h-3.5 w-3.5" />
+              Exportar
+            </Button>
+          </>
+        }
+      />
+
+      {/* 08.2: underlined tabs (canon), not bordered buttons. */}
+      <TabsList className="flex h-auto w-full flex-wrap justify-start gap-0 rounded-none border-b border-border bg-transparent p-0">
         {PROFITABILITY_TABS.map((tab) => (
           <TabsTrigger
             key={tab.value}
             value={tab.value}
-            className="border border-border data-[state=active]:border-foreground"
+            className="-mb-px rounded-none border-b-2 border-transparent px-4 py-2 text-muted-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none"
           >
             {tab.label}
           </TabsTrigger>
@@ -422,7 +456,10 @@ export default function ProfitabilityBoard({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {/* 08.4: one row of 5 KPIs on lg (canon): Ingresos, Costos Directos, Margen Bruto,
+            Gastos Operacionales, Utilidad Operacional. ROI has no data source yet, so its
+            explanatory empty state sits below the row instead of a figure. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <KpiCard
             icon={DollarSign}
             label="Ingresos del Período"
@@ -431,7 +468,7 @@ export default function ProfitabilityBoard({
           />
 
           {data.costs === null ? (
-            <div className="rounded-[10px] border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface-soft)] p-4">
+            <div className="rounded-[10px] border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface-soft)] p-4 sm:col-span-1 lg:col-span-4">
               <div className="text-xs font-medium text-[var(--color-text-secondary)]">
                 Costos, márgenes y utilidad
               </div>
@@ -444,68 +481,69 @@ export default function ProfitabilityBoard({
               </p>
             </div>
           ) : (
-            <KpiCard
-              icon={Coins}
-              label="Margen Bruto"
-              value={formatCLP(data.costs.margenBruto.margin)}
-              footer={
-                data.costs.margenBruto.marginPercentage === null
-                  ? "sin referencia"
-                  : `${Math.round(data.costs.margenBruto.marginPercentage * 10) / 10}% de los ingresos`
-              }
-            />
+            <>
+              <KpiCard
+                icon={Receipt}
+                label="Costos Directos"
+                value={formatCLP(data.costs.costosDirectos)}
+              />
+              <KpiCard
+                icon={Coins}
+                label="Margen Bruto"
+                value={formatCLP(data.costs.margenBruto.margin)}
+                footer={
+                  data.costs.margenBruto.marginPercentage === null
+                    ? "sin referencia"
+                    : `${Math.round(data.costs.margenBruto.marginPercentage * 10) / 10}% de los ingresos`
+                }
+              />
+              <KpiCard
+                icon={Wallet}
+                label="Gastos Operacionales"
+                value={formatCLP(data.costs.gastosOperacionales)}
+              />
+              <KpiCard
+                icon={TrendingDown}
+                label="Utilidad Operacional"
+                value={
+                  <span
+                    className={
+                      data.costs.utilidadOperacional.margin < 0
+                        ? "text-[var(--color-crit)]"
+                        : undefined
+                    }
+                  >
+                    {formatCLP(data.costs.utilidadOperacional.margin)}
+                  </span>
+                }
+              />
+            </>
           )}
         </div>
 
-        {data.costs !== null && (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <KpiCard
-              icon={Receipt}
-              label="Costos Directos"
-              value={formatCLP(data.costs.costosDirectos)}
-            />
-            <KpiCard
-              icon={Wallet}
-              label="Gastos Operacionales"
-              value={formatCLP(data.costs.gastosOperacionales)}
-            />
-            <KpiCard
-              icon={TrendingDown}
-              label="Utilidad Operacional"
-              value={
-                <span
-                  className={
-                    data.costs.utilidadOperacional.margin < 0
-                      ? "text-[var(--color-crit)]"
-                      : undefined
-                  }
-                >
-                  {formatCLP(data.costs.utilidadOperacional.margin)}
-                </span>
-              }
-            />
-            {(() => {
-              const roi = roiDisplay(data.costs.roiPromedioActivos);
-              return roi === null ? (
-                <div className="rounded-[10px] border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface-soft)] p-4">
-                  <div className="text-xs font-medium text-[var(--color-text-secondary)]">
-                    ROI promedio activos
-                  </div>
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
-                    Sin costo de adquisición registrado para los equipos del
-                    catálogo: no hay base para calcular el ROI.
-                  </p>
+        {data.costs !== null &&
+          (() => {
+            const roi = roiDisplay(data.costs.roiPromedioActivos);
+            return roi === null ? (
+              <div className="rounded-[10px] border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface-soft)] p-4">
+                <div className="text-xs font-medium text-[var(--color-text-secondary)]">
+                  ROI promedio activos
                 </div>
-              ) : (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+                  Sin costo de adquisición registrado para los equipos del
+                  catálogo: no hay base para calcular el ROI.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <KpiCard
                   icon={Boxes}
                   label="ROI promedio activos"
                   value={roi}
                 />
-              );
-            })()}
-          </div>
-        )}
+              </div>
+            );
+          })()}
 
         {/* D-24 08c/08d: replaces the 12 flat bars with a Recharts line chart (4 series when
             `marginSeries` is available; Ingresos only otherwise, no invented cost numbers) plus a
@@ -515,28 +553,6 @@ export default function ProfitabilityBoard({
             <h2 className="text-sm font-semibold">
               Evolución resultados (12 meses)
             </h2>
-            <div className="flex items-center gap-2">
-              <select
-                value={chartPeriod}
-                onChange={(e) => setChartPeriod(e.target.value as PeriodKey)}
-                aria-label="Período del gráfico"
-                className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs"
-              >
-                {PERIOD_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportResultados}
-              >
-                <Download className="mr-1 h-3.5 w-3.5" />
-                Exportar
-              </Button>
-            </div>
           </div>
 
           {visibleMarginSeries ? (
@@ -556,7 +572,7 @@ export default function ProfitabilityBoard({
                 />
                 <YAxis
                   tick={{ fontSize: 9 }}
-                  width={56}
+                  width={80}
                   tickFormatter={(value: number) => formatCLP(value)}
                 />
                 <Tooltip
@@ -618,7 +634,7 @@ export default function ProfitabilityBoard({
                   />
                   <YAxis
                     tick={{ fontSize: 9 }}
-                    width={56}
+                    width={80}
                     tickFormatter={(value: number) => formatCLP(value)}
                   />
                   <Tooltip
