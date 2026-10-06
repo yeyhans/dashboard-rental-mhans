@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   Card,
   CardContent,
@@ -52,10 +52,7 @@ import { InventoryGuideDialog } from "./inventory/InventoryGuideDialog";
 import { StatusBadge } from "./shared/StatusBadge";
 import { RowActionsMenu, type RowActionItem } from "./shared/RowActionsMenu";
 import { productStockTone, productStockBadgeLabel } from "./productStockBadge";
-import {
-  CATALOG_UNAVAILABLE_COLUMN_VALUE,
-  productBrandSkuLine,
-} from "../lib/catalogProductColumns";
+import { CATALOG_UNAVAILABLE_COLUMN_VALUE } from "../lib/catalogProductColumns";
 import {
   filterCatalogProducts,
   uniqueBrands,
@@ -77,6 +74,8 @@ interface ProductsDashboardProps {
   initialTotal: number;
   initialCategories?: ProductCategory[];
   accessToken: string;
+  /** Rendered right below the page header (the Astro page slots the KPI strip here). */
+  children?: ReactNode;
 }
 
 const ProductsDashboard = ({
@@ -84,6 +83,7 @@ const ProductsDashboard = ({
   initialTotal,
   initialCategories = [],
   accessToken,
+  children,
 }: ProductsDashboardProps) => {
   // All products loaded from server
   const [allProducts, setAllProducts] = useState<Product[]>(initialProducts);
@@ -597,6 +597,12 @@ const ProductsDashboard = ({
               >
                 Equipo <SortIndicator columnKey="name" />
               </TableHead>
+              <TableHead
+                className="text-foreground font-medium text-xs cursor-pointer"
+                onClick={() => requestSort("sku")}
+              >
+                SKU <SortIndicator columnKey="sku" />
+              </TableHead>
               <TableHead className="text-foreground font-medium text-xs">
                 Ubicación
               </TableHead>
@@ -604,7 +610,7 @@ const ProductsDashboard = ({
                 className="text-foreground font-medium text-xs cursor-pointer"
                 onClick={() => requestSort("stock_status")}
               >
-                Stock <SortIndicator columnKey="stock_status" />
+                Estado <SortIndicator columnKey="stock_status" />
               </TableHead>
               <TableHead className="text-center text-foreground font-medium text-xs">
                 Disp.
@@ -660,13 +666,16 @@ const ProductsDashboard = ({
                           <ExternalLink className="h-3 w-3" />
                         </a>
                       </div>
-                      {productBrandSkuLine(product) && (
+                      {product.brands?.trim() && (
                         <p className="truncate text-2xs text-muted-foreground">
-                          {productBrandSkuLine(product)}
+                          {product.brands.trim()}
                         </p>
                       )}
                     </div>
                   </div>
+                </TableCell>
+                <TableCell className="font-mono text-xs text-foreground p-2">
+                  {product.sku?.trim() || CATALOG_UNAVAILABLE_COLUMN_VALUE}
                 </TableCell>
                 <TableCell className="text-2xs text-muted-foreground p-2">
                   {CATALOG_UNAVAILABLE_COLUMN_VALUE}
@@ -716,6 +725,9 @@ const ProductsDashboard = ({
         }
       />
 
+      {/* D-8 (05.1): KPI strip below the header; slotted from the Astro page. */}
+      {children}
+
       {/* Filters */}
       <Card className="shadow-sm">
         <CardHeader className="pb-2 space-y-1">
@@ -748,7 +760,7 @@ const ProductsDashboard = ({
                 className="w-full"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Select
                 value={categoryFilter}
                 onValueChange={handleCategoryChange}
@@ -885,7 +897,7 @@ const ProductsDashboard = ({
               {/* D-23 (05e): list/grid view toggle (canon `.view-toggle`), hidden on the
                   auto-detected mobile card layout the same way the canon hides it on mobile. */}
               {!isMobileView && (
-                <div className="inline-flex h-10 overflow-hidden rounded-md border">
+                <div className="inline-flex h-10 shrink-0 overflow-hidden rounded-md border">
                   <button
                     type="button"
                     aria-label="Vista de lista"

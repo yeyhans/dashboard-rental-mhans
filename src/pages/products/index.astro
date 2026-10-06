@@ -73,14 +73,14 @@ const title = `Catálogo de Equipos | ${adminSession.admin.email}`;
       D-08: el header (PageHeader + "Nuevo Equipo") vive dentro de ProductsDashboard, no aquí —
       mismo patrón que D-04/D-06, para que `actions` reciba el handler real en un único árbol React.
     -->
-    <CatalogKpiRow kpis={availability} />
-
     <ProductsDashboard
       client:load
       initialProducts={productsData.products as any}
       initialTotal={productsData.total}
       initialCategories={categoriesData.categories as any}
       accessToken={accessToken}
-    />
+    >
+      <CatalogKpiRow kpis={availability} />
+    </ProductsDashboard>
   </div>
 </Base>
