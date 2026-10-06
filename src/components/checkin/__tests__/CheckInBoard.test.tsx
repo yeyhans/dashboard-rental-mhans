@@ -121,6 +121,35 @@ describe("CheckInBoard — Filtrar fecha, banda y preselección (D-22)", () => {
     expect(html).toContain('type="date"');
   });
 
+  it("renders the date filter as a calendar button with the native input hidden (03.1)", () => {
+    const html = renderToStaticMarkup(
+      <CheckInBoard
+        data={makeBoard()}
+        todayLabel="Sábado, 13 de junio"
+        todayIsoDay="2026-06-13"
+      />,
+    );
+    expect(html).toMatch(
+      /<button[^>]*aria-label="Filtrar fecha de devolución"[^>]*>.*<svg[^>]*lucide-calendar/s,
+    );
+    // The native input stays for the actual picking, but it is not a visible bordered field.
+    expect(html).toMatch(/<input[^>]*type="date"[^>]*class="[^"]*sr-only/);
+    expect(html).not.toMatch(/<input[^>]*type="date"[^>]*border-border/);
+  });
+
+  it("does not show the developer note about line_items / jsonb to the operator (03.4)", () => {
+    const html = renderToStaticMarkup(
+      <CheckInBoard
+        data={makeBoard()}
+        todayLabel="Sábado, 13 de junio"
+        todayIsoDay="2026-06-13"
+      />,
+    );
+    expect(html).not.toContain("line_items");
+    expect(html).not.toContain("jsonb");
+    expect(html).not.toContain("busca el número de serie exacto");
+  });
+
   it('shows the plain "Devoluciones" band title with no date filter set', () => {
     const html = renderToStaticMarkup(
       <CheckInBoard

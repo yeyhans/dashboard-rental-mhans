@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Package, Search } from "lucide-react";
+import { Calendar as CalendarIcon, Package, Search } from "lucide-react";
 import {
   checkInTotals,
   formatCheckInItemCount,
@@ -240,6 +240,7 @@ export default function CheckInBoard({
   // D-22 (03a): "Filtrar fecha" filtra la lista YA CARGADA por fecha de término exacta — sin
   // endpoint nuevo. Vacío (por defecto) sigue mostrando devoluciones abiertas + atrasadas.
   const [dateFilter, setDateFilter] = useState("");
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   const visible = useMemo(() => {
     const byDate = filterByReturnDate(data.entries, dateFilter);
@@ -335,16 +336,35 @@ export default function CheckInBoard({
         date={todayLabel}
         actions={
           <>
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              Filtrar fecha
+            {/* 03.1: secondary button; the native input stays hidden behind it and opens via showPicker(). */}
+            <span className="relative inline-flex">
+              <Button
+                type="button"
+                variant="outline"
+                aria-label="Filtrar fecha de devolución"
+                onClick={() => {
+                  const input = dateInputRef.current;
+                  if (!input) return;
+                  if (typeof input.showPicker === "function")
+                    input.showPicker();
+                  else input.focus();
+                }}
+              >
+                <CalendarIcon className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                {dateFilter
+                  ? dateFilter.split("-").reverse().join("/")
+                  : "Filtrar fecha"}
+              </Button>
               <input
+                ref={dateInputRef}
                 type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                aria-label="Filtrar fecha de devolución"
-                className="rounded-[6px] border border-border bg-background px-2 py-1 text-xs text-foreground"
+                tabIndex={-1}
+                aria-hidden="true"
+                className="sr-only"
               />
-            </label>
+            </span>
             <Button
               type="button"
               variant="outline"
@@ -624,18 +644,6 @@ export default function CheckInBoard({
                   </li>
                 ))}
               </ul>
-
-              <p className="border-t border-[var(--color-border)] bg-[var(--color-surface-soft)] p-3 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
-                "Registrar check-in" busca el número de serie exacto del equipo
-                y registra su devolución en el historial de movimientos. El
-                estado <strong>pendiente/recibido/incompleto/dañado</strong> por
-                línea del canónico todavía no se guarda:{" "}
-                <code>orders.line_items</code> es un jsonb sin ese campo, y
-                asociar automáticamente qué unidades salieron con este pedido
-                requeriría una tabla que hoy no existe. Si el equipo elegido no
-                tiene un checkout abierto en el sistema, el check-in se rechaza
-                con un aviso explícito en vez de fallar en silencio.
-              </p>
             </div>
           )}
         </section>
