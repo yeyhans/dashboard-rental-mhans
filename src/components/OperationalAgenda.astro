@@ -5,11 +5,16 @@ import type { AgendaDay, AgendaEntry } from "../lib/agenda";
  * Agenda Operacional del Centro de Control.
  *
  * Estructura del canónico `MarioHans_OS_Area01_Centro_Control_Canonical_RC2.1.2.html`: cinco días
- * y, en cada uno, tres filas — Preparaciones, Entregas, Devoluciones.
+ * y, en cada uno, tres filas — Preparaciones, Entregas, Devoluciones. Cada pedido es un chip
+ * (cliente + referencia en mono), teñido por tipo de operación.
  *
  * El canónico imprime "Sin entregas programadas" cuando una fila está vacía en vez de esconderla,
  * y ese detalle es el sentido del componente: una fila ausente se lee como "todavía no cargó",
  * mientras que un "sin entregas" explícito es una afirmación sobre la que se puede planificar.
+ *
+ * A la derecha va "Próximas Operaciones" (revisión oct, 01.2): las primeras operaciones de la
+ * misma agenda ya cargada, una tarjeta por pedido. No consulta nada más; si la agenda está vacía,
+ * lo dice.
  *
  * Es un componente Astro y no React porque no tiene estado ni interacción: enviarlo como island
  * sería mandar JavaScript al navegador para pintar una tabla estática.
@@ -20,8 +25,29 @@ interface Props {
 
 const { agenda } = Astro.props;
 
-const WEEKDAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const WEEKDAYS = [
+  "Domingo",
+  "Lunes",
+  "Martes",
+  "Miércoles",
+  "Jueves",
+  "Viernes",
+  "Sábado",
+];
+const MONTHS = [
+  "Ene",
+  "Feb",
+  "Mar",
+  "Abr",
+  "May",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dic",
+];
 
 function dayLabel(iso: string) {
   const [y, m, d] = iso.split("-").map(Number);
@@ -34,64 +60,195 @@ function dayLabel(iso: string) {
   };
 }
 
-const ROWS: Array<{ key: keyof Pick<AgendaDay, "preparaciones" | "entregas" | "devoluciones">; label: string; empty: string }> = [
-  { key: "preparaciones", label: "Preparaciones", empty: "Sin preparaciones" },
-  { key: "entregas", label: "Entregas", empty: "Sin entregas programadas" },
-  { key: "devoluciones", label: "Devoluciones", empty: "Sin devoluciones" },
+// Solo tokens de estado funcional: preparación = aviso, entrega = info, devolución = neutro.
+const TONE_WARN = "bg-[var(--color-warn-bg)] text-[var(--color-warn)]";
+const TONE_INFO = "bg-[var(--color-info-bg)] text-[var(--color-info)]";
+const TONE_NEUTRAL =
+  "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]";
+
+type RowKey = keyof Pick<
+  AgendaDay,
+  "preparaciones" | "entregas" | "devoluciones"
+>;
+
+const ROWS: Array<{
+  key: RowKey;
+  label: string;
+  badge: string;
+  empty: string;
+  tone: string;
+}> = [
+  {
+    key: "preparaciones",
+    label: "Preparaciones",
+    badge: "Preparación",
+    empty: "Sin preparaciones",
+    tone: TONE_WARN,
+  },
+  {
+    key: "entregas",
+    label: "Entregas",
+    badge: "Entrega",
+    empty: "Sin entregas programadas",
+    tone: TONE_INFO,
+  },
+  {
+    key: "devoluciones",
+    label: "Devoluciones",
+    badge: "Devolución",
+    empty: "Sin devoluciones",
+    tone: TONE_NEUTRAL,
+  },
 ];
+
+const UPCOMING_LIMIT = 5;
+
+// DD/MM/YYYY, el formato de fecha de la UI.
+function formatDate(iso: string) {
+  return iso.split("-").reverse().join("/");
+}
+
+// Misma agenda ya cargada, aplanada en orden de día y, dentro del día, de fila.
+const upcoming = agenda
+  .flatMap((day) =>
+    ROWS.flatMap((row) =>
+      (day[row.key] as AgendaEntry[]).map((entry) => ({
+        entry,
+        row,
+        date: day.date,
+      })),
+    ),
+  )
+  .slice(0, UPCOMING_LIMIT);
 ---
 
-<section class="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)]">
-  <div class="flex items-baseline justify-between border-b border-[var(--color-border)] p-4">
-    <h2 class="text-sm font-semibold">Agenda Operacional</h2>
-    <span class="text-xs text-[var(--color-text-secondary)]">Próximos 5 días</span>
-  </div>
+<div
+  class="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start"
+>
+  <section
+    class="min-w-0 rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)]"
+  >
+    <div
+      class="flex items-baseline justify-between border-b border-[var(--color-border)] p-4"
+    >
+      <h2 class="text-sm font-semibold">Agenda Operacional</h2>
+      <span class="text-xs text-[var(--color-text-secondary)]"
+        >Próximos 5 días</span
+      >
+    </div>
 
-  <div class="divide-y divide-[var(--color-border-soft)]">
-    {agenda.map((day) => {
-      const label = dayLabel(day.date);
-      return (
-        <div class="grid gap-3 p-4 sm:grid-cols-[110px_minmax(0,1fr)]">
-          <div>
-            <div class="text-xs font-semibold">{label.weekday}</div>
-            <div class="font-mono text-[11px] text-[var(--color-text-secondary)]">{label.short}</div>
-          </div>
-
-          <dl class="space-y-2">
-            {ROWS.map((row) => {
-              const entries = day[row.key] as AgendaEntry[];
-              return (
-                <div class="grid gap-1 sm:grid-cols-[120px_minmax(0,1fr)]">
-                  <dt class="text-[11px] font-medium text-[var(--color-text-secondary)]">
-                    {row.label}
-                  </dt>
-                  <dd class="text-xs">
-                    {entries.length === 0 ? (
-                      <span class="text-[var(--color-text-faint)]">{row.empty}</span>
-                    ) : (
-                      <ul class="space-y-0.5">
-                        {entries.map((entry) => (
-                          <li>
-                            <a
-                              href={`/orders/${entry.orderId}`}
-                              class="inline-flex flex-wrap items-baseline gap-1.5 underline-offset-2 hover:underline"
-                            >
-                              <span>{entry.client}</span>
-                              <span class="font-mono text-[10px] text-[var(--color-text-faint)]">
-                                {entry.reference}
-                              </span>
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </dd>
+    <div class="divide-y divide-[var(--color-border-soft)]">
+      {
+        agenda.map((day) => {
+          const label = dayLabel(day.date);
+          return (
+            <div class="grid gap-3 p-4 sm:grid-cols-[110px_minmax(0,1fr)]">
+              <div>
+                <div class="text-xs font-semibold">{label.weekday}</div>
+                <div class="font-mono text-[11px] text-[var(--color-text-secondary)]">
+                  {label.short}
                 </div>
-              );
-            })}
-          </dl>
-        </div>
-      );
-    })}
-  </div>
-</section>
+              </div>
+
+              <dl class="space-y-2">
+                {ROWS.map((row) => {
+                  const entries = day[row.key] as AgendaEntry[];
+                  return (
+                    <div class="grid gap-1 sm:grid-cols-[120px_minmax(0,1fr)]">
+                      <dt class="text-[11px] font-medium text-[var(--color-text-secondary)]">
+                        {row.label}
+                      </dt>
+                      <dd class="text-xs">
+                        {entries.length === 0 ? (
+                          <span class="italic text-[var(--color-text-faint)]">
+                            {row.empty}
+                          </span>
+                        ) : (
+                          <ul class="flex flex-wrap gap-1.5">
+                            {entries.map((entry) => (
+                              <li>
+                                <a
+                                  href={`/orders/${entry.orderId}`}
+                                  class={`inline-flex items-baseline gap-1.5 rounded-full px-2.5 py-0.5 hover:underline ${row.tone}`}
+                                >
+                                  <span>{entry.client}</span>
+                                  <span class="font-mono text-[10px] opacity-70">
+                                    {entry.reference}
+                                  </span>
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </div>
+          );
+        })
+      }
+    </div>
+  </section>
+
+  <section
+    class="min-w-0 rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)]"
+  >
+    <div
+      class="flex items-baseline justify-between border-b border-[var(--color-border)] p-4"
+    >
+      <h2 class="text-sm font-semibold">Próximas Operaciones</h2>
+      <a
+        href="/orders"
+        class="text-xs text-[var(--color-text-secondary)] hover:underline"
+      >
+        Ver todos
+      </a>
+    </div>
+
+    {
+      upcoming.length === 0 ? (
+        <p class="p-4 text-xs italic text-[var(--color-text-faint)]">
+          Sin operaciones próximas
+        </p>
+      ) : (
+        <ul class="space-y-3 p-4">
+          {upcoming.map(({ entry, row, date }) => (
+            <li class="rounded-[10px] border border-[var(--color-border)] p-3 text-xs">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-[11px] text-[var(--color-text-secondary)]">
+                  Pedido{" "}
+                  <span class="font-mono font-semibold text-[var(--color-text-primary)]">
+                    {entry.reference}
+                  </span>
+                </span>
+                <span
+                  class={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${row.tone}`}
+                >
+                  {row.badge}
+                </span>
+              </div>
+              <dl class="mt-2 grid grid-cols-[56px_minmax(0,1fr)] gap-y-1">
+                <dt class="text-[11px] text-[var(--color-text-secondary)]">
+                  Fecha
+                </dt>
+                <dd class="font-mono">{formatDate(date)}</dd>
+                <dt class="text-[11px] text-[var(--color-text-secondary)]">
+                  Cliente
+                </dt>
+                <dd>{entry.client}</dd>
+              </dl>
+              <a
+                href={`/orders/${entry.orderId}`}
+                class="mt-2 inline-block text-[11px] hover:underline"
+              >
+                Ver pedido &rarr;
+              </a>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+  </section>
+</div>
