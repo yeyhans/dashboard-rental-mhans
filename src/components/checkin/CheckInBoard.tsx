@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Calendar as CalendarIcon, Package, Search } from "lucide-react";
+import { Calendar as CalendarIcon, Package, Search, X } from "lucide-react";
+import { formatIsoDateLabel, openDatePicker } from "../../lib/dateInput";
 import {
   checkInTotals,
   formatCheckInItemCount,
@@ -342,18 +343,10 @@ export default function CheckInBoard({
                 type="button"
                 variant="outline"
                 aria-label="Filtrar fecha de devolución"
-                onClick={() => {
-                  const input = dateInputRef.current;
-                  if (!input) return;
-                  if (typeof input.showPicker === "function")
-                    input.showPicker();
-                  else input.focus();
-                }}
+                onClick={() => openDatePicker(dateInputRef.current)}
               >
                 <CalendarIcon className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                {dateFilter
-                  ? dateFilter.split("-").reverse().join("/")
-                  : "Filtrar fecha"}
+                {formatIsoDateLabel(dateFilter) || "Filtrar fecha"}
               </Button>
               <input
                 ref={dateInputRef}
@@ -365,6 +358,19 @@ export default function CheckInBoard({
                 className="sr-only"
               />
             </span>
+            {/* D-12: back to the "no date" state without having to open the picker. */}
+            {dateFilter && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Quitar filtro de fecha"
+                title="Quitar filtro de fecha"
+                onClick={() => setDateFilter("")}
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"

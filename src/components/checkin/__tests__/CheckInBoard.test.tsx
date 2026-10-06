@@ -219,3 +219,22 @@ describe("CheckInBoard — D-27 follow-up", () => {
     );
   });
 });
+
+describe("CheckInBoard date picker (D-12)", () => {
+  it("opens the picker through the guarded helper, not a bare showPicker() call", () => {
+    expect(source).toContain("openDatePicker(dateInputRef.current)");
+    expect(source).not.toMatch(/input\.showPicker\(\)/);
+  });
+
+  it("offers a visible control to clear an applied date", () => {
+    expect(source).toMatch(/dateFilter\s*&&/);
+    expect(source).toContain('aria-label="Quitar filtro de fecha"');
+    expect(source).toContain('setDateFilter("")');
+  });
+
+  it("shows no clear control in the initial no-date state", () => {
+    const html = renderToStaticMarkup(<CheckInBoard data={makeBoard()} />);
+    expect(html).not.toContain("Quitar filtro de fecha");
+    expect(html).toContain("Filtrar fecha");
+  });
+});
