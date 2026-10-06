@@ -143,3 +143,27 @@ describe("Base.astro mobile drawer and burger (D-25)", () => {
     expect(baseRuleIndex).toBeLessThan(mediaBlockIndex);
   });
 });
+
+describe("Base.astro sidebar shell tokens (00.2 / 00.4)", () => {
+  it("sizes the expanded sidebar from the canon --sidebar-w token, not a hardcoded 256px", () => {
+    expect(source).not.toContain("256px");
+    expect(source).toMatch(
+      /#sidebar\s*\{[^}]*width:\s*var\(--sidebar-width,\s*var\(--sidebar-w\)\)/,
+    );
+  });
+
+  it("keeps the collapse/expand script on the same token so the width stays consistent", () => {
+    expect(source).toMatch(/EXPANDED_W\s*=\s*'var\(--sidebar-w\)'/);
+  });
+
+  it("paints the sidebar surface with the canon --color-sidebar-bg token instead of white", () => {
+    expect(source).toMatch(
+      /#sidebar \.sidebar-inner\s*\{[^}]*background-color:\s*var\(--color-sidebar-bg\)/,
+    );
+  });
+
+  it('does not render the decorative green dot next to "Administrador"', () => {
+    expect(source).not.toContain("bg-emerald-500");
+    expect(source).toContain("Administrador");
+  });
+});
