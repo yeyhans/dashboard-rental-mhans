@@ -8,7 +8,6 @@ import {
   TableRow,
 } from "../ui/table";
 import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,7 +16,15 @@ import {
 } from "../ui/dropdown-menu";
 import { Edit, FileText, MoreVertical, RefreshCw } from "lucide-react";
 import type { UserProfile } from "../../types/user";
-import { enhanceUser, formatDate, statusColors } from "./utils/userUtils";
+import { enhanceUser, formatDate } from "./utils/userUtils";
+import { StatusBadge } from "../shared/StatusBadge";
+import type { BadgeTone } from "../shared/statusBadgeTones";
+import {
+  clientValidation,
+  VALIDATION_LABELS,
+  type ClientProfileLike,
+  type ClientValidation,
+} from "../../lib/clientStatus";
 import EditUserDialog from "../EditUserDialog";
 import UserDocumentUpload from "./UserDocumentUpload";
 import RegenerateContractDialog from "./RegenerateContractDialog";
@@ -33,6 +40,25 @@ interface UserTableViewProps {
   onUserUpdated: (user: UserProfile) => void;
   onViewDetails: (user: UserProfile) => void;
   sessionToken: string;
+}
+
+// Canon tones for the validation bucket (06.1): Validado ok, Pendiente and Incompleto warn.
+const VALIDATION_TONES: Record<ClientValidation, BadgeTone> = {
+  validado: "ok",
+  pendiente: "warn",
+  incompleto: "warn",
+};
+
+function toProfileLike(user: UserProfile): ClientProfileLike {
+  return {
+    tipoCliente: user.tipo_cliente,
+    contractUrl: user.url_user_contrato,
+    rutFrontUrl: user.url_rut_anverso,
+    rutBackUrl: user.url_rut_reverso,
+    signatureUrl: user.url_firma,
+    companyErutUrl: user.new_url_e_rut_empresa ?? user.url_empresa_erut,
+    termsAccepted: Boolean(user.terminos_aceptados),
+  };
 }
 
 const UserTableView = ({
@@ -77,13 +103,14 @@ const UserTableView = ({
             return (
               <TableRow key={user.user_id}>
                 <TableCell>
-                  <Badge className={statusColors[enhanced.registrationStatus]}>
-                    {enhanced.registrationStatus === "complete"
-                      ? "Completo"
-                      : enhanced.registrationStatus === "incomplete"
-                        ? "Incompleto"
-                        : "Pendiente"}
-                  </Badge>
+                  <StatusBadge
+                    tone={
+                      VALIDATION_TONES[clientValidation(toProfileLike(user))]
+                    }
+                    label={
+                      VALIDATION_LABELS[clientValidation(toProfileLike(user))]
+                    }
+                  />
                 </TableCell>
                 <TableCell className="text-foreground">
                   <div className="font-medium">{enhanced.fullName}</div>
@@ -92,13 +119,13 @@ const UserTableView = ({
                   </div>
                 </TableCell>
                 <TableCell className="text-foreground">{user.email}</TableCell>
-                <TableCell className="text-foreground">
+                <TableCell className="text-foreground font-mono whitespace-nowrap">
                   {user.rut || "-"}
                 </TableCell>
                 <TableCell className="text-foreground">
                   {user.empresa_nombre || "-"}
                 </TableCell>
-                <TableCell className="text-foreground">
+                <TableCell className="text-foreground font-mono whitespace-nowrap">
                   {formatDate(user.created_at)}
                 </TableCell>
                 <TableCell className="text-right">

@@ -340,7 +340,8 @@ const UsersDashboard = ({
               sessionToken={sessionToken}
               trigger={
                 <Button className="h-10 text-xs">
-                  <UserPlus className="h-3 w-3 mr-1" />+ Nuevo Cliente
+                  <UserPlus className="h-3 w-3 mr-1" />
+                  Nuevo Cliente
                 </Button>
               }
             />
