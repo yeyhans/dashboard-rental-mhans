@@ -15,20 +15,20 @@
  */
 
 /** The three validation buckets of the canonical. */
-export type ClientValidation = 'validado' | 'pendiente' | 'incompleto';
+export type ClientValidation = "validado" | "pendiente" | "incompleto";
 
-export type ClientFinancial = 'al-dia' | 'pago-pendiente' | 'con-deuda';
+export type ClientFinancial = "al-dia" | "pago-pendiente" | "con-deuda";
 
 export const VALIDATION_LABELS: Record<ClientValidation, string> = {
-  validado: 'Validado',
-  pendiente: 'Pendiente',
-  incompleto: 'Incompleto',
+  validado: "Validado",
+  pendiente: "Pendiente",
+  incompleto: "Incompleto",
 };
 
 export const FINANCIAL_LABELS: Record<ClientFinancial, string> = {
-  'al-dia': 'Al día',
-  'pago-pendiente': 'Pago pendiente',
-  'con-deuda': 'Con deuda',
+  "al-dia": "Al día",
+  "pago-pendiente": "Pago pendiente",
+  "con-deuda": "Con deuda",
 };
 
 export interface ClientProfileLike {
@@ -45,43 +45,112 @@ export interface ClientProfileLike {
 /**
  * The documents this client must supply, which depend on the client type.
  *
+ * Required: ID card front and back, the signed contract, and the company E-RUT for companies.
+ * The signature image (`signatureUrl`) is NOT a separate requirement: it is embedded in the signed
+ * contract, so asking for both would count one fact twice.
+ *
  * A natural person is never asked for a company E-RUT: demanding it would leave every individual
  * permanently "incompleto" and make the filter useless.
  */
-export function requiredDocuments(profile: ClientProfileLike): Array<keyof ClientProfileLike> {
+export function requiredDocuments(
+  profile: ClientProfileLike,
+): Array<keyof ClientProfileLike> {
   const base: Array<keyof ClientProfileLike> = [
-    'rutFrontUrl',
-    'rutBackUrl',
-    'signatureUrl',
-    'contractUrl',
+    "rutFrontUrl",
+    "rutBackUrl",
+    "contractUrl",
   ];
-  return profile.tipoCliente === 'empresa' ? [...base, 'companyErutUrl'] : base;
+  return profile.tipoCliente === "empresa" ? [...base, "companyErutUrl"] : base;
 }
 
 /** Documents still missing, in the order the contract flow asks for them. */
-export function missingDocuments(profile: ClientProfileLike): Array<keyof ClientProfileLike> {
-  return requiredDocuments(profile).filter(field => !profile[field]);
+export function missingDocuments(
+  profile: ClientProfileLike,
+): Array<keyof ClientProfileLike> {
+  return requiredDocuments(profile).filter((field) => !profile[field]);
+}
+
+/** Every requirement a client must meet to be `validado`. */
+export type ClientRequirementKey =
+  | "terms"
+  | "contract"
+  | "idFront"
+  | "idBack"
+  | "erut";
+
+export const REQUIREMENT_LABELS: Record<ClientRequirementKey, string> = {
+  terms: "Términos aceptados",
+  contract: "Contrato firmado",
+  idFront: "Carnet frontal",
+  idBack: "Carnet reverso",
+  erut: "E-RUT (empresa)",
+};
+
+export interface ClientRequirement {
+  readonly key: ClientRequirementKey;
+  readonly label: string;
+  readonly met: boolean;
+}
+
+export interface ClientValidationReport {
+  readonly status: ClientValidation;
+  /** Applicable requirements (E-RUT only for companies), each with its state. */
+  readonly requirements: ClientRequirement[];
+  /** The unmet subset of `requirements`, same order. */
+  readonly missing: ClientRequirement[];
 }
 
 /**
- * The validation bucket.
+ * Validation matrix (decision 2026-10-07):
  *
- * `validado` requires every document AND accepted terms — the contract is what the pickup rule
- * gates on, so a signed-but-unaccepted profile is not ready. `pendiente` is "almost there": only
- * the contract itself is missing, which is the last step of the flow and the one an admin can
- * chase with a single message. Anything else is `incompleto`.
+ *   validado   terms accepted AND signed contract AND ID front+back (AND E-RUT if empresa)
+ *   pendiente  identity documents are in (ID front+back, E-RUT if empresa) but the contract and/or
+ *              the terms are missing — the client can still finish the flow on their own
+ *   incompleto an identity document (ID front/back, company E-RUT) is missing — nothing can be
+ *              signed or verified until it arrives
+ *
+ * Requirements are listed in the order the contract flow asks for them.
  */
-export function clientValidation(profile: ClientProfileLike): ClientValidation {
-  const missing = missingDocuments(profile);
+export function clientValidationReport(
+  profile: ClientProfileLike,
+): ClientValidationReport {
+  const spec: Array<[ClientRequirementKey, boolean]> = [
+    ["terms", profile.termsAccepted],
+    ["contract", Boolean(profile.contractUrl)],
+    ["idFront", Boolean(profile.rutFrontUrl)],
+    ["idBack", Boolean(profile.rutBackUrl)],
+  ];
+  if (profile.tipoCliente === "empresa")
+    spec.push(["erut", Boolean(profile.companyErutUrl)]);
 
-  if (missing.length === 0) return profile.termsAccepted ? 'validado' : 'pendiente';
-  if (missing.length === 1 && missing[0] === 'contractUrl') return 'pendiente';
-  return 'incompleto';
+  const requirements = spec.map(([key, met]) => ({
+    key,
+    label: REQUIREMENT_LABELS[key],
+    met,
+  }));
+  const missing = requirements.filter((r) => !r.met);
+
+  const identityMissing = missing.some(
+    (r) => r.key !== "terms" && r.key !== "contract",
+  );
+  const status: ClientValidation =
+    missing.length === 0
+      ? "validado"
+      : identityMissing
+        ? "incompleto"
+        : "pendiente";
+
+  return { status, requirements, missing };
+}
+
+/** The validation bucket. See {@link clientValidationReport} for the matrix. */
+export function clientValidation(profile: ClientProfileLike): ClientValidation {
+  return clientValidationReport(profile).status;
 }
 
 /** Whether this client can legally pick up equipment. */
 export function canPickUp(profile: ClientProfileLike): boolean {
-  return clientValidation(profile) === 'validado';
+  return clientValidation(profile) === "validado";
 }
 
 export interface ClientBalanceLike {
@@ -99,8 +168,8 @@ export interface ClientBalanceLike {
  * make the one filter that matters unusable.
  */
 export function clientFinancial(balance: ClientBalanceLike): ClientFinancial {
-  if (balance.hasOverdue) return 'con-deuda';
-  return balance.outstanding > 0 ? 'pago-pendiente' : 'al-dia';
+  if (balance.hasOverdue) return "con-deuda";
+  return balance.outstanding > 0 ? "pago-pendiente" : "al-dia";
 }
 
 export interface ClientKpis {
@@ -112,17 +181,26 @@ export interface ClientKpis {
 }
 
 export function clientKpis(
-  clients: ReadonlyArray<{ profile: ClientProfileLike; balance: ClientBalanceLike }>
+  clients: ReadonlyArray<{
+    profile: ClientProfileLike;
+    balance: ClientBalanceLike;
+  }>,
 ): ClientKpis {
-  const kpis: ClientKpis = { total: clients.length, validados: 0, pendientes: 0, incompletos: 0, conDeuda: 0 };
+  const kpis: ClientKpis = {
+    total: clients.length,
+    validados: 0,
+    pendientes: 0,
+    incompletos: 0,
+    conDeuda: 0,
+  };
 
   for (const { profile, balance } of clients) {
     const validation = clientValidation(profile);
-    if (validation === 'validado') kpis.validados++;
-    else if (validation === 'pendiente') kpis.pendientes++;
+    if (validation === "validado") kpis.validados++;
+    else if (validation === "pendiente") kpis.pendientes++;
     else kpis.incompletos++;
 
-    if (clientFinancial(balance) === 'con-deuda') kpis.conDeuda++;
+    if (clientFinancial(balance) === "con-deuda") kpis.conDeuda++;
   }
 
   return kpis;
