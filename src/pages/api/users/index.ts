@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { UserService } from '../../../services/userService';
+import { InvalidRutError, UserService } from '../../../services/userService';
 import { withAuth } from '../../../middleware/auth';
 // withCors and withMiddleware removed - global middleware handles CORS
 
@@ -74,7 +74,9 @@ export const POST: APIRoute = withAuth(async (context) => {
     const errorMessage = error?.message || 'Error al crear usuario';
 
     let statusCode = 500;
-    if (error?.code === 'P0001' || errorMessage.includes('Ya existe') || errorMessage.includes('already been registered')) {
+    if (error instanceof InvalidRutError) {
+      statusCode = 400;
+    } else if (error?.code === 'P0001' || errorMessage.includes('Ya existe') || errorMessage.includes('already been registered')) {
       statusCode = 409;
     }
 

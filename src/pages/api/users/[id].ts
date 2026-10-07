@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { UserService } from '../../../services/userService';
+import { InvalidRutError, UserService } from '../../../services/userService';
 import { withAuth } from '../../../middleware/auth';
 // withCors and withMiddleware removed - global middleware handles CORS
 
@@ -69,6 +69,12 @@ export const PUT: APIRoute = withAuth(async (context: any) => {
     });
   } catch (error) {
     console.error('Error updating user:', error);
+    if (error instanceof InvalidRutError) {
+      return new Response(
+        JSON.stringify({ success: false, error: error.message }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
     return new Response(
       JSON.stringify({ error: 'Error al actualizar usuario' }),
       { 
@@ -124,6 +130,12 @@ export const PATCH: APIRoute = withAuth(async (context: any) => {
     });
   } catch (error) {
     console.error('❌ Error updating user:', error);
+    if (error instanceof InvalidRutError) {
+      return new Response(
+        JSON.stringify({ success: false, error: error.message }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
     return new Response(
       JSON.stringify({ 
         error: 'Error al actualizar usuario',

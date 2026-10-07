@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../lib/supabase';
 import type { Database } from '../types/database';
 import { sendEmailViaWorker } from '../lib/emailWorkerService';
+import { rutValidationError } from '../lib/rut';
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 type UserProfileInsert = Database['public']['Tables']['user_profiles']['Insert'];
@@ -13,6 +14,20 @@ const getSupabaseAdmin = () => {
   }
   return supabaseAdmin;
 };
+
+/** A client payload carried a RUT whose check digit does not match. Routes map it to HTTP 400. */
+export class InvalidRutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidRutError';
+  }
+}
+
+/** Throws `InvalidRutError` when the payload has a RUT (client or company) with a bad check digit. */
+function assertValidRuts(payload: { rut?: string | null; empresa_rut?: string | null }): void {
+  const error = rutValidationError(payload);
+  if (error) throw new InvalidRutError(error);
+}
 
 export class UserService {
   /**
@@ -200,6 +215,7 @@ export class UserService {
    */
   static async createUser(userData: UserProfileInsert): Promise<UserProfile> {
     try {
+      assertValidRuts(userData);
       const admin = getSupabaseAdmin();
 
       if (!userData.email) {
@@ -284,6 +300,7 @@ export class UserService {
    */
   static async updateUser(userId: number, updates: UserProfileUpdate): Promise<UserProfile> {
     try {
+      assertValidRuts(updates);
       const admin = getSupabaseAdmin();
 
       console.log('🔄 UserService.updateUser - Starting update:', { userId, updates });
