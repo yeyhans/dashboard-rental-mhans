@@ -1,410 +1,558 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-    DialogFooter,
-} from './ui/dialog';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Checkbox } from './ui/checkbox';
-import { Separator } from './ui/separator';
-import { toast } from 'sonner';
-import type { UserProfile } from '../types/user';
-import { UserPlus, Save, X, Loader2 } from 'lucide-react';
-import DocumentUploadSection from './users/DocumentUploadSection';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "./ui/dialog";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Textarea } from "./ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import { Checkbox } from "./ui/checkbox";
+import { Separator } from "./ui/separator";
+import { toast } from "sonner";
+import type { UserProfile } from "../types/user";
+import { UserPlus, Save, X, Loader2 } from "lucide-react";
+import DocumentUploadSection from "./users/DocumentUploadSection";
 import {
   uploadDocumentWithUpdate,
   getDocumentTypeName,
   type DocumentType,
-} from '../lib/documentUploadService';
+} from "../lib/documentUploadService";
+import {
+  RUT_ERROR_MESSAGE,
+  rutFieldDisplayValue,
+  rutFieldError,
+} from "../lib/rut";
 
 interface CreateUserDialogProps {
-    onUserCreated: (newUser: UserProfile) => void;
-    sessionToken: string;
-    trigger?: React.ReactNode;
+  onUserCreated: (newUser: UserProfile) => void;
+  sessionToken: string;
+  trigger?: React.ReactNode;
 }
 
 interface FormData {
-    // Personal Information
-    nombre: string;
-    apellido: string;
-    email: string;
-    rut: string;
-    telefono: string;
-    fecha_nacimiento: string;
-    instagram: string;
-    usuario: string;
+  // Personal Information
+  nombre: string;
+  apellido: string;
+  email: string;
+  rut: string;
+  telefono: string;
+  fecha_nacimiento: string;
+  instagram: string;
+  usuario: string;
 
-    // Address Information
-    direccion: string;
-    ciudad: string;
-    pais: string;
-    tipo_cliente: string;
+  // Address Information
+  direccion: string;
+  ciudad: string;
+  pais: string;
+  tipo_cliente: string;
 
-    // Company Information
-    empresa_nombre: string;
-    empresa_rut: string;
-    empresa_ciudad: string;
-    empresa_direccion: string;
+  // Company Information
+  empresa_nombre: string;
+  empresa_rut: string;
+  empresa_ciudad: string;
+  empresa_direccion: string;
 
-    // Status
-    terminos_aceptados: boolean;
+  // Status
+  terminos_aceptados: boolean;
 }
 
 const initialFormData: FormData = {
-    nombre: '',
-    apellido: '',
-    email: '',
-    rut: '',
-    telefono: '',
-    fecha_nacimiento: '',
-    instagram: '',
-    usuario: '',
-    direccion: '',
-    ciudad: '',
-    pais: '',
-    tipo_cliente: '',
-    empresa_nombre: '',
-    empresa_rut: '',
-    empresa_ciudad: '',
-    empresa_direccion: '',
-    terminos_aceptados: false,
+  nombre: "",
+  apellido: "",
+  email: "",
+  rut: "",
+  telefono: "",
+  fecha_nacimiento: "",
+  instagram: "",
+  usuario: "",
+  direccion: "",
+  ciudad: "",
+  pais: "",
+  tipo_cliente: "",
+  empresa_nombre: "",
+  empresa_rut: "",
+  empresa_ciudad: "",
+  empresa_direccion: "",
+  terminos_aceptados: false,
 };
 
-const CreateUserDialog = ({ onUserCreated, sessionToken, trigger }: CreateUserDialogProps) => {
-    const [open, setOpen] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [formData, setFormData] = useState<FormData>(initialFormData);
-    const [pendingFiles, setPendingFiles] = useState<Map<DocumentType, File>>(new Map());
+type RutField = "rut" | "empresa_rut";
+const RUT_FIELDS: RutField[] = ["rut", "empresa_rut"];
+const RUT_INPUT_IDS: Record<RutField, string> = {
+  rut: "create-rut",
+  empresa_rut: "create-empresa_rut",
+};
 
-    const handleInputChange = (field: keyof FormData, value: string | boolean) => {
-        setFormData(prev => ({
-            ...prev,
-            [field]: value
-        }));
-    };
+const CreateUserDialog = ({
+  onUserCreated,
+  sessionToken,
+  trigger,
+}: CreateUserDialogProps) => {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState<FormData>(initialFormData);
+  const [pendingFiles, setPendingFiles] = useState<Map<DocumentType, File>>(
+    new Map(),
+  );
+  const [rutErrors, setRutErrors] = useState<Partial<Record<RutField, string>>>(
+    {},
+  );
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
+  const handleInputChange = (
+    field: keyof FormData,
+    value: string | boolean,
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
 
-        try {
-            // Prepare user data
-            const userData: any = { ...formData };
+  const handleRutBlur = (field: RutField) => {
+    const value = formData[field];
+    setRutErrors((prev) => {
+      const next = { ...prev };
+      const error = rutFieldError(value);
+      if (error) next[field] = error;
+      else delete next[field];
+      return next;
+    });
+    const display = rutFieldDisplayValue(value);
+    if (display !== value) handleInputChange(field, display);
+  };
 
-            // Clean up empty strings to nulls
-            Object.keys(userData).forEach(key => {
-                if (typeof userData[key] === 'string' && userData[key].trim() === '') {
-                    userData[key] = null;
-                }
-            });
+  const focusRutField = (field: RutField) => {
+    document.getElementById(RUT_INPUT_IDS[field])?.focus();
+  };
 
-            // Use the session token passed from server
-            if (!sessionToken) {
-                throw new Error('No hay sesión activa. Por favor, inicia sesión nuevamente.');
-            }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-            const response = await fetch('/api/users', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${sessionToken}`,
-                },
-                body: JSON.stringify(userData),
-            });
+    const invalidRutErrors: Partial<Record<RutField, string>> = {};
+    for (const field of RUT_FIELDS) {
+      const error = rutFieldError(formData[field]);
+      if (error) invalidRutErrors[field] = error;
+    }
+    setRutErrors(invalidRutErrors);
+    const firstInvalid = RUT_FIELDS.find((field) => invalidRutErrors[field]);
+    if (firstInvalid) {
+      focusRutField(firstInvalid);
+      return;
+    }
 
-            const result = await response.json();
+    setLoading(true);
 
-            if (!response.ok || !result.success) {
-                throw new Error(result.error || 'Error al crear usuario');
-            }
+    try {
+      // Prepare user data
+      const userData: any = { ...formData };
 
-            const newUser = result.data;
-
-            // Subir documentos pendientes después de crear el usuario
-            if (pendingFiles.size > 0) {
-                const userId = newUser.user_id?.toString() || newUser.auth_uid || '';
-                toast.info(`Subiendo ${pendingFiles.size} documento(s)...`);
-
-                for (const [docType, file] of pendingFiles) {
-                    try {
-                        const uploadResult = await uploadDocumentWithUpdate(file, docType, userId, sessionToken);
-                        if (uploadResult.success && uploadResult.url) {
-                            switch (docType) {
-                                case 'rut_anverso': newUser.url_rut_anverso = uploadResult.url; break;
-                                case 'rut_reverso': newUser.url_rut_reverso = uploadResult.url; break;
-                                case 'e_rut_empresa': newUser.new_url_e_rut_empresa = uploadResult.url; break;
-                            }
-                        } else {
-                            toast.warning(`No se pudo subir ${getDocumentTypeName(docType)}`);
-                        }
-                    } catch (uploadErr) {
-                        console.error(`[CreateUserDialog] Error uploading ${docType}:`, uploadErr);
-                        toast.warning(`Error subiendo ${getDocumentTypeName(docType)}`);
-                    }
-                }
-            }
-
-            toast.success('Usuario creado correctamente');
-            onUserCreated(newUser);
-            setOpen(false);
-            setFormData(initialFormData);
-            setPendingFiles(new Map());
-        } catch (error) {
-            console.error('Error creating user:', error);
-            toast.error(error instanceof Error ? error.message : 'Error al crear usuario');
-        } finally {
-            setLoading(false);
+      // Clean up empty strings to nulls
+      Object.keys(userData).forEach((key) => {
+        if (typeof userData[key] === "string" && userData[key].trim() === "") {
+          userData[key] = null;
         }
-    };
+      });
 
-    return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                {trigger || (
-                    <Button>
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Nuevo Usuario
-                    </Button>
+      // Use the session token passed from server
+      if (!sessionToken) {
+        throw new Error(
+          "No hay sesión activa. Por favor, inicia sesión nuevamente.",
+        );
+      }
+
+      const response = await fetch("/api/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify(userData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        if (result.error === RUT_ERROR_MESSAGE) {
+          // The server rejected a RUT: show it on the field instead of only a toast
+          const field =
+            RUT_FIELDS.find((f) => rutFieldError(formData[f])) ?? "rut";
+          setRutErrors({ [field]: RUT_ERROR_MESSAGE });
+          focusRutField(field);
+        }
+        throw new Error(result.error || "Error al crear usuario");
+      }
+
+      const newUser = result.data;
+
+      // Subir documentos pendientes después de crear el usuario
+      if (pendingFiles.size > 0) {
+        const userId = newUser.user_id?.toString() || newUser.auth_uid || "";
+        toast.info(`Subiendo ${pendingFiles.size} documento(s)...`);
+
+        for (const [docType, file] of pendingFiles) {
+          try {
+            const uploadResult = await uploadDocumentWithUpdate(
+              file,
+              docType,
+              userId,
+              sessionToken,
+            );
+            if (uploadResult.success && uploadResult.url) {
+              switch (docType) {
+                case "rut_anverso":
+                  newUser.url_rut_anverso = uploadResult.url;
+                  break;
+                case "rut_reverso":
+                  newUser.url_rut_reverso = uploadResult.url;
+                  break;
+                case "e_rut_empresa":
+                  newUser.new_url_e_rut_empresa = uploadResult.url;
+                  break;
+              }
+            } else {
+              toast.warning(`No se pudo subir ${getDocumentTypeName(docType)}`);
+            }
+          } catch (uploadErr) {
+            console.error(
+              `[CreateUserDialog] Error uploading ${docType}:`,
+              uploadErr,
+            );
+            toast.warning(`Error subiendo ${getDocumentTypeName(docType)}`);
+          }
+        }
+      }
+
+      toast.success("Usuario creado correctamente");
+      onUserCreated(newUser);
+      setOpen(false);
+      setFormData(initialFormData);
+      setPendingFiles(new Map());
+    } catch (error) {
+      console.error("Error creating user:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Error al crear usuario",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {trigger || (
+          <Button>
+            <UserPlus className="h-4 w-4 mr-2" />
+            Nuevo Usuario
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Crear Nuevo Usuario</DialogTitle>
+          <DialogDescription>
+            Ingresa la información para el nuevo usuario. Los campos marcados
+            con * son obligatorios.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Personal Information */}
+          <div>
+            <h4 className="text-sm font-medium mb-3 text-foreground">
+              Información Personal
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="create-nombre">Nombre *</Label>
+                <Input
+                  id="create-nombre"
+                  value={formData.nombre}
+                  onChange={(e) => handleInputChange("nombre", e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="create-apellido">Apellido *</Label>
+                <Input
+                  id="create-apellido"
+                  value={formData.apellido}
+                  onChange={(e) =>
+                    handleInputChange("apellido", e.target.value)
+                  }
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="create-email">Email *</Label>
+                <Input
+                  id="create-email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="create-rut">RUT</Label>
+                <Input
+                  id="create-rut"
+                  value={formData.rut}
+                  onChange={(e) => handleInputChange("rut", e.target.value)}
+                  onBlur={() => handleRutBlur("rut")}
+                  aria-invalid={rutErrors.rut ? true : undefined}
+                  aria-describedby={
+                    rutErrors.rut ? "create-rut-error" : undefined
+                  }
+                  placeholder="12.345.678-9"
+                />
+                {rutErrors.rut && (
+                  <p
+                    id="create-rut-error"
+                    className="text-sm text-destructive mt-1"
+                  >
+                    {rutErrors.rut}
+                  </p>
                 )}
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle className="text-xl">
-                        Crear Nuevo Usuario
-                    </DialogTitle>
-                    <DialogDescription>
-                        Ingresa la información para el nuevo usuario. Los campos marcados con * son obligatorios.
-                    </DialogDescription>
-                </DialogHeader>
+              </div>
+              <div>
+                <Label htmlFor="create-telefono">Teléfono</Label>
+                <Input
+                  id="create-telefono"
+                  value={formData.telefono}
+                  onChange={(e) =>
+                    handleInputChange("telefono", e.target.value)
+                  }
+                  placeholder="+56912345678"
+                />
+              </div>
+              <div>
+                <Label htmlFor="create-fecha_nacimiento">
+                  Fecha de Nacimiento
+                </Label>
+                <Input
+                  id="create-fecha_nacimiento"
+                  type="date"
+                  value={formData.fecha_nacimiento}
+                  onChange={(e) =>
+                    handleInputChange("fecha_nacimiento", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="create-instagram">Instagram</Label>
+                <Input
+                  id="create-instagram"
+                  value={formData.instagram}
+                  onChange={(e) =>
+                    handleInputChange("instagram", e.target.value)
+                  }
+                  placeholder="@usuario"
+                />
+              </div>
+              <div>
+                <Label htmlFor="create-usuario">Usuario</Label>
+                <Input
+                  id="create-usuario"
+                  value={formData.usuario}
+                  onChange={(e) => handleInputChange("usuario", e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Personal Information */}
-                    <div>
-                        <h4 className="text-sm font-medium mb-3 text-foreground">Información Personal</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <Label htmlFor="create-nombre">Nombre *</Label>
-                                <Input
-                                    id="create-nombre"
-                                    value={formData.nombre}
-                                    onChange={(e) => handleInputChange('nombre', e.target.value)}
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="create-apellido">Apellido *</Label>
-                                <Input
-                                    id="create-apellido"
-                                    value={formData.apellido}
-                                    onChange={(e) => handleInputChange('apellido', e.target.value)}
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="create-email">Email *</Label>
-                                <Input
-                                    id="create-email"
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={(e) => handleInputChange('email', e.target.value)}
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="create-rut">RUT</Label>
-                                <Input
-                                    id="create-rut"
-                                    value={formData.rut}
-                                    onChange={(e) => handleInputChange('rut', e.target.value)}
-                                    placeholder="12.345.678-9"
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="create-telefono">Teléfono</Label>
-                                <Input
-                                    id="create-telefono"
-                                    value={formData.telefono}
-                                    onChange={(e) => handleInputChange('telefono', e.target.value)}
-                                    placeholder="+56912345678"
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="create-fecha_nacimiento">Fecha de Nacimiento</Label>
-                                <Input
-                                    id="create-fecha_nacimiento"
-                                    type="date"
-                                    value={formData.fecha_nacimiento}
-                                    onChange={(e) => handleInputChange('fecha_nacimiento', e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="create-instagram">Instagram</Label>
-                                <Input
-                                    id="create-instagram"
-                                    value={formData.instagram}
-                                    onChange={(e) => handleInputChange('instagram', e.target.value)}
-                                    placeholder="@usuario"
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="create-usuario">Usuario</Label>
-                                <Input
-                                    id="create-usuario"
-                                    value={formData.usuario}
-                                    onChange={(e) => handleInputChange('usuario', e.target.value)}
-                                />
-                            </div>
-                        </div>
-                    </div>
+          <Separator />
 
-                    <Separator />
+          {/* Address Information */}
+          <div>
+            <h4 className="text-sm font-medium mb-3 text-foreground">
+              Información de Dirección
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <Label htmlFor="create-direccion">Dirección</Label>
+                <Textarea
+                  id="create-direccion"
+                  value={formData.direccion}
+                  onChange={(e) =>
+                    handleInputChange("direccion", e.target.value)
+                  }
+                  rows={2}
+                />
+              </div>
+              <div>
+                <Label htmlFor="create-ciudad">Ciudad</Label>
+                <Input
+                  id="create-ciudad"
+                  value={formData.ciudad}
+                  onChange={(e) => handleInputChange("ciudad", e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="create-pais">País</Label>
+                <Input
+                  id="create-pais"
+                  value={formData.pais}
+                  onChange={(e) => handleInputChange("pais", e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="create-tipo_cliente">Tipo de Cliente</Label>
+                <Select
+                  value={formData.tipo_cliente}
+                  onValueChange={(value) =>
+                    handleInputChange("tipo_cliente", value)
+                  }
+                >
+                  <SelectTrigger id="create-tipo_cliente">
+                    <SelectValue placeholder="Seleccionar tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="natural">Persona Natural</SelectItem>
+                    <SelectItem value="empresa">Empresa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
 
-                    {/* Address Information */}
-                    <div>
-                        <h4 className="text-sm font-medium mb-3 text-foreground">Información de Dirección</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="md:col-span-2">
-                                <Label htmlFor="create-direccion">Dirección</Label>
-                                <Textarea
-                                    id="create-direccion"
-                                    value={formData.direccion}
-                                    onChange={(e) => handleInputChange('direccion', e.target.value)}
-                                    rows={2}
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="create-ciudad">Ciudad</Label>
-                                <Input
-                                    id="create-ciudad"
-                                    value={formData.ciudad}
-                                    onChange={(e) => handleInputChange('ciudad', e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="create-pais">País</Label>
-                                <Input
-                                    id="create-pais"
-                                    value={formData.pais}
-                                    onChange={(e) => handleInputChange('pais', e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="create-tipo_cliente">Tipo de Cliente</Label>
-                                <Select
-                                    value={formData.tipo_cliente}
-                                    onValueChange={(value) => handleInputChange('tipo_cliente', value)}
-                                >
-                                    <SelectTrigger id="create-tipo_cliente">
-                                        <SelectValue placeholder="Seleccionar tipo" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="natural">Persona Natural</SelectItem>
-                                        <SelectItem value="empresa">Empresa</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                    </div>
+          <Separator />
 
-                    <Separator />
+          {/* Company Information */}
+          <div>
+            <h4 className="text-sm font-medium mb-3 text-foreground">
+              Información de Empresa
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="create-empresa_nombre">Nombre de Empresa</Label>
+                <Input
+                  id="create-empresa_nombre"
+                  value={formData.empresa_nombre}
+                  onChange={(e) =>
+                    handleInputChange("empresa_nombre", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="create-empresa_rut">RUT de Empresa</Label>
+                <Input
+                  id="create-empresa_rut"
+                  value={formData.empresa_rut}
+                  onChange={(e) =>
+                    handleInputChange("empresa_rut", e.target.value)
+                  }
+                  onBlur={() => handleRutBlur("empresa_rut")}
+                  aria-invalid={rutErrors.empresa_rut ? true : undefined}
+                  aria-describedby={
+                    rutErrors.empresa_rut
+                      ? "create-empresa_rut-error"
+                      : undefined
+                  }
+                />
+                {rutErrors.empresa_rut && (
+                  <p
+                    id="create-empresa_rut-error"
+                    className="text-sm text-destructive mt-1"
+                  >
+                    {rutErrors.empresa_rut}
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label htmlFor="create-empresa_ciudad">Ciudad de Empresa</Label>
+                <Input
+                  id="create-empresa_ciudad"
+                  value={formData.empresa_ciudad}
+                  onChange={(e) =>
+                    handleInputChange("empresa_ciudad", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="create-empresa_direccion">
+                  Dirección de Empresa
+                </Label>
+                <Input
+                  id="create-empresa_direccion"
+                  value={formData.empresa_direccion}
+                  onChange={(e) =>
+                    handleInputChange("empresa_direccion", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+          </div>
 
-                    {/* Company Information */}
-                    <div>
-                        <h4 className="text-sm font-medium mb-3 text-foreground">Información de Empresa</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <Label htmlFor="create-empresa_nombre">Nombre de Empresa</Label>
-                                <Input
-                                    id="create-empresa_nombre"
-                                    value={formData.empresa_nombre}
-                                    onChange={(e) => handleInputChange('empresa_nombre', e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="create-empresa_rut">RUT de Empresa</Label>
-                                <Input
-                                    id="create-empresa_rut"
-                                    value={formData.empresa_rut}
-                                    onChange={(e) => handleInputChange('empresa_rut', e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="create-empresa_ciudad">Ciudad de Empresa</Label>
-                                <Input
-                                    id="create-empresa_ciudad"
-                                    value={formData.empresa_ciudad}
-                                    onChange={(e) => handleInputChange('empresa_ciudad', e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="create-empresa_direccion">Dirección de Empresa</Label>
-                                <Input
-                                    id="create-empresa_direccion"
-                                    value={formData.empresa_direccion}
-                                    onChange={(e) => handleInputChange('empresa_direccion', e.target.value)}
-                                />
-                            </div>
-                        </div>
-                    </div>
+          <Separator />
 
-                    <Separator />
+          {/* Status Information */}
+          <div>
+            <h4 className="text-sm font-medium mb-3 text-foreground">Estado</h4>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="create-terminos_aceptados"
+                checked={formData.terminos_aceptados}
+                onCheckedChange={(checked) =>
+                  handleInputChange("terminos_aceptados", Boolean(checked))
+                }
+              />
+              <Label htmlFor="create-terminos_aceptados">
+                Términos y condiciones aceptados
+              </Label>
+            </div>
+          </div>
 
-                    {/* Status Information */}
-                    <div>
-                        <h4 className="text-sm font-medium mb-3 text-foreground">Estado</h4>
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                                id="create-terminos_aceptados"
-                                checked={formData.terminos_aceptados}
-                                onCheckedChange={(checked) => handleInputChange('terminos_aceptados', Boolean(checked))}
-                            />
-                            <Label htmlFor="create-terminos_aceptados">Términos y condiciones aceptados</Label>
-                        </div>
-                    </div>
+          <Separator />
 
-                    <Separator />
+          {/* Documents Section */}
+          <div>
+            <h4 className="text-sm font-medium mb-3 text-foreground">
+              Documentos (opcional)
+            </h4>
+            <DocumentUploadSection
+              sessionToken={sessionToken}
+              tipoCliente={formData.tipo_cliente}
+              onPendingFilesChange={setPendingFiles}
+            />
+          </div>
 
-                    {/* Documents Section */}
-                    <div>
-                        <h4 className="text-sm font-medium mb-3 text-foreground">Documentos (opcional)</h4>
-                        <DocumentUploadSection
-                            sessionToken={sessionToken}
-                            tipoCliente={formData.tipo_cliente}
-                            onPendingFilesChange={setPendingFiles}
-                        />
-                    </div>
-
-                    <DialogFooter className="gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setOpen(false)}
-                            disabled={loading}
-                        >
-                            <X className="h-4 w-4 mr-2" />
-                            Cancelar
-                        </Button>
-                        <Button type="submit" disabled={loading}>
-                            {loading ? (
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : (
-                                <Save className="h-4 w-4 mr-2" />
-                            )}
-                            {loading ? 'Creando...' : 'Crear Usuario'}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    );
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={loading}
+            >
+              <X className="h-4 w-4 mr-2" />
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              {loading ? "Creando..." : "Crear Usuario"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 };
 
 export default CreateUserDialog;

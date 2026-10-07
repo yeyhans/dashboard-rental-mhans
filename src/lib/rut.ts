@@ -50,6 +50,20 @@ export function formatRut(value: string): string {
 }
 
 /**
+ * Field-level decision for a form input: null when the field is fine (blank counts as fine because
+ * the RUT is optional), otherwise the Spanish message to show under it.
+ */
+export function rutFieldError(value: string | null | undefined): string | null {
+  if (typeof value !== "string" || value.trim() === "") return null;
+  return isValidRut(value) ? null : RUT_ERROR_MESSAGE;
+}
+
+/** What to show in the input after blur: the formatted RUT when valid, the text as typed otherwise. */
+export function rutFieldDisplayValue(value: string): string {
+  return value.trim() !== "" && isValidRut(value) ? formatRut(value) : value;
+}
+
+/**
  * Error message for a payload that carries a RUT, or null when there is nothing to complain about.
  * Only RUTs that are present (non-blank) are checked: the field is optional.
  */

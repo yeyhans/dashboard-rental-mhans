@@ -5,6 +5,8 @@ import {
   computeRutCheckDigit,
   formatRut,
   isValidRut,
+  rutFieldError,
+  rutFieldDisplayValue,
   rutValidationError,
 } from "../rut";
 
@@ -97,5 +99,35 @@ describe("rutValidationError", () => {
     expect(
       rutValidationError({ rut: "12.345.678-5", empresa_rut: "76.086.428-0" }),
     ).toBe(RUT_ERROR_MESSAGE);
+  });
+});
+
+describe("rutFieldError", () => {
+  it("trata un campo vacío o en blanco como válido (opcional)", () => {
+    expect(rutFieldError("")).toBeNull();
+    expect(rutFieldError("   ")).toBeNull();
+    expect(rutFieldError(null)).toBeNull();
+    expect(rutFieldError(undefined)).toBeNull();
+  });
+
+  it("acepta RUT válidos con o sin formato", () => {
+    expect(rutFieldError("12.345.678-5")).toBeNull();
+    expect(rutFieldError("123456785")).toBeNull();
+  });
+
+  it("devuelve el mensaje en español para un RUT inválido", () => {
+    expect(rutFieldError("12.345.678-4")).toBe(RUT_ERROR_MESSAGE);
+    expect(rutFieldError("abc")).toBe(RUT_ERROR_MESSAGE);
+  });
+});
+
+describe("rutFieldDisplayValue", () => {
+  it("formatea un RUT válido", () => {
+    expect(rutFieldDisplayValue("123456785")).toBe("12.345.678-5");
+  });
+
+  it("deja tal cual un RUT inválido o vacío", () => {
+    expect(rutFieldDisplayValue("12.345.678-4")).toBe("12.345.678-4");
+    expect(rutFieldDisplayValue("")).toBe("");
   });
 });

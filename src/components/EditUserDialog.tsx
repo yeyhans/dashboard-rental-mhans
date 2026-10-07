@@ -27,6 +27,11 @@ import { Edit, Save, X, Loader2 } from "lucide-react";
 import DocumentUploadSection from "./users/DocumentUploadSection";
 import type { DocumentType } from "../lib/documentUploadService";
 import { useControllableOpen } from "./shared/useControllableOpen";
+import {
+  RUT_ERROR_MESSAGE,
+  rutFieldDisplayValue,
+  rutFieldError,
+} from "../lib/rut";
 
 interface EditUserDialogProps {
   user: UserProfile;
@@ -69,6 +74,9 @@ interface FormData {
   terminos_aceptados: boolean;
 }
 
+type RutField = "rut" | "empresa_rut";
+const RUT_FIELDS: RutField[] = ["rut", "empresa_rut"];
+
 const EditUserDialog = ({
   user,
   onUserUpdated,
@@ -82,6 +90,9 @@ const EditUserDialog = ({
     onOpenChange,
   );
   const [loading, setLoading] = useState(false);
+  const [rutErrors, setRutErrors] = useState<Partial<Record<RutField, string>>>(
+    {},
+  );
   const [formData, setFormData] = useState<FormData>({
     nombre: "",
     apellido: "",
@@ -105,6 +116,7 @@ const EditUserDialog = ({
   // Initialize form data when user changes or dialog opens
   useEffect(() => {
     if (user && open) {
+      setRutErrors({});
       setFormData({
         nombre: user.nombre || "",
         apellido: user.apellido || "",
@@ -137,8 +149,38 @@ const EditUserDialog = ({
     }));
   };
 
+  const handleRutBlur = (field: RutField) => {
+    const value = formData[field];
+    setRutErrors((prev) => {
+      const next = { ...prev };
+      const error = rutFieldError(value);
+      if (error) next[field] = error;
+      else delete next[field];
+      return next;
+    });
+    const display = rutFieldDisplayValue(value);
+    if (display !== value) handleInputChange(field, display);
+  };
+
+  const focusRutField = (field: RutField) => {
+    document.getElementById(field)?.focus();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const invalidRutErrors: Partial<Record<RutField, string>> = {};
+    for (const field of RUT_FIELDS) {
+      const error = rutFieldError(formData[field]);
+      if (error) invalidRutErrors[field] = error;
+    }
+    setRutErrors(invalidRutErrors);
+    const firstInvalid = RUT_FIELDS.find((field) => invalidRutErrors[field]);
+    if (firstInvalid) {
+      focusRutField(firstInvalid);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -198,6 +240,13 @@ const EditUserDialog = ({
 
       if (!response.ok) {
         const errorData = await response.json();
+        if (errorData.error === RUT_ERROR_MESSAGE) {
+          // The server rejected a RUT: show it on the field instead of only a toast
+          const field =
+            RUT_FIELDS.find((f) => rutFieldError(formData[f])) ?? "rut";
+          setRutErrors({ [field]: RUT_ERROR_MESSAGE });
+          focusRutField(field);
+        }
         throw new Error(errorData.error || "Error al actualizar usuario");
       }
 
@@ -288,8 +337,16 @@ const EditUserDialog = ({
                   id="rut"
                   value={formData.rut}
                   onChange={(e) => handleInputChange("rut", e.target.value)}
+                  onBlur={() => handleRutBlur("rut")}
+                  aria-invalid={rutErrors.rut ? true : undefined}
+                  aria-describedby={rutErrors.rut ? "rut-error" : undefined}
                   placeholder="12.345.678-9"
                 />
+                {rutErrors.rut && (
+                  <p id="rut-error" className="text-sm text-destructive mt-1">
+                    {rutErrors.rut}
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor="telefono">Teléfono</Label>
@@ -416,7 +473,20 @@ const EditUserDialog = ({
                   onChange={(e) =>
                     handleInputChange("empresa_rut", e.target.value)
                   }
+                  onBlur={() => handleRutBlur("empresa_rut")}
+                  aria-invalid={rutErrors.empresa_rut ? true : undefined}
+                  aria-describedby={
+                    rutErrors.empresa_rut ? "empresa_rut-error" : undefined
+                  }
                 />
+                {rutErrors.empresa_rut && (
+                  <p
+                    id="empresa_rut-error"
+                    className="text-sm text-destructive mt-1"
+                  >
+                    {rutErrors.empresa_rut}
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor="empresa_ciudad">Ciudad de Empresa</Label>
