@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +15,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import type { UserProfile } from "../../types/user";
-import { enhanceUser, formatDate, statusColors } from "./utils/userUtils";
+import { enhanceUser, formatDate } from "./utils/userUtils";
+import { ClientValidationBadge, missingSummary } from "./ClientValidation";
 import EditUserDialog from "../EditUserDialog";
 import UserDocumentUpload from "./UserDocumentUpload";
 import RegenerateContractDialog from "./RegenerateContractDialog";
@@ -52,13 +52,7 @@ const UserCardView = ({
           <Card key={user.user_id} className="overflow-hidden">
             <CardContent className="p-4">
               <div className="flex justify-between items-start mb-3">
-                <Badge className={statusColors[enhanced.registrationStatus]}>
-                  {enhanced.registrationStatus === "complete"
-                    ? "Completo"
-                    : enhanced.registrationStatus === "incomplete"
-                      ? "Incompleto"
-                      : "Pendiente"}
-                </Badge>
+                <ClientValidationBadge user={user} />
                 <div className="text-right">
                   <div className="text-sm text-muted-foreground">
                     {formatDate(user.created_at)}
@@ -92,6 +86,11 @@ const UserCardView = ({
                 <p className="text-xs text-muted-foreground">
                   Completitud del Perfil
                 </p>
+                {missingSummary(user) && (
+                  <p className="text-xs text-foreground mt-0.5">
+                    {missingSummary(user)}
+                  </p>
+                )}
                 <div className="flex items-center gap-2 mt-1">
                   <div className="flex-1 bg-gray-200 rounded-full h-2">
                     <div

@@ -4,21 +4,27 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '../ui/dialog';
-import { Label } from '../ui/label';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Card, CardContent } from '../ui/card';
-import { 
-  CheckCircle, 
-  FileText, 
-  Users, 
+} from "../ui/dialog";
+import { Label } from "../ui/label";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
+import { Card, CardContent } from "../ui/card";
+import {
+  CheckCircle,
+  FileText,
+  Users,
   AlertCircle,
   UserCheck,
-  ExternalLink
-} from 'lucide-react';
-import type { UserProfile } from '../../types/user';
-import { enhanceUser, getMissingFields, formatDate, statusColors } from './utils/userUtils';
+  ExternalLink,
+} from "lucide-react";
+import type { UserProfile } from "../../types/user";
+import { enhanceUser, getMissingFields, formatDate } from "./utils/userUtils";
+import {
+  ClientRequirementsChecklist,
+  ClientValidationBadge,
+  isFullyComplete,
+  missingSummary,
+} from "./ClientValidation";
 
 interface UserDetailsDialogProps {
   user: UserProfile | null;
@@ -26,7 +32,11 @@ interface UserDetailsDialogProps {
   onClose: () => void;
 }
 
-const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) => {
+const UserDetailsDialog = ({
+  user,
+  isOpen,
+  onClose,
+}: UserDetailsDialogProps) => {
   if (!user) return null;
 
   const enhanced = enhanceUser(user);
@@ -40,7 +50,8 @@ const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) =>
             Detalles del Usuario - {enhanced.fullName}
           </DialogTitle>
           <DialogDescription>
-            Información completa del usuario registrado el {formatDate(user.created_at)}
+            Información completa del usuario registrado el{" "}
+            {formatDate(user.created_at)}
           </DialogDescription>
         </DialogHeader>
 
@@ -53,7 +64,9 @@ const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) =>
                   <CheckCircle className="h-5 w-5 text-green-600" />
                   <div>
                     <p className="text-sm font-medium">Perfil Completo</p>
-                    <p className="text-2xl font-bold">{enhanced.completionPercentage}%</p>
+                    <p className="text-2xl font-bold">
+                      {enhanced.completionPercentage}%
+                    </p>
                     {missingFields.length > 0 && (
                       <p className="text-xs text-muted-foreground mt-1">
                         {missingFields.length} campos faltantes
@@ -63,35 +76,49 @@ const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) =>
                 </div>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center space-x-2">
                   <FileText className="h-5 w-5 text-blue-600" />
                   <div>
                     <p className="text-sm font-medium">Contrato</p>
-                    <Badge variant={enhanced.hasContract ? "default" : "secondary"}>
-                      {enhanced.hasContract ? 'Firmado' : 'Pendiente'}
+                    <Badge
+                      variant={enhanced.hasContract ? "default" : "secondary"}
+                    >
+                      {enhanced.hasContract ? "Firmado" : "Pendiente"}
                     </Badge>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center space-x-2">
                   <Users className="h-5 w-5 text-purple-600" />
                   <div>
                     <p className="text-sm font-medium">Estado</p>
-                    <Badge className={statusColors[enhanced.registrationStatus]}>
-                      {enhanced.registrationStatus === 'complete' ? 'Completo' :
-                       enhanced.registrationStatus === 'incomplete' ? 'Incompleto' : 'Pendiente'}
-                    </Badge>
+                    <ClientValidationBadge user={user} />
                   </div>
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Why the client is or is not validated (06.1) */}
+          <div>
+            <h4 className="text-sm font-medium mb-2 text-foreground">
+              Requisitos de validación
+            </h4>
+            <div className="rounded-lg border p-4">
+              <ClientRequirementsChecklist user={user} />
+              {missingSummary(user) && (
+                <p className="text-xs text-muted-foreground mt-3">
+                  {missingSummary(user)}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Missing Fields for Completion */}
@@ -111,17 +138,17 @@ const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) =>
                   ))}
                 </div>
                 <div className="mt-3 text-xs text-orange-700">
-                  <strong>Nota:</strong> {user.tipo_cliente === 'empresa' ? 
-                    'Como usuario empresa, debe completar campos adicionales de empresa.' : 
-                    'Instagram es el único campo opcional.'
-                  }
+                  <strong>Nota:</strong>{" "}
+                  {user.tipo_cliente === "empresa"
+                    ? "Como usuario empresa, debe completar campos adicionales de empresa."
+                    : "Instagram es el único campo opcional."}
                 </div>
               </div>
             </div>
           )}
 
           {/* Completion Status */}
-          {missingFields.length === 0 && (
+          {missingFields.length === 0 && isFullyComplete(user) && (
             <div>
               <h4 className="text-sm font-medium mb-2 text-foreground flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-green-600" />
@@ -136,7 +163,10 @@ const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) =>
                 </div>
                 <p className="text-xs text-green-700 mt-2">
                   Este usuario ha completado todos los campos requeridos
-                  {user.tipo_cliente === 'empresa' ? ' incluyendo información de empresa' : ''}.
+                  {user.tipo_cliente === "empresa"
+                    ? " incluyendo información de empresa"
+                    : ""}
+                  .
                 </p>
               </div>
             </div>
@@ -144,82 +174,127 @@ const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) =>
 
           {/* Personal Information */}
           <div>
-            <h4 className="text-sm font-medium mb-2 text-foreground">Información Personal</h4>
+            <h4 className="text-sm font-medium mb-2 text-foreground">
+              Información Personal
+            </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
               <div>
-                <Label className="text-foreground font-medium">Nombre Completo</Label>
+                <Label className="text-foreground font-medium">
+                  Nombre Completo
+                </Label>
                 <div className="mt-1 text-foreground">{enhanced.fullName}</div>
               </div>
               <div>
                 <Label className="text-foreground font-medium">Email</Label>
-                <div className="mt-1 text-foreground break-words">{user.email}</div>
+                <div className="mt-1 text-foreground break-words">
+                  {user.email}
+                </div>
               </div>
               <div>
                 <Label className="text-foreground font-medium">RUT</Label>
-                <div className="mt-1 text-foreground">{user.rut || '-'}</div>
+                <div className="mt-1 text-foreground">{user.rut || "-"}</div>
               </div>
               <div>
                 <Label className="text-foreground font-medium">Teléfono</Label>
-                <div className="mt-1 text-foreground">{user.telefono || '-'}</div>
+                <div className="mt-1 text-foreground">
+                  {user.telefono || "-"}
+                </div>
               </div>
               <div>
-                <Label className="text-foreground font-medium">Fecha de Nacimiento</Label>
-                <div className="mt-1 text-foreground">{formatDate(user.fecha_nacimiento)}</div>
+                <Label className="text-foreground font-medium">
+                  Fecha de Nacimiento
+                </Label>
+                <div className="mt-1 text-foreground">
+                  {formatDate(user.fecha_nacimiento)}
+                </div>
               </div>
               <div>
                 <Label className="text-foreground font-medium">Instagram</Label>
-                <div className="mt-1 text-foreground">{user.instagram || '-'}</div>
+                <div className="mt-1 text-foreground">
+                  {user.instagram || "-"}
+                </div>
               </div>
               <div>
                 <Label className="text-foreground font-medium">Usuario</Label>
-                <div className="mt-1 text-foreground">{user.usuario || '-'}</div>
+                <div className="mt-1 text-foreground">
+                  {user.usuario || "-"}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Address Information */}
           <div>
-            <h4 className="text-sm font-medium mb-2 text-foreground">Dirección</h4>
+            <h4 className="text-sm font-medium mb-2 text-foreground">
+              Dirección
+            </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
               <div>
                 <Label className="text-foreground font-medium">Dirección</Label>
-                <div className="mt-1 text-foreground">{user.direccion || '-'}</div>
+                <div className="mt-1 text-foreground">
+                  {user.direccion || "-"}
+                </div>
               </div>
               <div>
                 <Label className="text-foreground font-medium">Ciudad</Label>
-                <div className="mt-1 text-foreground">{user.ciudad || '-'}</div>
+                <div className="mt-1 text-foreground">{user.ciudad || "-"}</div>
               </div>
               <div>
                 <Label className="text-foreground font-medium">País</Label>
-                <div className="mt-1 text-foreground">{user.pais || '-'}</div>
+                <div className="mt-1 text-foreground">{user.pais || "-"}</div>
               </div>
               <div>
-                <Label className="text-foreground font-medium">Tipo Cliente</Label>
-                <div className="mt-1 text-foreground">{user.tipo_cliente || '-'}</div>
+                <Label className="text-foreground font-medium">
+                  Tipo Cliente
+                </Label>
+                <div className="mt-1 text-foreground">
+                  {user.tipo_cliente || "-"}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Company Information */}
-          {(user.empresa_nombre || user.empresa_rut || user.empresa_ciudad || user.empresa_direccion) && (
+          {(user.empresa_nombre ||
+            user.empresa_rut ||
+            user.empresa_ciudad ||
+            user.empresa_direccion) && (
             <div>
-              <h4 className="text-sm font-medium mb-2 text-foreground">Información de Empresa</h4>
+              <h4 className="text-sm font-medium mb-2 text-foreground">
+                Información de Empresa
+              </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
                 <div>
-                  <Label className="text-foreground font-medium">Nombre de Empresa</Label>
-                  <div className="mt-1 text-foreground">{user.empresa_nombre || '-'}</div>
+                  <Label className="text-foreground font-medium">
+                    Nombre de Empresa
+                  </Label>
+                  <div className="mt-1 text-foreground">
+                    {user.empresa_nombre || "-"}
+                  </div>
                 </div>
                 <div>
-                  <Label className="text-foreground font-medium">RUT de Empresa</Label>
-                  <div className="mt-1 text-foreground">{user.empresa_rut || '-'}</div>
+                  <Label className="text-foreground font-medium">
+                    RUT de Empresa
+                  </Label>
+                  <div className="mt-1 text-foreground">
+                    {user.empresa_rut || "-"}
+                  </div>
                 </div>
                 <div>
-                  <Label className="text-foreground font-medium">Ciudad de Empresa</Label>
-                  <div className="mt-1 text-foreground">{user.empresa_ciudad || '-'}</div>
+                  <Label className="text-foreground font-medium">
+                    Ciudad de Empresa
+                  </Label>
+                  <div className="mt-1 text-foreground">
+                    {user.empresa_ciudad || "-"}
+                  </div>
                 </div>
                 <div>
-                  <Label className="text-foreground font-medium">Dirección de Empresa</Label>
-                  <div className="mt-1 text-foreground">{user.empresa_direccion || '-'}</div>
+                  <Label className="text-foreground font-medium">
+                    Dirección de Empresa
+                  </Label>
+                  <div className="mt-1 text-foreground">
+                    {user.empresa_direccion || "-"}
+                  </div>
                 </div>
               </div>
             </div>
@@ -234,12 +309,17 @@ const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) =>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
               {user.url_empresa_erut && (
                 <div>
-                  <Label className="text-foreground font-medium">E-RUT Empresa</Label>
+                  <Label className="text-foreground font-medium">
+                    E-RUT Empresa
+                  </Label>
                   <div className="mt-1">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
-                      onClick={() => user.url_empresa_erut && window.open(user.url_empresa_erut, '_blank')}
+                      onClick={() =>
+                        user.url_empresa_erut &&
+                        window.open(user.url_empresa_erut, "_blank")
+                      }
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Ver E-RUT
@@ -249,12 +329,17 @@ const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) =>
               )}
               {user.new_url_e_rut_empresa && (
                 <div>
-                  <Label className="text-foreground font-medium">Nuevo E-RUT Empresa</Label>
+                  <Label className="text-foreground font-medium">
+                    Nuevo E-RUT Empresa
+                  </Label>
                   <div className="mt-1">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
-                      onClick={() => user.new_url_e_rut_empresa && window.open(user.new_url_e_rut_empresa, '_blank')}
+                      onClick={() =>
+                        user.new_url_e_rut_empresa &&
+                        window.open(user.new_url_e_rut_empresa, "_blank")
+                      }
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Ver Nuevo E-RUT
@@ -264,12 +349,17 @@ const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) =>
               )}
               {user.url_rut_anverso && (
                 <div>
-                  <Label className="text-foreground font-medium">RUT Anverso</Label>
+                  <Label className="text-foreground font-medium">
+                    RUT Anverso
+                  </Label>
                   <div className="mt-1">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
-                      onClick={() => user.url_rut_anverso && window.open(user.url_rut_anverso, '_blank')}
+                      onClick={() =>
+                        user.url_rut_anverso &&
+                        window.open(user.url_rut_anverso, "_blank")
+                      }
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Ver RUT Anverso
@@ -279,12 +369,17 @@ const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) =>
               )}
               {user.url_rut_reverso && (
                 <div>
-                  <Label className="text-foreground font-medium">RUT Reverso</Label>
+                  <Label className="text-foreground font-medium">
+                    RUT Reverso
+                  </Label>
                   <div className="mt-1">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
-                      onClick={() => user.url_rut_reverso && window.open(user.url_rut_reverso, '_blank')}
+                      onClick={() =>
+                        user.url_rut_reverso &&
+                        window.open(user.url_rut_reverso, "_blank")
+                      }
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Ver RUT Reverso
@@ -296,10 +391,12 @@ const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) =>
                 <div>
                   <Label className="text-foreground font-medium">Firma</Label>
                   <div className="mt-1">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
-                      onClick={() => user.url_firma && window.open(user.url_firma, '_blank')}
+                      onClick={() =>
+                        user.url_firma && window.open(user.url_firma, "_blank")
+                      }
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Ver Firma
@@ -318,20 +415,32 @@ const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) =>
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-card p-4 rounded-lg border">
               <div>
-                <Label className="text-foreground font-medium">Términos Aceptados</Label>
+                <Label className="text-foreground font-medium">
+                  Términos Aceptados
+                </Label>
                 <div className="mt-1">
-                  <Badge variant={user.terminos_aceptados ? "default" : "secondary"}>
-                    {user.terminos_aceptados ? 'Sí' : 'No'}
+                  <Badge
+                    variant={user.terminos_aceptados ? "default" : "secondary"}
+                  >
+                    {user.terminos_aceptados ? "Sí" : "No"}
                   </Badge>
                 </div>
               </div>
               <div>
-                <Label className="text-foreground font-medium">Fecha de Creación</Label>
-                <div className="mt-1 text-foreground">{formatDate(user.created_at)}</div>
+                <Label className="text-foreground font-medium">
+                  Fecha de Creación
+                </Label>
+                <div className="mt-1 text-foreground">
+                  {formatDate(user.created_at)}
+                </div>
               </div>
               <div>
-                <Label className="text-foreground font-medium">Última Actualización</Label>
-                <div className="mt-1 text-foreground">{formatDate(user.updated_at)}</div>
+                <Label className="text-foreground font-medium">
+                  Última Actualización
+                </Label>
+                <div className="mt-1 text-foreground">
+                  {formatDate(user.updated_at)}
+                </div>
               </div>
             </div>
           </div>
@@ -344,20 +453,29 @@ const UserDetailsDialog = ({ user, isOpen, onClose }: UserDetailsDialogProps) =>
             </h4>
             <div className="bg-card p-4 rounded-lg border space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-foreground font-medium">Términos Aceptados:</Label>
-                <Badge variant={enhanced.hasAcceptedTerms ? "default" : "secondary"}>
-                  {enhanced.hasAcceptedTerms ? 'Sí' : 'No'}
+                <Label className="text-foreground font-medium">
+                  Términos Aceptados:
+                </Label>
+                <Badge
+                  variant={enhanced.hasAcceptedTerms ? "default" : "secondary"}
+                >
+                  {enhanced.hasAcceptedTerms ? "Sí" : "No"}
                 </Badge>
               </div>
-              
+
               {user.url_user_contrato && (
                 <div>
-                  <Label className="text-foreground font-medium">Contrato</Label>
+                  <Label className="text-foreground font-medium">
+                    Contrato
+                  </Label>
                   <div className="mt-1">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="w-full justify-start"
-                      onClick={() => user.url_user_contrato && window.open(user.url_user_contrato, '_blank')}
+                      onClick={() =>
+                        user.url_user_contrato &&
+                        window.open(user.url_user_contrato, "_blank")
+                      }
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Ver Contrato
