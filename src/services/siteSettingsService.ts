@@ -24,6 +24,17 @@ export type SiteSettingsPatch = {
   [K in SiteSettingsSection]?: Partial<SiteSettings[K]>;
 } & { pickupAddresses?: string[] };
 
+/** Subset of the settings that is safe to hand to the public frontend. Strings only. */
+export interface PublicSiteProfile {
+  legalName: string;
+  tradeName: string;
+  rut: string;
+  representativeName: string;
+  contactEmail: string;
+  phone: string;
+  domicilio: string;
+}
+
 export class SiteSettingsValidationError extends Error {
   readonly details: SiteSettingsError;
 
@@ -126,6 +137,23 @@ export class SiteSettingsService {
     const value = await this.read();
     cache = { value, expiresAt: now + CACHE_TTL_MS };
     return value;
+  }
+
+  /**
+   * Public subset for the frontend (terms page, consent texts). Whitelist mapper: never add bank
+   * data, signature, or the admin notification email here.
+   */
+  static async getPublicProfile(): Promise<PublicSiteProfile> {
+    const settings = await this.get();
+    return {
+      legalName: settings.company.legalName ?? "",
+      tradeName: settings.company.tradeName ?? "",
+      rut: settings.company.rut ?? "",
+      representativeName: settings.representative.name ?? "",
+      contactEmail: settings.contact.email ?? "",
+      phone: settings.contact.phone ?? "",
+      domicilio: settings.company.domicilio ?? "",
+    };
   }
 
   /** Merges `patch` over the stored settings, validates, saves and returns the result. */

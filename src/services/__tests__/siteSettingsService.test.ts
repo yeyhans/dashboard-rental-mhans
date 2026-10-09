@@ -201,3 +201,62 @@ describe("SiteSettingsService.setSignatureUrl", () => {
     expect(upsert.data.bank).toEqual(DEFAULT_SETTINGS.bank);
   });
 });
+
+describe("SiteSettingsService.getPublicProfile", () => {
+  it("returns only the seven public string fields", async () => {
+    state.read = {
+      data: {
+        data: {
+          company: {
+            legalName: "ACME SpA",
+            tradeName: "Acme",
+            rut: "76.000.000-0",
+            domicilio: "Calle 1",
+          },
+          representative: {
+            name: "Ana Perez",
+            signatureUrl: "https://x/s.png",
+          },
+          contact: {
+            email: "privacidad@acme.cl",
+            phone: "+56911112222",
+            adminNotificationEmail: "admin@acme.cl",
+          },
+          bank: { accountNumber: "123" },
+        },
+      },
+      error: null,
+    };
+
+    const profile = await SiteSettingsService.getPublicProfile();
+
+    expect(profile).toEqual({
+      legalName: "ACME SpA",
+      tradeName: "Acme",
+      rut: "76.000.000-0",
+      representativeName: "Ana Perez",
+      contactEmail: "privacidad@acme.cl",
+      phone: "+56911112222",
+      domicilio: "Calle 1",
+    });
+    expect(JSON.stringify(profile)).not.toMatch(/admin@acme|123|s\.png/);
+  });
+
+  it("uses empty strings for unset values", async () => {
+    const profile = await SiteSettingsService.getPublicProfile();
+    for (const value of Object.values(profile)) {
+      expect(typeof value).toBe("string");
+    }
+    expect(Object.keys(profile).sort()).toEqual(
+      [
+        "contactEmail",
+        "domicilio",
+        "legalName",
+        "phone",
+        "representativeName",
+        "rut",
+        "tradeName",
+      ].sort(),
+    );
+  });
+});
