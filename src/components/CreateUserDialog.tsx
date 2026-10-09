@@ -11,7 +11,7 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Textarea } from "./ui/textarea";
+import { AddressInput, addressCity, addressLine } from "./ui/AddressInput";
 import {
   Select,
   SelectContent,
@@ -384,13 +384,17 @@ const CreateUserDialog = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <Label htmlFor="create-direccion">Dirección</Label>
-                <Textarea
+                <AddressInput
                   id="create-direccion"
                   value={formData.direccion}
-                  onChange={(e) =>
-                    handleInputChange("direccion", e.target.value)
-                  }
-                  rows={2}
+                  onChange={(text) => handleInputChange("direccion", text)}
+                  onSelect={(address) => {
+                    handleInputChange("direccion", addressLine(address));
+                    const city = addressCity(address);
+                    if (city) handleInputChange("ciudad", city);
+                    if (address.country)
+                      handleInputChange("pais", address.country);
+                  }}
                 />
               </div>
               <div>
@@ -486,12 +490,20 @@ const CreateUserDialog = ({
                 <Label htmlFor="create-empresa_direccion">
                   Dirección de Empresa
                 </Label>
-                <Input
+                <AddressInput
                   id="create-empresa_direccion"
                   value={formData.empresa_direccion}
-                  onChange={(e) =>
-                    handleInputChange("empresa_direccion", e.target.value)
+                  onChange={(text) =>
+                    handleInputChange("empresa_direccion", text)
                   }
+                  onSelect={(address) => {
+                    handleInputChange(
+                      "empresa_direccion",
+                      addressLine(address),
+                    );
+                    const city = addressCity(address);
+                    if (city) handleInputChange("empresa_ciudad", city);
+                  }}
                 />
               </div>
             </div>

@@ -2,7 +2,6 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import { apiClient } from "@/services/apiClient";
 
 export interface PlaceSuggestion {
   placeId: string;
@@ -58,6 +57,9 @@ async function postPlaces<T>(
   body: unknown,
 ): Promise<T | null> {
   try {
+    // Loaded on demand: the client pulls in the auth stack, which tests and SSR renders of
+    // forms embedding this input should not need.
+    const { apiClient } = await import("@/services/apiClient");
     const response = await apiClient.post(endpoint, body);
     if (!response.ok) return null;
     const json = (await response.json()) as { success?: boolean; data?: T };

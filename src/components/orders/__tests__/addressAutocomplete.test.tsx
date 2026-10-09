@@ -87,7 +87,7 @@ describe("address autocomplete wiring", () => {
     const source = read("components/ui/AddressInput.tsx");
     expect(source).toMatch(/["']\/api\/places\/autocomplete["']/);
     expect(source).toMatch(/["']\/api\/places\/details["']/);
-    expect(source).toMatch(/from ["']@\/services\/apiClient["']/);
+    expect(source).toMatch(/import\(["']@\/services\/apiClient["']\)/);
     expect(source).not.toContain("GOOGLE_MAPS_API_KEY");
     expect(source).not.toContain("places.googleapis.com");
   });
