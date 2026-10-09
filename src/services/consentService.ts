@@ -117,7 +117,18 @@ export class ConsentService {
         details: error.details,
         hint: error.hint,
         status: error.status,
-        shape: typeof error === "object" ? Object.keys(error) : typeof error,
+        type: typeof error,
+        ctor: (error as { constructor?: { name?: string } })?.constructor?.name,
+        raw: (() => {
+          try {
+            return JSON.stringify(
+              error,
+              Object.getOwnPropertyNames(error as object),
+            );
+          } catch {
+            return String(error);
+          }
+        })(),
       });
       throw error;
     }
