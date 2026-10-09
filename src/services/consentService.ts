@@ -112,7 +112,12 @@ export class ConsentService {
       .insert(rows);
     if (error) {
       console.error("[ConsentService] Error registrando consentimientos:", {
-        error: error.message,
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        status: error.status,
+        shape: typeof error === "object" ? Object.keys(error) : typeof error,
       });
       throw error;
     }
