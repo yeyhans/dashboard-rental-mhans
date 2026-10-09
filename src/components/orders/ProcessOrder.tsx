@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { AddressInput } from '@/components/ui/AddressInput';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye, Settings, Calendar, AlertTriangle, Percent, DollarSign } from 'lucide-react';
@@ -3343,12 +3344,12 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                           <Label htmlFor="shippingAddressEdit" className="text-sm font-medium text-gray-700">
                             Dirección de envío *
                           </Label>
-                          <Input
+                          <AddressInput
                             id="shippingAddressEdit"
-                            type="text"
                             placeholder="Dirección completa de envío"
                             value={shippingAddress}
-                            onChange={(e) => setShippingAddress(e.target.value)}
+                            onChange={setShippingAddress}
+                            onSelect={(address) => setShippingAddress(address.formattedAddress)}
                             className="w-full bg-white"
                             required
                           />

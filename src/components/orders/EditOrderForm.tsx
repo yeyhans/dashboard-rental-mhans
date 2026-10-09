@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AddressInput, addressCity, addressLine } from '@/components/ui/AddressInput';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -318,10 +319,15 @@ const EditOrderForm: React.FC<EditOrderFormProps> = ({ order, onSave, onCancel, 
 
                 <div>
                   <Label htmlFor="billing_address_1">Dirección</Label>
-                  <Input
+                  <AddressInput
                     id="billing_address_1"
                     value={formData.billing_address_1 || ''}
-                    onChange={(e) => handleInputChange('billing_address_1', e.target.value)}
+                    onChange={(text) => handleInputChange('billing_address_1', text)}
+                    onSelect={(address) => {
+                      handleInputChange('billing_address_1', addressLine(address));
+                      const city = addressCity(address);
+                      if (city) handleInputChange('billing_city', city);
+                    }}
                   />
                 </div>
 
