@@ -624,8 +624,9 @@ const OrdersDashboard = ({
     // Desktop view - Table layout
     return (
       <div className="border">
-        {/* 02.4: compact cell padding so the 11 columns fit at 1440px; whatever still overflows
-            scrolls inside `Table`'s own wrapper while the actions column stays pinned right. */}
+        {/* 02.4 / T-16: compact cell padding and a single Monto column (Total over "IVA · Neto")
+            so the 9 columns fit at 1440px; whatever still overflows scrolls inside `Table`'s own
+            wrapper while the actions column stays pinned right. */}
         <Table className="[&_td]:px-2 [&_th]:px-2">
           <TableHeader>
             <TableRow>
@@ -651,13 +652,7 @@ const OrdersDashboard = ({
                 Jornadas
               </TableHead>
               <TableHead className="text-foreground font-semibold text-right">
-                Neto
-              </TableHead>
-              <TableHead className="text-foreground font-semibold text-right">
-                IVA
-              </TableHead>
-              <TableHead className="text-foreground font-semibold text-right">
-                Total
+                Monto
               </TableHead>
               <TableHead className="sticky right-0 bg-background text-right text-foreground font-semibold">
                 Acciones
@@ -759,13 +754,13 @@ const OrdersDashboard = ({
                   {order.num_jornadas ?? ""}
                 </TableCell>
                 <TableCell className="text-foreground text-right whitespace-nowrap">
-                  ${formatCurrency(order.calculated_subtotal || "0")}
-                </TableCell>
-                <TableCell className="text-foreground text-right whitespace-nowrap">
-                  ${formatCurrency(order.calculated_iva || "0")}
-                </TableCell>
-                <TableCell className="text-foreground text-right font-bold whitespace-nowrap">
-                  ${formatCurrency(order.calculated_total || "0")}
+                  <div className="font-bold">
+                    ${formatCurrency(order.calculated_total || "0")}
+                  </div>
+                  <div className="font-mono text-xs text-muted-foreground">
+                    IVA ${formatCurrency(order.calculated_iva || "0")} · Neto $
+                    {formatCurrency(order.calculated_subtotal || "0")}
+                  </div>
                 </TableCell>
                 <TableCell className="sticky right-0 bg-background text-right">
                   <div className="flex flex-row gap-2 justify-end items-center">

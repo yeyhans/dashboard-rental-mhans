@@ -114,3 +114,37 @@ describe("OrdersDashboard — mobile pass (D-25)", () => {
     expect(mobileCardBlock).toMatch(/className="text-right col-start-2"/);
   });
 });
+
+describe("OrdersDashboard — table fits at 1440 px (T-16)", () => {
+  const desktop = source.slice(
+    source.indexOf("// Desktop view - Table layout"),
+  );
+  const header = desktop.slice(
+    desktop.indexOf("<TableHeader>"),
+    desktop.indexOf("</TableHeader>"),
+  );
+
+  it("merges Neto, IVA and Total into a single Monto column", () => {
+    expect(header).toMatch(/>\s*Monto\s*<\/TableHead>/);
+    expect(header).not.toMatch(/>\s*Neto\s*<\/TableHead>/);
+    expect(header).not.toMatch(/>\s*IVA\s*<\/TableHead>/);
+    expect(header).not.toMatch(/>\s*Total\s*<\/TableHead>/);
+  });
+
+  it("renders the Total on top and 'IVA · Neto' in small mono text below", () => {
+    const body = desktop.slice(desktop.indexOf("<TableBody>"));
+    const totalAt = body.indexOf("order.calculated_total");
+    const ivaAt = body.indexOf("order.calculated_iva");
+    const netAt = body.indexOf("order.calculated_subtotal");
+    expect(totalAt).toBeGreaterThan(-1);
+    expect(totalAt).toBeLessThan(ivaAt);
+    expect(ivaAt).toBeLessThan(netAt);
+    expect(body).toMatch(/font-mono text-xs[^"]*"[\s\S]{0,200}IVA \$/);
+    expect(body).toContain("· Neto $");
+  });
+
+  it("keeps the header to 9 columns with the actions column pinned right", () => {
+    expect((header.match(/<TableHead\b/g) ?? []).length).toBe(9);
+    expect(header).toMatch(/sticky right-0[^"]*">\s*Acciones/);
+  });
+});
