@@ -143,7 +143,8 @@ export default function OrderDriverField({ orderId }: OrderDriverFieldProps) {
       </datalist>
       {!loading && !hasShipment && (
         <p className="text-xs text-muted-foreground">
-          Guarda el pedido con un método de envío para poder asignar conductor.{" "}
+          Guarda el pedido con un método de delivery para poder asignar
+          conductor.{" "}
           <button
             type="button"
             onClick={() => void load()}

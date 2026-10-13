@@ -43,9 +43,11 @@ describe("DeliveryBoard — page header (D-22)", () => {
 });
 
 describe("DeliveryBoard — new shipping type button (04.1)", () => {
-  it('labels the create button "Nuevo Tipo de Envío" per canon', () => {
+  // R-07: the client renamed the service "Delivery" (2026-10-13); it overrides the canon's
+  // "Envío" wording, the button shape stays as the canon has it.
+  it('labels the create button "Nuevo Tipo de Delivery"', () => {
     const html = renderToStaticMarkup(<DeliveryBoard data={makeBoard()} />);
-    expect(html).toContain("Nuevo Tipo de Envío");
+    expect(html).toContain("Nuevo Tipo de Delivery");
     expect(html).not.toContain("Nuevo tipo<");
   });
 });
@@ -79,7 +81,9 @@ describe("DeliveryBoard — conductor (R-06)", () => {
   }
 
   it("renders a Conductor column in the active and history tables", () => {
-    const html = renderToStaticMarkup(<DeliveryBoard data={boardWithDrivers()} />);
+    const html = renderToStaticMarkup(
+      <DeliveryBoard data={boardWithDrivers()} />,
+    );
     expect(html.split(">Conductor</th>").length - 1).toBe(2);
     expect(html).toContain("Carlos R.");
     expect(html).toContain("Juan P.");
@@ -87,7 +91,9 @@ describe("DeliveryBoard — conductor (R-06)", () => {
   });
 
   it("offers a driver filter built from the drivers in the history", () => {
-    const html = renderToStaticMarkup(<DeliveryBoard data={boardWithDrivers()} />);
+    const html = renderToStaticMarkup(
+      <DeliveryBoard data={boardWithDrivers()} />,
+    );
     expect(html).toContain('aria-label="Filtrar por conductor"');
     expect(html).toContain("Todos los conductores");
     expect(html).toMatch(/<option value="Carlos R.">Carlos R.<\/option>/);

@@ -652,7 +652,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           console.log('⚠️ Advertencia: Dirección recomendada pero no obligatoria');
           // Solo mostrar advertencia, no bloquear
           toast.warning('⚠️ Recomendación', {
-            description: 'Se recomienda agregar una dirección de envío',
+            description: 'Se recomienda agregar una dirección de delivery',
             duration: 3000
           });
         }
@@ -918,8 +918,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       const defaultMethods: ShippingMethod[] = [
         {
           id: 1,
-          name: 'Envío Gratis',
-          description: 'Envío gratuito para órdenes mayores a $50.000',
+          name: 'Delivery Gratis',
+          description: 'Delivery gratuito para órdenes mayores a $50.000',
           cost: '0',
           shipping_type: 'free',
           enabled: true,
@@ -938,8 +938,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         },
         {
           id: 2,
-          name: 'Envío Estándar',
-          description: 'Envío estándar a todo Chile',
+          name: 'Delivery Estándar',
+          description: 'Delivery estándar a todo Chile',
           cost: '5000',
           shipping_type: 'flat_rate',
           enabled: true,
@@ -958,7 +958,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         },
         {
           id: 3,
-          name: 'Envío Express',
+          name: 'Delivery Express',
           description: 'Entrega rápida en 24-48 horas',
           cost: '12000',
           shipping_type: 'express',
@@ -1020,7 +1020,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       if (firstMethod) {
         setSelectedShippingMethod(firstMethod);
         setEditedShipping(firstMethod.cost.toString());
-        toast.info('🚚 Método cambiado a Envío a domicilio', {
+        toast.info('🚚 Método cambiado a Delivery a domicilio', {
           description: `Método seleccionado: ${firstMethod.name}`,
           duration: 3000
         });
@@ -1031,7 +1031,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   // Custom shipping handlers
   const handleCustomShippingSubmit = () => {
     if (!customShippingData.name || !customShippingData.cost) {
-      alert('Por favor completa el nombre y costo del envío customizado');
+      alert('Por favor completa el nombre y costo del delivery customizado');
       return;
     }
 
@@ -1039,7 +1039,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     const customMethod: ShippingMethod = {
       id: `custom_${Date.now()}`,
       name: customShippingData.name,
-      description: customShippingData.description || 'Envío personalizado',
+      description: customShippingData.description || 'Delivery personalizado',
       cost: customShippingData.cost,
       shipping_type: 'flat_rate',
       enabled: true,
@@ -2088,7 +2088,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   {deliveryMethodFromData === 'shipping' ? (
-                    <><Truck className="h-4 w-4" /> Información de Envío</>
+                    <><Truck className="h-4 w-4" /> Información de Delivery</>
                   ) : (
                     <><MapPin className="h-4 w-4" /> Información de Retiro</>
                   )}
@@ -2101,7 +2101,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                     ? 'bg-blue-100 text-blue-800'
                     : 'bg-green-100 text-green-800'
                     }`}>
-                    {deliveryMethodFromData === 'shipping' ? 'Envío a domicilio' : 'Retiro en tienda'}
+                    {deliveryMethodFromData === 'shipping' ? 'Delivery a domicilio' : 'Retiro en tienda'}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -2110,13 +2110,13 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                 </div>
                 {shippingAddressFromData && (
                   <div className="flex justify-between">
-                    <span className="font-medium">Dirección de envío:</span>
+                    <span className="font-medium">Dirección de delivery:</span>
                     <span className="text-right max-w-xs">{shippingAddressFromData}</span>
                   </div>
                 )}
                 {shippingPhoneFromData && (
                   <div className="flex justify-between">
-                    <span className="font-medium">Teléfono de envío:</span>
+                    <span className="font-medium">Teléfono de delivery:</span>
                     <span className="text-right max-w-xs">{shippingPhoneFromData}</span>
                   </div>
                 )}
@@ -3325,7 +3325,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                     <h4 className="font-medium text-sm mb-3">¿Cómo desea entregar el pedido?</h4>
                     <div className="mb-2 text-xs text-blue-600 bg-blue-50 p-2 rounded">
-                      <strong>Estado actual:</strong> {deliveryMethod === 'pickup' ? '📦 Retiro en tienda' : '🚚 Envío a domicilio'}
+                      <strong>Estado actual:</strong> {deliveryMethod === 'pickup' ? '📦 Retiro en tienda' : '🚚 Delivery a domicilio'}
                     </div>
                     <RadioGroup
                       value={deliveryMethod}
@@ -3350,10 +3350,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                         <div className="flex-1">
                           <Label htmlFor="shipping-edit" className="flex items-center space-x-2 cursor-pointer">
                             <Truck className="h-4 w-4" />
-                            <span className="font-medium">Envío a domicilio</span>
+                            <span className="font-medium">Delivery a domicilio</span>
                           </Label>
                           <p className="text-xs text-muted-foreground mt-1">
-                            Envío del pedido a la dirección del cliente
+                            Delivery del pedido a la dirección del cliente
                           </p>
                         </div>
                       </div>
@@ -3365,18 +3365,18 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                     <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
                       <h4 className="font-medium text-sm flex items-center gap-2 mb-3">
                         <Truck className="h-4 w-4 text-blue-600" />
-                        Información de Envío
+                        Información de Delivery
                       </h4>
 
                       {/* Campos de dirección y teléfono según requisitos del método */}
                       {selectedShippingMethod?.requires_address && (
                         <div className="space-y-2">
                           <Label htmlFor="shippingAddressEdit" className="text-sm font-medium text-gray-700">
-                            Dirección de envío *
+                            Dirección de delivery *
                           </Label>
                           <AddressInput
                             id="shippingAddressEdit"
-                            placeholder="Dirección completa de envío"
+                            placeholder="Dirección completa de delivery"
                             value={shippingAddress}
                             onChange={setShippingAddress}
                             onSelect={(address) => setShippingAddress(address.formattedAddress)}
@@ -3416,9 +3416,9 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                       {/* Información sobre campos requeridos */}
                       {selectedShippingMethod && (selectedShippingMethod.requires_address || selectedShippingMethod.requires_phone) && (
                         <div className="text-xs text-gray-600 bg-gray-100 p-2 rounded">
-                          <strong>Campos requeridos para este método de envío:</strong>
+                          <strong>Campos requeridos para este método de delivery:</strong>
                           <ul className="list-disc list-inside mt-1">
-                            {selectedShippingMethod.requires_address && <li>Dirección de envío</li>}
+                            {selectedShippingMethod.requires_address && <li>Dirección de delivery</li>}
                             {selectedShippingMethod.requires_phone && <li>Teléfono de contacto</li>}
                           </ul>
                         </div>
@@ -3426,7 +3426,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                       {shippingLoading ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
-                          Cargando métodos de envío...
+                          Cargando métodos de delivery...
                         </div>
                       ) : (
                         <div className="grid gap-3">
@@ -3501,7 +3501,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                           })}
                           {shippingMethods.length === 0 && !shippingLoading && (
                             <div className="text-sm text-muted-foreground text-center py-4">
-                              No hay métodos de envío disponibles
+                              No hay métodos de delivery disponibles
                             </div>
                           )}
 
@@ -3529,7 +3529,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                               className="w-full flex items-center gap-2 text-blue-600 border-blue-300 hover:bg-blue-50"
                             >
                               <Plus className="h-4 w-4" />
-                              Crear Envío Personalizado
+                              Crear Delivery Personalizado
                             </Button>
                           </div>
 
@@ -3538,18 +3538,18 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                             <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                               <h5 className="font-medium text-sm mb-3 flex items-center gap-2">
                                 <Settings className="h-4 w-4" />
-                                Crear Envío Personalizado
+                                Crear Delivery Personalizado
                               </h5>
 
                               <div className="space-y-3">
                                 <div>
                                   <Label htmlFor="customShippingName" className="text-xs font-medium">
-                                    Nombre del envío *
+                                    Nombre del delivery *
                                   </Label>
                                   <Input
                                     id="customShippingName"
                                     type="text"
-                                    placeholder="Ej: Envío Express Personalizado"
+                                    placeholder="Ej: Delivery Express Personalizado"
                                     value={customShippingData.name}
                                     onChange={(e) => setCustomShippingData(prev => ({ ...prev, name: e.target.value }))}
                                     className="mt-1"
@@ -3563,7 +3563,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                                   <Input
                                     id="customShippingDescription"
                                     type="text"
-                                    placeholder="Descripción del método de envío"
+                                    placeholder="Descripción del método de delivery"
                                     value={customShippingData.description}
                                     onChange={(e) => setCustomShippingData(prev => ({ ...prev, description: e.target.value }))}
                                     className="mt-1"
@@ -3623,7 +3623,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                                     onClick={handleCustomShippingSubmit}
                                     className="flex-1"
                                   >
-                                    Crear Envío
+                                    Crear Delivery
                                   </Button>
                                   <Button
                                     type="button"
@@ -3651,7 +3651,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                 parseFloat(String(orderData.shipping_total ?? 0)) > 0 && (
                   <div className="flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-200">
                     <div className="flex items-center gap-2">
-                      <span className="text-blue-700">🚚 Costo de Envío:</span>
+                      <span className="text-blue-700">🚚 Costo de Delivery:</span>
                     </div>
                     <span className="font-medium text-blue-600">
                       +${parseFloat(String(orderData.shipping_total ?? 0)).toLocaleString('es-CL')}

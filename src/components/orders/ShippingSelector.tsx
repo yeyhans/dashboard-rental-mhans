@@ -45,12 +45,12 @@ export function ShippingSelector({
           console.log('✅ Loaded shipping methods from database:', result.shippingMethods.length);
           setShippingMethods(result.shippingMethods);
         } else {
-          setError('No hay métodos de envío configurados en la base de datos');
+          setError('No hay métodos de delivery configurados en la base de datos');
           setShippingMethods([]);
         }
       } catch (err) {
         console.error('Error loading shipping methods from database:', err);
-        setError('Error al cargar métodos de envío desde la base de datos. Verifique la configuración.');
+        setError('Error al cargar métodos de delivery desde la base de datos. Verifique la configuración.');
         setShippingMethods([]);
       } finally {
         setLoading(false);
@@ -95,7 +95,7 @@ export function ShippingSelector({
         <CardContent className="p-4">
           <div className="flex items-center justify-center space-x-2">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm text-muted-foreground">Cargando métodos de envío...</span>
+            <span className="text-sm text-muted-foreground">Cargando métodos de delivery...</span>
           </div>
         </CardContent>
       </Card>
@@ -107,7 +107,7 @@ export function ShippingSelector({
       <CardHeader>
         <CardTitle className="flex items-center space-x-2 text-base">
           <Truck className="h-4 w-4" />
-          <span>Método de Envío</span>
+          <span>Método de Delivery</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -196,8 +196,8 @@ export function ShippingSelector({
           {shippingMethods.length === 0 && !loading && (
             <div className="text-center py-6 text-muted-foreground">
               <AlertCircle className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-              <p className="text-sm">No hay métodos de envío configurados</p>
-              <p className="text-xs mt-1">Configure métodos de envío en la base de datos</p>
+              <p className="text-sm">No hay métodos de delivery configurados</p>
+              <p className="text-xs mt-1">Configure métodos de delivery en la base de datos</p>
             </div>
           )}
 
@@ -226,7 +226,7 @@ export function ShippingSelector({
                 </div>
                 
                 <p className="text-xs text-muted-foreground mt-1">
-                  Ingresa un costo de envío personalizado
+                  Ingresa un costo de delivery personalizado
                 </p>
               </div>
             </div>
@@ -234,7 +234,7 @@ export function ShippingSelector({
             {selectedMethod === 'custom' && (
               <div className="ml-6 space-y-2">
                 <Label htmlFor="custom-cost" className="text-xs">
-                  Costo de Envío (CLP)
+                  Costo de Delivery (CLP)
                 </Label>
                 <Input
                   id="custom-cost"
@@ -255,7 +255,7 @@ export function ShippingSelector({
         {/* Información del total */}
         <div className="text-xs text-muted-foreground bg-gray-50 p-2 rounded">
           <div className="flex items-center justify-between">
-            <span>Costo de envío seleccionado:</span>
+            <span>Costo de delivery seleccionado:</span>
             <span className="font-medium">{formatShippingCost(parseFloat(customCost) || 0)}</span>
           </div>
         </div>

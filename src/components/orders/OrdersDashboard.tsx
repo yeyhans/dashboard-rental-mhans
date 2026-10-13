@@ -904,9 +904,9 @@ const OrdersDashboard = ({
                   value={shippingFilter}
                   onChange={(e) => setShippingFilter(e.target.value)}
                 >
-                  <option value="">Todos los envíos</option>
-                  <option value="con_envios">Con envíos</option>
-                  <option value="sin_envios">Sin envíos</option>
+                  <option value="">Con y sin delivery</option>
+                  <option value="con_envios">Con delivery</option>
+                  <option value="sin_envios">Sin delivery</option>
                 </select>
               </div>
 

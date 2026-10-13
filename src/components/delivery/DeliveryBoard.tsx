@@ -410,7 +410,9 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
       setEditing(null);
       setFeedback({
         tone: "ok",
-        message: isNew ? "Tipo de envío creado." : "Tipo de envío actualizado.",
+        message: isNew
+          ? "Tipo de delivery creado."
+          : "Tipo de delivery actualizado.",
       });
     } catch (error) {
       setFeedback({
@@ -418,7 +420,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
         message:
           error instanceof Error
             ? error.message
-            : "No se pudo guardar el tipo de envío",
+            : "No se pudo guardar el tipo de delivery",
       });
     } finally {
       setSaving(false);
@@ -485,7 +487,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
         message:
           error instanceof Error
             ? error.message
-            : "No se pudo eliminar el tipo de envío",
+            : "No se pudo eliminar el tipo de delivery",
       });
     } finally {
       setBusyId(null);
@@ -538,7 +540,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           icon={Truck}
-          label="Envíos Hoy"
+          label="Delivery Hoy"
           value={data.kpis.enviosHoy}
           footer={variacion}
         />
@@ -599,7 +601,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
               aria-hidden="true"
             />
             <p className="text-xs text-[var(--color-text-secondary)]">
-              No hay envíos en curso ahora mismo.
+              No hay delivery en curso ahora mismo.
             </p>
           </div>
         ) : (
@@ -649,7 +651,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
 
       <section className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)]">
         <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] p-4">
-          <h2 className="text-sm font-semibold">Tipos de Envío</h2>
+          <h2 className="text-sm font-semibold">Tipos de Delivery</h2>
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -660,7 +662,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
               className="inline-flex items-center gap-1.5 rounded-[6px] border border-[var(--color-border)] px-2.5 py-1.5 text-xs hover:bg-[var(--color-surface-2)]"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              Nuevo Tipo de Envío
+              Nuevo Tipo de Delivery
             </button>
           </div>
         </div>
@@ -680,7 +682,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
 
         {types.length === 0 ? (
           <p className="p-6 text-center text-xs text-[var(--color-text-secondary)]">
-            No hay métodos de envío configurados.
+            No hay métodos de delivery configurados.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -688,7 +690,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
               <thead>
                 <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-text-secondary)]">
                   <th scope="col" className="px-4 py-2 font-medium">
-                    Tipo de Envío
+                    Tipo de Delivery
                   </th>
                   <th scope="col" className="px-4 py-2 font-medium">
                     Descripción
@@ -774,7 +776,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
 
       <section className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)]">
         <div className="border-b border-[var(--color-border)] p-4">
-          <h2 className="mb-3 text-sm font-semibold">Historial de Envíos</h2>
+          <h2 className="mb-3 text-sm font-semibold">Historial de Delivery</h2>
           <div className="flex flex-wrap gap-2">
             <div className="relative min-w-[200px] flex-1">
               <Search
@@ -785,15 +787,15 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar envío, cliente o pedido"
-                aria-label="Buscar envío, cliente o pedido"
+                placeholder="Buscar delivery, cliente o pedido"
+                aria-label="Buscar delivery, cliente o pedido"
                 className="w-full rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] py-1.5 pl-8 pr-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text-primary)]"
               />
             </div>
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              aria-label="Filtrar por tipo de envío"
+              aria-label="Filtrar por tipo de delivery"
               className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
             >
               <option value="todos">Todos los tipos</option>
@@ -806,7 +808,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="Filtrar por estado del envío"
+              aria-label="Filtrar por estado del delivery"
               className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
             >
               <option value="todos">Todos los estados</option>
@@ -847,7 +849,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
                   Cliente
                 </th>
                 <th scope="col" className="px-4 py-2 font-medium">
-                  Tipo de Envío
+                  Tipo de Delivery
                 </th>
                 <th scope="col" className="px-4 py-2 font-medium">
                   Conductor
@@ -867,7 +869,8 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
                     colSpan={7}
                     className="p-8 text-center text-[var(--color-text-secondary)]"
                   >
-                    No se encontraron envíos con los filtros aplicados.
+                    No se encontraron registros de delivery con los filtros
+                    aplicados.
                   </td>
                 </tr>
               )}
@@ -911,7 +914,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
         <div className="grid grid-cols-3 gap-3 border-t border-[var(--color-border)] p-4">
           <div>
             <div className="text-[10px] text-[var(--color-text-faint)]">
-              Total Envíos
+              Total Delivery
             </div>
             <div className="font-mono text-base font-semibold">
               {data.totals.totalEnvios}
@@ -927,7 +930,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
           </div>
           <div>
             <div className="text-[10px] text-[var(--color-text-faint)]">
-              Promedio por Envío
+              Promedio por Delivery
             </div>
             <div className="font-mono text-base font-semibold">
               {formatCLP(data.totals.promedioPorEnvio)}
@@ -956,7 +959,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
 
       {deleting && (
         <ConfirmDialog
-          title="Eliminar tipo de envío"
+          title="Eliminar tipo de delivery"
           description={shippingMethodDeleteWarning(
             deleting.name,
             data.history.filter((row) => row.methodId === deleting.id).length,
@@ -1038,15 +1041,15 @@ function ShipmentTableRow({
       const payload = await response.json();
       if (!response.ok || !payload.success) {
         setStatusError(
-          payload.error || "No se pudo actualizar el estado del envío",
+          payload.error || "No se pudo actualizar el estado del delivery",
         );
         return;
       }
       onStatusChanged(row.id, payload.data.status);
       toast.success(
         action.to === "shipped"
-          ? "Envío marcado como despachado"
-          : "Envío marcado como entregado",
+          ? "Delivery marcado como despachado"
+          : "Delivery marcado como entregado",
       );
     } catch (error) {
       setStatusError(
@@ -1108,7 +1111,8 @@ function ShipmentTableRow({
           <span className="text-[10px] text-[var(--color-text-faint)]">—</span>
         ) : !eligible ? (
           <span className="text-[10px] text-[var(--color-text-faint)]">
-            Disponible cuando el envío esté en ruta ({shipmentLabel("shipped")})
+            Disponible cuando el delivery esté en ruta (
+            {shipmentLabel("shipped")})
           </span>
         ) : (
           <div className="flex flex-col gap-1.5">

@@ -26,7 +26,7 @@ export default function ShippingAnalyticsCard({ data }: ShippingAnalyticsCardPro
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(data.totalShippingRevenue)}</div>
             <p className="text-xs text-muted-foreground">
-              Ingresos por envíos
+              Ingresos por delivery
             </p>
           </CardContent>
         </Card>
@@ -39,20 +39,20 @@ export default function ShippingAnalyticsCard({ data }: ShippingAnalyticsCardPro
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(data.avgShippingCost)}</div>
             <p className="text-xs text-muted-foreground">
-              Por envío realizado
+              Por delivery realizado
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Envíos</CardTitle>
+            <CardTitle className="text-sm font-medium">Delivery</CardTitle>
             <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatNumber(data.pickupVsShipping.shipping)}</div>
             <p className="text-xs text-muted-foreground">
-              Órdenes con envío
+              Órdenes con delivery
             </p>
           </CardContent>
         </Card>
@@ -76,7 +76,7 @@ export default function ShippingAnalyticsCard({ data }: ShippingAnalyticsCardPro
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            Retiro vs Envío
+            Retiro vs Delivery
           </CardTitle>
           <CardDescription>
             Distribución de métodos de entrega
@@ -107,7 +107,7 @@ export default function ShippingAnalyticsCard({ data }: ShippingAnalyticsCardPro
               <div className="text-3xl font-bold text-blue-600 mb-2">
                 {formatNumber(data.pickupVsShipping.shipping)}
               </div>
-              <div className="text-sm font-medium mb-1">Envío a Domicilio</div>
+              <div className="text-sm font-medium mb-1">Delivery a Domicilio</div>
               <div className="text-xs text-muted-foreground">
                 {totalOrders > 0 ? `${((data.pickupVsShipping.shipping / totalOrders) * 100).toFixed(1)}%` : '0%'} del total
               </div>
@@ -124,7 +124,7 @@ export default function ShippingAnalyticsCard({ data }: ShippingAnalyticsCardPro
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Truck className="h-5 w-5" />
-            Métodos de Envío
+            Métodos de Delivery
           </CardTitle>
           <CardDescription>
             Análisis de métodos de entrega utilizados
@@ -185,7 +185,7 @@ export default function ShippingAnalyticsCard({ data }: ShippingAnalyticsCardPro
                   <div className="text-right">
                     <div className="text-sm font-bold">{formatNumber(region.orderCount)} órdenes</div>
                     <div className="text-xs text-muted-foreground">
-                      {formatCurrency(region.totalShippingCost)} en envíos
+                      {formatCurrency(region.totalShippingCost)} en delivery
                     </div>
                   </div>
                 </div>
@@ -199,10 +199,10 @@ export default function ShippingAnalyticsCard({ data }: ShippingAnalyticsCardPro
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              Tendencias de Envío
+              Tendencias de Delivery
             </CardTitle>
             <CardDescription>
-              Evolución mensual de costos de envío
+              Evolución mensual de costos de delivery
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -242,7 +242,7 @@ export default function ShippingAnalyticsCard({ data }: ShippingAnalyticsCardPro
         <CardHeader>
           <CardTitle>Resumen de Eficiencia</CardTitle>
           <CardDescription>
-            Métricas clave de la operación de envíos
+            Métricas clave de la operación de delivery
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -258,7 +258,7 @@ export default function ShippingAnalyticsCard({ data }: ShippingAnalyticsCardPro
               <div className="text-2xl font-bold text-blue-600">
                 {totalOrders > 0 ? `${((data.pickupVsShipping.shipping / totalOrders) * 100).toFixed(1)}%` : '0%'}
               </div>
-              <div className="text-sm text-muted-foreground">Tasa de envío</div>
+              <div className="text-sm text-muted-foreground">Tasa de delivery</div>
             </div>
             
             <div className="text-center p-4 border rounded-lg">

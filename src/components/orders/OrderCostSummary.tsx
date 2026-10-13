@@ -151,7 +151,7 @@ export const OrderCostSummary = ({
         {/* Shipping */}
         {showShipping && (
           <div className="flex justify-between items-center gap-2">
-            <span className="text-muted-foreground">Envío</span>
+            <span className="text-muted-foreground">Delivery</span>
             {isEditable && onShippingChange ? (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">$</span>

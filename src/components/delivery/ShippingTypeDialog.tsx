@@ -59,7 +59,7 @@ export function ShippingTypeDialog({ method, saving, onSubmit, onClose }: Shippi
       <form onSubmit={handleSubmit} noValidate>
         <div className="flex items-center justify-between border-b border-[var(--color-border)] p-4">
           <h2 id={titleId} className="text-sm font-semibold">
-            {method ? 'Editar tipo de envío' : 'Nuevo tipo de envío'}
+            {method ? 'Editar tipo de delivery' : 'Nuevo tipo de delivery'}
           </h2>
           <button
             type="button"
@@ -79,7 +79,7 @@ export function ShippingTypeDialog({ method, saving, onSubmit, onClose }: Shippi
                 ref={firstFieldRef}
                 value={form.name}
                 onChange={e => set('name', e.target.value)}
-                placeholder="Despacho Santiago"
+                placeholder="Delivery Santiago"
                 className={FIELD_CLASS}
               />
             )}

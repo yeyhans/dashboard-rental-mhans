@@ -300,8 +300,8 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers, triggerCla
           const defaultMethods: ShippingMethod[] = [
             {
               id: 2,
-              name: 'Envío Estándar',
-              description: 'Envío estándar a todo Chile',
+              name: 'Delivery Estándar',
+              description: 'Delivery estándar a todo Chile',
               cost: '5000',
               shipping_type: 'flat_rate',
               enabled: true,
@@ -705,7 +705,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers, triggerCla
 
       // Validar que se haya seleccionado un método de envío si se eligió despacho
       if (deliveryMethod === 'shipping' && !selectedShippingMethod) {
-        setError('Por favor seleccione un método de envío');
+        setError('Por favor seleccione un método de delivery');
         setLoading(false);
         return;
       }
@@ -1171,10 +1171,10 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers, triggerCla
                 <div className="flex-1">
                   <Label htmlFor="shipping" className="flex items-center space-x-2 cursor-pointer">
                     <Truck className="h-4 w-4" />
-                    <span className="font-medium">Envío a domicilio</span>
+                    <span className="font-medium">Delivery a domicilio</span>
                   </Label>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Envío del pedido a la dirección del cliente
+                    Delivery del pedido a la dirección del cliente
                   </p>
                 </div>
               </div>
@@ -1186,17 +1186,17 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers, triggerCla
             <div className="space-y-4">
               <h4 className="font-medium text-sm flex items-center gap-2">
                 <Truck className="h-4 w-4" />
-                Método de Envío
+                Método de Delivery
               </h4>
               {!selectedShippingMethod && !shippingLoading && (
                 <p className="text-sm text-orange-600 font-medium">
-                  * Debe seleccionar un método de envío para continuar
+                  * Debe seleccionar un método de delivery para continuar
                 </p>
               )}
               {shippingLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
-                  Cargando métodos de envío...
+                  Cargando métodos de delivery...
                 </div>
               ) : (
                 <div className="grid gap-3">
@@ -1250,7 +1250,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers, triggerCla
                   })}
                   {shippingMethods.length === 0 && !shippingLoading && (
                     <div className="text-sm text-muted-foreground text-center py-4">
-                      No hay métodos de envío disponibles
+                      No hay métodos de delivery disponibles
                     </div>
                   )}
                 </div>
