@@ -1,18 +1,42 @@
 import { Label } from "../ui/label";
-import { formatBusinessDateTimeFull } from '../../lib/businessDay';
+import { formatBusinessDateTimeFull } from "../../lib/businessDay";
 import { Button } from "../ui/button";
-import { STATUS_OPTIONS, canTransition, isOrderStatus } from "../../lib/orderStatus";
+import {
+  STATUS_OPTIONS,
+  canTransition,
+  isOrderStatus,
+} from "../../lib/orderStatus";
 
 // Icons as SVG components
 const FileTextIcon = () => (
-  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  <svg
+    className="h-4 w-4"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+    />
   </svg>
 );
 
 const FileCheckIcon = () => (
-  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  <svg
+    className="h-4 w-4"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
   </svg>
 );
 
@@ -20,9 +44,20 @@ const FileCheckIcon = () => (
 // ofrecia nueve valores, dos de los cuales — `trash` y `auto-draft` — el CHECK de la tabla nunca
 // admitio: elegirlos producia una violacion de constraint que el endpoint devolvia como 500.
 
+/**
+ * Whether `value` may be picked in a status selector for an order currently in `current`.
+ * Area 01 §5: no view lets a stage be skipped. The current status stays selectable so the
+ * control can show it; a legacy origin is unknown to the machine, so it is not judged.
+ */
+export function isSelectableStatus(current: string, value: string): boolean {
+  if (value === current) return true;
+  return isOrderStatus(current) ? canTransition(current, value as never) : true;
+}
+
 // Format date
 // Business-zone formatter: the island is server-rendered in UTC and hydrated in Santiago (D-5).
-const formatDate = (dateString: string) => formatBusinessDateTimeFull(dateString);
+const formatDate = (dateString: string) =>
+  formatBusinessDateTimeFull(dateString);
 
 interface OrderEstadoProps {
   order: {
@@ -60,12 +95,12 @@ function OrderEstado({ order, handleStatusUpdate, loading }: OrderEstadoProps) {
                 // 409 ante un salto, pero dejar la opcion elegible convierte un clic equivocado
                 // en un error; deshabilitarla lo convierte en algo que no se puede hacer.
                 // El estado actual queda habilitado para que el <select> pueda mostrarlo.
-                const isCurrent = value === order.status;
-                const isLegal = isOrderStatus(order.status)
-                  ? canTransition(order.status, value)
-                  : true; // origen legado: la maquina no lo conoce, no puede juzgarlo
                 return (
-                  <option key={value} value={value} disabled={!isCurrent && !isLegal}>
+                  <option
+                    key={value}
+                    value={value}
+                    disabled={!isSelectableStatus(order.status, value)}
+                  >
                     {label}
                   </option>
                 );
@@ -82,7 +117,9 @@ function OrderEstado({ order, handleStatusUpdate, loading }: OrderEstadoProps) {
         </div>
         <div>
           <Label className="font-medium">Última Modificación</Label>
-          <div className="mt-1">{formatDate(order.date_modified || order.date_created)}</div>
+          <div className="mt-1">
+            {formatDate(order.date_modified || order.date_created)}
+          </div>
         </div>
       </div>
 
@@ -92,17 +129,29 @@ function OrderEstado({ order, handleStatusUpdate, loading }: OrderEstadoProps) {
           <Button
             variant="outline"
             className="w-full justify-start gap-2 h-auto py-3"
-            onClick={() => window.open(order.metadata?.pdf_on_hold_url || order.new_pdf_on_hold_url, '_blank')}
+            onClick={() =>
+              window.open(
+                order.metadata?.pdf_on_hold_url || order.new_pdf_on_hold_url,
+                "_blank",
+              )
+            }
           >
             <FileTextIcon />
             <span className="text-left">Ver PDF de Presupuesto</span>
           </Button>
         )}
-        {(order.metadata?.pdf_processing_url || order.new_pdf_processing_url) && (
+        {(order.metadata?.pdf_processing_url ||
+          order.new_pdf_processing_url) && (
           <Button
             variant="outline"
             className="w-full justify-start gap-2 h-auto py-3"
-            onClick={() => window.open(order.metadata?.pdf_processing_url || order.new_pdf_processing_url, '_blank')}
+            onClick={() =>
+              window.open(
+                order.metadata?.pdf_processing_url ||
+                  order.new_pdf_processing_url,
+                "_blank",
+              )
+            }
           >
             <FileCheckIcon />
             <span className="text-left">Ver PDF de Contrato</span>
@@ -110,6 +159,6 @@ function OrderEstado({ order, handleStatusUpdate, loading }: OrderEstadoProps) {
         )}
       </div>
     </div>
-  )
+  );
 }
-export default OrderEstado
+export default OrderEstado;
