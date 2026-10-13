@@ -324,13 +324,23 @@ export const PUT: APIRoute = withAuth(
       }
 
       // R-14: same lifecycle side effects as the status route (contract on `in-rental`). The
-      // order is already saved; the service never throws and only reports a warning.
+      // order is already saved; the service never throws and only reports a warning, which is
+      // added to (never replaces) the email warning (H-2).
+      //
+      // It runs inside the request on purpose: the contract render is bounded by
+      // `CONTRACT_GENERATION_TIMEOUT_MS` (20 s), and no `waitUntil` is wired in this project (no
+      // `@vercel/functions` dependency): on serverless, work started after the response is sent
+      // can be frozen mid-upload. Deferring it is a follow-up, not a silent change.
       if (isStatusChange) {
         const lifecycle = await OrderLifecycleService.onStatusChanged(
           updatedOrder,
           String(newStatus),
         );
-        if (lifecycle.warning) warning = lifecycle.warning;
+        if (lifecycle.warning) {
+          warning = warning
+            ? `${warning} ${lifecycle.warning}`
+            : lifecycle.warning;
+        }
       }
 
       return new Response(

@@ -63,6 +63,10 @@ export const POST: APIRoute = withAuth(
             success: false,
             error: error.message,
             ...(error.code ? { code: error.code } : {}),
+            // H-2: a partial close tells the panel where the order stopped.
+            ...(error.currentStatus
+              ? { currentStatus: error.currentStatus }
+              : {}),
           },
           error.status,
         );

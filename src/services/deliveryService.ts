@@ -171,6 +171,11 @@ export class DeliveryService {
       .from('shipping_usage')
       .select('*')
       .eq('order_id', orderId)
+      // H-2: `shipping_usage` is UNIQUE on `order_id` today, so this is one row; ordering keeps the
+      // read deterministic (latest shipment) if that constraint is ever relaxed.
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(1)
       .maybeSingle();
     if (error) throw error;
     if (!data) return null;

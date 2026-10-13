@@ -133,3 +133,26 @@ describe("/api/delivery/orders/[orderId]/driver", () => {
     expect(JSON.stringify(await response.json())).not.toContain("secret");
   });
 });
+
+describe("PUT driver — explicit clear only (H-2)", () => {
+  it("answers 400 when the body has no driver_name field", async () => {
+    const response = await route.PUT(ctx("PUT", "9", {}));
+    expect(response.status).toBe(400);
+    expect(setDriverForOrder).not.toHaveBeenCalled();
+  });
+
+  it("clears only with an explicit empty string or null", async () => {
+    vi.clearAllMocks();
+    setDriverForOrder.mockResolvedValue({ shipmentId: 3, driverName: null });
+    expect((await route.PUT(ctx("PUT", "9", { driver_name: "" }))).status).toBe(
+      200,
+    );
+    expect(
+      (await route.PUT(ctx("PUT", "9", { driver_name: null }))).status,
+    ).toBe(200);
+    expect(setDriverForOrder.mock.calls).toEqual([
+      [9, ""],
+      [9, null],
+    ]);
+  });
+});

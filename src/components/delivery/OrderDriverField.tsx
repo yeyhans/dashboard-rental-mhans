@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { DRIVER_NAME_MAX_LENGTH } from "../../lib/delivery";
 import { apiClient } from "../../services/apiClient";
@@ -32,38 +32,50 @@ export default function OrderDriverField({ orderId }: OrderDriverFieldProps) {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const response = await apiClient.get(
-          `/api/delivery/orders/${orderId}/driver`,
-        );
-        const payload = await response.json().catch(() => null);
-        if (cancelled) return;
-        if (!response.ok || !payload?.success) {
-          setFeedback({
-            tone: "error",
-            message: payload?.error || "No se pudo cargar el conductor.",
-          });
-          return;
-        }
-        const current = payload.data.driverName ?? "";
-        setValue(current);
-        setSaved(current);
-        setKnownDrivers(payload.data.knownDrivers ?? []);
-        setHasShipment(payload.data.shipmentId !== null);
-      } catch {
-        if (!cancelled)
-          setFeedback({ tone: "error", message: "Error de conexión." });
-      } finally {
-        if (!cancelled) setLoading(false);
+  // An unsaved edit survives a background reload (H-2): only a clean field is overwritten.
+  const dirtyRef = useRef(false);
+  dirtyRef.current = value.trim() !== saved;
+  const aliveRef = useRef(true);
+
+  const load = useCallback(async () => {
+    try {
+      const response = await apiClient.get(
+        `/api/delivery/orders/${orderId}/driver`,
+      );
+      const payload = await response.json().catch(() => null);
+      if (!aliveRef.current) return;
+      if (!response.ok || !payload?.success) {
+        setFeedback({
+          tone: "error",
+          message: payload?.error || "No se pudo cargar el conductor.",
+        });
+        return;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+      const current = payload.data.driverName ?? "";
+      if (!dirtyRef.current) setValue(current);
+      setSaved(current);
+      setKnownDrivers(payload.data.knownDrivers ?? []);
+      setHasShipment(payload.data.shipmentId !== null);
+    } catch {
+      if (aliveRef.current)
+        setFeedback({ tone: "error", message: "Error de conexión." });
+    } finally {
+      if (aliveRef.current) setLoading(false);
+    }
   }, [orderId]);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    void load();
+    // H-2: the shipment row appears when the order is saved with a shipping method, often in
+    // another tab or after a reload; "no shipment yet" must not stick, so re-check on focus.
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      aliveRef.current = false;
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [load]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -131,7 +143,14 @@ export default function OrderDriverField({ orderId }: OrderDriverFieldProps) {
       </datalist>
       {!loading && !hasShipment && (
         <p className="text-xs text-muted-foreground">
-          Guarda el pedido con un método de envío para poder asignar conductor.
+          Guarda el pedido con un método de envío para poder asignar conductor.{" "}
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="underline underline-offset-2"
+          >
+            Volver a comprobar
+          </button>
         </p>
       )}
       {feedback && (

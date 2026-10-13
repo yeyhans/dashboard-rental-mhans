@@ -80,10 +80,16 @@ export const PUT: APIRoute = withAuth(
       return json({ success: false, error: "JSON inválido" }, 400);
     }
 
+    // H-2: only an explicit `driver_name` ("" or null clears it). A body without the field is a
+    // client mistake, not a request to remove the driver.
+    if (!body || typeof body !== "object" || !("driver_name" in body)) {
+      return json({ success: false, error: "Falta el campo driver_name" }, 400);
+    }
+
     try {
       const updated = await DeliveryService.setDriverForOrder(
         orderId,
-        body.driver_name ?? null,
+        body.driver_name,
       );
       return json({ success: true, data: updated }, 200);
     } catch (error) {

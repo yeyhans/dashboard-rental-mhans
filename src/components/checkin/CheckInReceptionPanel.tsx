@@ -161,6 +161,7 @@ export default function CheckInReceptionPanel({
   const [itemFilter, setItemFilter] = useState("todos");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
 
   const totals = receptionTotals(lines, reception);
   const finalize = finalizeState(lines, reception);
@@ -215,12 +216,19 @@ export default function CheckInReceptionPanel({
       );
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.success) {
-        toast.error(
+        const message =
           payload?.error ||
-            "No se pudo cerrar la devolución. Inténtalo de nuevo.",
-        );
+          "No se pudo cerrar la devolución. Inténtalo de nuevo.";
+        // H-2: a close that stopped midway stays visible in the dialog, with where the order
+        // was left; "Reintentar cierre" resumes from there (the server derives the steps).
+        if (payload?.code === "PARTIAL_CLOSE") {
+          setCloseError(message);
+          return;
+        }
+        toast.error(message);
         return;
       }
+      setCloseError(null);
       if (payload.warning) toast.warning(payload.warning);
       toast.success(
         finalize.variant === "incident"
@@ -526,6 +534,14 @@ export default function CheckInReceptionPanel({
           <p className="text-xs text-[var(--color-text-secondary)]">
             El pedido pasará a Completado.
           </p>
+          {closeError && (
+            <p
+              role="alert"
+              className="rounded-[6px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-2 text-xs text-[var(--color-crit)]"
+            >
+              {closeError}
+            </p>
+          )}
           <DialogFooter>
             <Button
               type="button"
@@ -543,7 +559,11 @@ export default function CheckInReceptionPanel({
               disabled={closing}
               onClick={handleConfirmClose}
             >
-              {closing ? "Cerrando…" : "Confirmar cierre"}
+              {closing
+                ? "Cerrando…"
+                : closeError
+                  ? "Reintentar cierre"
+                  : "Confirmar cierre"}
             </Button>
           </DialogFooter>
         </DialogContent>

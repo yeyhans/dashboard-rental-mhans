@@ -150,3 +150,25 @@ describe("POST /api/bodega/orders/[id]/finalize", () => {
     expect(JSON.stringify(await response.json())).not.toContain("secret");
   });
 });
+
+describe("POST /api/bodega/orders/[id]/finalize — partial close (H-2)", () => {
+  it("tells the panel which state the order was left in", async () => {
+    const error = new ReturnFinalizeError(
+      409,
+      "La orden quedó en Devolución",
+      "PARTIAL_CLOSE",
+    );
+    (error as any).currentStatus = "return";
+    finalizeReturn.mockRejectedValue(error);
+
+    const response = await POST(ctx("7", { lines: LINES }));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      success: false,
+      error: "La orden quedó en Devolución",
+      code: "PARTIAL_CLOSE",
+      currentStatus: "return",
+    });
+  });
+});

@@ -43,9 +43,8 @@ vi.mock("../../lib/supabase", () => ({
   },
 }));
 
-const { CheckInService, CHECK_IN_PAGE_SIZE } = await import(
-  "../checkInService"
-);
+const { CheckInService, CHECK_IN_PAGE_SIZE, CHECK_IN_KPI_ROW_LIMIT } =
+  await import("../checkInService");
 
 const NOW = new Date("2026-10-13T15:00:00Z");
 
@@ -131,5 +130,55 @@ describe("CheckInService.getBoard", () => {
     results[0] = { data: null, error: new Error("db down") };
 
     await expect(CheckInService.getBoard(NOW)).rejects.toThrow("db down");
+  });
+});
+
+/* H-2 --------------------------------------------------------------------------------------- */
+
+describe("CheckInService.getBoard — bounds (H-2)", () => {
+  afterEach(() => {
+    queries.length = 0;
+    results.length = 0;
+    fromCount = 0;
+  });
+
+  it("clamps a page past the end to the last page", async () => {
+    results[0] = { data: [], error: null, count: 45 };
+    results[1] = {
+      data: [row(9, "return", "2026-10-10")],
+      error: null,
+      count: 45,
+    };
+
+    const board = await CheckInService.getBoard(NOW, { page: 9, pageSize: 20 });
+
+    const ranges = queries
+      .flat()
+      .filter((c) => c.method === "range")
+      .map((c) => c.args);
+    expect(ranges).toEqual([
+      [160, 179],
+      [40, 59],
+    ]);
+    expect(board.pagination.page).toBe(3);
+    expect(board.entries.map((e) => e.id)).toEqual([9]);
+  });
+
+  it("bounds the KPI queries and selects only the two columns they need", async () => {
+    await CheckInService.getBoard(NOW);
+
+    const kpiQueries = queries.filter(
+      (calls) => !calls.some((c) => c.method === "range"),
+    );
+    expect(kpiQueries).toHaveLength(2);
+    for (const calls of kpiQueries) {
+      expect(calls.find((c) => c.method === "select")?.args[0]).toBe(
+        "status, order_fecha_termino",
+      );
+      expect(calls).toContainEqual({
+        method: "limit",
+        args: [CHECK_IN_KPI_ROW_LIMIT],
+      });
+    }
   });
 });

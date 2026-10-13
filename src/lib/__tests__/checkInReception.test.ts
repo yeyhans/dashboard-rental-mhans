@@ -349,3 +349,41 @@ describe("return report lines", () => {
     expect(result.ok ? "" : result.error).toBe(RETURN_REPORT_ERRORS.INVALID);
   });
 });
+
+/* H-2 --------------------------------------------------------------------------------------- */
+
+describe("linesToAutoReceive — two lines of the same product (H-2)", () => {
+  const lines = [
+    { key: "0", quantity: 2, productId: 10 },
+    { key: "1", quantity: 1, productId: 10 },
+  ];
+
+  it("fills the lines in order with the units checked in", () => {
+    const state = createReception(lines);
+    expect(linesToAutoReceive(lines, state, { 10: 2 })).toEqual(["0"]);
+    expect(linesToAutoReceive(lines, state, { 10: 3 })).toEqual(["0", "1"]);
+  });
+
+  it("does not count the same units twice for both lines", () => {
+    const state = createReception(lines);
+    expect(linesToAutoReceive(lines, state, { 10: 1 })).toEqual([]);
+  });
+
+  it("lets a line already set by hand consume its units", () => {
+    const state = receptionReducer(createReception(lines), {
+      type: "setState",
+      key: "0",
+      state: "incomplete",
+    });
+    expect(linesToAutoReceive(lines, state, { 10: 2 })).toEqual([]);
+    expect(linesToAutoReceive(lines, state, { 10: 3 })).toEqual(["1"]);
+  });
+});
+
+describe("isReturnDue — timestamps (H-2)", () => {
+  it("reads a timestamp end date in the business zone, not UTC", () => {
+    // 02:00 UTC on Oct 14 is still Oct 13 in Santiago.
+    expect(isReturnDue("2026-10-14T02:00:00Z", "2026-10-13")).toBe(true);
+    expect(isReturnDue("2026-10-14T05:00:00Z", "2026-10-13")).toBe(false);
+  });
+});

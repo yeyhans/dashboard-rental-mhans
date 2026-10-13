@@ -13,6 +13,8 @@
  * per serialised unit, the check-in movement (`asset_movements.condition_notes`).
  */
 
+import { businessDay } from "./businessDay";
+
 export type ReceptionState =
   | "pending"
   | "received"
@@ -236,7 +238,11 @@ export function isReturnDue(
   todayIsoDay: string,
 ): boolean {
   if (!endDate) return false;
-  return endDate.slice(0, 10) <= todayIsoDay;
+  // A bare date compares as-is; a timestamp is read in the business zone, the same way
+  // `todayIsoDay` was produced, so both sides speak America/Santiago (H-2).
+  const endDay =
+    endDate.length > 10 ? businessDay(new Date(endDate)) : endDate.slice(0, 10);
+  return endDay <= todayIsoDay;
 }
 
 /**
@@ -248,14 +254,22 @@ export function linesToAutoReceive(
   state: ReceptionMap,
   checkedInByProduct: Readonly<Record<number, number>>,
 ): string[] {
-  return lines
-    .filter((line) => {
-      if (line.productId === null || state[line.key]?.state !== "pending")
-        return false;
-      const checkedIn = checkedInByProduct[line.productId] ?? 0;
-      return line.quantity > 0 && checkedIn >= line.quantity;
-    })
-    .map((line) => line.key);
+  // H-2: two lines can share a product. The units checked in are handed out to those lines in
+  // order, each line taking its full quantity, so one unit never completes two lines. A line set
+  // by hand still takes its units: they are physically back too.
+  const remaining: Record<number, number> = { ...checkedInByProduct };
+  const keys: string[] = [];
+  for (const line of lines) {
+    if (line.productId === null || line.quantity <= 0) continue;
+    const available = remaining[line.productId] ?? 0;
+    if (available < line.quantity) {
+      remaining[line.productId] = 0;
+      continue;
+    }
+    remaining[line.productId] = available - line.quantity;
+    if (state[line.key]?.state === "pending") keys.push(line.key);
+  }
+  return keys;
 }
 
 /** One line of `orders.return_report.lines`. */

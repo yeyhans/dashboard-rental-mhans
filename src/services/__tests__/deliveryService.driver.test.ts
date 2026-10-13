@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  * migration is applied, so it selects `*` instead of naming the column, and the write reports a
  * clear "pending migration" error instead of a 500.
  */
+const latestCalls = vi.hoisted(() => [] as unknown[][]);
+
 const state = vi.hoisted(() => ({
   usageSelect: "" as string,
   usageRows: [] as unknown[],
@@ -33,12 +35,24 @@ vi.mock("../../lib/supabase", () => ({
             order: () => ({
               limit: async () => ({ data: state.usageRows, error: null }),
             }),
-            eq: () => ({
-              maybeSingle: async () => ({
-                data: state.driverRows[0] ?? null,
-                error: null,
-              }),
-            }),
+            // H-2: latest shipment of the order, deterministically.
+            eq: () => {
+              const chain: any = {
+                order: (...args: unknown[]) => {
+                  latestCalls.push(["order", ...args]);
+                  return chain;
+                },
+                limit: (...args: unknown[]) => {
+                  latestCalls.push(["limit", ...args]);
+                  return chain;
+                },
+                maybeSingle: async () => ({
+                  data: state.driverRows[0] ?? null,
+                  error: null,
+                }),
+              };
+              return chain;
+            },
             not: () => ({
               order: () => ({
                 limit: async () => ({ data: state.driverRows, error: null }),
@@ -154,6 +168,19 @@ describe("DeliveryService driver", () => {
     await expect(DeliveryService.listDriverNames()).resolves.toEqual([
       "Carlos R.",
       "Juan P.",
+    ]);
+  });
+
+  it("reads the order's latest shipment when there is more than one (H-2)", async () => {
+    latestCalls.length = 0;
+    state.driverRows = [{ id: 5, driver_name: "Juan P." }];
+
+    await DeliveryService.getDriverForOrder(9);
+
+    expect(latestCalls).toEqual([
+      ["order", "created_at", { ascending: false }],
+      ["order", "id", { ascending: false }],
+      ["limit", 1],
     ]);
   });
 });

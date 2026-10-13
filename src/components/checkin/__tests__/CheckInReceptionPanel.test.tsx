@@ -136,3 +136,13 @@ describe("CheckInReceptionPanel — shared flow (R-04b)", () => {
     expect(html).toMatch(/role="group"[^>]*class="[^"]*flex-wrap/);
   });
 });
+
+/** H-2: a close that stops midway is shown, not swallowed, and can be retried from the dialog. */
+describe("CheckInReceptionPanel — partial close (H-2)", () => {
+  it("keeps the dialog open with where the order stopped, and retries with the same button", () => {
+    expect(source).toContain('payload?.code === "PARTIAL_CLOSE"');
+    expect(source).toContain("setCloseError(");
+    expect(source).toMatch(/role="alert"[\s\S]{0,200}\{closeError\}/);
+    expect(source).toContain("Reintentar cierre");
+  });
+});

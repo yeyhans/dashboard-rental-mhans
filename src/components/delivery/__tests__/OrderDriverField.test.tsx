@@ -46,3 +46,12 @@ describe("OrderDriverField", () => {
     );
   });
 });
+
+/** H-2: "no shipment yet" must not stick after the order is saved with a shipping method. */
+describe("OrderDriverField — refresh (H-2)", () => {
+  it("reloads when the window regains focus and offers a manual re-check", () => {
+    expect(source).toContain('window.addEventListener("focus"');
+    expect(source).toContain('window.removeEventListener("focus"');
+    expect(source).toContain("Volver a comprobar");
+  });
+});

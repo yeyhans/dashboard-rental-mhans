@@ -618,3 +618,55 @@ describe("admin order update relay boundary", () => {
     });
   });
 });
+
+/** H-2 (R3): a lifecycle warning must not hide the notification warning, and vice versa. */
+describe("avisos combinados", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps both the email warning and the lifecycle warning", async () => {
+    vi.stubEnv("FRONTEND_API_SECRET", "frontend-secret");
+    from.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          single: async () => ({
+            data: { id: 123, status: "return" },
+            error: null,
+          }),
+        }),
+      }),
+    });
+    updateOrder.mockResolvedValue({ id: 123, status: "completed" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("down", { status: 500 })),
+    );
+    onStatusChanged.mockResolvedValueOnce({
+      generated: false,
+      warning: "Aviso del ciclo de vida.",
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { PUT } = await import("../[id]");
+
+    const response = await PUT({
+      params: { id: "123" },
+      request: new Request(
+        "https://dashboard.mariohans.cl/api/orders/update/123",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "completed" }),
+        },
+      ),
+      locals: { user: { id: "admin-1", role: "admin" } },
+    } as never);
+
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.warning).toContain("correo");
+    expect(body.warning).toContain("Aviso del ciclo de vida.");
+  });
+});

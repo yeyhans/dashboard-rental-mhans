@@ -210,3 +210,75 @@ describe("OrderLifecycleService.finalizeReturn", () => {
     expect(result.warning).toBe(RETURN_REPORT_COLUMN_WARNING);
   });
 });
+
+/* H-2: finalize is resumable --------------------------------------------------------------- */
+
+describe("OrderLifecycleService.finalizeReturn — resumable (H-2)", () => {
+  beforeEach(() => {
+    updateOrderStatus.mockImplementation(
+      async (id: number, status: string) => ({ id, status }),
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    reportWrites.length = 0;
+    reportResult.value = { error: null };
+  });
+
+  it("succeeds without changes when the order is already completed with its report", async () => {
+    getOrderById.mockResolvedValue({
+      id: 7,
+      status: "completed",
+      order_fecha_termino: "2026-10-12",
+    });
+    vi.spyOn(OrderLifecycleService, "getReturnReport").mockResolvedValue({
+      lines: [],
+    });
+
+    const result = await OrderLifecycleService.finalizeReturn(input());
+
+    expect(result.steps).toEqual([]);
+    expect(updateOrderStatus).not.toHaveBeenCalled();
+    expect(reportWrites).toEqual([]);
+  });
+
+  it("saves the missing report when a previous close completed the order but not the report", async () => {
+    getOrderById.mockResolvedValue({
+      id: 7,
+      status: "completed",
+      order_fecha_termino: "2026-10-12",
+    });
+    vi.spyOn(OrderLifecycleService, "getReturnReport").mockResolvedValue(null);
+
+    const result = await OrderLifecycleService.finalizeReturn(input());
+
+    expect(result.steps).toEqual([]);
+    expect(updateOrderStatus).not.toHaveBeenCalled();
+    expect(reportWrites).toHaveLength(1);
+  });
+
+  it("reports where the order stopped when a step fails midway", async () => {
+    getOrderById.mockResolvedValue({
+      id: 7,
+      status: "in-rental",
+      order_fecha_termino: "2026-10-12",
+    });
+    updateOrderStatus
+      .mockResolvedValueOnce({ id: 7, status: "return" })
+      .mockRejectedValueOnce(new Error("db down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const error = await OrderLifecycleService.finalizeReturn(input()).catch(
+      (e) => e,
+    );
+
+    expect(error).toBeInstanceOf(ReturnFinalizeError);
+    expect(error.status).toBe(409);
+    expect(error.code).toBe("PARTIAL_CLOSE");
+    expect(error.currentStatus).toBe("return");
+    expect(error.message).toContain("Devolución");
+    expect(reportWrites).toEqual([]);
+  });
+});

@@ -7,6 +7,7 @@ import {
   type ReturnReportLine,
 } from "../lib/checkInReception";
 import { checkStatusChange } from "../lib/orderTransitionGate";
+import { statusLabel } from "../lib/orderStatus";
 import { OrderService } from "./orderService";
 
 /**
@@ -56,6 +57,8 @@ export class ReturnFinalizeError extends Error {
     readonly status: 400 | 403 | 404 | 409,
     message: string,
     readonly code?: string,
+    /** H-2: on a partial close, the status the order was left in. */
+    readonly currentStatus?: string,
   ) {
     super(message);
     this.name = "ReturnFinalizeError";
@@ -117,6 +120,24 @@ export class OrderLifecycleService {
     if (!order) throw new ReturnFinalizeError(404, "La orden no existe");
 
     const status = String(order.status ?? "");
+
+    // H-2: resumable. A previous close may have completed the order and then failed (or been cut
+    // off) before the report was written. Re-running it is a success, not a 409: the report is
+    // written if it is missing, and nothing else changes.
+    if (status === "completed") {
+      const existing = await OrderLifecycleService.getReturnReport(
+        input.orderId,
+      );
+      const warning = existing
+        ? undefined
+        : await OrderLifecycleService.saveReturnReport(input.orderId, {
+            finalized_at: new Date().toISOString(),
+            finalized_by: input.actorId ?? null,
+            lines: report.lines,
+          });
+      return { steps: [], order, ...(warning ? { warning } : {}) };
+    }
+
     const steps = returnClosingSteps(status);
     if (!steps) {
       throw new ReturnFinalizeError(
@@ -153,7 +174,28 @@ export class OrderLifecycleService {
           rejection.code,
         );
       }
-      updated = await OrderService.updateOrderStatus(input.orderId, step);
+      try {
+        updated = await OrderService.updateOrderStatus(input.orderId, step);
+      } catch (error) {
+        // H-2: never a silent half-state. If an earlier step already landed, say where the order
+        // stopped; finalize again resumes from there (the steps are derived from the live status).
+        if (current === status) throw error;
+        console.error(
+          "[OrderLifecycleService] Cierre de devolución incompleto:",
+          {
+            orderId: input.orderId,
+            stoppedAt: current,
+            failedStep: step,
+            error,
+          },
+        );
+        throw new ReturnFinalizeError(
+          409,
+          `La devolución quedó a medias: el pedido está en «${statusLabel(current)}». Vuelve a finalizar para completarla.`,
+          "PARTIAL_CLOSE",
+          current,
+        );
+      }
       current = step;
     }
 
