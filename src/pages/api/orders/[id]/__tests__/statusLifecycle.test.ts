@@ -55,7 +55,9 @@ describe("PUT /api/orders/[id]/status lifecycle hook", () => {
     const response = await PUT(context("in-rental"));
 
     expect(response.status).toBe(200);
-    expect(onStatusChanged).toHaveBeenCalledWith(saved, "in-rental");
+    expect(onStatusChanged).toHaveBeenCalledWith(saved, "in-rental", {
+      previousStatus: "preparation",
+    });
     const body = await response.json();
     expect(body.success).toBe(true);
     expect(body.warning).toBeUndefined();

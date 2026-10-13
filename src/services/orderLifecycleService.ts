@@ -7,7 +7,12 @@ import {
   type ReturnReportLine,
 } from "../lib/checkInReception";
 import { checkStatusChange } from "../lib/orderTransitionGate";
-import { statusLabel } from "../lib/orderStatus";
+import { emailOnTransition, statusLabel } from "../lib/orderStatus";
+import type { TransactionalEmailKey } from "../lib/transactionalEmail";
+import {
+  TransactionalEmailService,
+  type EmailOrder,
+} from "./transactionalEmailService";
 import { OrderService } from "./orderService";
 
 /**
@@ -25,7 +30,7 @@ export const CONTRACT_GENERATION_WARNING =
 /** Upper bound for render + upload; matches the email hop's deadline in the update route. */
 export const CONTRACT_GENERATION_TIMEOUT_MS = 20_000;
 
-export interface LifecycleOrder {
+export interface LifecycleOrder extends EmailOrder {
   id: number;
   new_pdf_processing_url?: string | null;
 }
@@ -213,7 +218,7 @@ export class OrderLifecycleService {
       current = step;
     }
 
-    const warning = await OrderLifecycleService.saveReturnReport(
+    const reportWarning = await OrderLifecycleService.saveReturnReport(
       input.orderId,
       {
         finalized_at: new Date().toISOString(),
@@ -222,6 +227,21 @@ export class OrderLifecycleService {
       },
     );
 
+    // R-09c: the close enters `completed` like any other path, so it gets the same single
+    // "Pedido completado" email — judged from where the order started, once for all steps.
+    const lifecycle = await OrderLifecycleService.onStatusChanged(
+      {
+        ...(order as object),
+        ...(updated as object),
+        id: input.orderId,
+      } as LifecycleOrder,
+      "completed",
+      { previousStatus: status },
+    );
+
+    const warning = [reportWarning, lifecycle.warning]
+      .filter(Boolean)
+      .join(" ");
     return { steps, order: updated, ...(warning ? { warning } : {}) };
   }
 
@@ -277,24 +297,56 @@ export class OrderLifecycleService {
     }
   }
 
-  /** Never throws: the caller has already persisted the status change. */
+  /**
+   * Never throws: the caller has already persisted the status change.
+   *
+   * 1. R-14: entering `in-rental` without a contract generates it.
+   * 2. R-09c: entering a stage with an email (`emailOnTransition`) sends exactly that one
+   *    transactional email — the delivery email with the contract attached. This is the only
+   *    place status emails are sent from, so every route sends the same single email. Without
+   *    `previousStatus` no email is sent: the transition cannot be judged, and guessing would
+   *    re-send on every save.
+   */
   static async onStatusChanged(
     order: LifecycleOrder,
     newStatus: string,
+    options: { previousStatus?: string | null } = {},
   ): Promise<LifecycleResult> {
-    if (newStatus !== "in-rental") return { generated: false };
-    if (order.new_pdf_processing_url) return { generated: false };
+    let generated = false;
+    let contractUrl = order.new_pdf_processing_url ?? null;
+    const warnings: string[] = [];
 
-    try {
-      await OrderLifecycleService.generateRentalContract(order.id);
-      return { generated: true };
-    } catch (error) {
-      console.error(
-        "[OrderLifecycleService] No se pudo generar el contrato de la orden:",
-        { orderId: order.id, error },
-      );
-      return { generated: false, warning: CONTRACT_GENERATION_WARNING };
+    if (newStatus === "in-rental" && !contractUrl) {
+      try {
+        contractUrl = await OrderLifecycleService.generateRentalContract(
+          order.id,
+        );
+        generated = true;
+      } catch (error) {
+        console.error(
+          "[OrderLifecycleService] No se pudo generar el contrato de la orden:",
+          { orderId: order.id, error },
+        );
+        warnings.push(CONTRACT_GENERATION_WARNING);
+      }
     }
+
+    const emailKey =
+      options.previousStatus !== undefined
+        ? emailOnTransition(options.previousStatus, newStatus)
+        : null;
+    if (emailKey) {
+      const result = await TransactionalEmailService.sendForOrder(
+        emailKey as TransactionalEmailKey,
+        order,
+        emailKey === "equipos-entregados" ? { contractUrl } : {},
+      );
+      if (result.warning) warnings.push(result.warning);
+    }
+
+    return warnings.length > 0
+      ? { generated, warning: warnings.join(" ") }
+      : { generated };
   }
 
   /**

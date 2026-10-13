@@ -7,23 +7,12 @@ import { OrderPricingService } from "../../../../services/orderPricingService";
 import { PricingError } from "../../../../lib/pricing";
 import { validateReserveInput } from "../../../../lib/finance";
 import { supabaseAdmin } from "../../../../lib/supabase";
-import {
-  FetchTimeoutError,
-  fetchWithTimeout,
-} from "../../../../lib/fetchWithTimeout";
-import { createInternalApiHeaders } from "../../../../lib/serverApiAuth";
 import { withAuth } from "../../../../middleware/auth";
 
-// The email hop runs after the order is saved and itself waits on the mail worker. Without a
-// deadline a slow hop froze the admin's tab (A-03); the worker call inside is bounded tighter.
-const NOTIFICATION_TIMEOUT_MS = 20_000;
 /** Several non-fatal problems in one save are all reported, never overwritten (H-2/H-3). */
 function appendWarning(current: string | undefined, next: string): string {
   return current ? `${current} ${next}` : next;
 }
-
-const NOTIFICATION_WARNING =
-  "La orden se guardó, pero no se pudo enviar el correo al cliente.";
 
 export const PUT: APIRoute = withAuth(
   async ({ params, request, user, locals }: any) => {
@@ -237,28 +226,10 @@ export const PUT: APIRoute = withAuth(
         sanitizedData.date_completed = new Date().toISOString();
       }
 
-      // Se compara el estado normalizado, no el literal. `failed` desaparece en 0003 plegado sobre
-      // `cancelled`: comparar contra `'failed'` haria que el correo de disculpas dejara de salir
-      // justo cuando el pedido no prospera, que es cuando mas importa.
-      const nuevoCanonico = canonicalStatus(newStatus);
-      const anteriorCanonico = canonicalStatus(previousStatus);
-      const notificationTarget =
-        nuevoCanonico === "completed" && anteriorCanonico !== "completed"
-          ? {
-              path: "/api/emails/send-order-completed-notification",
-              emailType: "order_completed",
-            }
-          : nuevoCanonico === "cancelled" && anteriorCanonico !== "cancelled"
-            ? {
-                path: "/api/emails/send-order-failed-notification",
-                emailType: "order_failed",
-              }
-            : null;
-
       console.log("Updating order with data:", sanitizedData);
 
-      // The status change is saved FIRST. The customer email is best effort: if it fails or times out
-      // the order stays saved and the response carries a non-fatal warning (D-9).
+      // The status change is saved FIRST. The customer email is sent afterwards by the lifecycle
+      // service and is best effort: a failure only adds a non-fatal warning (D-9).
       // R-05: `orders.discount_percent` arrives with migration 0019. Until it is applied, the
       // order is saved without it (the recomputed `calculated_discount` still lands) and the
       // response says so, instead of the whole edit failing on one missing column.
@@ -289,72 +260,10 @@ export const PUT: APIRoute = withAuth(
       }
 
       let warning: string | undefined = discountPercentWarning;
-      if (notificationTarget) {
-        const notificationOrder = { ...currentOrder, ...sanitizedData };
-        const notificationUrl = new URL(
-          notificationTarget.path,
-          request.url,
-        ).toString();
-        console.log(
-          "📧 [Order Update] Status changed, sending notification email...",
-          {
-            orderId,
-            newStatus,
-            notificationUrl,
-          },
-        );
-
-        try {
-          const notificationResponse = await fetchWithTimeout(
-            notificationUrl,
-            {
-              method: "POST",
-              headers: createInternalApiHeaders(crypto.randomUUID()),
-              body: JSON.stringify({
-                orderData: notificationOrder,
-                emailType: notificationTarget.emailType,
-              }),
-            },
-            NOTIFICATION_TIMEOUT_MS,
-          );
-
-          if (!notificationResponse.ok) {
-            const errorText = await notificationResponse.text().catch(() => "");
-            console.error(
-              "❌ [Order Update] Notification email failed (order already saved):",
-              {
-                orderId,
-                newStatus,
-                status: notificationResponse.status,
-                error: errorText,
-              },
-            );
-            warning = appendWarning(warning, NOTIFICATION_WARNING);
-          } else {
-            console.log(
-              "✅ [Order Update] Notification email sent successfully",
-            );
-          }
-        } catch (notificationError) {
-          console.error(
-            "❌ [Order Update] Notification email did not go out (order already saved):",
-            {
-              orderId,
-              newStatus,
-              timedOut: notificationError instanceof FetchTimeoutError,
-              error:
-                notificationError instanceof Error
-                  ? notificationError.message
-                  : notificationError,
-            },
-          );
-          warning = appendWarning(warning, NOTIFICATION_WARNING);
-        }
-      }
-
-      // R-14: same lifecycle side effects as the status route (contract on `in-rental`). The
-      // order is already saved; the service never throws and only reports a warning, which is
-      // added to (never replaces) the email warning (H-2).
+      // R-14 / R-09c: same lifecycle side effects as the status route — the contract on
+      // `in-rental` and the ONE customer email of the transition (this route used to send its own
+      // completed/cancelled emails, which doubled them). The order is already saved; the service
+      // never throws and only reports a warning, added to any earlier one (H-2).
       //
       // It runs inside the request on purpose: the contract render is bounded by
       // `CONTRACT_GENERATION_TIMEOUT_MS` (20 s), and no `waitUntil` is wired in this project (no
@@ -364,6 +273,7 @@ export const PUT: APIRoute = withAuth(
         const lifecycle = await OrderLifecycleService.onStatusChanged(
           updatedOrder,
           String(newStatus),
+          { previousStatus },
         );
         if (lifecycle.warning) {
           warning = appendWarning(warning, lifecycle.warning);

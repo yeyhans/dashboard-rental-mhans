@@ -117,19 +117,14 @@ describe("admin order update relay boundary", () => {
       123,
       expect.objectContaining({ status: "completed" }),
     );
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "https://dashboard.mariohans.cl/api/emails/send-order-completed-notification",
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({
-          "X-API-Key": "frontend-secret",
-          "X-Request-ID": expect.any(String),
-        }),
-      }),
-    );
+    // R-09c: the customer email goes out once, from the lifecycle service — no relay hop here.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(onStatusChanged).toHaveBeenCalledWith(updatedOrder, "completed", {
+      previousStatus: "processing",
+    });
   });
 
-  it("still persists the status update and warns when the notification fails", async () => {
+  it("still persists the status update and warns when the email fails", async () => {
     vi.stubEnv("FRONTEND_API_SECRET", "frontend-secret");
     const currentOrder = {
       id: 123,
@@ -145,10 +140,11 @@ describe("admin order update relay boundary", () => {
       }),
     });
     updateOrder.mockResolvedValue(updatedOrder);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("delivery failed", { status: 500 })),
-    );
+    onStatusChanged.mockResolvedValueOnce({
+      generated: false,
+      warning:
+        "El estado se guardó, pero no se pudo enviar el correo al cliente.",
+    });
     const request = new Request(
       "https://dashboard.mariohans.cl/api/orders/update/123",
       {
@@ -583,7 +579,9 @@ describe("admin order update relay boundary", () => {
       const response = await PUT(ctx({ status: "in-rental" }));
 
       expect(response.status).toBe(200);
-      expect(onStatusChanged).toHaveBeenCalledWith(saved, "in-rental");
+      expect(onStatusChanged).toHaveBeenCalledWith(saved, "in-rental", {
+        previousStatus: "preparation",
+      });
     });
 
     it("mantiene el 200 y agrega el aviso si el contrato no se pudo generar", async () => {
@@ -619,7 +617,7 @@ describe("admin order update relay boundary", () => {
   });
 });
 
-/** H-2 (R3): a lifecycle warning must not hide the notification warning, and vice versa. */
+/** H-2 (R3): one warning never hides another (here: discount percentage + lifecycle email). */
 describe("avisos combinados", () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -627,8 +625,7 @@ describe("avisos combinados", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps both the email warning and the lifecycle warning", async () => {
-    vi.stubEnv("FRONTEND_API_SECRET", "frontend-secret");
+  it("keeps both the save warning and the lifecycle warning", async () => {
     from.mockReturnValue({
       select: () => ({
         eq: () => ({
@@ -639,11 +636,10 @@ describe("avisos combinados", () => {
         }),
       }),
     });
-    updateOrder.mockResolvedValue({ id: 123, status: "completed" });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("down", { status: 500 })),
-    );
+    priceOrderUpdate.mockResolvedValueOnce({ discount_percent: 10 });
+    updateOrder
+      .mockRejectedValueOnce({ code: "42703", message: "no discount_percent" })
+      .mockResolvedValueOnce({ id: 123, status: "completed" });
     onStatusChanged.mockResolvedValueOnce({
       generated: false,
       warning: "Aviso del ciclo de vida.",
@@ -658,7 +654,7 @@ describe("avisos combinados", () => {
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "completed" }),
+          body: JSON.stringify({ status: "completed", discount_percent: 10 }),
         },
       ),
       locals: { user: { id: "admin-1", role: "admin" } },
@@ -666,7 +662,7 @@ describe("avisos combinados", () => {
 
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(body.warning).toContain("correo");
+    expect(body.warning).toContain("0019");
     expect(body.warning).toContain("Aviso del ciclo de vida.");
   });
 });

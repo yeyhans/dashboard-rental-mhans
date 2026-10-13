@@ -11,6 +11,11 @@ const updateOrderStatus = vi.hoisted(() => vi.fn());
 const reportWrites = vi.hoisted(() => [] as unknown[]);
 const reportResult = vi.hoisted(() => ({ value: { error: null as unknown } }));
 
+// R-09c: the close now sends "Pedido completado"; the email itself is tested elsewhere.
+vi.mock("../transactionalEmailService", () => ({
+  TransactionalEmailService: { sendForOrder: vi.fn(async () => ({ sent: true })) },
+}));
+
 vi.mock("../orderService", () => ({
   OrderService: { getOrderById, updateOrderStatus },
 }));
@@ -325,5 +330,36 @@ describe("OrderLifecycleService.finalizeReturn — completed orders (H-3)", () =
       OrderLifecycleService.finalizeReturn(input({ role: "operator" })),
     ).rejects.toMatchObject({ status: 409, code: "ALREADY_COMPLETED" });
     expect(reportWrites).toEqual([]);
+  });
+});
+
+/* R-09c: closing a return from the reception panel sends "Pedido completado" like any other
+   path into `completed` — through `onStatusChanged`, once. */
+describe("OrderLifecycleService.finalizeReturn — email (R-09c)", () => {
+  beforeEach(() => {
+    updateOrderStatus.mockImplementation(async (id: number, status: string) => ({ id, status }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    reportWrites.length = 0;
+  });
+
+  it("runs the lifecycle once for the whole close, from the original status", async () => {
+    getOrderById.mockResolvedValue({ id: 7, status: "in-rental", order_fecha_termino: "2026-10-12" });
+    const lifecycle = vi
+      .spyOn(OrderLifecycleService, "onStatusChanged")
+      .mockResolvedValue({ generated: false, warning: "Correo no enviado." });
+
+    const result = await OrderLifecycleService.finalizeReturn(input());
+
+    expect(lifecycle).toHaveBeenCalledTimes(1);
+    expect(lifecycle).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 7, status: "completed" }),
+      "completed",
+      { previousStatus: "in-rental" },
+    );
+    expect(result.warning).toContain("Correo no enviado.");
   });
 });

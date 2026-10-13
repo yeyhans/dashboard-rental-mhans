@@ -111,9 +111,11 @@ export const PUT: APIRoute = withAuth(async (context) => {
 
   // R-14: side effects of the new stage (contract on `in-rental`). The status is already saved,
   // so a failure here only adds a warning; it never turns the change into an error.
+  // R-09c: `previousStatus` lets the lifecycle send the one customer email of this transition.
   const lifecycle = await OrderLifecycleService.onStatusChanged(
     order,
     body.status,
+    { previousStatus: current.status },
   );
 
   return json(
