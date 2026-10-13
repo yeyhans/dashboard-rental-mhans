@@ -23,6 +23,7 @@ import OrderDiscountControl from '@/components/orders/OrderDiscountControl';
 import { discountPercentPayload, initialManualDiscount, manualDiscountPricing, type ManualDiscountInput } from '@/lib/pricing';
 import type { Database } from '@/types/database';
 import { toast } from 'sonner';
+import { formatCLP } from '../../lib/delivery';
 import { WarrantyImageUpload } from './WarrantyImageUpload';
 // generateBudgetPdfFromId removed - now using dedicated endpoint
 import { createEventFromOrder, openGoogleCalendar } from '@/lib/simpleCalendar';
@@ -1910,7 +1911,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             </div>
             <div className="flex justify-between">
               <span className="font-medium">Total:</span>
-              <span className="font-bold">${orderData.calculated_total || orderData.total}</span>
+              <span className="font-bold">{formatCLP(Number(orderData.calculated_total || orderData.total || 0))}</span>
             </div>
             <div className="flex justify-between">
               <span className="font-medium">Moneda:</span>

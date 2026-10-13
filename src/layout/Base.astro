@@ -31,13 +31,15 @@ import { activeModule, visibleNavGroups } from "../lib/navigation";
 import { AlertService } from "../services/alertService";
 import { getAdminInitials } from "../lib/adminIdentity";
 import { formatTopbarDateTime } from "../lib/topbarDateTime";
+import { documentTitle } from "../lib/documentTitle";
 
 interface Props {
   title: string;
 }
 
 const description = "Panel de Administración - Rental Mario Hans";
-const { title } = Astro.props;
+// T-19 (c): pages append the admin email to their title; the tab must not show it.
+const title = documentTitle(Astro.props.title);
 const ogImageURL = new URL("hero.png", import.meta.env.SITE).href;
 const canonicalURL = new URL(Astro.url).href;
 
@@ -304,19 +306,10 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
       .sidebar-collapsed .sidebar-logout { justify-content: center; padding: 0.625rem; }
 
       /* ── Content shift ── */
-      #main-content, #footer {
+      #main-content {
         margin-left: var(--sidebar-width, 0px);
         transition: margin-left 280ms cubic-bezier(0.4, 0, 0.2, 1);
       }
-
-      /* ── Footer ── */
-      #footer {
-        background-color: hsl(0 0% 100%);
-        color: hsl(0 0% 45.1%);
-        border-top: 1px solid hsl(0 0% 89.8%);
-      }
-      #footer a { color: inherit; }
-      #footer a:hover { text-decoration: underline; }
 
       /* ── Mobile overlay ── */
       #sidebar-overlay {
@@ -348,7 +341,7 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
         #sidebar.mobile-open {
           transform: translateX(0);
         }
-        #main-content, #footer {
+        #main-content {
           margin-left: 0 !important;
         }
         /* D-25: tighten the drawer's own rows so the eight modules + their sub-links fit
@@ -687,13 +680,6 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
       <slot />
     </main>
 
-    <footer id="footer" class="py-4 text-center">
-      <div class="container mx-auto px-4">
-        <p class="text-sm">
-          Hecho con amor por su hermanito <a href="https://instagram.com/chocolohans" target="_blank" rel="noopener noreferrer" class="font-bold">Yey</a>
-        </p>
-      </div>
-    </footer>
 
 <script is:inline>
   (function() {
@@ -714,7 +700,6 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
       if (skipTransition) {
         sb.style.transition = 'none';
         document.getElementById('main-content').style.transition = 'none';
-        document.getElementById('footer').style.transition = 'none';
       }
 
       var w = collapsed ? COLLAPSED_W : EXPANDED_W;
@@ -737,7 +722,6 @@ const alertCount = isAuthenticated ? await AlertService.getAlertCount() : 0;
         sb.offsetHeight;
         sb.style.transition = '';
         document.getElementById('main-content').style.transition = '';
-        document.getElementById('footer').style.transition = '';
       }
 
       // Close submenus when collapsing

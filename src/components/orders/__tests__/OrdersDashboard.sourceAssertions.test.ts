@@ -41,7 +41,8 @@ describe("OrdersDashboard — canon pass (02.1-02.5)", () => {
     expect(source).toContain('from "../shared/PageHeader"');
     expect(returned).toMatch(/<PageHeader[\s\S]*title="Pedidos"/);
     expect(returned).toMatch(/<PageHeader[\s\S]*date=\{/);
-    expect(returned).toMatch(/<PageHeader[\s\S]*\{total\}/);
+    // T-19 (a): the header total uses the Todos tab basis, not the raw row count.
+    expect(returned).toMatch(/<PageHeader[\s\S]*\{tabCounts\.todos\}/);
     expect(returned).not.toContain("<CardTitle");
   });
 
@@ -146,5 +147,14 @@ describe("OrdersDashboard — table fits at 1440 px (T-16)", () => {
   it("keeps the header to 9 columns with the actions column pinned right", () => {
     expect((header.match(/<TableHead\b/g) ?? []).length).toBe(9);
     expect(header).toMatch(/sticky right-0[^"]*">\s*Acciones/);
+  });
+});
+
+describe("OrdersDashboard — header total matches the Todos tab (T-19a)", () => {
+  it("counts the header total on the same basis as the Todos tab", () => {
+    expect(source).toMatch(
+      /subtitle=\{`Gestiona y visualiza todos los pedidos \(\$\{tabCounts\.todos\} en total\)`\}/,
+    );
+    expect(source).toMatch(/\(\{tabCounts\.todos\} total\)/);
   });
 });

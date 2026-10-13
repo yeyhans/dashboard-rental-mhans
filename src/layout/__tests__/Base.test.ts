@@ -167,3 +167,18 @@ describe("Base.astro sidebar shell tokens (00.2 / 00.4)", () => {
     expect(source).toContain("Administrador");
   });
 });
+
+describe("Base.astro personal data and copy (T-19)", () => {
+  it("passes the page title through documentTitle so the admin email never reaches the tab (c)", () => {
+    expect(source).toContain('from "../lib/documentTitle"');
+    expect(source).toMatch(/const title = documentTitle\(/);
+  });
+
+  it("does not render the personal footer (d)", () => {
+    expect(source).not.toContain("hermanito");
+    expect(source).not.toContain("Hecho con amor");
+    expect(source).not.toContain("instagram.com/chocolohans");
+    // The sidebar script used to set transitions on #footer; it must not reference it anymore.
+    expect(source).not.toContain("getElementById('footer')");
+  });
+});

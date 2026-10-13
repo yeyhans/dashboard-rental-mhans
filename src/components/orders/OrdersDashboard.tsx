@@ -848,7 +848,7 @@ const OrdersDashboard = ({
       {/* 02.1/02.2: cabecera canónica primero (H1 en mayúsculas, fecha y total), KPI debajo. */}
       <PageHeader
         title="Pedidos"
-        subtitle={`Gestiona y visualiza todos los pedidos (${total} en total)`}
+        subtitle={`Gestiona y visualiza todos los pedidos (${tabCounts.todos} en total)`}
         date={todayLabel}
       />
 
@@ -972,7 +972,7 @@ const OrdersDashboard = ({
             <div className="text-sm text-muted-foreground order-2 sm:order-1">
               Mostrando {Math.min(startIndex + 1, totalFilteredOrders)}-
               {Math.min(endIndex, totalFilteredOrders)} de {totalFilteredOrders}{" "}
-              pedidos filtrados ({total} total)
+              pedidos filtrados ({tabCounts.todos} total)
             </div>
 
             <div className="flex flex-wrap justify-center gap-2 order-1 sm:order-2">
