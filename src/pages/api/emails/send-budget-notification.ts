@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { createEmailWorkerHeaders, getEmailWorkerUrl } from '../../../lib/emailWorkerService';
+import { sendEmailViaWorker } from '../../../lib/emailWorkerService';
 import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 import { statusLabel } from '../../../lib/orderStatus';
 
@@ -392,7 +392,6 @@ async function sendViaWorker(
 ): Promise<Response> {
   try {
     const requestId = crypto.randomUUID();
-    const workerUrl = getEmailWorkerUrl();
     
     const emailPayload = {
       to,
@@ -408,32 +407,16 @@ async function sendViaWorker(
 
     console.log('📤 [Backend] Sending via worker fallback', { requestId, deliveryType: 'budget_notification' });
 
-    const response = await fetch(`${workerUrl}/send-email`, {
-      method: 'POST',
-      headers: {
-        ...createEmailWorkerHeaders(requestId),
-      },
-      body: JSON.stringify(emailPayload)
-    });
-
-    if (!response.ok) {
-      console.error('❌ [Backend] Cloudflare Worker error:', {
-        requestId,
-        failureClass: 'worker_delivery_failed',
-        status: response.status,
-      });
-      
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'Failed to send email via Cloudflare Worker',
-        error: `Worker error: ${response.statusText}`
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    const result = await response.json();
+    // H-4: through sendEmailViaWorker, which fails closed without EMAIL_WORKER_SHARED_SECRET
+    // and has a deadline, instead of a direct request to the worker.
+    const result = await sendEmailViaWorker(
+      emailPayload.to,
+      emailPayload.subject,
+      emailPayload.html,
+      emailPayload.attachments,
+      requestId,
+      emailPayload.metadata
+    );
     
     if (!result.success) {
       return new Response(JSON.stringify({
@@ -451,7 +434,7 @@ async function sendViaWorker(
     return new Response(JSON.stringify({
       success: true,
       message: 'Budget notification email sent successfully (via Cloudflare Worker)',
-      emailId: result.emailId || result.messageId || `worker_${budgetData.order_id}_${Date.now()}`
+      emailId: result.emailId || `worker_${budgetData.order_id}_${Date.now()}`
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }

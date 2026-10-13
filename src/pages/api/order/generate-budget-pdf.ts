@@ -6,7 +6,7 @@ import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
 import { buildBudgetDocumentData } from '../../../lib/pdf/mappers/budgetData';
 import { SiteSettingsService } from '../../../services/siteSettingsService';
 import { DEFAULT_SETTINGS } from '../../../lib/siteSettings';
-import { createEmailWorkerHeaders, getEmailWorkerUrl } from '../../../lib/emailWorkerService';
+import { sendEmailViaWorker } from '../../../lib/emailWorkerService';
 import { budgetUploadFields } from '../../../lib/budgetUpload';
 import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 
@@ -269,6 +269,9 @@ export const POST: APIRoute = async (context) => {
     }
 
     // Optional: Send email notification
+    // H-4: a failed email (missing worker secret included) never breaks the PDF: it is logged
+    // and returned as `warning`.
+    let emailWarning: string | undefined;
     if (sendEmail && (orderData.billing?.email || orderData.billing_email)) {
       console.log('📧 Sending email notification...');
       try {
@@ -462,26 +465,10 @@ Descarga el detalle del pedido aquí
 
         // Send customer email with download link via Cloudflare Worker
         const requestId = routeRequestId;
-        const workerUrl = getEmailWorkerUrl();
-
         console.log('📧 Sending budget email to customer via Worker', { requestId, deliveryType: 'budget_generated' });
-        const workerResponse = await fetch(`${workerUrl}/send-email`, {
-          method: 'POST',
-          headers: createEmailWorkerHeaders(requestId),
-          body: JSON.stringify({
-            to: customerEmail,
-            subject,
-            html: emailHtml
-          })
-        });
-
-        if (!workerResponse.ok) {
-          throw new Error(`Worker responded with ${workerResponse.status}`);
-        }
-
-        const workerResult = await workerResponse.json();
-        if (!workerResult.success) {
-          throw new Error(workerResult.error || 'Worker failed to send email');
+        const customerSend = await sendEmailViaWorker(customerEmail, subject, emailHtml, undefined, requestId);
+        if (!customerSend.success) {
+          throw new Error(customerSend.error || 'Worker failed to send email');
         }
 
         console.log('✅ Email notification sent successfully via Worker');
@@ -491,17 +478,15 @@ Descarga el detalle del pedido aquí
           const adminSubject = `[RESPALDO ORDEN] ${subject}`;
           console.log('📧 Sending admin backup via Worker', { requestId, deliveryType: 'budget_admin_backup' });
 
-          const adminResponse = await fetch(`${workerUrl}/send-email`, {
-            method: 'POST',
-            headers: createEmailWorkerHeaders(requestId),
-            body: JSON.stringify({
-              to: settings.contact.adminNotificationEmail || DEFAULT_SETTINGS.contact.adminNotificationEmail,
-              subject: adminSubject,
-              html: emailHtml
-            })
-          });
+          const adminSend = await sendEmailViaWorker(
+            settings.contact.adminNotificationEmail || DEFAULT_SETTINGS.contact.adminNotificationEmail,
+            adminSubject,
+            emailHtml,
+            undefined,
+            requestId
+          );
 
-          if (adminResponse.ok) {
+          if (adminSend.success) {
             console.log('✅ Admin backup sent successfully');
           } else {
             logBudgetEmailFailure(console, requestId, 'budget_admin_backup', 'worker_delivery_failed');
@@ -512,6 +497,7 @@ Descarga el detalle del pedido aquí
         
       } catch (emailError) {
         logBudgetEmailFailure(console, routeRequestId, 'budget_customer_email', 'worker_delivery_exception');
+        emailWarning = 'El presupuesto se generó, pero no se pudo enviar el correo al cliente.';
       }
     } else if (sendEmail) {
       console.warn('⚠️ Email requested but no billing email found in order data');
@@ -527,6 +513,7 @@ Descarga el detalle del pedido aquí
     return new Response(JSON.stringify({
       success: true,
       message: 'Presupuesto generado exitosamente',
+      ...(emailWarning ? { warning: emailWarning } : {}),
       pdf_url: finalPdfUrl,
       pdfUrl: finalPdfUrl,
       direct_pdf_url: `${new URL(request.url).origin}/budget-pdf/${orderId}.pdf`, // Direct PDF access for testing

@@ -72,7 +72,8 @@ export async function sendEmailViaWorker(
   subject: string,
   html?: string,
   attachments?: EmailPayload['attachments'],
-  requestId = crypto.randomUUID()
+  requestId = crypto.randomUUID(),
+  metadata?: Record<string, unknown>
 ): Promise<EmailResult> {
   // R-09a: fail closed. An unauthenticated request to the shared worker (it also serves
   // production) is what the staged auth rollout removes; without the secret, no request.
@@ -100,6 +101,14 @@ export async function sendEmailViaWorker(
 
     if (attachments && attachments.length > 0) {
       payload.attachments = attachments;
+    }
+
+    if (metadata) {
+      payload.metadata = Object.fromEntries(
+        Object.entries(metadata)
+          .filter(([, value]) => value !== undefined && value !== null)
+          .map(([key, value]) => [key, String(value)])
+      );
     }
 
     const response = await fetchWithTimeout(`${getEmailWorkerUrl()}/send-email`, {

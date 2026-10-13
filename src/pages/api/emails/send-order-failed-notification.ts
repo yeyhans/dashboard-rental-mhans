@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { EmailTemplateService } from '../../../lib/emailTemplateService';
-import { createEmailWorkerHeaders, getEmailWorkerUrl } from '../../../lib/emailWorkerService';
+import { sendEmailViaWorker } from '../../../lib/emailWorkerService';
 import { isFrontendApiKeyOrAdmin } from '../../../lib/serverApiAuth';
 
 // Order Data Interface for failed orders
@@ -180,7 +180,6 @@ async function sendViaWorker(
 ): Promise<Response> {
   try {
     const requestId = crypto.randomUUID();
-    const workerUrl = getEmailWorkerUrl();
     
     const emailPayload = {
       to,
@@ -195,32 +194,16 @@ async function sendViaWorker(
 
     console.log('📤 [Backend] Sending via Cloudflare Worker', { requestId, deliveryType: emailType });
 
-    const response = await fetch(`${workerUrl}/send-email`, {
-      method: 'POST',
-      headers: {
-        ...createEmailWorkerHeaders(requestId),
-      },
-      body: JSON.stringify(emailPayload)
-    });
-
-    if (!response.ok) {
-      console.error('❌ [Backend] Cloudflare Worker error:', {
-        requestId,
-        failureClass: 'worker_delivery_failed',
-        status: response.status,
-      });
-      
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'Failed to send email via Cloudflare Worker',
-        error: `Worker error: ${response.statusText}`
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    const result = await response.json();
+    // H-4: through sendEmailViaWorker, which fails closed without EMAIL_WORKER_SHARED_SECRET
+    // and has its own deadline, instead of a direct request to the worker.
+    const result = await sendEmailViaWorker(
+      emailPayload.to,
+      emailPayload.subject,
+      emailPayload.html,
+      undefined,
+      requestId,
+      emailPayload.metadata
+    );
     
     if (!result.success) {
       return new Response(JSON.stringify({
@@ -238,7 +221,7 @@ async function sendViaWorker(
     return new Response(JSON.stringify({
       success: true,
       message: 'Order notification email sent successfully (via Cloudflare Worker)',
-      emailId: result.emailId || result.messageId || `worker_${orderData.id}_${Date.now()}`
+      emailId: result.emailId || `worker_${orderData.id}_${Date.now()}`
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
