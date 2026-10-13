@@ -398,7 +398,11 @@ export default function CheckInBoard({
               </p>
             </div>
           ) : (
-            <CheckInReceptionPanel key={selected.id} entry={selected} />
+            <CheckInReceptionPanel
+              key={selected.id}
+              entry={selected}
+              todayIsoDay={todayIsoDay}
+            />
           )}
         </section>
       </div>

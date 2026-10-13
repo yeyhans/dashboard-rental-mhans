@@ -79,9 +79,10 @@ describe("CheckInReceptionPanel", () => {
     );
   });
 
-  it("closes the return through the status route, one legal step at a time", () => {
-    expect(source).toContain("returnClosingSteps(entry.status)");
-    expect(source).toMatch(/\/api\/orders\/\$\{entry\.id\}\/status/);
+  it("closes the return through the shared finalize route with the report (R-04b)", () => {
+    expect(source).toMatch(/\/api\/bodega\/orders\/\$\{entry\.id\}\/finalize/);
+    expect(source).toContain("buildReturnReportLines(");
+    expect(source).not.toMatch(/\/api\/orders\/\$\{entry\.id\}\/status/);
   });
 
   it("asks for confirmation with a summary before closing", () => {
@@ -99,5 +100,39 @@ describe("CheckInReceptionPanel", () => {
     ]) {
       expect(html).toContain(label);
     }
+  });
+});
+
+/** R-04b: the same panel serves /bodega (mobile) and /check-in. */
+describe("CheckInReceptionPanel — shared flow (R-04b)", () => {
+  it("does not let an in-rental order close before its rental ends", () => {
+    const html = renderToStaticMarkup(
+      <CheckInReceptionPanel
+        entry={{ ...ENTRY, status: "in-rental", endDate: "2026-10-20" }}
+        todayIsoDay="2026-10-13"
+      />,
+    );
+    expect(html).toContain("El arriendo aún no termina");
+  });
+
+  it("marks a line Recibido when all its serialised units were checked in", () => {
+    const html = renderToStaticMarkup(
+      <CheckInReceptionPanel entry={ENTRY} checkedInUnits={{ 10: 2 }} />,
+    );
+    const camara = html.slice(
+      html.indexOf('aria-label="Estado de recepción — Cámara X"'),
+      html.indexOf('aria-label="Estado de recepción — Trípode"'),
+    );
+    expect(camara).toMatch(/aria-pressed="true"[^>]*>Recibido<\/button>/);
+  });
+
+  it("uses big tap targets that wrap on the mobile variant", () => {
+    const html = renderToStaticMarkup(
+      <CheckInReceptionPanel entry={ENTRY} variant="mobile" />,
+    );
+    expect(html).toMatch(
+      /aria-pressed="false"[^>]*class="[^"]*min-h-11[^"]*"[^>]*>Recibido/,
+    );
+    expect(html).toMatch(/role="group"[^>]*class="[^"]*flex-wrap/);
   });
 });

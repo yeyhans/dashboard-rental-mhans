@@ -154,6 +154,8 @@ describe('BodegaService.getScanSheet', () => {
       endDate: '2026-09-12',
     });
     expect(sheet?.lines).toEqual([{ productId: 1, name: 'Canon R5', quantity: 2, open: 1, returned: 0 }]);
+    // R-04b: the shared reception panel on /bodega needs the order's raw line items.
+    expect(sheet?.lineItems).toEqual(orderRow.line_items);
     expect(state.calls).toContainEqual({ table: 'asset_movements', op: 'eq', args: ['order_id', 1] });
     expect(state.calls).toContainEqual({ table: 'serialised_assets', op: 'in', args: ['id', [100]] });
   });

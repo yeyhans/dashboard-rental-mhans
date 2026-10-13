@@ -32,11 +32,16 @@ import BodegaOrderStatus from './BodegaOrderStatus';
  */
 interface BodegaScannerProps {
   sheet: ScanSheet;
+  /**
+   * R-04b: called after a unit's check-in is recorded, with its product id, so the shared
+   * reception panel below the scanner can mark the line Recibido once every unit is back.
+   */
+  onCheckedIn?: (productId: number) => void;
 }
 
 const FLASH_MS = 600;
 
-export default function BodegaScanner({ sheet }: BodegaScannerProps) {
+export default function BodegaScanner({ sheet, onCheckedIn }: BodegaScannerProps) {
   const [state, dispatch] = useReducer(bodegaScanReducer, sheet, (s) => createScanState(s.order.id, s.lines));
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -125,6 +130,7 @@ export default function BodegaScanner({ sheet }: BodegaScannerProps) {
             return;
           }
           dispatch({ type: 'movementRecorded', at: recordBody.data?.checked_at || new Date().toISOString() });
+          if (current.mode === 'checkin') onCheckedIn?.(asset.product_id);
           celebrate();
         } catch {
           dispatch({ type: 'recordFailed' });
@@ -134,7 +140,7 @@ export default function BodegaScanner({ sheet }: BodegaScannerProps) {
         refocus();
       }
     },
-    [busy, celebrate, refocus]
+    [busy, celebrate, refocus, onCheckedIn]
   );
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {

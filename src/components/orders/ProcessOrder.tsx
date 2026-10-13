@@ -18,6 +18,7 @@ import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliver
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { apiClient } from '@/services/apiClient';
 import OrderDriverField from '@/components/delivery/OrderDriverField';
+import ReturnReportSummary from '@/components/checkin/ReturnReportSummary';
 import type { Database } from '@/types/database';
 import { toast } from 'sonner';
 import { WarrantyImageUpload } from './WarrantyImageUpload';
@@ -1960,6 +1961,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             <Badge className={statusBadgeClass(orderData.status)}>
               {statusLabel(orderData.status)}
             </Badge>
+            {/* R-04b: informe guardado al finalizar la devolución (migración 0018). */}
+            <ReturnReportSummary orderId={orderData.id} />
           </CardContent>
         </Card>
 

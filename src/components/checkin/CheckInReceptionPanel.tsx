@@ -1,4 +1,4 @@
-import React, { useMemo, useReducer, useState } from "react";
+import React, { useEffect, useMemo, useReducer, useState } from "react";
 import { toast } from "sonner";
 import { CheckCheck } from "lucide-react";
 import { itemsFromLineItems } from "../../lib/checkIn";
@@ -6,13 +6,18 @@ import {
   INCIDENT_NOTE_MAX_LENGTH,
   INCIDENT_TYPES,
   RECEPTION_STATE_OPTIONS,
+  buildReturnReportLines,
   createReception,
   finalizeState,
   isIncidentState,
+  isReturnDue,
+  linesToAutoReceive,
   receptionReducer,
   receptionTotals,
   returnClosingSteps,
   type LineReception,
+  type ReceptionLine,
+  type ReceptionMap,
   type ReceptionState,
 } from "../../lib/checkInReception";
 import { apiClient } from "../../services/apiClient";
@@ -38,12 +43,29 @@ import AssetCheckInControl from "./AssetCheckInControl";
  * Every decision lives in `lib/checkInReception.ts`; this component renders it. Mounted with
  * `key={entry.id}` so switching orders starts a fresh reception.
  *
- * What persists: closing moves the order to `completed` through `PUT /api/orders/[id]/status`
- * (one legal step at a time), and a serialised unit's check-in carries the line's incident in
- * `asset_movements.condition_notes`. The per-line state itself has no column in the schema.
+ * R-04b: the same panel serves /check-in (admins, desktop) and the operator's order screen on
+ * /bodega (`variant="mobile"`: big tap targets that wrap). A serialised check-in — from the
+ * line's own control or from the bodega gun scanner, via `checkedInUnits` — marks the line
+ * Recibido once every unit of it is back (`linesToAutoReceive`).
+ *
+ * What persists: "Finalizar devolución" posts the report to `POST /api/bodega/orders/[id]/finalize`
+ * (operator-reachable), which walks the order to `completed` one legal step at a time and saves
+ * `orders.return_report`; a serialised unit's check-in also carries the line's incident in
+ * `asset_movements.condition_notes`.
  */
+type PanelEntry = Pick<
+  CheckInListEntry,
+  "id" | "reference" | "client" | "project" | "status" | "endDate" | "lineItems"
+>;
+
 interface CheckInReceptionPanelProps {
-  entry: CheckInListEntry;
+  entry: PanelEntry;
+  /** `"mobile"` on /bodega: larger buttons, no order header (the scan screen shows it). */
+  variant?: "desktop" | "mobile";
+  /** Server-resolved business day; decides whether an `in-rental` order may be closed yet. */
+  todayIsoDay?: string;
+  /** Units checked in per product id, from outside the panel (the bodega scanner). */
+  checkedInUnits?: Readonly<Record<number, number>>;
 }
 
 const STATE_LABEL: Record<ReceptionState, string> = Object.fromEntries(
@@ -79,9 +101,26 @@ function incidentSummary(line: LineReception | undefined): string {
     .join(" · ");
 }
 
+/** Applies `linesToAutoReceive` to a reception map. */
+function autoReceive(
+  state: ReceptionMap,
+  lines: readonly (ReceptionLine & { productId: number | null })[],
+  checkedIn: Readonly<Record<number, number>>,
+): ReceptionMap {
+  return linesToAutoReceive(lines, state, checkedIn).reduce(
+    (next, key) =>
+      receptionReducer(next, { type: "setState", key, state: "received" }),
+    state,
+  );
+}
+
 export default function CheckInReceptionPanel({
   entry,
+  variant = "desktop",
+  todayIsoDay,
+  checkedInUnits,
 }: CheckInReceptionPanelProps) {
+  const isMobile = variant === "mobile";
   const items = useMemo(
     () => itemsFromLineItems(entry.lineItems),
     [entry.lineItems],
@@ -91,14 +130,34 @@ export default function CheckInReceptionPanel({
       items.map((item, index) => ({
         key: String(index),
         quantity: item.quantity,
+        productId: item.productId,
       })),
     [items],
   );
-  const [reception, dispatch] = useReducer(
-    receptionReducer,
-    lines,
-    createReception,
+  // Units checked in from this panel's own controls, added to the ones the parent reports.
+  const [localCheckIns, setLocalCheckIns] = useState<Record<number, number>>(
+    {},
   );
+  const checkedIn = useMemo(() => {
+    const merged: Record<number, number> = { ...(checkedInUnits ?? {}) };
+    for (const [productId, units] of Object.entries(localCheckIns)) {
+      merged[Number(productId)] = (merged[Number(productId)] ?? 0) + units;
+    }
+    return merged;
+  }, [checkedInUnits, localCheckIns]);
+
+  const [reception, dispatch] = useReducer(receptionReducer, lines, (initial) =>
+    autoReceive(createReception(initial), initial, checkedInUnits ?? {}),
+  );
+
+  useEffect(() => {
+    for (const key of linesToAutoReceive(lines, reception, checkedIn)) {
+      dispatch({ type: "setState", key, state: "received" });
+    }
+    // `reception` is read, not watched: a line set by hand must not be re-marked.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkedIn, lines]);
+
   const [itemFilter, setItemFilter] = useState("todos");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -106,11 +165,24 @@ export default function CheckInReceptionPanel({
   const totals = receptionTotals(lines, reception);
   const finalize = finalizeState(lines, reception);
   const closingSteps = returnClosingSteps(entry.status);
-  const canFinalize = finalize.enabled && closingSteps !== null && !closing;
+  const notDueYet =
+    entry.status === "in-rental" &&
+    todayIsoDay !== undefined &&
+    !isReturnDue(entry.endDate, todayIsoDay);
+  const canFinalize =
+    finalize.enabled && closingSteps !== null && !notDueYet && !closing;
   const finalizeHint =
     closingSteps === null
       ? "Solo se puede cerrar un pedido en arriendo o en devolución."
-      : finalize.reason;
+      : notDueYet
+        ? "El arriendo aún no termina: la devolución se cierra desde la fecha de término."
+        : finalize.reason;
+
+  const handleUnitCheckedIn = (productId: number) =>
+    setLocalCheckIns((prev) => ({
+      ...prev,
+      [productId]: (prev[productId] ?? 0) + 1,
+    }));
 
   const visibleIndexes = items
     .map((_, index) => index)
@@ -129,21 +201,27 @@ export default function CheckInReceptionPanel({
     if (!closingSteps) return;
     setClosing(true);
     try {
-      // One legal step at a time: an order that came back before the hourly cron moved it to
-      // `return` goes in-rental -> return -> completed, each through the state machine.
-      for (const status of closingSteps) {
-        const response = await apiClient.put(`/api/orders/${entry.id}/status`, {
-          status,
-        });
-        const payload = await response.json().catch(() => null);
-        if (!response.ok || !payload?.success) {
-          toast.error(
-            payload?.error ||
-              "No se pudo cerrar la devolución. Inténtalo de nuevo.",
-          );
-          return;
-        }
+      // The server walks the order to `completed` one legal step at a time (in-rental -> return
+      // -> completed when the rental already ended) and saves the report with it.
+      const response = await apiClient.post(
+        `/api/bodega/orders/${entry.id}/finalize`,
+        {
+          lines: buildReturnReportLines(
+            items.map((item) => item.name),
+            lines,
+            reception,
+          ),
+        },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) {
+        toast.error(
+          payload?.error ||
+            "No se pudo cerrar la devolución. Inténtalo de nuevo.",
+        );
+        return;
       }
+      if (payload.warning) toast.warning(payload.warning);
       toast.success(
         finalize.variant === "incident"
           ? "Devolución cerrada con incidencias"
@@ -185,26 +263,29 @@ export default function CheckInReceptionPanel({
   return (
     <div>
       <div className="border-b border-[var(--color-border)] p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-              {entry.reference}
+        {/* On /bodega the scan screen already shows the order header above the panel. */}
+        {!isMobile && (
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
+                {entry.reference}
+              </div>
+              <h2 className="truncate text-sm font-semibold">{entry.client}</h2>
+              <p className="truncate text-xs text-[var(--color-text-secondary)]">
+                Proyecto: {entry.project}
+              </p>
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                Término del arriendo: {entry.endDate ?? "sin fecha"}
+              </p>
             </div>
-            <h2 className="truncate text-sm font-semibold">{entry.client}</h2>
-            <p className="truncate text-xs text-[var(--color-text-secondary)]">
-              Proyecto: {entry.project}
-            </p>
-            <p className="text-xs text-[var(--color-text-secondary)]">
-              Término del arriendo: {entry.endDate ?? "sin fecha"}
-            </p>
+            <a
+              href={`/orders/${entry.id}`}
+              className="whitespace-nowrap text-xs text-[var(--color-text-primary)] underline underline-offset-2"
+            >
+              Ver pedido →
+            </a>
           </div>
-          <a
-            href={`/orders/${entry.id}`}
-            className="whitespace-nowrap text-xs text-[var(--color-text-primary)] underline underline-offset-2"
-          >
-            Ver pedido →
-          </a>
-        </div>
+        )}
 
         <div className="mt-4 grid grid-cols-5 gap-2">
           {counters.map((metric) => (
@@ -247,7 +328,9 @@ export default function CheckInReceptionPanel({
           onClick={() => dispatch({ type: "markAllReceived" })}
           disabled={totals.pendientes === 0}
           title="Marcar todos los pendientes como Recibido"
-          className="ml-auto inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-[11px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-2)] disabled:opacity-50"
+          className={`ml-auto inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-2)] disabled:opacity-50 ${
+            isMobile ? "min-h-11 px-4 text-sm" : "px-2.5 py-1 text-[11px]"
+          }`}
         >
           <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
           Marcar todos como recibidos
@@ -287,7 +370,7 @@ export default function CheckInReceptionPanel({
               <div
                 role="group"
                 aria-label={`Estado de recepción — ${item.name}`}
-                className="mt-1.5 flex flex-wrap gap-1"
+                className={`mt-1.5 flex flex-wrap ${isMobile ? "gap-2" : "gap-1"}`}
               >
                 {RECEPTION_STATE_OPTIONS.map((option) => {
                   const pressed = option.value === current;
@@ -299,7 +382,11 @@ export default function CheckInReceptionPanel({
                       onClick={() =>
                         dispatch({ type: "setState", key, state: option.value })
                       }
-                      className={`rounded-[6px] border px-2 py-0.5 text-[11px] transition-colors ${
+                      className={`rounded-[6px] border transition-colors ${
+                        isMobile
+                          ? "min-h-11 px-3 py-2 text-sm"
+                          : "px-2 py-0.5 text-[11px]"
+                      } ${
                         pressed
                           ? PRESSED_TONE[option.value]
                           : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
@@ -363,6 +450,7 @@ export default function CheckInReceptionPanel({
                   productId={item.productId}
                   orderId={entry.id}
                   incidentNote={incidentSummary(line)}
+                  onCheckedIn={() => handleUnitCheckedIn(item.productId!)}
                 />
               )}
             </li>
@@ -380,7 +468,9 @@ export default function CheckInReceptionPanel({
           type="button"
           disabled={!canFinalize}
           onClick={() => setConfirmOpen(true)}
-          className={`rounded-[6px] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 ${
+          className={`rounded-[6px] font-medium text-white disabled:opacity-50 ${
+            isMobile ? "min-h-12 w-full px-4 text-sm" : "px-3 py-1.5 text-xs"
+          } ${
             finalize.variant === "incident"
               ? "bg-[var(--color-crit)]"
               : "bg-[var(--color-text-primary)]"

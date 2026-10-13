@@ -1,6 +1,8 @@
 ---
 import Bodega from "../../../layout/Bodega.astro";
 import BodegaScanner from "../../../components/bodega/BodegaScanner";
+import BodegaReturnScreen, { isReturnScreenOrder } from "../../../components/bodega/BodegaReturnScreen";
+import { businessDay } from "../../../lib/businessDay";
 import { clearAuthCookies, getServerAdmin } from "../../../lib/supabase";
 import { BodegaService, type ScanSheet } from "../../../services/bodegaService";
 
@@ -33,6 +35,11 @@ if (!sheet && !loadError) {
   Astro.response.status = 404;
 }
 
+// R-04b: a return (or a rental whose end date arrived) opens the shared reception flow under the
+// scanner. "Today" is the server's business day, never the device clock.
+const todayIsoDay = businessDay(new Date());
+const isReturn = sheet ? isReturnScreenOrder(sheet.order.status, sheet.order.endDate, todayIsoDay) : false;
+
 const title = sheet ? `${sheet.order.reference} | Bodega` : 'Orden | Bodega';
 ---
 
@@ -44,6 +51,8 @@ const title = sheet ? `${sheet.order.reference} | Bodega` : 'Orden | Bodega';
     >
       {loadError}
     </div>
+  ) : sheet && isReturn ? (
+    <BodegaReturnScreen client:load sheet={sheet} todayIsoDay={todayIsoDay} />
   ) : sheet ? (
     <BodegaScanner client:load sheet={sheet} />
   ) : (

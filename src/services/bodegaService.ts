@@ -11,6 +11,7 @@ import {
   type BodegaOrderLike,
 } from '../lib/bodega';
 import type { ScanLine } from '../lib/bodegaScan';
+import type { LineItem } from '../types/order';
 import { supabaseAdmin } from '../lib/supabase';
 
 /**
@@ -44,6 +45,8 @@ export interface ScanSheetOrder {
 export interface ScanSheet {
   order: ScanSheetOrder;
   lines: ScanLine[];
+  /** R-04b: the order's raw `line_items`, for the shared reception panel on a return. */
+  lineItems: LineItem[];
 }
 
 export class BodegaService {
@@ -159,6 +162,7 @@ export class BodegaService {
         endDate: typedOrder.order_fecha_termino ? isoDay(typedOrder.order_fecha_termino) : null,
       },
       lines: scanSheetLines(typedOrder.line_items, movements, assetProducts),
+      lineItems: Array.isArray(typedOrder.line_items) ? (typedOrder.line_items as LineItem[]) : [],
     };
   }
 }

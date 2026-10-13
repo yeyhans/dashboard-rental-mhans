@@ -22,10 +22,13 @@ export default function AssetCheckInControl({
   productId,
   orderId,
   incidentNote,
+  onCheckedIn,
 }: {
   productId: number;
   orderId: number;
   incidentNote?: string;
+  /** R-04b: called after a successful check-in, so the reception panel can mark the line. */
+  onCheckedIn?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<AssetOption[] | null>(null);
@@ -83,6 +86,7 @@ export default function AssetCheckInControl({
       }
       setResult({ ok: true, message: "Check-in registrado" });
       toast.success("Check-in registrado");
+      onCheckedIn?.();
     } catch (error) {
       setResult({
         ok: false,

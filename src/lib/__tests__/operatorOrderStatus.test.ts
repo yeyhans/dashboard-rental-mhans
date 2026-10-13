@@ -90,3 +90,40 @@ describe("validateOperatorStatusChange", () => {
     ).toBe(false);
   });
 });
+
+/**
+ * R-04b (owner decision 2026-10-13): an operator may close a return (`return -> completed`), but
+ * only through the reception flow (`POST /api/bodega/orders/[id]/finalize`), which also saves the
+ * return report. The plain status route keeps refusing it, so a return is never closed without
+ * its report.
+ */
+describe("validateOperatorStatusChange — closing a return", () => {
+  it("allows return -> completed when the caller is the finalize flow", () => {
+    expect(
+      validateOperatorStatusChange("return", "completed", {
+        allowClosing: true,
+      }),
+    ).toEqual({ valid: true });
+  });
+
+  it("still refuses return -> completed outside the finalize flow", () => {
+    expect(validateOperatorStatusChange("return", "completed").valid).toBe(
+      false,
+    );
+  });
+
+  it.each([
+    ["in-rental", "completed"],
+    ["return", "cancelled"],
+    ["confirmed", "completed"],
+    ["completed", "completed"],
+  ])("never widens anything else: %s -> %s", (from, to) => {
+    expect(
+      validateOperatorStatusChange(from, to, { allowClosing: true }).valid,
+    ).toBe(false);
+  });
+
+  it("keeps the closing step out of the bodega 'next step' button", () => {
+    expect(operatorNextStatus("return")).toBeNull();
+  });
+});

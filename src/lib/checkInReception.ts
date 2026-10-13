@@ -221,3 +221,150 @@ export function returnClosingSteps(
   if (status === "in-rental") return ["return", "completed"];
   return null;
 }
+
+/* ---------------------------------------------------------------------------------------------
+ * R-04b: one reception flow for /check-in and /bodega, persisted as `orders.return_report`
+ * ------------------------------------------------------------------------------------------ */
+
+/**
+ * An `in-rental` order may be closed from the reception flow once its rental period has ended
+ * (end date today or earlier). Before that, closing it would mark equipment as back that the
+ * client still legitimately holds; the server answers 409.
+ */
+export function isReturnDue(
+  endDate: string | null | undefined,
+  todayIsoDay: string,
+): boolean {
+  if (!endDate) return false;
+  return endDate.slice(0, 10) <= todayIsoDay;
+}
+
+/**
+ * Lines a serialised check-in completes: every unit of the line's product came back, and nobody
+ * set the line by hand yet. A partial return stays pending — "Recibido" means the whole line.
+ */
+export function linesToAutoReceive(
+  lines: readonly (ReceptionLine & { productId: number | null })[],
+  state: ReceptionMap,
+  checkedInByProduct: Readonly<Record<number, number>>,
+): string[] {
+  return lines
+    .filter((line) => {
+      if (line.productId === null || state[line.key]?.state !== "pending")
+        return false;
+      const checkedIn = checkedInByProduct[line.productId] ?? 0;
+      return line.quantity > 0 && checkedIn >= line.quantity;
+    })
+    .map((line) => line.key);
+}
+
+/** One line of `orders.return_report.lines`. */
+export interface ReturnReportLine {
+  key: string;
+  label: string;
+  state: Exclude<ReceptionState, "pending">;
+  incident_type: string | null;
+  note: string | null;
+}
+
+export const RETURN_REPORT_MAX_LINES = 200;
+const LABEL_MAX_LENGTH = 200;
+
+export const RETURN_REPORT_ERRORS = {
+  INVALID:
+    "El informe de devolución no es válido. Recarga la página y vuelve a marcar los equipos.",
+} as const;
+
+/** Client side: the finalize payload, built from the reception state. */
+export function buildReturnReportLines(
+  labels: readonly string[],
+  lines: readonly ReceptionLine[],
+  state: ReceptionMap,
+): ReturnReportLine[] {
+  return lines.map((line, index) => {
+    const reception = state[line.key] ?? {
+      state: "pending" as const,
+      incidentType: "",
+      note: "",
+    };
+    const incident = isIncidentState(reception.state);
+    return {
+      key: line.key,
+      label: labels[index] ?? `Ítem ${index + 1}`,
+      state: reception.state as ReturnReportLine["state"],
+      incident_type:
+        incident && reception.incidentType ? reception.incidentType : null,
+      note: incident && reception.note.trim() ? reception.note.trim() : null,
+    };
+  });
+}
+
+const CLOSED_STATES: readonly ReceptionState[] = [
+  "received",
+  "incomplete",
+  "damaged",
+  "not-delivered",
+];
+
+/**
+ * Server side: validates the finalize payload. Every line must be judged (no `pending`), every
+ * incident must carry one of the canonical types, and lengths are bounded — this is what gets
+ * stored in `orders.return_report`, so nothing the panel could not have produced gets in.
+ */
+export function parseReturnReportLines(
+  raw: unknown,
+): { ok: true; lines: ReturnReportLine[] } | { ok: false; error: string } {
+  const invalid = { ok: false as const, error: RETURN_REPORT_ERRORS.INVALID };
+  if (
+    !Array.isArray(raw) ||
+    raw.length === 0 ||
+    raw.length > RETURN_REPORT_MAX_LINES
+  )
+    return invalid;
+
+  const lines: ReturnReportLine[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") return invalid;
+    const { key, label, state, incident_type, note } = item as Record<
+      string,
+      unknown
+    >;
+    if (typeof key !== "string" || key === "" || key.length > 20)
+      return invalid;
+    if (
+      typeof label !== "string" ||
+      label.trim() === "" ||
+      label.length > LABEL_MAX_LENGTH
+    )
+      return invalid;
+    if (
+      typeof state !== "string" ||
+      !CLOSED_STATES.includes(state as ReceptionState)
+    )
+      return invalid;
+
+    const incident = isIncidentState(state as ReceptionState);
+    let incidentType: string | null = null;
+    if (incident) {
+      if (
+        typeof incident_type !== "string" ||
+        !(INCIDENT_TYPES as readonly string[]).includes(incident_type)
+      )
+        return invalid;
+      incidentType = incident_type;
+    }
+    if (note !== undefined && note !== null && typeof note !== "string")
+      return invalid;
+    const cleanNote = typeof note === "string" ? note.trim() : "";
+    if (cleanNote.length > INCIDENT_NOTE_MAX_LENGTH) return invalid;
+
+    lines.push({
+      key,
+      label: label.trim(),
+      state: state as ReturnReportLine["state"],
+      incident_type: incidentType,
+      note: incident && cleanNote ? cleanNote : null,
+    });
+  }
+  return { ok: true, lines };
+}

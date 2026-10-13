@@ -1,4 +1,13 @@
 import { supabaseAdmin } from "../lib/supabase";
+import { businessDay } from "../lib/businessDay";
+import {
+  isReturnDue,
+  parseReturnReportLines,
+  returnClosingSteps,
+  type ReturnReportLine,
+} from "../lib/checkInReception";
+import { checkStatusChange } from "../lib/orderTransitionGate";
+import { OrderService } from "./orderService";
 
 /**
  * Side effects of an order entering a lifecycle stage, kept out of the API routes so every path
@@ -34,7 +43,184 @@ type ProfileRow = {
 
 const PROFILE_COLUMNS = "rut, tipo_cliente, empresa_nombre, empresa_rut";
 
+/* R-04b: closing a return from the shared reception panel ---------------------------------- */
+
+export const RETURN_REPORT_COLUMN_WARNING =
+  "La devolución se cerró, pero el informe no se guardó: falta aplicar la migración 0018.";
+export const RETURN_REPORT_SAVE_WARNING =
+  "La devolución se cerró, pero no se pudo guardar el informe de devolución.";
+
+/** A refusal the finalize route turns into its HTTP status, with the Spanish message as-is. */
+export class ReturnFinalizeError extends Error {
+  constructor(
+    readonly status: 400 | 403 | 404 | 409,
+    message: string,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = "ReturnFinalizeError";
+  }
+}
+
+export interface FinalizeReturnInput {
+  orderId: number;
+  role?: string | null;
+  actorId?: string | null;
+  /** The panel's report lines, untrusted until `parseReturnReportLines` accepts them. */
+  lines: unknown;
+  /** Business day (`YYYY-MM-DD`, America/Santiago); defaults to today. */
+  todayChile?: string;
+}
+
+export interface FinalizeReturnResult {
+  steps: ("return" | "completed")[];
+  order: unknown;
+  warning?: string;
+}
+
+/** `orders.return_report` (migration 0018). */
+export interface ReturnReport {
+  finalized_at: string;
+  finalized_by: string | null;
+  lines: ReturnReportLine[];
+}
+
+/** PostgREST / Postgres codes for "this column does not exist" (migration not applied). */
+function isMissingColumnError(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  return code === "42703" || code === "PGRST204";
+}
+
 export class OrderLifecycleService {
+  /**
+   * R-04b: closes a return from the shared reception panel (/check-in and /bodega).
+   *
+   * 1. Validates the report (every line judged, canonical incident types, bounded lengths).
+   * 2. Only `return` and a due `in-rental` (rental ended today or earlier) can be closed; the
+   *    order then walks to `completed` one legal step at a time through the shared gate. An
+   *    operator may take `return -> completed` here, and only here (`allowOperatorClosing`).
+   * 3. Saves `orders.return_report`. If the column does not exist yet (0018 not applied), or the
+   *    write fails, the close stands and the result carries a warning: the equipment is physically
+   *    back, and refusing the close over a missing column would block the garage.
+   */
+  static async finalizeReturn(
+    input: FinalizeReturnInput,
+  ): Promise<FinalizeReturnResult> {
+    const report = parseReturnReportLines(input.lines);
+    if (!report.ok)
+      throw new ReturnFinalizeError(400, report.error, "INVALID_REPORT");
+
+    const order = (await OrderService.getOrderById(input.orderId)) as {
+      status?: string;
+      order_fecha_termino?: string | null;
+    } | null;
+    if (!order) throw new ReturnFinalizeError(404, "La orden no existe");
+
+    const status = String(order.status ?? "");
+    const steps = returnClosingSteps(status);
+    if (!steps) {
+      throw new ReturnFinalizeError(
+        409,
+        "Solo se puede cerrar una devolución de un pedido en arriendo o en devolución.",
+        "NOT_RETURNABLE",
+      );
+    }
+    const today = input.todayChile ?? businessDay(new Date());
+    if (
+      status === "in-rental" &&
+      !isReturnDue(order.order_fecha_termino, today)
+    ) {
+      throw new ReturnFinalizeError(
+        409,
+        "El arriendo aún no termina: no se puede cerrar la devolución antes de la fecha de término.",
+        "RETURN_NOT_DUE",
+      );
+    }
+
+    let current = status;
+    let updated: unknown = order;
+    for (const step of steps) {
+      const rejection = checkStatusChange({
+        from: current,
+        to: step,
+        role: input.role,
+        allowOperatorClosing: true,
+      });
+      if (rejection) {
+        throw new ReturnFinalizeError(
+          rejection.status,
+          rejection.error,
+          rejection.code,
+        );
+      }
+      updated = await OrderService.updateOrderStatus(input.orderId, step);
+      current = step;
+    }
+
+    const warning = await OrderLifecycleService.saveReturnReport(
+      input.orderId,
+      {
+        finalized_at: new Date().toISOString(),
+        finalized_by: input.actorId ?? null,
+        lines: report.lines,
+      },
+    );
+
+    return { steps, order: updated, ...(warning ? { warning } : {}) };
+  }
+
+  /**
+   * Reads `orders.return_report` with `select('*')`: before migration 0018 the key is simply
+   * absent and this returns `null`, instead of failing on a named column that does not exist.
+   */
+  static async getReturnReport(orderId: number): Promise<unknown> {
+    const { data, error } = await supabaseAdmin
+      .from("orders")
+      .select("*")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as { return_report?: unknown } | null)?.return_report ?? null;
+  }
+
+  /** Writes `orders.return_report`; returns a warning instead of throwing. */
+  static async saveReturnReport(
+    orderId: number,
+    report: ReturnReport,
+  ): Promise<string | undefined> {
+    try {
+      const { error } = await supabaseAdmin
+        .from("orders")
+        .update({ return_report: report } as never)
+        .eq("id", orderId);
+      if (!error) return undefined;
+      if (isMissingColumnError(error)) {
+        console.error(
+          "[OrderLifecycleService] orders.return_report no existe (migración 0018 pendiente):",
+          { orderId },
+        );
+        return RETURN_REPORT_COLUMN_WARNING;
+      }
+      console.error(
+        "[OrderLifecycleService] No se pudo guardar el informe de devolución:",
+        {
+          orderId,
+          error,
+        },
+      );
+      return RETURN_REPORT_SAVE_WARNING;
+    } catch (error) {
+      console.error(
+        "[OrderLifecycleService] No se pudo guardar el informe de devolución:",
+        {
+          orderId,
+          error,
+        },
+      );
+      return RETURN_REPORT_SAVE_WARNING;
+    }
+  }
+
   /** Never throws: the caller has already persisted the status change. */
   static async onStatusChanged(
     order: LifecycleOrder,

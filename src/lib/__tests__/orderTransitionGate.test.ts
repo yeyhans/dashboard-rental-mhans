@@ -68,3 +68,34 @@ describe("checkStatusChange", () => {
     ).toBeNull();
   });
 });
+
+describe("checkStatusChange — finalize flow (R-04b)", () => {
+  it("lets an operator close a return when allowOperatorClosing is set", () => {
+    expect(
+      checkStatusChange({
+        from: "return",
+        to: "completed",
+        role: "operator",
+        allowOperatorClosing: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("refuses it for an operator without the flag", () => {
+    expect(
+      checkStatusChange({ from: "return", to: "completed", role: "operator" })
+        ?.status,
+    ).toBe(403);
+  });
+
+  it("still applies the state machine with the flag", () => {
+    expect(
+      checkStatusChange({
+        from: "in-rental",
+        to: "completed",
+        role: "operator",
+        allowOperatorClosing: true,
+      })?.status,
+    ).toBe(403);
+  });
+});

@@ -192,3 +192,160 @@ describe("returnClosingSteps", () => {
     expect(returnClosingSteps("completed")).toBeNull();
   });
 });
+
+/* R-04b ------------------------------------------------------------------------------------- */
+
+import {
+  RETURN_REPORT_ERRORS,
+  buildReturnReportLines,
+  isReturnDue,
+  linesToAutoReceive,
+  parseReturnReportLines,
+} from "../checkInReception";
+
+describe("isReturnDue", () => {
+  it("is due once the rental end date is today or past", () => {
+    expect(isReturnDue("2026-10-13", "2026-10-13")).toBe(true);
+    expect(isReturnDue("2026-10-10", "2026-10-13")).toBe(true);
+  });
+
+  it("is not due before the end date or without one", () => {
+    expect(isReturnDue("2026-10-14", "2026-10-13")).toBe(false);
+    expect(isReturnDue(null, "2026-10-13")).toBe(false);
+  });
+});
+
+describe("linesToAutoReceive", () => {
+  const lines = [
+    { key: "0", quantity: 2, productId: 10 },
+    { key: "1", quantity: 1, productId: 11 },
+    { key: "2", quantity: 1, productId: null },
+  ];
+
+  it("marks a pending line once every unit of it was checked in", () => {
+    const state = createReception(lines);
+    expect(linesToAutoReceive(lines, state, { 10: 2, 11: 0 })).toEqual(["0"]);
+  });
+
+  it("leaves a partially returned line pending", () => {
+    const state = createReception(lines);
+    expect(linesToAutoReceive(lines, state, { 10: 1 })).toEqual([]);
+  });
+
+  it("never overrides a state someone already set", () => {
+    const state = receptionReducer(createReception(lines), {
+      type: "setState",
+      key: "0",
+      state: "damaged",
+    });
+    expect(linesToAutoReceive(lines, state, { 10: 2 })).toEqual([]);
+  });
+});
+
+describe("return report lines", () => {
+  const lines = [
+    { key: "0", quantity: 1 },
+    { key: "1", quantity: 1 },
+  ];
+
+  it("builds the payload from the reception state", () => {
+    let state = receptionReducer(createReception(lines), {
+      type: "markAllReceived",
+    });
+    state = receptionReducer(state, {
+      type: "setState",
+      key: "1",
+      state: "damaged",
+    });
+    state = receptionReducer(state, {
+      type: "setIncident",
+      key: "1",
+      incidentType: "Falla eléctrica",
+      note: "no enciende",
+    });
+
+    expect(buildReturnReportLines(["Cámara", "Flash"], lines, state)).toEqual([
+      {
+        key: "0",
+        label: "Cámara",
+        state: "received",
+        incident_type: null,
+        note: null,
+      },
+      {
+        key: "1",
+        label: "Flash",
+        state: "damaged",
+        incident_type: "Falla eléctrica",
+        note: "no enciende",
+      },
+    ]);
+  });
+
+  it("accepts a valid payload on the server", () => {
+    const result = parseReturnReportLines([
+      {
+        key: "0",
+        label: "Cámara",
+        state: "received",
+        incident_type: null,
+        note: null,
+      },
+      {
+        key: "1",
+        label: "Flash",
+        state: "not-delivered",
+        incident_type: "No devuelto",
+        note: "",
+      },
+    ]);
+    expect(result).toEqual({
+      ok: true,
+      lines: [
+        {
+          key: "0",
+          label: "Cámara",
+          state: "received",
+          incident_type: null,
+          note: null,
+        },
+        {
+          key: "1",
+          label: "Flash",
+          state: "not-delivered",
+          incident_type: "No devuelto",
+          note: null,
+        },
+      ],
+    });
+  });
+
+  it.each([
+    ["not an array", { lines: [] }],
+    ["empty", []],
+    ["a pending line", [{ key: "0", label: "x", state: "pending" }]],
+    ["an unknown state", [{ key: "0", label: "x", state: "lost" }]],
+    ["an incident without type", [{ key: "0", label: "x", state: "damaged" }]],
+    [
+      "an unknown incident type",
+      [{ key: "0", label: "x", state: "damaged", incident_type: "Robado" }],
+    ],
+    [
+      "a note too long",
+      [
+        {
+          key: "0",
+          label: "x",
+          state: "damaged",
+          incident_type: "Otro",
+          note: "n".repeat(501),
+        },
+      ],
+    ],
+    ["a missing label", [{ key: "0", state: "received" }]],
+  ])("rejects %s", (_name, raw) => {
+    const result = parseReturnReportLines(raw);
+    expect(result.ok).toBe(false);
+    expect(result.ok ? "" : result.error).toBe(RETURN_REPORT_ERRORS.INVALID);
+  });
+});

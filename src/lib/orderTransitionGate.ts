@@ -28,13 +28,16 @@ export function checkStatusChange(input: {
   from: unknown;
   to: unknown;
   role?: string | null;
+  /** Only the return finalize flow sets this: it lets an operator take `return -> completed`. */
+  allowOperatorClosing?: boolean;
 }): StatusChangeRejection | null {
-  const { from, to, role } = input;
+  const { from, to, role, allowOperatorClosing = false } = input;
 
   if (role === "operator") {
     const gate = validateOperatorStatusChange(
       typeof from === "string" ? from : null,
       typeof to === "string" ? to : null,
+      { allowClosing: allowOperatorClosing },
     );
     if (!gate.valid) {
       return {
