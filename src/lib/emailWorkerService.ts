@@ -36,6 +36,11 @@ export function getEmailWorkerUrl(): string {
   return parsed.origin;
 }
 
+/** R-09a: whether the worker's shared secret is configured; without it nothing is sent. */
+export function isEmailWorkerAuthConfigured(): boolean {
+  return Boolean(import.meta.env.EMAIL_WORKER_SHARED_SECRET);
+}
+
 export function createEmailWorkerHeaders(requestId = crypto.randomUUID()): HeadersInit {
   const secret = import.meta.env.EMAIL_WORKER_SHARED_SECRET;
   const headers: Record<string, string> = {
@@ -61,6 +66,20 @@ export async function sendEmailViaWorker(
   attachments?: EmailPayload['attachments'],
   requestId = crypto.randomUUID()
 ): Promise<EmailResult> {
+  // R-09a: fail closed. An unauthenticated request to the shared worker (it also serves
+  // production) is what the staged auth rollout removes; without the secret, no request.
+  if (!isEmailWorkerAuthConfigured()) {
+    console.error('[Email] Correo no enviado: falta EMAIL_WORKER_SHARED_SECRET', {
+      requestId,
+      failureClass: 'email_worker_not_configured',
+    });
+    return {
+      success: false,
+      message: 'Email worker not configured: EMAIL_WORKER_SHARED_SECRET is missing',
+      error: 'email_worker_not_configured',
+    };
+  }
+
   try {
     const payload: EmailPayload = {
       to,

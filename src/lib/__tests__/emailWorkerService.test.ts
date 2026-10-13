@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createEmailWorkerHeaders, validateEmailConfig } from '../emailWorkerService';
+import { createEmailWorkerHeaders, sendEmailViaWorker, validateEmailConfig } from '../emailWorkerService';
 
 describe('dashboard emailWorkerService', () => {
   afterEach(() => {
@@ -35,5 +35,53 @@ describe('dashboard emailWorkerService', () => {
       workerReachable: true,
       authenticatedDeliveryReady: false,
     });
+  });
+});
+
+/**
+ * R-09a: the sending path fails closed. Without EMAIL_WORKER_SHARED_SECRET nothing is sent — an
+ * unauthenticated request to the shared worker is exactly what the staged auth rollout removes.
+ */
+describe('sendEmailViaWorker — fails closed without the shared secret (R-09a)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('sends no request and returns a typed failure', async () => {
+    vi.stubEnv('EMAIL_WORKER_SHARED_SECRET', '');
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await sendEmailViaWorker('cliente@x.cl', 'Asunto', '<p>Hola</p>');
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      message: expect.stringContaining('EMAIL_WORKER_SHARED_SECRET'),
+      error: 'email_worker_not_configured',
+    });
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[Email]'),
+      expect.objectContaining({ failureClass: 'email_worker_not_configured' }),
+    );
+  });
+
+  it('sends with bearer auth when the secret is configured', async () => {
+    vi.stubEnv('EMAIL_WORKER_SHARED_SECRET', 'worker-secret');
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ message: 'ok' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const result = await sendEmailViaWorker('cliente@x.cl', 'Asunto', '<p>Hola</p>');
+
+    expect(result.success).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/\/send-email$/),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer worker-secret' }),
+      }),
+    );
   });
 });
