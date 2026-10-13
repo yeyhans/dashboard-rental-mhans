@@ -14,7 +14,7 @@ import { formatBusinessDate, formatBusinessDateTimeFull } from '../../lib/busine
 import { FetchTimeoutError, fetchWithTimeout } from '../../lib/fetchWithTimeout';
 import { CouponSelector } from './CouponSelector';
 import { ProductSelector } from './ProductSelector';
-import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliveryTime, getShippingTypeLabel } from '../../services/shippingService';
+import { createShippingLine, fetchEnabledShippingMethods, validateShippingMethod, type ShippingMethod, formatShippingCost, formatDeliveryTime, getShippingTypeLabel } from '../../lib/orderShipping';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { apiClient } from '@/services/apiClient';
 import OrderDriverField from '@/components/delivery/OrderDriverField';
@@ -691,8 +691,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
               }
             }
             : {
-              // Método estándar - usar ShippingService
-              ...ShippingService.createShippingLine(
+              // Método estándar - usar createShippingLine
+              ...createShippingLine(
                 selectedShippingMethod,
                 {
                   first_name: orderData.billing_first_name || '',
@@ -703,7 +703,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                 }
               ),
               meta_data: {
-                ...ShippingService.createShippingLine(selectedShippingMethod).meta_data,
+                ...createShippingLine(selectedShippingMethod).meta_data,
                 delivery_method: deliveryMethod,
                 shipping_address: shippingAddress.trim() || 'No especificada',
                 shipping_phone: shippingPhone.trim() || 'No especificado'
@@ -840,14 +840,15 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       }
 
       // Fallback: cargar desde API si no hay props
-      const shippingResult = await ShippingService.getAllShippingMethods(1, 100, true); // Solo métodos habilitados
-      if (shippingResult && shippingResult.shippingMethods) {
-        setShippingMethods(shippingResult.shippingMethods);
+      // Solo métodos habilitados, vía la API protegida (T-05)
+      const enabledMethods = await fetchEnabledShippingMethods();
+      if (enabledMethods) {
+        setShippingMethods(enabledMethods);
         setShippingMethodsSource('database');
 
         // Si estamos en modo shipping y no hay método seleccionado, seleccionar el primero
         if (deliveryMethod === 'shipping' && !selectedShippingMethod) {
-          const defaultMethod = shippingResult.shippingMethods[0];
+          const defaultMethod = enabledMethods[0];
           if (defaultMethod) {
             setSelectedShippingMethod(defaultMethod);
             setEditedShipping(defaultMethod.cost.toString());
@@ -856,7 +857,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       }
     } catch (shippingError) {
       console.error('[ProcessOrder] Error al cargar los métodos de envío:', shippingError);
-      // Fallback a métodos por defecto siguiendo la interfaz del ShippingService
+      // Fallback a métodos por defecto siguiendo la interfaz ShippingMethod
       const defaultMethods: ShippingMethod[] = [
         {
           id: 1,
@@ -3330,7 +3331,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                           {shippingMethods.map((method) => {
                             const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
                             const productsSubtotal = calculateProductsSubtotal(editedProducts, numDays);
-                            const validation = ShippingService.validateShippingMethod(method, productsSubtotal);
+                            const validation = validateShippingMethod(method, productsSubtotal);
                             const isSelected = selectedShippingMethod?.id === method.id;
 
                             return (
