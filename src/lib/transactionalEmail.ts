@@ -40,6 +40,11 @@ export interface TransactionalEmailData {
   logo_url?: string | null;
   whatsapp_url?: string | null;
   site_url?: string | null;
+  /**
+   * R-09e: Registro only — the "Crear mi contraseña" recovery link for an account an admin
+   * created. Absent, the template's optional block is dropped (self-registration).
+   */
+  link_crear_contrasena?: string | null;
 }
 
 /** The business WhatsApp (verified 2026-09-30); the designs carry a 56900000000 placeholder. */
@@ -55,7 +60,19 @@ const DARK_HEADER: ReadonlySet<TransactionalEmailKey> = new Set([
 ]);
 
 /** Keys whose `{{...}}` holds a URL: validated as http(s) before it is escaped. */
-const URL_KEYS = new Set(["link_pdf", "logo_url", "whatsapp_url", "site_url"]);
+const URL_KEYS = new Set([
+  "link_pdf",
+  "logo_url",
+  "whatsapp_url",
+  "site_url",
+  "link_crear_contrasena",
+]);
+
+/**
+ * Optional template blocks, `<!--{{#name}}-->…<!--{{/name}}-->`: kept when `name` has a value,
+ * removed whole otherwise. HTML comments so the raw design still opens cleanly in a browser.
+ */
+const OPTIONAL_BLOCK = /<!--\{\{#(\w+)\}\}-->([\s\S]*?)<!--\{\{\/\1\}\}-->/g;
 
 export function escapeHtml(value: string): string {
   return value
@@ -145,7 +162,12 @@ export function renderTransactionalEmail(
       values[name] = value;
   }
 
-  const html = template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => {
+  const withBlocks = template.replace(
+    OPTIONAL_BLOCK,
+    (_match, name: string, body: string) =>
+      values[name] === undefined ? "" : body,
+  );
+  const html = withBlocks.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => {
     const raw = values[name];
     if (raw === undefined || raw === null) return "";
     const text = String(raw);

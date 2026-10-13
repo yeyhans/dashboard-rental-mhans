@@ -62,10 +62,11 @@ export const POST: APIRoute = withAuth(async (context) => {
       );
     }
 
-    const newUser = await UserService.createUser(userData);
+    // R-09e: el correo de Registro es best-effort; si falla, el panel muestra el aviso.
+    const { user: newUser, warning } = await UserService.createUserWithWelcome(userData);
 
     return new Response(
-      JSON.stringify({ success: true, data: newUser }),
+      JSON.stringify({ success: true, data: newUser, ...(warning ? { warning } : {}) }),
       { status: 201, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {

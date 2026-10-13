@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../lib/supabase';
 import type { Database } from '../types/database';
 import { sendEmailViaWorker } from '../lib/emailWorkerService';
+import { renderTransactionalEmail } from '../lib/transactionalEmail';
 import { rutValidationError } from '../lib/rut';
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
@@ -146,79 +147,79 @@ export class UserService {
   }
 
   /**
-   * Generar contraseña temporal segura
-   */
-  private static generateTemporaryPassword(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    const special = '!@#$%&*';
-    let password = '';
-    for (let i = 0; i < 10; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    password += special.charAt(Math.floor(Math.random() * special.length));
-    return password;
-  }
-
-  /**
-   * Enviar email de bienvenida con credenciales temporales
+   * R-09e: the "Registro" design for an account an admin created, with a "Crear mi contraseña"
+   * button instead of a password in the email.
    *
-   * R-09d: no usa el diseño aprobado "Registro" (01) a propósito. Este correo lo dispara un admin
-   * al crear la cuenta y lleva la contraseña temporal; la plantilla de Registro no tiene dónde
-   * mostrarla (solo Nombre y usuario) y cambiarlo dejaría al cliente sin forma de entrar. El
-   * Registro del cliente que se registra solo lo envía el frontend, fuera de este repo.
+   * The button is a Supabase recovery link generated server-side. It points at the customer
+   * site's own `/reset-password?token_hash=…&type=recovery` — the same entry the site's "¿Olvidaste
+   * tu contraseña?" emails use, which asks for an explicit click before redeeming the token (so
+   * a mail scanner opening the link does not burn it) — rather than at `action_link`, which
+   * would redeem it on the Supabase host first.
+   *
+   * Best effort: the account already exists. Returns a Spanish warning for the admin when the
+   * link or the email fails; nothing is sent without the link, because without it the customer
+   * has no way in.
    */
-  private static async sendWelcomeEmail(
+  private static async sendRegistroEmail(
     email: string,
     nombre: string,
-    temporaryPassword: string
-  ): Promise<void> {
+    usuario: string
+  ): Promise<string | undefined> {
+    const frontendUrl = (import.meta.env.PUBLIC_FRONTEND_URL || 'https://rental.mariohans.cl').replace(/\/$/, '');
+    const resetPage = `${frontendUrl}/reset-password`;
+
     try {
-      const frontendUrl = import.meta.env.PUBLIC_FRONTEND_URL || 'https://rental.mariohans.cl';
-      const emailDomain = import.meta.env.PUBLIC_EMAIL_DOMAIN || 'mail.mariohans.cl';
-
-      const html = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: #1a1a1a;">Bienvenido/a a Mario Hans Rental</h2>
-          <p>Hola <strong>${nombre || 'Cliente'}</strong>,</p>
-          <p>Tu cuenta ha sido creada exitosamente. A continuación te dejamos tus credenciales de acceso:</p>
-          <div style="background-color: #f4f4f5; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <p style="margin: 0 0 8px;"><strong>Email:</strong> ${email}</p>
-            <p style="margin: 0;"><strong>Contraseña temporal:</strong> ${temporaryPassword}</p>
-          </div>
-          <p style="color: #dc2626; font-weight: bold;">Te recomendamos cambiar tu contraseña después de iniciar sesión.</p>
-          <a href="${frontendUrl}/login" style="display: inline-block; background-color: #000; color: #fff; padding: 12px 24px; border-radius: 6px; text-decoration: none; margin-top: 10px;">
-            Iniciar sesión
-          </a>
-          <hr style="margin: 30px 0; border: none; border-top: 1px solid #e4e4e7;" />
-          <p style="color: #71717a; font-size: 14px;">
-            Si tenés alguna consulta, escribinos a rental.mariohans@gmail.com<br/>
-            Equipo Mario Hans Rental Fotográfico
-          </p>
-        </div>
-      `;
-
-      // Send via Cloudflare Worker using send_email binding
-      const result = await sendEmailViaWorker(
+      const { data, error } = await getSupabaseAdmin().auth.admin.generateLink({
+        type: 'recovery',
         email,
-        'Bienvenido/a a Mario Hans Rental — Tus credenciales de acceso',
-        html
-      );
-
-      if (!result.success) {
-        console.error('[UserService] Error enviando email de bienvenida:', { email, error: result.error });
-      } else {
-        console.log('[UserService] Email de bienvenida enviado a:', email);
+        options: { redirectTo: resetPage },
+      });
+      const hashedToken = data?.properties?.hashed_token;
+      if (error || !hashedToken) {
+        console.error('[UserService] No se pudo generar el enlace para crear la contraseña:', {
+          email,
+          error: error?.message,
+        });
+        return 'La cuenta se creó, pero no se pudo generar el enlace para crear la contraseña. El cliente puede pedirlo en «¿Olvidaste tu contraseña?».';
       }
+
+      const link = `${resetPage}?${new URLSearchParams({ token_hash: hashedToken, type: 'recovery' })}`;
+      const { subject, html } = renderTransactionalEmail('registro', {
+        nombre_cliente: nombre || 'Cliente',
+        usuario,
+        link_crear_contrasena: link,
+      });
+
+      const result = await sendEmailViaWorker(email, subject, html);
+      if (!result.success) {
+        console.error('[UserService] Error enviando el correo de registro:', { email, error: result.error });
+        return 'La cuenta se creó, pero no se pudo enviar el correo de registro al cliente.';
+      }
+      console.log('[UserService] Correo de registro enviado a:', email);
+      return undefined;
     } catch (error) {
-      // No lanzar error — el usuario ya fue creado, el email es best-effort
-      console.error('[UserService] Error en sendWelcomeEmail:', error);
+      console.error('[UserService] Error en sendRegistroEmail:', { email, error });
+      return 'La cuenta se creó, pero no se pudo enviar el correo de registro al cliente.';
     }
   }
 
   /**
-   * Crear nuevo usuario: primero en Supabase Auth, luego perfil via RPC
+   * Crear nuevo usuario: primero en Supabase Auth, luego perfil via RPC.
+   *
+   * Callers that cannot show a warning (the Hermes `external/create-user` route) keep this
+   * signature; the admin panel uses `createUserWithWelcome` to surface it.
    */
   static async createUser(userData: UserProfileInsert): Promise<UserProfile> {
+    const { user } = await UserService.createUserWithWelcome(userData);
+    return user;
+  }
+
+  /**
+   * `createUser`, plus the warning when the Registro email could not go out (R-09e).
+   */
+  static async createUserWithWelcome(
+    userData: UserProfileInsert
+  ): Promise<{ user: UserProfile; warning?: string }> {
     try {
       assertValidRuts(userData);
       const admin = getSupabaseAdmin();
@@ -229,13 +230,10 @@ export class UserService {
 
       console.log('[UserService] Creando usuario:', { email: userData.email, nombre: userData.nombre });
 
-      // 1. Generar contraseña temporal
-      const temporaryPassword = UserService.generateTemporaryPassword();
-
-      // 2. Crear usuario en Supabase Auth
+      // 1. Crear usuario en Supabase Auth, sin contraseña: el cliente la crea con el enlace del
+      //    correo de Registro (R-09e). Nadie más llega a conocerla.
       const { data: authData, error: authError } = await admin.auth.admin.createUser({
         email: userData.email,
-        password: temporaryPassword,
         email_confirm: true,
       });
 
@@ -250,7 +248,7 @@ export class UserService {
       const authUid = authData.user.id;
       console.log('[UserService] Auth user creado:', { authUid, email: userData.email });
 
-      // 3. Crear perfil via RPC con auth_uid
+      // 2. Crear perfil via RPC con auth_uid
       const { data, error } = await admin
         .rpc('admin_create_user_profile' as any, {
           p_auth_uid: authUid,
@@ -289,11 +287,14 @@ export class UserService {
 
       console.log('[UserService] Perfil creado:', { user_id: newUser.user_id, email: newUser.email });
 
-      // 4. Enviar email de bienvenida con credenciales (best-effort, no bloquea)
-      const nombre = userData.nombre || '';
-      UserService.sendWelcomeEmail(userData.email, nombre, temporaryPassword);
+      // 3. Correo de Registro con "Crear mi contraseña" (best-effort: la cuenta ya existe)
+      const warning = await UserService.sendRegistroEmail(
+        userData.email,
+        userData.nombre || '',
+        userData.usuario || userData.email
+      );
 
-      return newUser as UserProfile;
+      return warning ? { user: newUser as UserProfile, warning } : { user: newUser as UserProfile };
     } catch (error) {
       console.error('[UserService] Error creating user:', error);
       throw error;
