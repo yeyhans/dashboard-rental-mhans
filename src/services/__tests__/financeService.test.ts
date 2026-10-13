@@ -17,6 +17,8 @@ const state = vi.hoisted(() => ({
   gteArgs: [] as unknown[][],
   ranges: [] as number[][],
   pages: [] as unknown[][],
+  boardRanges: [] as number[][],
+  boardPages: [] as unknown[][],
 }));
 
 vi.mock("../../lib/supabase", () => ({
@@ -27,11 +29,21 @@ vi.mock("../../lib/supabase", () => ({
         select: (columns: string) => {
           state.selectColumns = columns;
           return {
-            in: () => ({
-              order: () => ({
+            in: () => {
+              const chain = {
+                order: () => chain,
                 limit: async () => ({ data: state.rows, error: null }),
-              }),
-            }),
+                // D1-a: the board pages with `range` instead of one capped `limit`.
+                range: async (from: number, to: number) => {
+                  state.boardRanges.push([from, to]);
+                  const page = state.boardPages.length
+                    ? (state.boardPages[state.boardRanges.length - 1] ?? [])
+                    : state.rows.slice(from, to + 1);
+                  return { data: page, error: null };
+                },
+              };
+              return chain;
+            },
             gte: (...args: unknown[]) => {
               state.gteArgs.push(args);
               return {
@@ -93,6 +105,8 @@ function order(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   state.rows = [];
+  state.boardRanges = [];
+  state.boardPages = [];
   state.updatePayloads = [];
   state.updateFilters = [];
   state.updateResult = { data: null, error: null };
@@ -121,6 +135,31 @@ describe("FinanceService.getBoard — payment date", () => {
       paidAtSource: "date_paid",
     });
     expect(byId.get(3)).toMatchObject({ paidAt: null, paidAtSource: null });
+  });
+});
+
+describe("FinanceService.getBoard — every order, not the first 500 (D1-a)", () => {
+  it("pages past the row cap so the newest orders are not dropped", async () => {
+    const fullPage = Array.from({ length: 1000 }, (_, i) =>
+      order({ id: i + 1, order_fecha_termino: "2026-01-10" }),
+    );
+    const newest = order({
+      id: 1001,
+      order_fecha_termino: "2026-10-12",
+      pago_completo: false,
+    });
+    state.boardPages = [fullPage, [newest]];
+
+    const board = await FinanceService.getBoard(
+      new Date("2026-10-13T12:00:00Z"),
+    );
+
+    expect(state.boardRanges).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+    expect(board.pendingRows.map((r) => r.id)).toContain(1001);
+    expect(board.paidRows).toHaveLength(1000);
   });
 });
 

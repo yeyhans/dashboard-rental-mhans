@@ -26,6 +26,13 @@ import { buildFinanceCharts, trailingMonths, type ChartOrder, type FinanceCharts
 const CHART_PAGE_SIZE = 1000;
 const CHART_MAX_PAGES = 20;
 
+/**
+ * D1-a: the board reads every non-cancelled order in pages. A single `limit` ordered by end date
+ * ascending silently dropped the NEWEST orders once the table passed the cap.
+ */
+const BOARD_PAGE_SIZE = 1000;
+const BOARD_MAX_PAGES = 50;
+
 function clientName(row: any): string {
   const company = row.billing_company?.trim();
   const person = `${row.billing_first_name ?? ''} ${row.billing_last_name ?? ''}`.trim();
@@ -83,24 +90,33 @@ export class FinanceService {
     if (!supabaseAdmin) throw new Error('Supabase admin client is not initialized');
   }
 
-  static async getBoard(now: Date = new Date(), limit = 500): Promise<FinanceBoard> {
+  static async getBoard(now: Date = new Date()): Promise<FinanceBoard> {
     FinanceService.ensureSupabaseAdmin();
 
-    const { data, error } = await supabaseAdmin!
-      .from('orders')
-      .select(
-        'id, order_key, status, order_proyecto, order_fecha_termino, date_paid, date_completed, ' +
-          'calculated_total, pago_reserva, pago_completo, reserve_type, reserve_value, ' +
-          'orden_compra, numero_factura, ' +
-          'billing_first_name, billing_last_name, billing_company'
-      )
-      .in('status', bookingStatusFilter())
-      .order('order_fecha_termino', { ascending: true })
-      .limit(limit);
+    const data: any[] = [];
+    for (let page = 0; page < BOARD_MAX_PAGES; page++) {
+      const from = page * BOARD_PAGE_SIZE;
+      const { data: chunk, error } = await supabaseAdmin!
+        .from('orders')
+        .select(
+          'id, order_key, status, order_proyecto, order_fecha_termino, date_paid, date_completed, ' +
+            'calculated_total, pago_reserva, pago_completo, reserve_type, reserve_value, ' +
+            'orden_compra, numero_factura, ' +
+            'billing_first_name, billing_last_name, billing_company'
+        )
+        .in('status', bookingStatusFilter())
+        .order('order_fecha_termino', { ascending: true })
+        // Tie-breaker: without a unique key, rows sharing an end date can repeat or vanish
+        // across pages.
+        .order('id', { ascending: true })
+        .range(from, from + BOARD_PAGE_SIZE - 1);
 
-    if (error) throw error;
+      if (error) throw error;
+      data.push(...(chunk ?? []));
+      if (!chunk || chunk.length < BOARD_PAGE_SIZE) break;
+    }
 
-    const rows: FinanceRow[] = (data ?? []).map((row: any) => {
+    const rows: FinanceRow[] = data.map((row: any) => {
       const company = row.billing_company?.trim();
       const person = `${row.billing_first_name ?? ''} ${row.billing_last_name ?? ''}`.trim();
       const like = {
@@ -159,8 +175,8 @@ export class FinanceService {
 
   /**
    * R-03b: the Finanzas tab — 12-month series and indicators, aggregated here so the page
-   * receives a few hundred numbers instead of every order. `getBoard` keeps its 500-row cap for
-   * the tables; the charts must not inherit it, or the newest months would be the ones cut.
+   * receives a few hundred numbers instead of every order. Like `getBoard` (D1-a), it pages
+   * past the PostgREST row cap so the newest months are never the ones cut.
    */
   static async getCharts(now: Date = new Date(), months = 12): Promise<FinanceCharts> {
     FinanceService.ensureSupabaseAdmin();
