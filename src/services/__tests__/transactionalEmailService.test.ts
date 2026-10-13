@@ -133,7 +133,7 @@ describe("TransactionalEmailService.sendForOrder", () => {
       "equipos-entregados",
       ORDER,
       {
-        contractUrl: "https://files.example/contrato-1573.pdf",
+        contractUrl: "https://media.mariohans.cl/contracts/contrato-1573.pdf",
       },
     );
 
@@ -157,7 +157,7 @@ describe("TransactionalEmailService.sendForOrder", () => {
       "equipos-entregados",
       ORDER,
       {
-        contractUrl: "https://files.example/contrato-1573.pdf",
+        contractUrl: "https://media.mariohans.cl/contracts/contrato-1573.pdf",
       },
     );
 
@@ -182,7 +182,7 @@ describe("TransactionalEmailService.sendForOrder", () => {
       "equipos-entregados",
       ORDER,
       {
-        contractUrl: "https://files.example/contrato-1573.pdf",
+        contractUrl: "https://media.mariohans.cl/contracts/contrato-1573.pdf",
       },
     );
 
@@ -235,5 +235,111 @@ describe("contract route wiring (R-09d)", () => {
     expect(source).toContain("TransactionalEmailService.sendToCustomer(");
     expect(source).toContain('"contrato"');
     expect(source).not.toContain("/send-email");
+  });
+});
+
+/* H-4 (R1-001): the contract attachment is fetched only from the hosts the app writes PDFs to,
+   never follows a redirect, and is read with a hard byte cap. */
+describe("TransactionalEmailService — bounded contract fetch (H-4)", () => {
+  const send = (contractUrl: string) =>
+    TransactionalEmailService.sendForOrder("equipos-entregados", ORDER, {
+      contractUrl,
+    });
+
+  it.each([
+    "https://evil.example/contrato.pdf",
+    "http://media.mariohans.cl/contrato.pdf",
+    "https://169.254.169.254/latest/meta-data",
+    "file:///etc/passwd",
+  ])(
+    "does not fetch %s and still sends without the attachment",
+    async (url) => {
+      const fetchSpy = vi.fn();
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const result = await send(url);
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(sendEmailViaWorker.mock.calls[0]![3]).toBeUndefined();
+      expect(result.warning).toContain("contrato");
+    },
+  );
+
+  it("refuses redirects", async () => {
+    const fetchSpy = vi.fn(async () => new Response("%PDF", { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await send("https://media.mariohans.cl/contracts/c.pdf");
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "https://media.mariohans.cl/contracts/c.pdf",
+      expect.objectContaining({ redirect: "error" }),
+    );
+  });
+
+  it("rejects an oversized PDF from its content-length without reading the body", async () => {
+    const arrayBuffer = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({
+          "content-length": String(CONTRACT_ATTACHMENT_MAX_BYTES + 1),
+        }),
+        body: null,
+        arrayBuffer,
+      })),
+    );
+
+    const result = await send("https://media.mariohans.cl/contracts/c.pdf");
+
+    expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(sendEmailViaWorker.mock.calls[0]![3]).toBeUndefined();
+    expect(result.warning).toContain("contrato");
+  });
+
+  it("stops reading a stream that passes the cap without a content-length", async () => {
+    let pulled = 0;
+    const chunk = new Uint8Array(1024 * 1024);
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        controller.enqueue(chunk);
+        if (pulled > 20) controller.close();
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(stream, { status: 200 })),
+    );
+
+    const result = await send("https://media.mariohans.cl/contracts/c.pdf");
+
+    expect(pulled).toBeLessThanOrEqual(7);
+    expect(sendEmailViaWorker.mock.calls[0]![3]).toBeUndefined();
+    expect(result.warning).toContain("contrato");
+  });
+
+  it("drops an oversized attachment handed in by the caller (contract route)", async () => {
+    const big = Buffer.alloc(CONTRACT_ATTACHMENT_MAX_BYTES + 1).toString(
+      "base64",
+    );
+
+    const result = await TransactionalEmailService.sendToCustomer(
+      "contrato",
+      { email: "ana@example.com", name: "Ana" },
+      { attachment: { filename: "Contrato_arriendo.pdf", content: big } },
+    );
+
+    expect(sendEmailViaWorker.mock.calls[0]![3]).toBeUndefined();
+    expect(result.sent).toBe(true);
+    expect(result.warning).toContain("contrato");
+  });
+});
+
+describe("TransactionalEmailService — warning wording (H-4)", () => {
+  it("does not claim a status change for an account email", () => {
+    expect(EMAIL_SEND_WARNING).not.toContain("estado");
   });
 });

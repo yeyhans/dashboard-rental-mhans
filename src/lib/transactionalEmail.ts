@@ -113,20 +113,24 @@ function defaults(
     "logo_url" | "whatsapp_url" | "site_url" | "link_pdf"
   >
 > {
-  const dashboard = httpsOrigin(
+  // H-4 (R2-env-name-swap, checked): in THIS repo `PUBLIC_SITE_URL` is the dashboard itself
+  // (`.env.example`: "Site URL for server-side API calls", localhost:4322) and serves
+  // `public/logo-*.png`; `PUBLIC_FRONTEND_URL` is the customer site (localhost:4321), the same
+  // variable `UserService` uses for the customer's `/login` link. The mapping is intentional.
+  const dashboardOrigin = httpsOrigin(
     import.meta.env.PUBLIC_SITE_URL,
     DEFAULT_DASHBOARD_URL,
   );
-  const site = httpsOrigin(
+  const customerSiteOrigin = httpsOrigin(
     import.meta.env.PUBLIC_FRONTEND_URL,
     DEFAULT_SITE_URL,
   );
   const logo = DARK_HEADER.has(key) ? "logo-white.png" : "logo-black.png";
   return {
-    logo_url: import.meta.env.EMAIL_LOGO_URL || `${dashboard}/${logo}`,
+    logo_url: import.meta.env.EMAIL_LOGO_URL || `${dashboardOrigin}/${logo}`,
     whatsapp_url: BUSINESS_WHATSAPP_URL,
-    site_url: site,
-    link_pdf: `${site}/cuenta/pedidos`,
+    site_url: customerSiteOrigin,
+    link_pdf: `${customerSiteOrigin}/cuenta/pedidos`,
   };
 }
 

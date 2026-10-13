@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   TRANSACTIONAL_EMAIL_KEYS,
   renderTransactionalEmail,
@@ -117,5 +117,25 @@ describe("renderTransactionalEmail — order without a PDF yet (R-09d)", () => {
       numero_pedido: 9,
     });
     expect(html).toMatch(/href="https:\/\/[^"]+\/cuenta\/pedidos"/);
+  });
+});
+
+/** H-4: the logo comes from the dashboard (PUBLIC_SITE_URL), links go to the customer site. */
+describe("renderTransactionalEmail — environment (H-4)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("serves the logo from the dashboard and links to the customer site", () => {
+    vi.stubEnv("PUBLIC_SITE_URL", "https://dash.example.cl");
+    vi.stubEnv("PUBLIC_FRONTEND_URL", "https://tienda.example.cl");
+
+    const { html } = renderTransactionalEmail("registro", {
+      nombre_cliente: "Ana",
+    });
+
+    expect(html).toContain('src="https://dash.example.cl/logo-white.png"');
+    expect(html).toContain('href="https://tienda.example.cl/registro"');
+    expect(html).not.toContain("https://dash.example.cl/registro");
   });
 });
