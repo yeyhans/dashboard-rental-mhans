@@ -1,12 +1,20 @@
-import { supabaseAdmin } from '../lib/supabase';
-import { ORDER_STATUSES, bookingStatusFilter, canonicalStatus, expandStatusFilter } from '../lib/orderStatus';
-import type { Database } from '../types/database';
-import { OrderPricingService, type OrderCallerOrigin } from './orderPricingService';
-import { CouponService, type OrderCouponSnapshot } from './couponService';
+import { supabaseAdmin } from "../lib/supabase";
+import {
+  ORDER_STATUSES,
+  bookingStatusFilter,
+  canonicalStatus,
+  expandStatusFilter,
+} from "../lib/orderStatus";
+import type { Database } from "../types/database";
+import {
+  OrderPricingService,
+  type OrderCallerOrigin,
+} from "./orderPricingService";
+import { CouponService, type OrderCouponSnapshot } from "./couponService";
 
-type Order = Database['public']['Tables']['orders']['Row'];
-type OrderInsert = Database['public']['Tables']['orders']['Insert'];
-type OrderUpdate = Database['public']['Tables']['orders']['Update'];
+type Order = Database["public"]["Tables"]["orders"]["Row"];
+type OrderInsert = Database["public"]["Tables"]["orders"]["Insert"];
+type OrderUpdate = Database["public"]["Tables"]["orders"]["Update"];
 
 export class OrderService {
   /**
@@ -15,14 +23,15 @@ export class OrderService {
   static async getCompletedOrders(page: number = 1, limit: number = 10) {
     try {
       if (!supabaseAdmin) {
-        throw new Error('Supabase admin client is not initialized');
+        throw new Error("Supabase admin client is not initialized");
       }
 
       const offset = (page - 1) * limit;
-      
+
       const query = supabaseAdmin
-        .from('orders')
-        .select(`
+        .from("orders")
+        .select(
+          `
           id,
           status,
           currency,
@@ -89,39 +98,44 @@ export class OrderService {
             email,
             rut
           )
-        `, { count: 'exact' })
-        .eq('status', 'completed')
-        .order('date_completed', { ascending: false });
+        `,
+          { count: "exact" },
+        )
+        .eq("status", "completed")
+        .order("date_completed", { ascending: false });
 
-      const { data, error, count } = await query
-        .range(offset, offset + limit - 1);
+      const { data, error, count } = await query.range(
+        offset,
+        offset + limit - 1,
+      );
 
       if (error) {
         throw error;
       }
 
       // Ensure all completed orders have required calculated fields
-      const ordersWithCalculatedFields = data?.map(order => ({
-        ...order,
-        calculated_subtotal: order.calculated_subtotal || 0,
-        calculated_discount: order.calculated_discount || 0,
-        calculated_iva: order.calculated_iva || 0,
-        calculated_total: order.calculated_total || order.total || 0,
-        total: order.total || 0,
-        shipping_total: order.shipping_total || 0,
-        cart_tax: order.cart_tax || 0,
-        total_tax: order.total_tax || 0
-      })) || [];
+      const ordersWithCalculatedFields =
+        data?.map((order) => ({
+          ...order,
+          calculated_subtotal: order.calculated_subtotal || 0,
+          calculated_discount: order.calculated_discount || 0,
+          calculated_iva: order.calculated_iva || 0,
+          calculated_total: order.calculated_total || order.total || 0,
+          total: order.total || 0,
+          shipping_total: order.shipping_total || 0,
+          cart_tax: order.cart_tax || 0,
+          total_tax: order.total_tax || 0,
+        })) || [];
 
       return {
         orders: ordersWithCalculatedFields,
         total: count || 0,
         page,
         limit,
-        totalPages: Math.ceil((count || 0) / limit)
+        totalPages: Math.ceil((count || 0) / limit),
       };
     } catch (error) {
-      console.error('Error fetching completed orders:', error);
+      console.error("Error fetching completed orders:", error);
       throw error;
     }
   }
@@ -129,13 +143,18 @@ export class OrderService {
   /**
    * Obtener todas las órdenes con paginación
    */
-  static async getAllOrders(page: number = 1, limit: number = 10, status?: string) {
+  static async getAllOrders(
+    page: number = 1,
+    limit: number = 10,
+    status?: string,
+  ) {
     try {
       const offset = (page - 1) * limit;
-      
+
       let query = supabaseAdmin
-        .from('orders')
-        .select(`
+        .from("orders")
+        .select(
+          `
           id,
           status,
           currency,
@@ -202,45 +221,50 @@ export class OrderService {
             email,
             rut
           )
-        `, { count: 'exact' })
-        .order('date_created', { ascending: false });
+        `,
+          { count: "exact" },
+        )
+        .order("date_created", { ascending: false });
 
       // El listado filtra por una etapa canónica, pero durante la ventana la fila puede seguir
       // escrita en vocabulario legado: un `.eq()` literal devolvería la lista vacía sin error.
       const statusFilter = expandStatusFilter(status ? [status] : undefined);
       if (statusFilter) {
-        query = query.in('status', statusFilter);
+        query = query.in("status", statusFilter);
       }
 
-      const { data, error, count } = await query
-        .range(offset, offset + limit - 1);
+      const { data, error, count } = await query.range(
+        offset,
+        offset + limit - 1,
+      );
 
       if (error) {
         throw error;
       }
 
       // Ensure all orders have required calculated fields
-      const ordersWithCalculatedFields = data?.map(order => ({
-        ...order,
-        calculated_subtotal: order.calculated_subtotal || 0,
-        calculated_discount: order.calculated_discount || 0,
-        calculated_iva: order.calculated_iva || 0,
-        calculated_total: order.calculated_total || order.total || 0,
-        total: order.total || 0,
-        shipping_total: order.shipping_total || 0,
-        cart_tax: order.cart_tax || 0,
-        total_tax: order.total_tax || 0
-      })) || [];
+      const ordersWithCalculatedFields =
+        data?.map((order) => ({
+          ...order,
+          calculated_subtotal: order.calculated_subtotal || 0,
+          calculated_discount: order.calculated_discount || 0,
+          calculated_iva: order.calculated_iva || 0,
+          calculated_total: order.calculated_total || order.total || 0,
+          total: order.total || 0,
+          shipping_total: order.shipping_total || 0,
+          cart_tax: order.cart_tax || 0,
+          total_tax: order.total_tax || 0,
+        })) || [];
 
       return {
         orders: ordersWithCalculatedFields,
         total: count || 0,
         page,
         limit,
-        totalPages: Math.ceil((count || 0) / limit)
+        totalPages: Math.ceil((count || 0) / limit),
       };
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error("Error fetching orders:", error);
       throw error;
     }
   }
@@ -251,8 +275,9 @@ export class OrderService {
   static async getOrderById(orderId: number): Promise<Order | null> {
     try {
       const { data, error } = await supabaseAdmin
-        .from('orders')
-        .select(`
+        .from("orders")
+        .select(
+          `
           id,
           status,
           currency,
@@ -322,12 +347,13 @@ export class OrderService {
             direccion,
             ciudad
           )
-        `)
-        .eq('id', orderId)
+        `,
+        )
+        .eq("id", orderId)
         .single();
 
       if (error) {
-        if (error.code === 'PGRST116') {
+        if (error.code === "PGRST116") {
           return null;
         }
         throw error;
@@ -343,12 +369,12 @@ export class OrderService {
         total: data.total || 0,
         shipping_total: data.shipping_total || 0,
         cart_tax: data.cart_tax || 0,
-        total_tax: data.total_tax || 0
+        total_tax: data.total_tax || 0,
       };
 
       return orderWithCalculatedFields;
     } catch (error) {
-      console.error('Error fetching order by ID:', error);
+      console.error("Error fetching order by ID:", error);
       throw error;
     }
   }
@@ -361,15 +387,18 @@ export class OrderService {
    */
   private static async syncCouponUsage(
     order: OrderCouponSnapshot,
-    options?: { isNew?: boolean }
+    options?: { isNew?: boolean },
   ): Promise<void> {
     try {
       await CouponService.syncOrderCouponUsage(order, options);
     } catch (error) {
-      console.error('[OrderService] No se pudo sincronizar el uso del cupón de la orden:', {
-        orderId: order?.id ?? null,
-        error,
-      });
+      console.error(
+        "[OrderService] No se pudo sincronizar el uso del cupón de la orden:",
+        {
+          orderId: order?.id ?? null,
+          error,
+        },
+      );
     }
   }
 
@@ -378,10 +407,13 @@ export class OrderService {
     try {
       await CouponService.releaseOrderCouponUsage(orderId);
     } catch (error) {
-      console.error('[OrderService] No se pudo liberar el uso del cupón de la orden:', {
-        orderId,
-        error,
-      });
+      console.error(
+        "[OrderService] No se pudo liberar el uso del cupón de la orden:",
+        {
+          orderId,
+          error,
+        },
+      );
     }
   }
 
@@ -390,16 +422,19 @@ export class OrderService {
    */
   static async createOrder(
     orderData: OrderInsert & { apply_iva?: boolean },
-    origin: OrderCallerOrigin = 'admin'
+    origin: OrderCallerOrigin = "admin",
   ): Promise<Order> {
     try {
       // The money is always recomputed here: client-sent calculated_* values are never persisted.
-      const pricedFields = await OrderPricingService.priceNewOrder(orderData, origin);
+      const pricedFields = await OrderPricingService.priceNewOrder(
+        orderData,
+        origin,
+      );
       // `apply_iva` is a pricing input only; `orders` has no such column.
       const { apply_iva: _applyIva, ...insertable } = orderData;
 
       const { data, error } = await supabaseAdmin
-        .from('orders')
+        .from("orders")
         .insert([{ ...insertable, ...pricedFields }])
         .select()
         .single();
@@ -424,12 +459,12 @@ export class OrderService {
         total: data.total || 0,
         shipping_total: data.shipping_total || 0,
         cart_tax: data.cart_tax || 0,
-        total_tax: data.total_tax || 0
+        total_tax: data.total_tax || 0,
       };
 
       return orderWithCalculatedFields;
     } catch (error) {
-      console.error('Error creating order:', error);
+      console.error("Error creating order:", error);
       throw error;
     }
   }
@@ -437,20 +472,26 @@ export class OrderService {
   /**
    * Actualizar orden
    */
-  static async updateOrder(orderId: number, updates: OrderUpdate): Promise<Order> {
+  static async updateOrder(
+    orderId: number,
+    updates: OrderUpdate,
+  ): Promise<Order> {
     try {
-      console.log('🔄 OrderService.updateOrder - Order ID:', orderId);
-      console.log('📤 OrderService.updateOrder - Updates:', JSON.stringify(updates, null, 2));
-      
+      console.log("🔄 OrderService.updateOrder - Order ID:", orderId);
+      console.log(
+        "📤 OrderService.updateOrder - Updates:",
+        JSON.stringify(updates, null, 2),
+      );
+
       const { data, error } = await supabaseAdmin
-        .from('orders')
+        .from("orders")
         .update(updates)
-        .eq('id', orderId)
+        .eq("id", orderId)
         .select()
         .single();
-        
-      console.log('📡 Supabase response error:', error);
-      console.log('📡 Supabase response data:', data);
+
+      console.log("📡 Supabase response error:", error);
+      console.log("📡 Supabase response data:", data);
 
       if (error) {
         throw error;
@@ -473,12 +514,12 @@ export class OrderService {
         total: data.total || 0,
         shipping_total: data.shipping_total || 0,
         cart_tax: data.cart_tax || 0,
-        total_tax: data.total_tax || 0
+        total_tax: data.total_tax || 0,
       };
 
       return orderWithCalculatedFields;
     } catch (error) {
-      console.error('Error updating order:', error);
+      console.error("Error updating order:", error);
       throw error;
     }
   }
@@ -489,9 +530,9 @@ export class OrderService {
   static async deleteOrder(orderId: number): Promise<boolean> {
     try {
       const { error } = await supabaseAdmin
-        .from('orders')
+        .from("orders")
         .delete()
-        .eq('id', orderId);
+        .eq("id", orderId);
 
       if (error) {
         throw error;
@@ -499,7 +540,7 @@ export class OrderService {
 
       return true;
     } catch (error) {
-      console.error('Error deleting order:', error);
+      console.error("Error deleting order:", error);
       throw error;
     }
   }
@@ -507,14 +548,22 @@ export class OrderService {
   /**
    * Buscar órdenes
    */
-  static async searchOrders(searchTerm: string, page: number = 1, limit: number = 10) {
+  static async searchOrders(
+    searchTerm: string,
+    page: number = 1,
+    limit: number = 10,
+  ) {
     try {
       const offset = (page - 1) * limit;
-      const sanitizedTerm = searchTerm.replace(/[%_\\]/g, '\\$&').trim().slice(0, 200);
+      const sanitizedTerm = searchTerm
+        .replace(/[%_\\]/g, "\\$&")
+        .trim()
+        .slice(0, 200);
 
       const { data, error, count } = await supabaseAdmin
-        .from('orders')
-        .select(`
+        .from("orders")
+        .select(
+          `
           id,
           status,
           currency,
@@ -581,9 +630,13 @@ export class OrderService {
             email,
             rut
           )
-        `, { count: 'exact' })
-        .or(`billing_email.ilike.%${sanitizedTerm}%,billing_first_name.ilike.%${sanitizedTerm}%,billing_last_name.ilike.%${sanitizedTerm}%,order_proyecto.ilike.%${sanitizedTerm}%,company_rut.ilike.%${sanitizedTerm}%`)
-        .order('date_created', { ascending: false })
+        `,
+          { count: "exact" },
+        )
+        .or(
+          `billing_email.ilike.%${sanitizedTerm}%,billing_first_name.ilike.%${sanitizedTerm}%,billing_last_name.ilike.%${sanitizedTerm}%,order_proyecto.ilike.%${sanitizedTerm}%,company_rut.ilike.%${sanitizedTerm}%`,
+        )
+        .order("date_created", { ascending: false })
         .range(offset, offset + limit - 1);
 
       if (error) {
@@ -591,17 +644,18 @@ export class OrderService {
       }
 
       // Ensure all search results have required calculated fields
-      const ordersWithCalculatedFields = data?.map(order => ({
-        ...order,
-        calculated_subtotal: order.calculated_subtotal || 0,
-        calculated_discount: order.calculated_discount || 0,
-        calculated_iva: order.calculated_iva || 0,
-        calculated_total: order.calculated_total || order.total || 0,
-        total: order.total || 0,
-        shipping_total: order.shipping_total || 0,
-        cart_tax: order.cart_tax || 0,
-        total_tax: order.total_tax || 0
-      })) || [];
+      const ordersWithCalculatedFields =
+        data?.map((order) => ({
+          ...order,
+          calculated_subtotal: order.calculated_subtotal || 0,
+          calculated_discount: order.calculated_discount || 0,
+          calculated_iva: order.calculated_iva || 0,
+          calculated_total: order.calculated_total || order.total || 0,
+          total: order.total || 0,
+          shipping_total: order.shipping_total || 0,
+          cart_tax: order.cart_tax || 0,
+          total_tax: order.total_tax || 0,
+        })) || [];
 
       return {
         orders: ordersWithCalculatedFields,
@@ -609,10 +663,10 @@ export class OrderService {
         page,
         limit,
         totalPages: Math.ceil((count || 0) / limit),
-        searchTerm
+        searchTerm,
       };
     } catch (error) {
-      console.error('Error searching orders:', error);
+      console.error("Error searching orders:", error);
       throw error;
     }
   }
@@ -620,13 +674,18 @@ export class OrderService {
   /**
    * Obtener órdenes por usuario
    */
-  static async getOrdersByUser(userId: number, page: number = 1, limit: number = 10) {
+  static async getOrdersByUser(
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+  ) {
     try {
       const offset = (page - 1) * limit;
-      
+
       const { data, error, count } = await supabaseAdmin
-        .from('orders')
-        .select(`
+        .from("orders")
+        .select(
+          `
           id,
           status,
           currency,
@@ -693,9 +752,11 @@ export class OrderService {
             email,
             rut
           )
-        `, { count: 'exact' })
-        .eq('customer_id', userId)
-        .order('date_created', { ascending: false })
+        `,
+          { count: "exact" },
+        )
+        .eq("customer_id", userId)
+        .order("date_created", { ascending: false })
         .range(offset, offset + limit - 1);
 
       if (error) {
@@ -703,17 +764,18 @@ export class OrderService {
       }
 
       // Ensure all user orders have required calculated fields
-      const ordersWithCalculatedFields = data?.map(order => ({
-        ...order,
-        calculated_subtotal: order.calculated_subtotal || 0,
-        calculated_discount: order.calculated_discount || 0,
-        calculated_iva: order.calculated_iva || 0,
-        calculated_total: order.calculated_total || order.total || 0,
-        total: order.total || 0,
-        shipping_total: order.shipping_total || 0,
-        cart_tax: order.cart_tax || 0,
-        total_tax: order.total_tax || 0
-      })) || [];
+      const ordersWithCalculatedFields =
+        data?.map((order) => ({
+          ...order,
+          calculated_subtotal: order.calculated_subtotal || 0,
+          calculated_discount: order.calculated_discount || 0,
+          calculated_iva: order.calculated_iva || 0,
+          calculated_total: order.calculated_total || order.total || 0,
+          total: order.total || 0,
+          shipping_total: order.shipping_total || 0,
+          cart_tax: order.cart_tax || 0,
+          total_tax: order.total_tax || 0,
+        })) || [];
 
       return {
         orders: ordersWithCalculatedFields,
@@ -721,10 +783,10 @@ export class OrderService {
         page,
         limit,
         totalPages: Math.ceil((count || 0) / limit),
-        userId
+        userId,
       };
     } catch (error) {
-      console.error('Error fetching orders by user:', error);
+      console.error("Error fetching orders by user:", error);
       throw error;
     }
   }
@@ -732,13 +794,19 @@ export class OrderService {
   /**
    * Obtener órdenes por rango de fechas
    */
-  static async getOrdersByDateRange(startDate: string, endDate: string, page: number = 1, limit: number = 10) {
+  static async getOrdersByDateRange(
+    startDate: string,
+    endDate: string,
+    page: number = 1,
+    limit: number = 10,
+  ) {
     try {
       const offset = (page - 1) * limit;
-      
+
       const { data, error, count } = await supabaseAdmin
-        .from('orders')
-        .select(`
+        .from("orders")
+        .select(
+          `
           id,
           status,
           currency,
@@ -805,10 +873,12 @@ export class OrderService {
             email,
             rut
           )
-        `, { count: 'exact' })
-        .gte('date_created', startDate)
-        .lte('date_created', endDate)
-        .order('date_created', { ascending: false })
+        `,
+          { count: "exact" },
+        )
+        .gte("date_created", startDate)
+        .lte("date_created", endDate)
+        .order("date_created", { ascending: false })
         .range(offset, offset + limit - 1);
 
       if (error) {
@@ -816,17 +886,18 @@ export class OrderService {
       }
 
       // Ensure all date range orders have required calculated fields
-      const ordersWithCalculatedFields = data?.map(order => ({
-        ...order,
-        calculated_subtotal: order.calculated_subtotal || 0,
-        calculated_discount: order.calculated_discount || 0,
-        calculated_iva: order.calculated_iva || 0,
-        calculated_total: order.calculated_total || order.total || 0,
-        total: order.total || 0,
-        shipping_total: order.shipping_total || 0,
-        cart_tax: order.cart_tax || 0,
-        total_tax: order.total_tax || 0
-      })) || [];
+      const ordersWithCalculatedFields =
+        data?.map((order) => ({
+          ...order,
+          calculated_subtotal: order.calculated_subtotal || 0,
+          calculated_discount: order.calculated_discount || 0,
+          calculated_iva: order.calculated_iva || 0,
+          calculated_total: order.calculated_total || order.total || 0,
+          total: order.total || 0,
+          shipping_total: order.shipping_total || 0,
+          cart_tax: order.cart_tax || 0,
+          total_tax: order.total_tax || 0,
+        })) || [];
 
       return {
         orders: ordersWithCalculatedFields,
@@ -835,10 +906,10 @@ export class OrderService {
         limit,
         totalPages: Math.ceil((count || 0) / limit),
         startDate,
-        endDate
+        endDate,
       };
     } catch (error) {
-      console.error('Error fetching orders by date range:', error);
+      console.error("Error fetching orders by date range:", error);
       throw error;
     }
   }
@@ -846,14 +917,18 @@ export class OrderService {
   /**
    * Actualizar estado de orden
    */
-  static async updateOrderStatus(orderId: number, status: string, notes?: string): Promise<Order> {
+  static async updateOrderStatus(
+    orderId: number,
+    status: string,
+    notes?: string,
+  ): Promise<Order> {
     try {
       const updates: OrderUpdate = {
         status,
-        date_modified: new Date().toISOString()
+        date_modified: new Date().toISOString(),
       };
 
-      if (status === 'completed') {
+      if (status === "completed") {
         updates.date_completed = new Date().toISOString();
       }
 
@@ -862,9 +937,9 @@ export class OrderService {
       }
 
       const { data, error } = await supabaseAdmin
-        .from('orders')
+        .from("orders")
         .update(updates)
-        .eq('id', orderId)
+        .eq("id", orderId)
         .select()
         .single();
 
@@ -874,7 +949,7 @@ export class OrderService {
 
       // Solo `cancelled` libera el cupón, y `failed` es su forma legada (0003 la pliega ahí). El
       // resto de las transiciones no lo tocan: una orden en curso sigue consumiendo su uso.
-      if (canonicalStatus(status) === 'cancelled') {
+      if (canonicalStatus(status) === "cancelled") {
         await OrderService.releaseCouponUsage(orderId);
       }
 
@@ -888,14 +963,57 @@ export class OrderService {
         total: data.total || 0,
         shipping_total: data.shipping_total || 0,
         cart_tax: data.cart_tax || 0,
-        total_tax: data.total_tax || 0
+        total_tax: data.total_tax || 0,
       };
 
       return orderWithCalculatedFields;
     } catch (error) {
-      console.error('Error updating order status:', error);
+      console.error("Error updating order status:", error);
       throw error;
     }
+  }
+
+  /**
+   * R-02: el arriendo terminó y el equipo debe volver, así que la orden pasa sola de `in-rental`
+   * a `return`. Lo llama el cron horario (`POST /api/cron/rentals-to-return`).
+   *
+   * `todayChile` is the business day (`YYYY-MM-DD`, America/Santiago); an order moves once its
+   * `order_fecha_termino` is strictly before it. Each move goes through `updateOrderStatus` so it
+   * shares the side effects of a manual change. Idempotent: a moved order is no longer selected.
+   * One failing order does not stop the rest; it is logged and left for the next run.
+   */
+  static async moveExpiredRentalsToReturn(
+    todayChile: string,
+  ): Promise<{ moved: number; ids: number[] }> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(todayChile)) {
+      throw new Error(`Fecha de negocio inválida: ${todayChile}`);
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("orders")
+      .select("id")
+      .eq("status", "in-rental")
+      .lt("order_fecha_termino", todayChile);
+
+    if (error) throw error;
+
+    const ids: number[] = [];
+    for (const row of (data ?? []) as { id: number }[]) {
+      try {
+        await OrderService.updateOrderStatus(row.id, "return");
+        ids.push(row.id);
+      } catch (moveError) {
+        console.error(
+          "[OrderService] No se pudo pasar la orden a devolución:",
+          {
+            orderId: row.id,
+            error: moveError,
+          },
+        );
+      }
+    }
+
+    return { moved: ids.length, ids };
   }
 
   /**
@@ -905,36 +1023,45 @@ export class OrderService {
     try {
       // Total de órdenes
       const { count: totalOrders, error: totalError } = await supabaseAdmin
-        .from('orders')
-        .select('*', { count: 'exact', head: true });
+        .from("orders")
+        .select("*", { count: "exact", head: true });
 
       if (totalError) throw totalError;
 
       // Órdenes por estado
       const { data: statusData, error: statusError } = await supabaseAdmin
-        .from('orders')
-        .select('status')
-        .order('status');
+        .from("orders")
+        .select("status")
+        .order("status");
 
       if (statusError) throw statusError;
 
       // Se cuenta por etapa canónica: mientras la ventana tenga filas legadas, contar por el
       // valor crudo parte cada etapa en dos claves y ninguna refleja el total real.
-      const statusCounts = statusData.reduce((acc: Record<string, number>, order) => {
-        const bucket = canonicalStatus(order.status);
-        if (bucket) acc[bucket] = (acc[bucket] || 0) + 1;
-        return acc;
-      }, Object.fromEntries(ORDER_STATUSES.map(s => [s, 0])) as Record<string, number>);
+      const statusCounts = statusData.reduce(
+        (acc: Record<string, number>, order) => {
+          const bucket = canonicalStatus(order.status);
+          if (bucket) acc[bucket] = (acc[bucket] || 0) + 1;
+          return acc;
+        },
+        Object.fromEntries(ORDER_STATUSES.map((s) => [s, 0])) as Record<
+          string,
+          number
+        >,
+      );
 
       // Ingresos totales
       const { data: revenueData, error: revenueError } = await supabaseAdmin
-        .from('orders')
-        .select('calculated_total')
-        .eq('status', 'completed');
+        .from("orders")
+        .select("calculated_total")
+        .eq("status", "completed");
 
       if (revenueError) throw revenueError;
 
-      const totalRevenue = revenueData.reduce((sum, order) => sum + (order.calculated_total || 0), 0);
+      const totalRevenue = revenueData.reduce(
+        (sum, order) => sum + (order.calculated_total || 0),
+        0,
+      );
 
       // Órdenes del mes actual
       const currentMonth = new Date();
@@ -942,14 +1069,16 @@ export class OrderService {
       currentMonth.setHours(0, 0, 0, 0);
 
       const { count: monthlyOrders, error: monthlyError } = await supabaseAdmin
-        .from('orders')
-        .select('*', { count: 'exact', head: true })
-        .gte('date_created', currentMonth.toISOString());
+        .from("orders")
+        .select("*", { count: "exact", head: true })
+        .gte("date_created", currentMonth.toISOString());
 
       if (monthlyError) throw monthlyError;
 
       // Promedio de valor de orden
-      const averageOrderValue = totalOrders ? (totalRevenue / totalOrders).toFixed(2) : '0';
+      const averageOrderValue = totalOrders
+        ? (totalRevenue / totalOrders).toFixed(2)
+        : "0";
 
       return {
         totalOrders: totalOrders || 0,
@@ -957,11 +1086,11 @@ export class OrderService {
         totalRevenue: totalRevenue.toFixed(2),
         monthlyOrders: monthlyOrders || 0,
         averageOrderValue,
-        completedOrders: statusCounts['completed'] || 0,
-        cancelledOrders: statusCounts['cancelled'] || 0
+        completedOrders: statusCounts["completed"] || 0,
+        cancelledOrders: statusCounts["cancelled"] || 0,
       };
     } catch (error) {
-      console.error('Error fetching order stats:', error);
+      console.error("Error fetching order stats:", error);
       throw error;
     }
   }
@@ -973,7 +1102,7 @@ export class OrderService {
     currentOrderId: number,
     productIds: number[],
     startDate: string,
-    endDate: string
+    endDate: string,
   ) {
     try {
       if (!productIds.length || !startDate || !endDate) {
@@ -982,8 +1111,9 @@ export class OrderService {
 
       // Buscar órdenes que tengan los mismos productos en el rango de fechas
       const { data, error } = await supabaseAdmin
-        .from('orders')
-        .select(`
+        .from("orders")
+        .select(
+          `
           id,
           order_proyecto,
           order_fecha_inicio,
@@ -993,15 +1123,16 @@ export class OrderService {
           billing_first_name,
           billing_last_name,
           billing_email
-        `)
-        .neq('id', currentOrderId) // Excluir la orden actual
+        `,
+        )
+        .neq("id", currentOrderId) // Excluir la orden actual
         // Toda orden no cancelada retiene su equipo en su rango de fechas. La lista literal que
         // habia aqui era ['processing','completed','on-hold']: despues de 0003 esos tres valores
         // solo coinciden con `completed`, y la consulta habria devuelto menos filas sin ningun
         // error — la deteccion de conflictos dejaria de ver las ordenes que tienen el equipo.
-        .in('status', bookingStatusFilter())
-        .not('order_fecha_inicio', 'is', null)
-        .not('order_fecha_termino', 'is', null);
+        .in("status", bookingStatusFilter())
+        .not("order_fecha_inicio", "is", null)
+        .not("order_fecha_termino", "is", null);
 
       if (error) {
         throw error;
@@ -1023,52 +1154,53 @@ export class OrderService {
       }> = [];
 
       // Verificar cada orden para conflictos de fechas y productos
-      data?.forEach(order => {
+      data?.forEach((order) => {
         const orderStart = new Date(order.order_fecha_inicio);
         const orderEnd = new Date(order.order_fecha_termino);
         const currentStart = new Date(startDate);
         const currentEnd = new Date(endDate);
 
         // Verificar si hay solapamiento de fechas
-        const hasDateOverlap = (
+        const hasDateOverlap =
           (currentStart <= orderEnd && currentEnd >= orderStart) ||
-          (orderStart <= currentEnd && orderEnd >= currentStart)
-        );
+          (orderStart <= currentEnd && orderEnd >= currentStart);
 
         if (hasDateOverlap && order.line_items) {
           let orderLineItems: any[] = [];
-          
+
           try {
             // Parsear line_items si es string JSON
-            if (typeof order.line_items === 'string') {
+            if (typeof order.line_items === "string") {
               orderLineItems = JSON.parse(order.line_items);
             } else if (Array.isArray(order.line_items)) {
               orderLineItems = order.line_items;
             }
           } catch (e) {
-            console.warn('Error parsing line_items for order', order.id, e);
+            console.warn("Error parsing line_items for order", order.id, e);
             return;
           }
 
           // Buscar productos en conflicto
           const conflictingProducts = orderLineItems
-            .filter(item => productIds.includes(item.product_id))
-            .map(item => ({
+            .filter((item) => productIds.includes(item.product_id))
+            .map((item) => ({
               productId: item.product_id,
-              productName: item.name || 'Producto sin nombre',
-              quantity: item.quantity || 1
+              productName: item.name || "Producto sin nombre",
+              quantity: item.quantity || 1,
             }));
 
           if (conflictingProducts.length > 0) {
             conflicts.push({
               orderId: order.id,
-              orderProject: order.order_proyecto || 'Sin proyecto',
+              orderProject: order.order_proyecto || "Sin proyecto",
               startDate: order.order_fecha_inicio,
               endDate: order.order_fecha_termino,
               status: order.status,
-              customerName: `${order.billing_first_name || ''} ${order.billing_last_name || ''}`.trim() || 'Cliente sin nombre',
-              customerEmail: order.billing_email || 'Sin email',
-              conflictingProducts
+              customerName:
+                `${order.billing_first_name || ""} ${order.billing_last_name || ""}`.trim() ||
+                "Cliente sin nombre",
+              customerEmail: order.billing_email || "Sin email",
+              conflictingProducts,
             });
           }
         }
@@ -1076,7 +1208,7 @@ export class OrderService {
 
       return conflicts;
     } catch (error) {
-      console.error('Error checking product conflicts:', error);
+      console.error("Error checking product conflicts:", error);
       throw error;
     }
   }
@@ -1084,17 +1216,20 @@ export class OrderService {
   /**
    * Actualizar fotos de garantía de una orden
    */
-  static async updateWarrantyPhotos(orderId: number, photoUrls: string[]): Promise<Order> {
+  static async updateWarrantyPhotos(
+    orderId: number,
+    photoUrls: string[],
+  ): Promise<Order> {
     try {
       const updates: OrderUpdate = {
         fotos_garantia: photoUrls,
-        date_modified: new Date().toISOString()
+        date_modified: new Date().toISOString(),
       };
 
       const { data, error } = await supabaseAdmin
-        .from('orders')
+        .from("orders")
         .update(updates)
-        .eq('id', orderId)
+        .eq("id", orderId)
         .select()
         .single();
 
@@ -1112,12 +1247,12 @@ export class OrderService {
         total: data.total || 0,
         shipping_total: data.shipping_total || 0,
         cart_tax: data.cart_tax || 0,
-        total_tax: data.total_tax || 0
+        total_tax: data.total_tax || 0,
       };
 
       return orderWithCalculatedFields;
     } catch (error) {
-      console.error('Error updating warranty photos:', error);
+      console.error("Error updating warranty photos:", error);
       throw error;
     }
   }
@@ -1125,44 +1260,46 @@ export class OrderService {
   /**
    * Obtener resumen de ventas por período
    */
-  static async getSalesReport(period: 'day' | 'week' | 'month' | 'year' = 'month', limit: number = 30) {
+  static async getSalesReport(
+    period: "day" | "week" | "month" | "year" = "month",
+    limit: number = 30,
+  ) {
     try {
       let dateFormat: string;
       let interval: string;
 
       switch (period) {
-        case 'day':
-          dateFormat = 'YYYY-MM-DD';
-          interval = '1 day';
+        case "day":
+          dateFormat = "YYYY-MM-DD";
+          interval = "1 day";
           break;
-        case 'week':
+        case "week":
           dateFormat = 'YYYY-"W"WW';
-          interval = '1 week';
+          interval = "1 week";
           break;
-        case 'month':
-          dateFormat = 'YYYY-MM';
-          interval = '1 month';
+        case "month":
+          dateFormat = "YYYY-MM";
+          interval = "1 month";
           break;
-        case 'year':
-          dateFormat = 'YYYY';
-          interval = '1 year';
+        case "year":
+          dateFormat = "YYYY";
+          interval = "1 year";
           break;
       }
 
-      const { data, error } = await supabaseAdmin
-        .rpc('get_sales_report', {
-          date_format: dateFormat,
-          period_interval: interval,
-          result_limit: limit
-        });
+      const { data, error } = await supabaseAdmin.rpc("get_sales_report", {
+        date_format: dateFormat,
+        period_interval: interval,
+        result_limit: limit,
+      });
 
       if (error) {
         // Si la función RPC no existe, usar consulta alternativa
         const { data: ordersData, error: ordersError } = await supabaseAdmin
-          .from('orders')
-          .select('date_created, calculated_total, status')
-          .eq('status', 'completed')
-          .order('date_created', { ascending: false })
+          .from("orders")
+          .select("date_created, calculated_total, status")
+          .eq("status", "completed")
+          .order("date_created", { ascending: false })
           .limit(1000);
 
         if (ordersError) throw ordersError;
@@ -1173,21 +1310,21 @@ export class OrderService {
           let key: string;
 
           switch (period) {
-            case 'day':
-              key = date.toISOString().split('T')[0];
+            case "day":
+              key = date.toISOString().split("T")[0];
               break;
-            case 'week':
+            case "week":
               const week = getWeekNumber(date);
-              key = `${date.getFullYear()}-W${week.toString().padStart(2, '0')}`;
+              key = `${date.getFullYear()}-W${week.toString().padStart(2, "0")}`;
               break;
-            case 'month':
-              key = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+            case "month":
+              key = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, "0")}`;
               break;
-            case 'year':
+            case "year":
               key = date.getFullYear().toString();
               break;
             default:
-              key = date.toISOString().split('T')[0];
+              key = date.toISOString().split("T")[0];
           }
 
           if (!acc[key]) {
@@ -1205,7 +1342,7 @@ export class OrderService {
 
       return data;
     } catch (error) {
-      console.error('Error fetching sales report:', error);
+      console.error("Error fetching sales report:", error);
       throw error;
     }
   }
@@ -1213,9 +1350,11 @@ export class OrderService {
 
 // Función auxiliar para obtener número de semana
 function getWeekNumber(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const d = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+  );
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
