@@ -69,10 +69,13 @@ describe("address autocomplete wiring", () => {
   it("EditOrderForm uses AddressInput for billing_address_1 and keeps the saved field names", () => {
     const source = read("components/orders/EditOrderForm.tsx");
     expect(source).toMatch(/<AddressInput[\s\S]{0,80}id="billing_address_1"/);
-    expect(source).toContain(
-      "handleInputChange('billing_address_1', addressLine(address))",
+    // Quote style and line breaks follow Prettier; the assertion is about the wiring.
+    expect(source).toMatch(
+      /handleInputChange\(\s*["']billing_address_1["'],\s*addressLine\(address\),?\s*\)/,
     );
-    expect(source).toContain("handleInputChange('billing_city', city)");
+    expect(source).toMatch(
+      /handleInputChange\(\s*["']billing_city["'],\s*city,?\s*\)/,
+    );
   });
 
   it("ProcessOrder uses AddressInput for the shipping address string", () => {
