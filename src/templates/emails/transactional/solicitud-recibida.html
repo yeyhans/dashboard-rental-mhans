@@ -1,0 +1,119 @@
+<!-- Transactional email "solicitud-recibida" (R-09b). Ported from CONSOLIDADO WEB YEYSON/correos/Correo Solicitud.html: same markup and inline styles; sample data replaced by template variables per the handoff §6. Rendered by src/lib/transactionalEmail.ts. -->
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<meta name="format-detection" content="telephone=no">
+<title>Mario Hans FotoRental · Solicitud de arriendo</title>
+<!--[if mso]>
+<style>body,table,td,p,a,h1 { font-family: Arial, Helvetica, sans-serif !important; }</style>
+<![endif]-->
+<style>
+  img { -ms-interpolation-mode: bicubic; }
+  a { color: #0A0A0A; }
+  @media only screen and (max-width: 620px) {
+    .container { width: 100% !important; max-width: 100% !important; border-radius: 10px !important; }
+    .outer { padding: 24px 12px !important; }
+    .px { padding-left: 24px !important; padding-right: 24px !important; }
+    .pt { padding-top: 32px !important; }
+    .h1 { font-size: 26px !important; line-height: 1.16 !important; }
+    .logo { width: 148px !important; height: auto !important; }
+    .fluid { width: 100% !important; }
+    .step { display: block !important; width: 100% !important; padding: 0 0 16px 0 !important; }
+    .step-last { padding-bottom: 0 !important; }
+  }
+  @media only screen and (max-width: 400px) {
+    .px { padding-left: 18px !important; padding-right: 18px !important; }
+    .h1 { font-size: 23px !important; }
+  }
+  @media (prefers-color-scheme: dark) {
+    .container { background: #FFFFFF !important; }
+  }
+</style>
+</head>
+<body style="margin:0; padding:0; background:#FAFAFA;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0; font-size:1px; line-height:1px; color:#FAFAFA;">Recibimos tu solicitud. Estamos verificando la disponibilidad de los equipos.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FAFAFA;">
+    <tr>
+      <td align="center" class="outer" style="padding:48px 16px;">
+        <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; background:#FFFFFF; border:1px solid #E2E2E2; border-radius:12px; overflow:hidden;">
+
+          <!-- Header · marca. Logo alojado por https ({{logo_url}}): Gmail no renderiza imágenes base64. -->
+          <tr>
+            <td class="px" width="600" style="background:#FFFFFF; padding:34px 44px 26px; border-bottom:1px solid #0A0A0A;">
+              <img src="{{logo_url}}" alt="Mario Hans FotoRental" width="172" height="30" style="display:block; width:172px; height:30px; border:0;">
+            </td>
+          </tr>
+
+          <!-- Encabezado editorial -->
+          <tr>
+            <td class="px pt" width="600" style="padding:48px 44px 8px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
+                <tr>
+                  <td style="background:#F4F4F4; border:1px solid #E2E2E2; border-radius:999px; padding:6px 14px; font-family:'IBM Plex Mono', 'SF Mono', Consolas, 'Courier New', monospace; font-size:10.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#4E504F; mso-line-height-rule:exactly; line-height:14px;">Solicitud recibida</td>
+                </tr>
+              </table>
+              <h1 class="h1" style="margin:0; font-family:'Archivo', 'Arial Narrow', Helvetica, Arial, sans-serif; font-weight:800; font-size:36px; line-height:1.12; letter-spacing:-.02em; color:#0A0A0A; mso-line-height-rule:exactly;">Estamos revisando<br>la disponibilidad</h1>
+            </td>
+          </tr>
+
+          <!-- Cuerpo -->
+          <tr>
+            <td class="px" width="600" style="padding:26px 44px 0;">
+              <p style="margin:0 0 16px; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15.5px; line-height:1.68; color:#333333;">Hola {{nombre_cliente}},</p>
+              <p style="margin:0 0 16px; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15.5px; line-height:1.68; color:#333333;">Recibimos tu solicitud de arriendo.</p>
+              <p style="margin:0 0 0; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15.5px; line-height:1.68; color:#333333;">Estamos verificando la disponibilidad de los equipos seleccionados para las fechas solicitadas. Una vez finalizada la revisión, te enviaremos la confirmación.</p>
+            </td>
+          </tr>
+
+          <!-- Pedido -->
+          <tr>
+            <td class="px" width="600" style="padding:32px 44px 0;">
+              <table role="presentation" class="fluid" width="512" cellpadding="0" cellspacing="0" border="0" style="width:100%; border:1px solid #E2E2E2; border-radius:8px;">
+                <tr>
+                  <td style="padding:20px;">
+                    <div style="font-family:'IBM Plex Mono', 'SF Mono', Consolas, 'Courier New', monospace; font-size:10.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#999999; mso-line-height-rule:exactly; line-height:14px;">Pedido</div>
+                    <div style="font-family:'IBM Plex Mono', 'SF Mono', Consolas, 'Courier New', monospace; font-size:20px; font-weight:600; letter-spacing:.02em; color:#0A0A0A; padding:8px 0 14px; mso-line-height-rule:exactly; line-height:26px;">#{{numero_pedido}}</div>
+                    <p style="margin:0; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:14px; line-height:1.65; color:#666666; border-top:1px solid #EAEAEA; padding-top:14px;">Puedes descargar el detalle de tu pedido aquí:</p>
+                    <table role="presentation" class="fluid" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
+                      <tr>
+                        <td align="center" bgcolor="#0A0A0A" style="border-radius:8px; background:#0A0A0A;">
+                          <a href="{{link_pdf}}" style="display:block; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:14px; font-weight:600; letter-spacing:.01em; color:#FFFFFF; text-decoration:none; padding:15px 32px; border-radius:8px; mso-line-height-rule:exactly; line-height:18px;">Descargar pedido</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Cierre -->
+          <tr>
+            <td class="px" width="600" style="padding:32px 44px 40px;">
+              <table role="presentation" class="fluid" width="512" cellpadding="0" cellspacing="0" border="0" style="width:100%; background:#FAFAFA; border:1px solid #EAEAEA; border-radius:8px;">
+                <tr>
+                  <td style="padding:16px 18px; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; line-height:1.6; color:#666666;">
+                    Si necesitas realizar algún cambio antes de la confirmación, <a href="{{whatsapp_url}}" style="color:#0A0A0A; font-weight:600; text-decoration:underline;">contáctanos</a>.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="px" width="600" style="padding:24px 44px 28px; border-top:1px solid #E2E2E2;">
+              <p style="margin:0 0 8px; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:12.5px; line-height:1.5; color:#666666;">Saludos,<br>Mario Hans FotoRental · Hans Salinas SpA<br>Santiago, Chile</p>
+              <p style="margin:0; font-family:'IBM Plex Mono', 'SF Mono', Consolas, 'Courier New', monospace; font-size:10px; letter-spacing:.03em; line-height:1.6; color:#999999;">Recibes este correo por una solicitud de arriendo asociada a esta dirección. Si no fuiste tú, <a href="{{site_url}}/baja" style="color:#666666; text-decoration:underline;">avísanos</a>.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

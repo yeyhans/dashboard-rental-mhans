@@ -1,0 +1,159 @@
+<!-- Transactional email "contrato" (R-09b). Ported from CONSOLIDADO WEB YEYSON/correos/Correo Contrato.html: same markup and inline styles; sample data replaced by template variables per the handoff §6. Rendered by src/lib/transactionalEmail.ts. -->
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<meta name="format-detection" content="telephone=no">
+<title>Mario Hans FotoRental · Contrato de arriendo</title>
+<!--[if mso]>
+<style>body,table,td,p,a,h1 { font-family: Arial, Helvetica, sans-serif !important; }</style>
+<![endif]-->
+<style>
+  img { -ms-interpolation-mode: bicubic; }
+  a { color: #0A0A0A; }
+  @media only screen and (max-width: 620px) {
+    .container { width: 100% !important; max-width: 100% !important; border-radius: 10px !important; }
+    .outer { padding: 24px 12px !important; }
+    .px { padding-left: 24px !important; padding-right: 24px !important; }
+    .pt { padding-top: 32px !important; }
+    .h1 { font-size: 26px !important; line-height: 1.16 !important; }
+    .logo { width: 148px !important; height: auto !important; }
+    .fluid { width: 100% !important; }
+    .step { display: block !important; width: 100% !important; padding: 0 0 16px 0 !important; }
+    .step-last { padding-bottom: 0 !important; }
+  }
+  @media only screen and (max-width: 400px) {
+    .px { padding-left: 18px !important; padding-right: 18px !important; }
+    .h1 { font-size: 23px !important; }
+  }
+  @media (prefers-color-scheme: dark) {
+    .container { background: #FFFFFF !important; }
+  }
+</style>
+</head>
+<body style="margin:0; padding:0; background:#FAFAFA;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0; font-size:1px; line-height:1px; color:#FAFAFA;">Tu cuenta ya está activa. Adjunto va el contrato con los términos de arriendo.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FAFAFA;">
+    <tr>
+      <td align="center" class="outer" style="padding:48px 16px;">
+        <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; background:#FFFFFF; border:1px solid #E2E2E2; border-radius:12px; overflow:hidden;">
+
+          <!-- Header · marca. Logo alojado por https ({{logo_url}}): Gmail no renderiza imágenes base64. -->
+          <tr>
+            <td class="px" width="600" style="background:#0A0A0A; padding:32px 44px;">
+              <img src="{{logo_url}}" alt="Mario Hans FotoRental" width="172" height="30" style="display:block; width:172px; height:30px; border:0;">
+            </td>
+          </tr>
+
+          <!-- Encabezado editorial -->
+          <tr>
+            <td class="px pt" width="600" style="padding:48px 44px 8px;">
+              <h1 class="h1" style="margin:0; font-family:'Archivo', 'Arial Narrow', Helvetica, Arial, sans-serif; font-weight:800; font-size:36px; line-height:1.12; letter-spacing:-.02em; color:#0A0A0A; mso-line-height-rule:exactly;">Tu cuenta ya está activa</h1>
+            </td>
+          </tr>
+
+          <!-- Cuerpo -->
+          <tr>
+            <td class="px" width="600" style="padding:26px 44px 0;">
+              <p style="margin:0 0 16px; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15.5px; line-height:1.68; color:#333333;">Hola {{nombre_cliente}},</p>
+              <p style="margin:0 0 16px; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15.5px; line-height:1.68; color:#333333;">Tu registro ha sido completado y tu cuenta ya está activa.</p>
+              <p style="margin:0 0 0; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:15.5px; line-height:1.68; color:#333333;">A partir de ahora puedes explorar nuestros equipos y realizar solicitudes de arriendo directamente desde la plataforma.</p>
+            </td>
+          </tr>
+
+          <!-- Información importante -->
+          <tr>
+            <td class="px" width="600" style="padding:32px 44px 0;">
+              <table role="presentation" class="fluid" width="512" cellpadding="0" cellspacing="0" border="0" style="width:100%; border:1px solid #E2E2E2; border-radius:8px;">
+                <tr>
+                  <td style="padding:20px;">
+                    <div style="font-family:'IBM Plex Mono', 'SF Mono', Consolas, 'Courier New', monospace; font-size:10.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#999999; mso-line-height-rule:exactly; line-height:14px;">Información importante</div>
+                    <p style="margin:14px 0 12px; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:14px; line-height:1.65; color:#333333;">Adjunto encontrarás el contrato con los términos y condiciones de arriendo. Te recomendamos revisarlo antes de realizar tu primer pedido.</p>
+                    <p style="margin:0 0 16px; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:14px; line-height:1.65; color:#666666;">Este proceso se realiza una sola vez.</p>
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #EAEAEA; width:100%;">
+                      <tr>
+                        <td style="padding-top:14px; font-family:'IBM Plex Mono', 'SF Mono', Consolas, 'Courier New', monospace; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#666666; mso-line-height-rule:exactly; line-height:15px;">Adjunto · Contrato_arriendo.pdf</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- CTA -->
+          <tr>
+            <td class="px" width="600" style="padding:28px 44px 40px;">
+              <table role="presentation" class="fluid" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" bgcolor="#0A0A0A" style="border-radius:8px; background:#0A0A0A;">
+                    <a href="{{site_url}}/equipos" style="display:block; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:14px; font-weight:600; letter-spacing:.01em; color:#FFFFFF; text-decoration:none; padding:15px 32px; border-radius:8px; mso-line-height-rule:exactly; line-height:18px;">Explorar equipos</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Proceso · stepper -->
+          <tr>
+            <td class="px" width="600" style="padding:0 44px 44px;">
+              <div style="border-top:1px solid #0A0A0A; padding-top:20px;">
+                <div style="font-family:'IBM Plex Mono', 'SF Mono', Consolas, 'Courier New', monospace; font-size:10.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#999999; padding-bottom:20px; mso-line-height-rule:exactly; line-height:14px;">El proceso completo</div>
+                <table role="presentation" class="fluid" width="512" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+                  <tr>
+                  <td class="step" width="25%" valign="top" style="width:25%; padding:0 10px 0 0;">
+                    <div style="height:2px; line-height:2px; font-size:0; background:#0A0A0A;">&nbsp;</div>
+                    <div style="font-family:'IBM Plex Mono', 'SF Mono', Consolas, 'Courier New', monospace; font-size:10.5px; font-weight:600; letter-spacing:.06em; color:#666666; padding:12px 0 5px;">01</div>
+                    <div style="font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:12px; font-weight:500; line-height:1.35; color:#666666;">Solicitud recibida</div>
+                  </td>
+                  <td class="step" width="25%" valign="top" style="width:25%; padding:0 10px 0 0;">
+                    <div style="height:2px; line-height:2px; font-size:0; background:#0A0A0A;">&nbsp;</div>
+                    <div style="font-family:'IBM Plex Mono', 'SF Mono', Consolas, 'Courier New', monospace; font-size:10.5px; font-weight:600; letter-spacing:.06em; color:#666666; padding:12px 0 5px;">02</div>
+                    <div style="font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:12px; font-weight:500; line-height:1.35; color:#666666;">Tus datos</div>
+                  </td>
+                  <td class="step" width="25%" valign="top" style="width:25%; padding:0 10px 0 0;">
+                    <div style="height:2px; line-height:2px; font-size:0; background:#0A0A0A;">&nbsp;</div>
+                    <div style="font-family:'IBM Plex Mono', 'SF Mono', Consolas, 'Courier New', monospace; font-size:10.5px; font-weight:600; letter-spacing:.06em; color:#666666; padding:12px 0 5px;">03</div>
+                    <div style="font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:12px; font-weight:500; line-height:1.35; color:#666666;">Contrato de arriendo</div>
+                  </td>
+                  <td class="step step-last" width="25%" valign="top" style="width:25%; padding:0 10px 0 0;">
+                    <div style="height:2px; line-height:2px; font-size:0; background:#0A0A0A;">&nbsp;</div>
+                    <div style="font-family:'IBM Plex Mono', 'SF Mono', Consolas, 'Courier New', monospace; font-size:10.5px; font-weight:600; letter-spacing:.06em; color:#0A0A0A; padding:12px 0 5px;">04</div>
+                    <div style="font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:12px; font-weight:600; line-height:1.35; color:#0A0A0A;">Cuenta activa</div>
+                  </td>
+                  </tr>
+                </table>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Cierre -->
+          <tr>
+            <td class="px" width="600" style="padding:0 44px 40px;">
+              <table role="presentation" class="fluid" width="512" cellpadding="0" cellspacing="0" border="0" style="width:100%; background:#FAFAFA; border:1px solid #EAEAEA; border-radius:8px;">
+                <tr>
+                  <td style="padding:16px 18px; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; line-height:1.6; color:#666666;">
+                    Atendemos todos los días, de 08:00 a 20:00 hrs.<br>
+                    Si necesitas ayuda, <a href="{{whatsapp_url}}" style="color:#0A0A0A; font-weight:600; text-decoration:underline;">escríbenos por WhatsApp</a>.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="px" width="600" style="padding:24px 44px 28px; border-top:1px solid #E2E2E2;">
+              <p style="margin:0 0 8px; font-family:'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:12.5px; line-height:1.5; color:#666666;">Saludos,<br>Mario Hans FotoRental · Hans Salinas SpA<br>Santiago, Chile</p>
+              <p style="margin:0; font-family:'IBM Plex Mono', 'SF Mono', Consolas, 'Courier New', monospace; font-size:10px; letter-spacing:.03em; line-height:1.6; color:#999999;">Recibes este correo porque completaste tu registro en Mario Hans FotoRental. Si no fuiste tú, <a href="{{site_url}}/baja" style="color:#666666; text-decoration:underline;">avísanos</a>.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
