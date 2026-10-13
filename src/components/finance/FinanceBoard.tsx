@@ -1,29 +1,51 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { toast, Toaster } from "sonner";
 import {
   AlertTriangle,
   Calendar,
   CheckCircle2,
   Clock,
   Download,
+  Eye,
   Package,
   Percent,
   PiggyBank,
   Receipt,
+  RotateCcw,
   Search,
   SlidersHorizontal,
   TrendingUp,
   Wallet,
 } from "lucide-react";
 import { formatCLP } from "../../lib/delivery";
+import { PAYMENT_DOCUMENT_MAX_LENGTH } from "../../lib/finance";
 import type {
   FinanceBoard as FinanceBoardData,
   FinanceRow,
+  SavedPayment,
 } from "../../services/financeService";
 import { PageHeader } from "../shared/PageHeader";
 import { KpiCard } from "../shared/KpiCard";
 import { StatusBadge } from "../shared/StatusBadge";
+import { RowActionsMenu } from "../shared/RowActionsMenu";
 import { Button } from "../ui/button";
-import { financePaymentTone } from "./financePaymentTone";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
+import {
+  applySavedPayment,
+  PAGE_SIZE_OPTIONS,
+  reserveChip,
+  type FinanceLists,
+} from "./financePaymentState";
+import { formatMonthDelta, paidMonthOverMonth } from "./financePaidDelta";
 import {
   financeRowsToCsv,
   formatDay,
@@ -69,9 +91,83 @@ interface FinanceBoardProps {
    * whatever date the suite happens to run on.
    */
   now?: Date;
+  /** Tab shown first; Pendientes unless a test needs another one rendered. */
+  initialTab?: Tab;
 }
 
 type Tab = "pendientes" | "pagados" | "finanzas";
+
+/** R-03a: one payment change waiting for the admin's confirmation. */
+interface PendingConfirmation {
+  row: FinanceRow;
+  paid: boolean;
+}
+
+async function patchPayment(
+  id: number,
+  body: Record<string, unknown>,
+): Promise<SavedPayment> {
+  // `PATCH /api/payments/[id]` exige sesión de admin (`withAuth`), que se resuelve por cookie.
+  const response = await fetch(`/api/payments/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.success) {
+    throw new Error(payload?.error ?? "No se pudo guardar el pago");
+  }
+  return payload.data as SavedPayment;
+}
+
+/**
+ * R-03a: OC / Factura typed in place. Saves on blur (or Enter) only when the value changed, and
+ * goes back to the saved value when the request fails.
+ */
+function DocumentInput({
+  row,
+  field,
+  label,
+  disabled,
+  onSave,
+}: {
+  row: FinanceRow;
+  field: "purchaseOrder" | "invoiceNumber";
+  label: string;
+  disabled: boolean;
+  onSave: (value: string) => Promise<boolean>;
+}) {
+  const saved = row[field] ?? "";
+  const [value, setValue] = useState(saved);
+  useEffect(() => setValue(saved), [saved]);
+
+  const commit = async () => {
+    if (value.trim() === saved) {
+      setValue(saved);
+      return;
+    }
+    const isSaved = await onSave(value);
+    if (!isSaved) setValue(saved);
+  };
+
+  return (
+    <input
+      type="text"
+      value={value}
+      disabled={disabled}
+      maxLength={PAYMENT_DOCUMENT_MAX_LENGTH}
+      placeholder="—"
+      aria-label={`${label} pedido ${row.reference}`}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+      }}
+      className="w-24 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 font-mono text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text-primary)]"
+    />
+  );
+}
 
 const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
   { value: "pendientes", label: "Pendientes" },
@@ -94,13 +190,35 @@ function matches(row: FinanceRow, needle: string): boolean {
 function Pager({
   page,
   onPageChange,
+  pageSize,
+  onPageSizeChange,
 }: {
   page: Page<unknown>;
   onPageChange: (next: number) => void;
+  pageSize: number;
+  onPageSizeChange: (next: number) => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-3 border-t border-[var(--color-border)] px-3 py-2 text-[11px] text-[var(--color-text-secondary)]">
-      <span>{paginationLabel(page)}</span>
+      <div className="flex items-center gap-3">
+        <span>{paginationLabel(page)}</span>
+        {/* R-03a: the canon's "10 por página" select. */}
+        <label className="flex items-center gap-1.5">
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            aria-label="Filas por página"
+            className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-0.5 text-[11px]"
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+          por página
+        </label>
+      </div>
       {page.totalPages > 1 && (
         <div className="flex items-center gap-1.5">
           <Button
@@ -159,8 +277,19 @@ export default function FinanceBoard({
   data,
   periodLabel,
   now: nowProp,
+  initialTab = "pendientes",
 }: FinanceBoardProps) {
-  const [tab, setTab] = useState<Tab>("pendientes");
+  const [tab, setTab] = useState<Tab>(initialTab);
+  // R-03a: the rows live in state so a saved payment moves between tabs without a reload.
+  const [lists, setLists] = useState<FinanceLists>({
+    pendingRows: data.pendingRows,
+    paidRows: data.paidRows,
+  });
+  const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[0]);
+  const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(
+    null,
+  );
+  const [savingId, setSavingId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [period, setPeriod] = useState<PeriodKey>("all");
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilterKey>("all");
@@ -207,31 +336,109 @@ export default function FinanceBoard({
   const range = useMemo(() => periodRangeFor(period, now), [period, now]);
 
   const pendingRows = useMemo(() => {
-    const byPeriod = filterByPeriod(data.pendingRows, range, (r) => r.endDate);
+    const byPeriod = filterByPeriod(lists.pendingRows, range, (r) => r.endDate);
     const byPayment = byPeriod.filter((r) =>
       matchesPaymentFilter(r, paymentFilter),
     );
     return byPayment.filter((r) => matches(r, search.trim()));
-  }, [data.pendingRows, range, paymentFilter, search]);
+  }, [lists.pendingRows, range, paymentFilter, search]);
 
   const paidRows = useMemo(() => {
-    const byPeriod = filterByPeriod(data.paidRows, range, (r) => r.paidAt);
+    const byPeriod = filterByPeriod(lists.paidRows, range, (r) => r.paidAt);
     return byPeriod.filter((r) => matches(r, search.trim()));
-  }, [data.paidRows, range, search]);
+  }, [lists.paidRows, range, search]);
 
   // 07.1: any change to what the table lists sends it back to the first page.
   useEffect(() => {
     setPageNumber(1);
-  }, [tab, period, paymentFilter, search]);
+  }, [tab, period, paymentFilter, search, pageSize]);
 
   const pendingPage = useMemo(
-    () => paginate(pendingRows, pageNumber),
-    [pendingRows, pageNumber],
+    () => paginate(pendingRows, pageNumber, pageSize),
+    [pendingRows, pageNumber, pageSize],
   );
   const paidPage = useMemo(
-    () => paginate(paidRows, pageNumber),
-    [paidRows, pageNumber],
+    () => paginate(paidRows, pageNumber, pageSize),
+    [paidRows, pageNumber, pageSize],
   );
+
+  // R-03a: "% vs mes anterior" — this month against the previous one, over every loaded paid
+  // row, independent of the Período selector (see `paidMonthOverMonth`).
+  const paidDelta = useMemo(
+    () => paidMonthOverMonth(lists.paidRows, now),
+    [lists.paidRows, now],
+  );
+
+  const savePayment = async (
+    row: FinanceRow,
+    body: Record<string, unknown>,
+    successMessage: string,
+  ): Promise<boolean> => {
+    setSavingId(row.id);
+    try {
+      const saved = await patchPayment(row.id, body);
+      setLists((current) => applySavedPayment(current, saved, new Date()));
+      toast.success(successMessage);
+      return true;
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "No se pudo guardar el pago",
+      );
+      return false;
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const confirmPayment = () => {
+    const target = confirmation;
+    setConfirmation(null);
+    if (!target) return;
+    void savePayment(
+      target.row,
+      { paid: target.paid },
+      target.paid
+        ? `${target.row.reference} quedó pagado`
+        : `${target.row.reference} volvió a Pendientes`,
+    );
+  };
+
+  const rowActions = (row: FinanceRow) => [
+    {
+      id: "view",
+      label: "Ver pedido",
+      icon: Eye,
+      onSelect: () => {
+        window.location.href = `/orders/${row.id}`;
+      },
+    },
+    row.fullyPaid
+      ? {
+          id: "unpay",
+          label: "Marcar como no pagado",
+          icon: RotateCcw,
+          disabled: savingId === row.id,
+          onSelect: () => setConfirmation({ row, paid: false }),
+        }
+      : {
+          id: "pay",
+          label: "Marcar como pagado",
+          icon: CheckCircle2,
+          disabled: savingId === row.id,
+          onSelect: () => setConfirmation({ row, paid: true }),
+        },
+  ];
+
+  const saveDocument =
+    (row: FinanceRow, field: "purchaseOrder" | "invoiceNumber") =>
+    (value: string) =>
+      savePayment(
+        row,
+        { [field]: value },
+        field === "purchaseOrder"
+          ? "Orden de compra guardada"
+          : "Número de factura guardado",
+      );
 
   const pendingKpis = useMemo(
     () => recomputePendingKpis(pendingRows),
@@ -249,24 +456,24 @@ export default function FinanceBoard({
   const pendingSparkline = useMemo(
     () =>
       monthlyBucketSums(
-        data.pendingRows,
+        lists.pendingRows,
         (r) => r.endDate,
         (r) => r.outstanding,
         now,
         6,
       ),
-    [data.pendingRows, now],
+    [lists.pendingRows, now],
   );
   const paidSparkline = useMemo(
     () =>
       monthlyBucketSums(
-        data.paidRows,
+        lists.paidRows,
         (r) => r.paidAt,
         (r) => r.total,
         now,
         6,
       ),
-    [data.paidRows, now],
+    [lists.paidRows, now],
   );
 
   // D-10/D-24: "Exportar" descarga en CSV, sin dependencias nuevas, las filas ya
@@ -529,13 +736,16 @@ export default function FinanceBoard({
                     <th scope="col" className="px-3 py-2 font-medium">
                       Pago
                     </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Acciones
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {pendingRows.length === 0 && (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={10}
                         className="p-8 text-center text-[var(--color-text-secondary)]"
                       >
                         {search
@@ -545,7 +755,8 @@ export default function FinanceBoard({
                     </tr>
                   )}
                   {pendingPage.items.map((row) => {
-                    const payment = financePaymentTone(row);
+                    const reserve = reserveChip(row);
+                    const isSaving = savingId === row.id;
                     return (
                       <tr
                         key={row.id}
@@ -566,22 +777,68 @@ export default function FinanceBoard({
                         <td className="px-3 py-2 text-right font-mono">
                           {formatCLP(row.total)}
                         </td>
-                        <td className="px-3 py-2 text-right font-mono text-[var(--color-text-secondary)]">
-                          {formatCLP(row.reserve)}
+                        <td className="px-3 py-2 text-right">
+                          {/* R-03a: the canon's reserve chip, beside the amount actually agreed. */}
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="font-mono text-[var(--color-text-secondary)]">
+                              {formatCLP(row.reserve)}
+                            </span>
+                            <StatusBadge
+                              tone={reserve.tone}
+                              label={reserve.label}
+                            />
+                          </div>
                         </td>
-                        <td className="px-3 py-2 text-right font-mono font-semibold">
-                          {formatCLP(row.outstanding)}
-                        </td>
-                        <td className="px-3 py-2 font-mono text-[11px] text-[var(--color-text-secondary)]">
-                          {row.purchaseOrder || "—"}
-                        </td>
-                        <td className="px-3 py-2 font-mono text-[11px] text-[var(--color-text-secondary)]">
-                          {row.invoiceNumber || "—"}
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="font-mono font-semibold">
+                              {formatCLP(row.outstanding)}
+                            </span>
+                            {row.overdue && (
+                              <StatusBadge tone="crit" label="Vencido" />
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2">
-                          <StatusBadge
-                            tone={payment.tone}
-                            label={payment.label}
+                          <DocumentInput
+                            row={row}
+                            field="purchaseOrder"
+                            label="Orden de compra"
+                            disabled={isSaving}
+                            onSave={saveDocument(row, "purchaseOrder")}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <DocumentInput
+                            row={row}
+                            field="invoiceNumber"
+                            label="Número de factura"
+                            disabled={isSaving}
+                            onSave={saveDocument(row, "invoiceNumber")}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          {/* Pendientes only lists unpaid rows, so this sits on "No pagado";
+                              choosing "Pagado" asks for confirmation before saving. */}
+                          <select
+                            value="no-pagado"
+                            disabled={isSaving}
+                            aria-label={`Estado de pago pedido ${row.reference}`}
+                            onChange={(e) => {
+                              if (e.target.value === "pagado") {
+                                setConfirmation({ row, paid: true });
+                              }
+                            }}
+                            className="rounded-[6px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] px-2 py-1 text-[11px] font-medium text-[var(--color-crit)]"
+                          >
+                            <option value="pagado">Pagado</option>
+                            <option value="no-pagado">No pagado</option>
+                          </select>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <RowActionsMenu
+                            items={rowActions(row)}
+                            label={`Acciones del pedido ${row.reference}`}
                           />
                         </td>
                       </tr>
@@ -590,7 +847,12 @@ export default function FinanceBoard({
                 </tbody>
               </table>
             </div>
-            <Pager page={pendingPage} onPageChange={setPageNumber} />
+            <Pager
+              page={pendingPage}
+              onPageChange={setPageNumber}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
           </section>
         </>
       )}
@@ -605,7 +867,7 @@ export default function FinanceBoard({
               icon={CheckCircle2}
               label="Cobrado Período"
               value={formatCLP(paidKpisData.cobradoPeriodo)}
-              meta="Pagos completos"
+              meta={formatMonthDelta(paidDelta.cobrado)}
               tone="text-[var(--color-ok)]"
               sparkline={paidSparkline}
             />
@@ -613,13 +875,13 @@ export default function FinanceBoard({
               icon={Package}
               label="Pedidos Pagados"
               value={String(paidKpisData.pedidosPagados)}
-              meta="Cerrados"
+              meta={formatMonthDelta(paidDelta.pedidos)}
             />
             <Kpi
               icon={Receipt}
               label="Ticket Promedio"
               value={formatCLP(paidKpisData.ticketPromedio)}
-              meta="Por pedido"
+              meta={formatMonthDelta(paidDelta.ticket)}
             />
           </div>
 
@@ -656,13 +918,16 @@ export default function FinanceBoard({
                     <th scope="col" className="px-3 py-2 font-medium">
                       Factura
                     </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Acción
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {paidRows.length === 0 && (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={8}
                         className="p-8 text-center text-[var(--color-text-secondary)]"
                       >
                         {search
@@ -690,6 +955,16 @@ export default function FinanceBoard({
                       </td>
                       <td className="px-3 py-2 font-mono text-[11px]">
                         {formatDay(row.paidAt)}
+                        {/* Before R-03a nothing wrote `date_paid`; those orders show their
+                            closing date instead, and say so. */}
+                        {row.paidAtSource === "date_completed" && (
+                          <span
+                            title="Fecha de cierre del pedido: no hay fecha de pago registrada"
+                            className="ml-1 font-sans text-[var(--color-text-faint)]"
+                          >
+                            (cierre)
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-right font-mono">
                         {formatCLP(row.total)}
@@ -700,12 +975,23 @@ export default function FinanceBoard({
                       <td className="px-3 py-2 font-mono text-[11px] text-[var(--color-text-secondary)]">
                         {row.invoiceNumber || "—"}
                       </td>
+                      <td className="px-3 py-2 text-right">
+                        <RowActionsMenu
+                          items={rowActions(row)}
+                          label={`Acciones del pedido ${row.reference}`}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <Pager page={paidPage} onPageChange={setPageNumber} />
+            <Pager
+              page={paidPage}
+              onPageChange={setPageNumber}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
           </section>
         </>
       )}
@@ -772,6 +1058,35 @@ export default function FinanceBoard({
           </section>
         </div>
       )}
+
+      <AlertDialog
+        open={confirmation !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmation(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmation?.paid
+                ? `¿Marcar ${confirmation.row.reference} como pagado?`
+                : `¿Marcar ${confirmation?.row.reference ?? ""} como no pagado?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmation?.paid
+                ? `Se registra el pago completo de ${formatCLP(confirmation.row.total)} con fecha de hoy y el pedido pasa a Pagados.`
+                : "El pedido vuelve a Pendientes con su saldo por cobrar. La reserva queda como está."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPayment}>
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <Toaster position="top-right" richColors />
     </div>
   );
 }

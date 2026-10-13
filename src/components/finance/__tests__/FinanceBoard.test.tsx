@@ -19,7 +19,8 @@ function row(overrides: Partial<FinanceBoardData["pendingRows"][number]> = {}) {
     fullyPaid: false,
     overdue: false,
     endDate: "2026-07-10",
-    paidAt: null,
+    paidAt: null as string | null,
+    paidAtSource: null as "date_paid" | "date_completed" | null,
     purchaseOrder: null,
     invoiceNumber: null,
     ...overrides,
@@ -192,5 +193,87 @@ describe("FinanceBoard — active filter visibility while collapsed (D-27)", () 
       <FinanceBoard data={makeData()} periodLabel="septiembre 2026" />,
     );
     expect(html).not.toContain("Estado de pago");
+  });
+});
+
+describe("FinanceBoard — R-03a Pendientes columns to canon", () => {
+  const html = renderToStaticMarkup(
+    <FinanceBoard
+      data={makeData({
+        pendingRows: [
+          row({ id: 1, reservePaid: true, purchaseOrder: "OC-12" }),
+          row({ id: 2, reference: "#0002", reservePaid: false }),
+        ],
+      })}
+      periodLabel="octubre 2026"
+    />,
+  );
+
+  it("shows the reserve as a Pagado / No pagado chip next to its amount", () => {
+    expect(html).toContain(">Reserva<");
+    expect(html).toMatch(/25\.000[\s\S]*Pagado/);
+    expect(html).toContain("No pagado");
+  });
+
+  it("offers a Pago select per row, sitting on No pagado", () => {
+    expect(html).toContain('aria-label="Estado de pago pedido #0001"');
+    expect(html).toMatch(
+      /<option value="no-pagado" selected="">No pagado<\/option>/,
+    );
+    expect(html).toContain('<option value="pagado">Pagado</option>');
+  });
+
+  it("lets OC and Factura be typed in place", () => {
+    expect(html).toContain('aria-label="Orden de compra pedido #0001"');
+    expect(html).toContain('value="OC-12"');
+    expect(html).toContain('aria-label="Número de factura pedido #0002"');
+  });
+
+  it("adds the Acciones column with a row menu", () => {
+    expect(html).toContain(">Acciones<");
+    expect(html).toContain('aria-label="Acciones del pedido #0001"');
+  });
+
+  it("offers 10 / 20 / 50 rows per page", () => {
+    expect(html).toContain('aria-label="Filas por página"');
+    expect(html).toMatch(/<option value="10" selected="">10<\/option>/);
+    expect(html).toContain('<option value="20">20</option>');
+    expect(html).toContain('<option value="50">50</option>');
+  });
+});
+
+describe("FinanceBoard — R-03a Pagados to canon", () => {
+  it("adds the Acción column, flags an approximate payment date and compares with last month", () => {
+    const now = new Date("2026-10-13T15:00:00.000Z");
+    const paid = (overrides: Parameters<typeof row>[0]) =>
+      row({ fullyPaid: true, outstanding: 0, collected: 100000, ...overrides });
+    // `initialTab` opens Pagados so the static render shows it.
+    const html = renderToStaticMarkup(
+      <FinanceBoard
+        data={makeData({
+          paidRows: [
+            paid({
+              id: 1,
+              paidAt: "2026-10-02T12:00:00Z",
+              paidAtSource: "date_paid",
+            }),
+            paid({
+              id: 2,
+              reference: "#0002",
+              paidAt: "2026-09-20T12:00:00Z",
+              paidAtSource: "date_completed",
+            }),
+          ],
+        })}
+        periodLabel="octubre 2026"
+        now={now}
+        initialTab="pagados"
+      />,
+    );
+
+    expect(html).toContain(">Acción<");
+    expect(html).toContain('aria-label="Acciones del pedido #0002"');
+    expect(html).toContain("Fecha de cierre del pedido");
+    expect(html).toContain("0% vs mes anterior");
   });
 });
