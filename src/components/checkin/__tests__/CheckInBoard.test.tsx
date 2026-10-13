@@ -19,6 +19,11 @@ import { fileURLToPath } from "node:url";
 import CheckInBoard from "../CheckInBoard";
 import type { CheckInBoard as CheckInBoardData } from "../../../services/checkInService";
 
+const panelSource = readFileSync(
+  fileURLToPath(new URL("../CheckInReceptionPanel.tsx", import.meta.url)),
+  "utf8",
+);
+
 const source = readFileSync(
   fileURLToPath(new URL("../CheckInBoard.tsx", import.meta.url)),
   "utf8",
@@ -51,6 +56,7 @@ function makeBoard(
         ...overrides,
       },
     ],
+    pagination: { page: 1, pageSize: 50, total: 1, totalPages: 1 },
   };
 }
 
@@ -64,7 +70,8 @@ describe("CheckInBoard — list row (D-15)", () => {
       />,
     );
     expect(html).toContain("3 ítems");
-    expect(html).not.toContain("recibidos");
+    // The reception panel's "Marcar todos como recibidos" is fine; a "0 / N recibidos" readout is not.
+    expect(html).not.toMatch(/\d+ \/ \d+ recibidos/);
   });
 
   it("shows the dd/mm date alongside the deadline hour when it is not today", () => {
@@ -195,6 +202,8 @@ describe("CheckInBoard — mobile pass (D-25)", () => {
   });
 
   it("does not cap the item list height or scroll it on its own below the lg breakpoint either", () => {
+    // R-04: the item list moved to the reception panel.
+    const source = panelSource;
     expect(source).not.toMatch(/className="max-h-\[300px\] overflow-y-auto"/);
     expect(source).toContain("lg:max-h-[300px] lg:overflow-y-auto");
   });
@@ -236,5 +245,30 @@ describe("CheckInBoard date picker (D-12)", () => {
     const html = renderToStaticMarkup(<CheckInBoard data={makeBoard()} />);
     expect(html).not.toContain("Quitar filtro de fecha");
     expect(html).toContain("Filtrar fecha");
+  });
+});
+
+/** T-01: the list is paginated on the server; the board links to the neighbouring pages. */
+describe("CheckInBoard — pagination (T-01)", () => {
+  it("links to the previous and next pages when there is more than one", () => {
+    const board = makeBoard();
+    board.pagination = { page: 2, pageSize: 50, total: 120, totalPages: 3 };
+    const html = renderToStaticMarkup(
+      <CheckInBoard data={board} todayLabel="Hoy" todayIsoDay="2026-06-13" />,
+    );
+    expect(html).toContain('href="?page=1"');
+    expect(html).toContain('href="?page=3"');
+    expect(html).toContain("Página 2 de 3");
+  });
+
+  it("renders no pagination for a single page", () => {
+    const html = renderToStaticMarkup(
+      <CheckInBoard
+        data={makeBoard()}
+        todayLabel="Hoy"
+        todayIsoDay="2026-06-13"
+      />,
+    );
+    expect(html).not.toContain("Paginación de devoluciones");
   });
 });

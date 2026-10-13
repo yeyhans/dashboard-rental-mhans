@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 import { Calendar as CalendarIcon, Package, Search, X } from "lucide-react";
 import { formatIsoDateLabel, openDatePicker } from "../../lib/dateInput";
 import {
@@ -7,7 +6,6 @@ import {
   formatCheckInItemCount,
   formatReturnDeadlineLabel,
   itemsFromLineItems,
-  type ItemReceiptState,
   type ReturnUrgency,
 } from "../../lib/checkIn";
 import {
@@ -16,7 +14,6 @@ import {
   resolveVisibleSelection,
 } from "../../lib/checkInDateFilter";
 import { statusBadgeClass, statusLabel } from "../../lib/orderStatus";
-import { apiClient } from "../../services/apiClient";
 import { Button } from "../ui/button";
 import { KpiCard } from "../shared/KpiCard";
 import { PageHeader } from "../shared/PageHeader";
@@ -24,6 +21,7 @@ import type {
   CheckInBoard as CheckInBoardData,
   CheckInListEntry,
 } from "../../services/checkInService";
+import CheckInReceptionPanel from "./CheckInReceptionPanel";
 
 /**
  * Check-In / Devoluciones.
@@ -43,6 +41,11 @@ import type {
  * endpoint ("El equipo no tiene un checkout abierto para hacer check-in") es una respuesta real y
  * esperable mientras el flujo de despacho no registre el checkout correspondiente; se muestra tal
  * cual, en español, no como un error genérico.
+ *
+ * R-04: el detalle (estado por línea con botones, incidencias y cierre de la devolución) vive en
+ * `CheckInReceptionPanel`; el control de check-in por número de serie, en `AssetCheckInControl`.
+ * T-01: la lista viene paginada desde el servidor (solo `in-rental` y `return`), así que la
+ * búsqueda y "Filtrar fecha" actúan sobre la página cargada.
  */
 interface CheckInBoardProps {
   data: CheckInBoardData;
@@ -72,172 +75,18 @@ const URGENCY_STYLES: Record<
   done: { label: "Completado", className: "text-[var(--color-ok)]" },
 };
 
-const ITEM_FILTERS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "todos", label: "Todos" },
-  { value: "pending", label: "Pendientes" },
-  { value: "received", label: "Recibidos" },
-  { value: "incidencias", label: "Incidencias" },
-];
-
-interface AssetOption {
-  id: number;
-  serial_number: string;
-}
-
-/**
- * Búsqueda de número de serie + registro de check-in para UNA línea del pedido.
- *
- * Vive fuera de `CheckInBoard` porque cada línea necesita su propio estado de
- * búsqueda/selección/envío, y montarlo condicionalmente en el detalle evita pedir la lista de
- * equipos de un producto que el admin nunca abre.
- */
-function AssetCheckInControl({
-  productId,
-  orderId,
-}: {
-  productId: number;
-  orderId: number;
-}) {
-  const [open, setOpen] = useState(false);
-  const [options, setOptions] = useState<AssetOption[] | null>(null);
-  const [loadingOptions, setLoadingOptions] = useState(false);
-  const [selectedAssetId, setSelectedAssetId] = useState<number | "">("");
-  const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(
-    null,
-  );
-
-  const loadOptions = async () => {
-    setOpen(true);
-    if (options !== null) return;
-    setLoadingOptions(true);
-    try {
-      const response = await apiClient.get(
-        `/api/inventory/assets?product_id=${productId}`,
-      );
-      const payload = await apiClient.handleJsonResponse<{
-        success: boolean;
-        data: { assets: AssetOption[] };
-      }>(response);
-      setOptions(payload.data.assets);
-    } catch {
-      setOptions([]);
-    } finally {
-      setLoadingOptions(false);
-    }
-  };
-
-  const handleCheckIn = async () => {
-    if (!selectedAssetId) {
-      toast.error("Selecciona un número de serie");
-      return;
-    }
-    setSubmitting(true);
-    setResult(null);
-    try {
-      const response = await apiClient.post("/api/inventory/movements", {
-        asset_id: selectedAssetId,
-        order_id: orderId,
-        direction: "checkin",
-        condition_notes: notes.trim() || undefined,
-      });
-      const payload = await response.json();
-      if (!response.ok || !payload.success) {
-        setResult({
-          ok: false,
-          message: payload.error || "No se pudo registrar el check-in",
-        });
-        return;
-      }
-      setResult({ ok: true, message: "Check-in registrado" });
-      toast.success("Check-in registrado");
-    } catch (error) {
-      setResult({
-        ok: false,
-        message: error instanceof Error ? error.message : "Error de conexión",
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={loadOptions}
-        className="whitespace-nowrap rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
-      >
-        Registrar check-in
-      </button>
-    );
-  }
-
-  return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-      <select
-        value={selectedAssetId}
-        onChange={(e) =>
-          setSelectedAssetId(e.target.value ? Number(e.target.value) : "")
-        }
-        disabled={loadingOptions || (options?.length ?? 0) === 0}
-        aria-label="Número de serie"
-        className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-[11px]"
-      >
-        <option value="">
-          {loadingOptions
-            ? "Cargando…"
-            : options?.length
-              ? "Elige el número de serie"
-              : "Sin equipos registrados"}
-        </option>
-        {(options ?? []).map((asset) => (
-          <option key={asset.id} value={asset.id}>
-            {asset.serial_number}
-          </option>
-        ))}
-      </select>
-      <input
-        type="text"
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        placeholder="Notas (opcional)"
-        aria-label="Notas del check-in"
-        className="w-28 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-[11px]"
-      />
-      <button
-        type="button"
-        onClick={handleCheckIn}
-        disabled={submitting || !selectedAssetId}
-        className="rounded-[6px] bg-[var(--color-text-primary)] px-2 py-1 text-[11px] font-medium text-white disabled:opacity-50"
-      >
-        {submitting ? "Guardando…" : "Confirmar"}
-      </button>
-      {result && (
-        <span
-          className={`text-[11px] ${result.ok ? "text-[var(--color-ok)]" : "text-[var(--color-crit)]"}`}
-          role="status"
-        >
-          {result.message}
-        </span>
-      )}
-    </div>
-  );
-}
-
 export default function CheckInBoard({
   data,
   todayLabel,
   todayIsoDay,
 }: CheckInBoardProps) {
+  const pagination = data.pagination;
   // D-22 (03e): el panel derecho ya no arranca vacío cuando hay devoluciones que mostrar — se
   // preselecciona la primera de la lista, igual que cualquier maestro/detalle con datos.
   const [selectedId, setSelectedId] = useState<number | null>(
     data.entries[0]?.id ?? null,
   );
   const [search, setSearch] = useState("");
-  const [itemFilter, setItemFilter] = useState("todos");
   // D-22 (03a): "Filtrar fecha" filtra la lista YA CARGADA por fecha de término exacta — sin
   // endpoint nuevo. Vacío (por defecto) sigue mostrando devoluciones abiertas + atrasadas.
   const [dateFilter, setDateFilter] = useState("");
@@ -276,19 +125,6 @@ export default function CheckInBoard({
 
   const selected: CheckInListEntry | null =
     data.entries.find((e) => e.id === effectiveSelectedId) ?? null;
-
-  const items = useMemo(
-    () => itemsFromLineItems(selected?.lineItems),
-    [selected],
-  );
-  const totals = useMemo(() => checkInTotals(items), [items]);
-
-  const filteredItems = items.filter((item) => {
-    if (itemFilter === "todos") return true;
-    if (itemFilter === "incidencias")
-      return item.state === "damaged" || item.state === "incomplete";
-    return item.state === (itemFilter as ItemReceiptState);
-  });
 
   // Canon (m-chk, "Medio"): las 4 KPI no llevan ícono ni cifra en mono con cero tachado — solo
   // etiqueta + valor plano, con color semántico donde corresponde.
@@ -512,6 +348,39 @@ export default function CheckInBoard({
               );
             })}
           </ul>
+
+          {/* T-01: server pagination. Plain links: the page is server-rendered per `?page=`. */}
+          {pagination && pagination.totalPages > 1 && (
+            <nav
+              aria-label="Paginación de devoluciones"
+              className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-4 py-2 text-[11px] text-[var(--color-text-secondary)]"
+            >
+              {pagination.page > 1 ? (
+                <a
+                  href={`?page=${pagination.page - 1}`}
+                  className="underline underline-offset-2"
+                >
+                  ← Anterior
+                </a>
+              ) : (
+                <span aria-hidden="true" />
+              )}
+              <span>
+                Página {pagination.page} de {pagination.totalPages} ·{" "}
+                {pagination.total} pedidos
+              </span>
+              {pagination.page < pagination.totalPages ? (
+                <a
+                  href={`?page=${pagination.page + 1}`}
+                  className="underline underline-offset-2"
+                >
+                  Siguiente →
+                </a>
+              ) : (
+                <span aria-hidden="true" />
+              )}
+            </nav>
+          )}
         </section>
 
         <section
@@ -529,128 +398,7 @@ export default function CheckInBoard({
               </p>
             </div>
           ) : (
-            <div>
-              <div className="border-b border-[var(--color-border)] p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-                      {selected.reference}
-                    </div>
-                    <h2 className="truncate text-sm font-semibold">
-                      {selected.client}
-                    </h2>
-                    <p className="truncate text-xs text-[var(--color-text-secondary)]">
-                      Proyecto: {selected.project}
-                    </p>
-                    <p className="text-xs text-[var(--color-text-secondary)]">
-                      Término del arriendo: {selected.endDate ?? "sin fecha"}
-                    </p>
-                  </div>
-                  <a
-                    href={`/orders/${selected.id}`}
-                    className="whitespace-nowrap text-xs text-[var(--color-text-primary)] underline underline-offset-2"
-                  >
-                    Ver pedido →
-                  </a>
-                </div>
-
-                <div className="mt-4 grid grid-cols-5 gap-2">
-                  {[
-                    { label: "Total", value: totals.total, tone: "" },
-                    {
-                      label: "Recibidos",
-                      value: totals.recibidos,
-                      tone: "text-[var(--color-ok)]",
-                    },
-                    {
-                      label: "Incompletos",
-                      value: totals.incompletos,
-                      tone: "text-[var(--color-warn)]",
-                    },
-                    {
-                      label: "Dañados",
-                      value: totals.danados,
-                      tone: "text-[var(--color-crit)]",
-                    },
-                    {
-                      label: "Pendientes",
-                      value: totals.pendientes,
-                      tone: "text-[var(--color-text-secondary)]",
-                    },
-                  ].map((metric) => (
-                    <div
-                      key={metric.label}
-                      className="rounded-[6px] bg-[var(--color-surface-2)] p-2 text-center"
-                    >
-                      {/*
-                        D-22 (03d): Tailwind's `font-mono` utility is the SYSTEM mono stack
-                        (SF Mono/Menlo on macOS), which renders "0" with a slash — not the
-                        canonical figure font. `var(--font-mono)` (D-02, JetBrains Mono) is the
-                        one actually wired to the design system's figures.
-                      */}
-                      <div
-                        className={`text-base font-semibold ${metric.tone}`}
-                        style={{ fontFamily: "var(--font-mono)" }}
-                      >
-                        {metric.value}
-                      </div>
-                      <div className="text-[10px] text-[var(--color-text-faint)]">
-                        {metric.label}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-1 border-b border-[var(--color-border)] px-4 py-2">
-                {ITEM_FILTERS.map((filter) => (
-                  <button
-                    key={filter.value}
-                    type="button"
-                    onClick={() => setItemFilter(filter.value)}
-                    className={`rounded-full px-2.5 py-1 text-[11px] transition-colors ${
-                      itemFilter === filter.value
-                        ? "bg-[var(--color-text-primary)] text-white"
-                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
-              </div>
-
-              <ul className="lg:max-h-[300px] lg:overflow-y-auto">
-                {filteredItems.length === 0 && (
-                  <li className="p-6 text-center text-xs text-[var(--color-text-secondary)]">
-                    Este pedido no tiene equipos en esa categoría.
-                  </li>
-                )}
-                {filteredItems.map((item, index) => (
-                  <li
-                    key={`${item.sku}-${index}`}
-                    className="flex items-start justify-between gap-3 border-b border-[var(--color-border-soft)] px-4 py-2.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-medium">
-                        {item.name}
-                      </div>
-                      <div className="font-mono text-[10px] text-[var(--color-text-faint)]">
-                        {item.sku}
-                      </div>
-                      {item.productId !== null && selected && (
-                        <AssetCheckInControl
-                          productId={item.productId}
-                          orderId={selected.id}
-                        />
-                      )}
-                    </div>
-                    <span className="whitespace-nowrap font-mono text-xs text-[var(--color-text-secondary)]">
-                      ×{item.quantity}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <CheckInReceptionPanel key={selected.id} entry={selected} />
           )}
         </section>
       </div>

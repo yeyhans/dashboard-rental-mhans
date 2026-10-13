@@ -21,11 +21,14 @@ const now = new Date();
 let board = {
   kpis: { pendientesHoy: 0, recibidosHoy: 0, incidencias: 0, atrasadas: 0 },
   entries: [],
+  pagination: { page: 1, pageSize: 50, total: 0, totalPages: 1 },
 };
 let loadError: string | null = null;
 
 try {
-  board = await CheckInService.getBoard(now);
+  // T-01: paginado en el servidor; el servicio acota page/pageSize inválidos.
+  const page = Number(Astro.url.searchParams.get("page") ?? "1");
+  board = await CheckInService.getBoard(now, { page });
 } catch (error) {
   console.error("[check-in] Error al cargar el tablero de devoluciones:", {
     admin: adminSession.admin.email,
