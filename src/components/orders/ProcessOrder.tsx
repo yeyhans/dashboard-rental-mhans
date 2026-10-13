@@ -147,20 +147,17 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           methodTitle.toLowerCase().includes('pickup');
 
         if (isPickupMethod) {
-          console.log('🚀 Initial delivery method: PICKUP (detected from shipping_lines)');
           return 'pickup';
         } else if (deliveryMethodFromMeta === 'shipping') {
-          console.log('🚀 Initial delivery method: SHIPPING (detected from shipping_lines)');
           return 'shipping';
         }
       }
     } catch (error) {
-      console.error('Error parsing initial shipping_lines:', error);
+      console.error('[ProcessOrder] Error al leer shipping_lines iniciales:', error);
     }
 
     // Fallback a la lógica original basada en shipping_total
     const fallbackMethod = orderData?.shipping_total && parseFloat(orderData.shipping_total.toString()) > 0 ? 'shipping' : 'pickup';
-    console.log('🚀 Initial delivery method: ' + fallbackMethod.toUpperCase() + ' (fallback based on shipping_total)');
     return fallbackMethod;
   });
   const [shippingAddress, setShippingAddress] = useState('');
@@ -233,30 +230,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   });
 
   useEffect(() => {
-    console.log('🔍 ProcessOrder: Received orderData:', {
-      id: orderData?.id,
-      status: orderData?.status,
-      customer_id: orderData?.customer_id,
-      order_proyecto: orderData?.order_proyecto,
-      coupon_lines: orderData?.coupon_lines,
-      shipping_total: orderData?.shipping_total,
-      calculated_discount: orderData?.calculated_discount,
-      shipping_lines: orderData?.shipping_lines
-    });
 
-    console.log('🚚 [ProcessOrder] Detailed shipping_lines analysis:', {
-      shipping_lines_exists: !!orderData?.shipping_lines,
-      shipping_lines_type: typeof orderData?.shipping_lines,
-      shipping_lines_raw: orderData?.shipping_lines,
-      shipping_lines_length: Array.isArray(orderData?.shipping_lines) ? orderData.shipping_lines.length : 'not array',
-      shipping_address: (() => {
-        if (Array.isArray(orderData?.shipping_lines) && orderData.shipping_lines.length > 0) {
-          const firstLine = orderData.shipping_lines[0];
-          return typeof firstLine === 'object' && firstLine && 'meta_data' in firstLine ? firstLine.meta_data?.shipping_address : undefined;
-        }
-        return undefined;
-      })()
-    });
 
     if (orderData?.coupon_lines) {
       try {
@@ -264,13 +238,11 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           ? JSON.parse(orderData.coupon_lines)
           : orderData.coupon_lines;
 
-        console.log('🎫 Parsed coupon_lines:', couponLines);
 
         if (Array.isArray(couponLines) && couponLines.length > 0) {
           const firstCoupon = couponLines[0];
           // Reconstruct coupon object from stored data
           if (firstCoupon.id && firstCoupon.code) {
-            console.log('✅ Applying coupon from order data:', firstCoupon.code, 'discount:', firstCoupon.discount);
             setAppliedCoupon({
               id: firstCoupon.id,
               code: firstCoupon.code,
@@ -295,20 +267,18 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           }
         }
       } catch (error) {
-        console.error('❌ Error parsing coupon_lines:', error);
+        console.error('[ProcessOrder] Error al leer coupon_lines:', error);
       }
     }
 
     // Initialize shipping total
     if (orderData?.shipping_total) {
-      console.log('🚚 Setting shipping total from order data:', orderData.shipping_total);
       setEditedShipping(orderData.shipping_total.toString());
     }
 
     // Initialize calculated_discount if it exists (for display purposes)
     // Note: Manual discount editing was removed, but we still need to show existing values
     if (orderData?.calculated_discount) {
-      console.log('💰 Found existing calculated_discount:', orderData.calculated_discount);
       // The calculated_discount is now handled automatically through coupon calculations
       // but we log it for reference
     }
@@ -317,15 +287,12 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     if (orderData?.calculated_iva) {
       const ivaValue = parseFloat(orderData.calculated_iva.toString());
       const shouldApplyIva = ivaValue > 0;
-      console.log('💵 Initializing applyIva:', shouldApplyIva, 'from calculated_iva:', ivaValue);
       setApplyIva(shouldApplyIva);
     }
 
-    console.log('ℹ️ Order data initialization completed');
   }, [orderData]);
 
   if (!order || !order.orders) {
-    console.log('No order data received');
     return (
       <div className="mt-6 p-4 bg-destructive/10 text-destructive rounded-md">
         No se encontraron datos de la orden
@@ -334,7 +301,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   }
 
   if (!order.orders.orders || !Array.isArray(order.orders.orders)) {
-    console.log('Orders array is missing or invalid');
     return (
       <div className="mt-6 p-4 bg-destructive/10 text-destructive rounded-md">
         Estructura de datos inválida
@@ -345,7 +311,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   // orderData is now defined above in useEffect
 
   if (!orderData) {
-    console.log('No order found in array');
     return (
       <div className="mt-6 p-4 bg-destructive/10 text-destructive rounded-md">
         No se encontraron datos de la orden
@@ -365,41 +330,34 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             // Ensure we convert to number if it's a string
             const id = item.product_id;
             const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
-            console.log(`🔍 Processing item "${item.name}": product_id=${id} (${typeof id}) → ${numericId} (${typeof numericId})`);
             return numericId;
           })
           .filter((id): id is number => {
             const isValid = id && !isNaN(id);
             if (!isValid) {
-              console.warn(`❌ Invalid product_id filtered out: ${id}`);
             }
             return isValid;
           });
 
         if (productIds.length > 0) {
-          console.log('🔄 Loading product details for IDs:', productIds);
           const response = await apiClient.post('/api/products/batch', { ids: productIds });
           const result = await apiClient.handleJsonResponse<{ success: boolean, data: DatabaseProduct[] }>(response);
 
           if (result.success) {
-            console.log('✅ Products loaded successfully:', result.data?.length || 0, 'products');
-            console.log('📦 Loaded product IDs:', result.data?.map(p => p.id) || []);
-            console.log('📊 Product stock status:', result.data?.map(p => ({ id: p.id, name: p.name, stock_status: p.stock_status })) || []);
 
             // Check for missing products
             const loadedIds = (result.data || []).map(p => p.id).filter((id): id is number => id !== undefined);
             const missingIds = productIds.filter(id => !loadedIds.includes(id));
             if (missingIds.length > 0) {
-              console.warn('⚠️ Products not found in database:', missingIds);
             }
 
             setProductsData(result.data || []);
           } else {
-            console.error('❌ Failed to load products:', result);
+            console.error('[ProcessOrder] No se pudieron cargar los productos:', result?.error);
           }
         }
       } catch (error) {
-        console.error('Error loading product details:', error);
+        console.error('[ProcessOrder] Error al cargar el detalle de productos:', error);
       } finally {
         setLoadingProducts(false);
       }
@@ -448,7 +406,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         return [images.src || images.url];
       }
     } catch (error) {
-      console.warn('Error parsing product images:', error);
     }
 
     return [];
@@ -502,7 +459,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         toast.error(apiErrorMessage(result, 'No se pudo actualizar el pedido'));
       }
     } catch (error) {
-      console.error('Error updating order:', error);
+      console.error('[ProcessOrder] Error al actualizar el pedido:', error);
       toast.error(
         error instanceof FetchTimeoutError
           ? 'El servidor tardó demasiado en responder. Revisa el estado del pedido antes de reintentar.'
@@ -625,15 +582,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   const handleSaveFinancials = async () => {
     try {
       setSavingFinancials(true);
-      console.log('🔄 Iniciando handleSaveFinancials...');
-      console.log('📦 Order ID:', orderData.id);
 
       // Usar las nuevas funciones de cálculo siguiendo CreateOrderForm.tsx
-      console.log('🔢 Calculando valores...');
       const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
       const shipping = parseFloat(editedShipping || '0');
-      console.log('📊 numDays:', numDays, 'shipping:', shipping, 'couponDiscountAmount:', couponDiscountAmount, 'applyIva:', applyIva);
-      console.log('📦 editedProducts length:', editedProducts.length);
 
       const calculations = updateAllCalculations(
         editedProducts,
@@ -642,16 +594,12 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         couponDiscountAmount,
         applyIva
       );
-      console.log('✅ Cálculos completados:', calculations);
 
       // Validar campos requeridos para métodos de envío (más flexible)
-      console.log('🚚 Validando método de envío:', deliveryMethod);
       if (deliveryMethod === 'shipping' && selectedShippingMethod) {
-        console.log('📋 Validando campos de envío...');
 
         // Solo validar si el método específicamente requiere estos campos Y están marcados como obligatorios
         if (selectedShippingMethod.requires_address && selectedShippingMethod.requires_address === true && !shippingAddress.trim()) {
-          console.log('⚠️ Advertencia: Dirección recomendada pero no obligatoria');
           // Solo mostrar advertencia, no bloquear
           toast.warning('⚠️ Recomendación', {
             description: 'Se recomienda agregar una dirección de delivery',
@@ -660,7 +608,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         }
 
         if (selectedShippingMethod.requires_phone && selectedShippingMethod.requires_phone === true && !shippingPhone.trim()) {
-          console.log('⚠️ Advertencia: Teléfono recomendado pero no obligatorio');
           // Solo mostrar advertencia, no bloquear
           toast.warning('⚠️ Recomendación', {
             description: 'Se recomienda agregar un teléfono de contacto',
@@ -668,10 +615,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           });
         }
       }
-      console.log('✅ Validaciones de envío completadas');
 
       // Prepare updated order data
-      console.log('📦 Preparando datos de la orden...');
       const updatedOrderData = {
         id: orderData.id,
         line_items: editedProducts.map(item => ({
@@ -769,7 +714,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         calculated_total: calculations.calculated_total
       };
 
-      console.log('📤 Datos a enviar:', updatedOrderData);
 
       // Con el nuevo sistema de autenticación, usamos cookies en lugar de Bearer token
       const response = await fetch(`/api/orders/${orderData.id}`, {
@@ -781,14 +725,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         body: JSON.stringify(updatedOrderData)
       });
 
-      console.log('📡 Response status:', response.status);
-      console.log('📡 Response ok:', response.ok);
 
       const result = await response.json();
-      console.log('📋 Response result:', result);
 
       if (result.success) {
-        console.log('✅ Pedido actualizado exitosamente');
         toast.success('Pedido actualizado correctamente');
         setIsEditingFinancials(false);
         // Reload the page to show updated data
@@ -796,11 +736,11 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           window.location.reload();
         }, 1000);
       } else {
-        console.error('❌ Error en la respuesta:', result.error);
+        console.error('[ProcessOrder] Error en la respuesta al actualizar el pedido:', result.error);
         throw new Error(result.error || 'Error al actualizar');
       }
     } catch (error) {
-      console.error('Error updating order:', error);
+      console.error('[ProcessOrder] Error al actualizar el pedido:', error);
       toast.error('Error al actualizar el pedido');
     } finally {
       setSavingFinancials(false);
@@ -811,8 +751,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     // Reset to original values
     setEditedShipping(orderData?.shipping_total?.toString() || '0');
     // Force refresh from enhanced line items to ensure we have current data
-    console.log('🔄 Resetting editedProducts from enhancedLineItems');
-    console.log('📦 Available enhanced items:', enhancedLineItems.length);
     setEditedProducts([...enhancedLineItems]);
 
     // Reset coupon to original state
@@ -852,7 +790,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           setCouponDiscountAmount(0);
         }
       } catch (error) {
-        console.error('Error resetting coupon:', error);
+        console.error('[ProcessOrder] Error al restablecer el cupón:', error);
         setAppliedCoupon(null);
         setCouponDiscountAmount(0);
       }
@@ -887,7 +825,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     try {
       // Usar métodos pasados como prop si están disponibles
       if (allShippingMethods && allShippingMethods.length > 0) {
-        console.log('✅ Using shipping methods from server-side props:', allShippingMethods.length);
         setShippingMethods(allShippingMethods);
         setShippingMethodsSource('database');
 
@@ -905,7 +842,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
       // Fallback: cargar desde API si no hay props
       const shippingResult = await ShippingService.getAllShippingMethods(1, 100, true); // Solo métodos habilitados
       if (shippingResult && shippingResult.shippingMethods) {
-        console.log('✅ Loaded shipping methods from API:', shippingResult.shippingMethods.length);
         setShippingMethods(shippingResult.shippingMethods);
         setShippingMethodsSource('database');
 
@@ -919,7 +855,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         }
       }
     } catch (shippingError) {
-      console.error('Error loading shipping methods:', shippingError);
+      console.error('[ProcessOrder] Error al cargar los métodos de envío:', shippingError);
       // Fallback a métodos por defecto siguiendo la interfaz del ShippingService
       const defaultMethods: ShippingMethod[] = [
         {
@@ -1003,16 +939,12 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   };
 
   const handleDeliveryMethodChange = (method: 'pickup' | 'shipping') => {
-    console.log('🔄 handleDeliveryMethodChange called with:', method);
-    console.log('🔄 Current deliveryMethod:', deliveryMethod);
-    console.log('🔄 Current selectedShippingMethod:', selectedShippingMethod);
 
     // Marcar que el usuario ha hecho un cambio manual
     setUserHasChangedDeliveryMethod(true);
     setDeliveryMethod(method);
 
     if (method === 'pickup') {
-      console.log('✅ Switching to PICKUP method (user manual change)');
       setSelectedShippingMethod(null);
       setEditedShipping('0');
       toast.info('📦 Método cambiado a Retiro en tienda', {
@@ -1020,7 +952,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         duration: 3000
       });
     } else if (method === 'shipping' && shippingMethods.length > 0) {
-      console.log('✅ Switching to SHIPPING method (user manual change)');
       // Auto-seleccionar el primer método disponible cuando se cambia a shipping
       const firstMethod = shippingMethods[0];
       if (firstMethod) {
@@ -1134,9 +1065,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   // Initialize edited products from enhanced line items when they change
   useEffect(() => {
     if (enhancedLineItems.length > 0 && editedProducts.length === 0) {
-      console.log('🔄 Initializing editedProducts from enhancedLineItems');
-      console.log('📦 Enhanced items:', enhancedLineItems.length);
-      console.log('🖼️ Images in enhanced items:', enhancedLineItems.map(item => ({ name: item.name, images: item.images?.length || 0 })));
       setEditedProducts([...enhancedLineItems]);
     }
   }, [enhancedLineItems, editedProducts.length]);
@@ -1173,7 +1101,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           setProductConflicts(result.data);
         }
       } catch (error) {
-        console.error('Error checking product conflicts:', error);
+        console.error('[ProcessOrder] Error al verificar conflictos de productos:', error);
       } finally {
         setCheckingConflicts(false);
       }
@@ -1185,9 +1113,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   // Force refresh editedProducts when entering edit mode
   useEffect(() => {
     if (isEditingFinancials && enhancedLineItems.length > 0) {
-      console.log('🔄 Refreshing editedProducts for edit mode with enhanced data');
-      console.log('📦 Enhanced items:', enhancedLineItems.length);
-      console.log('🖼️ Images in enhanced items:', enhancedLineItems.map(item => ({ name: item.name, images: item.images?.length || 0 })));
       setEditedProducts([...enhancedLineItems]);
     }
   }, [isEditingFinancials, enhancedLineItems]);
@@ -1202,7 +1127,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
         if (Array.isArray(shippingLines) && shippingLines.length > 0) {
           const firstShippingLine = shippingLines[0];
-          console.log('🚚 Initializing shipping method from existing shipping_lines:', firstShippingLine);
 
           // Crear un método de envío temporal basado en los datos existentes
           const existingMethod: ShippingMethod = {
@@ -1235,25 +1159,14 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           const methodId = firstShippingLine.method_id || '';
           const shippingType = metaData.shipping_type || '';
 
-          console.log('🔍 Determining delivery method:', {
-            metaData,
-            deliveryMethodFromMeta,
-            cost: existingMethod.cost,
-            method_title: methodTitle,
-            method_id: methodId,
-            shipping_type: shippingType,
-            shipping_address: metaData.shipping_address
-          });
 
           // Cargar dirección de envío si existe
           if (metaData.shipping_address) {
-            console.log('📍 Loading shipping address:', metaData.shipping_address);
             setShippingAddress(metaData.shipping_address);
           }
 
           // Cargar teléfono de envío si existe
           if (metaData.shipping_phone) {
-            console.log('📞 Loading shipping phone:', metaData.shipping_phone);
             setShippingPhone(metaData.shipping_phone);
           }
 
@@ -1265,22 +1178,19 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             methodTitle.toLowerCase().includes('pickup');
 
           if (isPickupMethod) {
-            console.log('✅ Setting delivery method to PICKUP - detected pickup method');
             setDeliveryMethod('pickup');
             setSelectedShippingMethod(null); // Clear shipping method for pickup
             setEditedShipping('0'); // Set shipping cost to 0 for pickup
           } else if (deliveryMethodFromMeta === 'shipping' || existingMethod.cost > 0) {
-            console.log('✅ Setting delivery method to SHIPPING based on metadata or cost > 0');
             setDeliveryMethod('shipping');
           } else {
-            console.log('✅ Setting delivery method to PICKUP as fallback (cost = 0)');
             setDeliveryMethod('pickup');
             setSelectedShippingMethod(null);
             setEditedShipping('0');
           }
         }
       } catch (error) {
-        console.error('Error parsing shipping_lines:', error);
+        console.error('[ProcessOrder] Error al leer shipping_lines:', error);
       }
     }
   }, [isEditingFinancials, orderData?.shipping_lines, selectedShippingMethod, userHasChangedDeliveryMethod]);
@@ -1377,7 +1287,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
     setGeneratingPdf(true);
     try {
-      console.log('🚀 Generating order processing PDF for order:', orderData.id);
 
       // Same-origin with the session cookie: the route requires an admin session and reads the
       // order on the server (the browser's anon client cannot read `orders`).
@@ -1393,7 +1302,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
       if (result.success) {
         toast.success('Contrato de procesamiento generado exitosamente');
-        console.log('✅ PDF generated successfully:', result.pdfUrl);
 
         // Notificar al cliente sobre la generación del contrato
         await notifyPdfGenerated(
@@ -1404,7 +1312,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
         // Crear recordatorio en Google Calendar (solución simple)
         try {
-          console.log('📅 Creating calendar reminder for order:', orderData.id);
           const eventData = createEventFromOrder(orderData);
 
           // Abrir Google Calendar automáticamente para agregar el evento
@@ -1414,9 +1321,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
             description: `Se abrió Google Calendar para agregar el evento de la orden #${orderData.id}`
           });
 
-          console.log('✅ Calendar reminder opened successfully');
         } catch (calendarError) {
-          console.error('💥 Error creating calendar reminder:', calendarError);
+          console.error('[ProcessOrder] Error al crear el recordatorio de calendario:', calendarError);
           toast.warning('No se pudo abrir el recordatorio de calendario');
         }
 
@@ -1428,7 +1334,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         throw new Error(result.message || 'Error al generar el contrato');
       }
     } catch (error) {
-      console.error('💥 Error generating order PDF:', error);
+      console.error('[ProcessOrder] Error al generar el PDF de la orden:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al generar el contrato';
       toast.error(errorMessage);
 
@@ -1447,7 +1353,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   // Calendar event handler
   const handleAddToCalendar = () => {
     try {
-      console.log('📅 Creating calendar event for order:', orderData.id);
       const eventData = createEventFromOrder(orderData);
 
       // Open Google Calendar
@@ -1457,9 +1362,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         description: `Agregando evento para orden #${orderData.id}`
       });
 
-      console.log('✅ Calendar event opened successfully');
     } catch (error) {
-      console.error('💥 Error opening calendar:', error);
+      console.error('[ProcessOrder] Error al abrir el calendario:', error);
       toast.error('Error al abrir el calendario');
     }
   };
@@ -1473,7 +1377,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
     setGeneratingBudget(true);
     try {
-      console.log('🚀 Generating budget PDF for order:', orderData.id);
 
       // Usar el endpoint dedicado /api/orders/:id/generate-budget
       // sendEmail: false porque la notificación se envía manualmente desde el admin
@@ -1494,7 +1397,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
       if (result.success) {
         toast.success('Presupuesto generado exitosamente');
-        console.log('✅ Budget PDF generated successfully:', result.pdfUrl);
 
         // Notificar al cliente sobre la generación del presupuesto
         await notifyPdfGenerated(
@@ -1511,7 +1413,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         throw new Error(result.message || 'Error al generar el presupuesto');
       }
     } catch (error) {
-      console.error('💥 Error generating budget PDF:', error);
+      console.error('[ProcessOrder] Error al generar el presupuesto:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al generar el presupuesto';
       toast.error(errorMessage);
 
@@ -1536,7 +1438,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
     setGeneratingBudget(true);
     try {
-      console.log('🔄 Updating budget PDF for order:', orderData.id);
 
       // Usar el endpoint dedicado /api/orders/:id/generate-budget
       // sendEmail: false porque la notificación se envía manualmente desde el admin
@@ -1557,7 +1458,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
       if (result.success) {
         toast.success('Presupuesto actualizado exitosamente');
-        console.log('✅ Budget PDF updated successfully:', result.pdfUrl);
 
         // Notificar al cliente sobre la actualización del presupuesto
         await notifyPdfGenerated(
@@ -1574,7 +1474,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         throw new Error(result.message || 'Error al actualizar el presupuesto');
       }
     } catch (error) {
-      console.error('💥 Error updating budget PDF:', error);
+      console.error('[ProcessOrder] Error al actualizar el presupuesto:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al actualizar el presupuesto';
       toast.error(errorMessage);
 
@@ -1603,7 +1503,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
     setDeletingPdf(true);
     try {
-      console.log('🗑️ Deleting budget PDF:', budgetUrl);
 
       const response = await fetch(`/api/orders/${orderData.id}/delete-pdf`, {
         method: 'DELETE',
@@ -1625,7 +1524,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
       if (result.success) {
         toast.success('Presupuesto eliminado exitosamente');
-        console.log('✅ Budget PDF deleted successfully');
 
         // Reload the page to reflect changes
         setTimeout(() => {
@@ -1635,7 +1533,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         throw new Error(result.message || 'Error al eliminar el presupuesto');
       }
     } catch (error) {
-      console.error('💥 Error deleting budget PDF:', error);
+      console.error('[ProcessOrder] Error al eliminar el presupuesto:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al eliminar el presupuesto';
       toast.error(errorMessage);
     } finally {
@@ -1656,7 +1554,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
     setDeletingPdf(true);
     try {
-      console.log('🗑️ Deleting contract PDF');
 
       const response = await fetch(`/api/orders/${orderData.id}/delete-pdf`, {
         method: 'DELETE',
@@ -1677,7 +1574,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
       if (result.success) {
         toast.success('Contrato eliminado exitosamente');
-        console.log('✅ Contract PDF deleted successfully');
 
         // Reload the page to reflect changes
         setTimeout(() => {
@@ -1687,7 +1583,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         throw new Error(result.message || 'Error al eliminar el contrato');
       }
     } catch (error) {
-      console.error('💥 Error deleting contract PDF:', error);
+      console.error('[ProcessOrder] Error al eliminar el contrato:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al eliminar el contrato';
       toast.error(errorMessage);
     } finally {
@@ -1812,7 +1708,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
     setSendingEmail(true);
     try {
-      console.log('📧 Sending manual email:', manualEmailData);
 
       const result = await sendManualEmail(manualEmailData);
 
@@ -1846,7 +1741,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         throw new Error(result.message || 'Error al enviar el correo');
       }
     } catch (error) {
-      console.error('💥 Error sending manual email:', error);
+      console.error('[ProcessOrder] Error al enviar el correo manual:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al enviar el correo';
       toast.error(errorMessage);
 
@@ -1929,7 +1824,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   };
 
   if (!orderData) {
-    console.log('No order found in array');
     return (
       <div className="mt-6 p-4 bg-destructive/10 text-destructive rounded-md">
         No se encontraron datos de la orden
@@ -3095,10 +2989,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   <div className="space-y-3">
                     {editedProducts.map((item, index) => {
                       // Debug logging for images
-                      console.log(`🖼️ Product ${index}: "${item.name}"`);
-                      console.log(`   - Images array:`, item.images);
-                      console.log(`   - Images length:`, item.images?.length || 0);
-                      console.log(`   - First image:`, item.images?.[0]);
 
                       const imageUrl = item.images && item.images.length > 0
                         ? (typeof item.images[0] === 'string'
@@ -3106,7 +2996,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                           : item.images[0]?.src || item.images[0]?.url || item.images[0])
                         : null;
 
-                      console.log(`   - Final image URL:`, imageUrl);
 
                       return (
                         <div key={`${item.product_id}-${index}`} className="flex items-center gap-3 p-3 bg-white rounded-lg border">
@@ -3118,12 +3007,11 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                                 alt={item.name}
                                 className="w-12 h-12 object-cover rounded border"
                                 onError={(e) => {
-                                  console.error(`❌ Image failed to load: ${imageUrl}`);
+                                  console.error('[ProcessOrder] No se pudo cargar la imagen del producto:', imageUrl);
                                   e.currentTarget.style.display = 'none';
                                   e.currentTarget.nextElementSibling?.classList.remove('hidden');
                                 }}
                                 onLoad={() => {
-                                  console.log(`✅ Image loaded successfully: ${imageUrl}`);
                                 }}
                               />
                             ) : null}
@@ -3273,7 +3161,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                       ));
                     }
                   } catch (error) {
-                    console.error('Error parsing coupon_lines:', error);
+                    console.error('[ProcessOrder] Error al leer coupon_lines:', error);
                   }
                   return null;
                 })()
