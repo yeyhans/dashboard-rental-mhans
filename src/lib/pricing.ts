@@ -185,15 +185,15 @@ function percentDiscount(productsSubtotal: number, percent: number): number {
   return clampDiscount(roundHalfUp((productsSubtotal * percent) / 100), productsSubtotal);
 }
 
-/**
- * R-05: server-side reading of `orders.discount_percent`. Empty means "no percentage"; anything
- * else must be a number in (0, 100] with at most two decimals (the column is numeric(5,2)).
- */
 /** The one range rule for a manual percentage: (0, 100]. */
 function isPercentInRange(value: number): boolean {
   return Number.isFinite(value) && value > 0 && value <= 100;
 }
 
+/**
+ * R-05: server-side reading of `orders.discount_percent`. Empty means "no percentage"; anything
+ * else must be a number in (0, 100] with at most two decimals (the column is numeric(5,2)).
+ */
 export function parseDiscountPercent(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
   const parsed = toNumber(value as NumericLike);

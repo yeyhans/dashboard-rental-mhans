@@ -126,3 +126,44 @@ describe("OrderService.createOrderDetailed — discount_percent", () => {
     expect(order).toMatchObject({ id: 9 });
   });
 });
+
+/* H-4 (R3/R4): the retry is only for THE missing column, never for any other undefined column. */
+describe("OrderService.createOrderDetailed — retry scope (H-4)", () => {
+  it("does not retry when the missing column is another one", async () => {
+    insertResults.push({
+      data: null,
+      error: {
+        code: "42703",
+        message: 'column "otra_columna" of relation "orders" does not exist',
+      },
+    });
+
+    await expect(
+      OrderService.createOrderDetailed(
+        { customer_id: 1, discount_percent: 10 } as never,
+        "admin",
+      ),
+    ).rejects.toMatchObject({ code: "42703" });
+    expect(inserts).toHaveLength(1);
+  });
+
+  it("prices with the same shape for every origin (apply_iva kept, no raw percentage)", async () => {
+    await OrderService.createOrderDetailed(
+      { customer_id: 1, apply_iva: false, discount_percent: "10" } as never,
+      "admin",
+    );
+    await OrderService.createOrderDetailed(
+      { customer_id: 1, apply_iva: false, discount_percent: "10" } as never,
+      "frontend",
+    );
+
+    expect(priceNewOrder.mock.calls[0]![0]).toMatchObject({
+      apply_iva: false,
+      discount_percent: 10,
+    });
+    expect(priceNewOrder.mock.calls[1]![0]).toMatchObject({ apply_iva: false });
+    expect(priceNewOrder.mock.calls[1]![0]).not.toHaveProperty(
+      "discount_percent",
+    );
+  });
+});

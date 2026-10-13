@@ -13,6 +13,29 @@ import {
 import { CouponService, type OrderCouponSnapshot } from "./couponService";
 import { parseDiscountPercent } from "../lib/pricing";
 
+/** Postgres (`undefined_column`) and PostgREST (schema cache) codes for a missing column. */
+const MISSING_COLUMN_CODES: ReadonlySet<string> = new Set([
+  "42703",
+  "PGRST204",
+]);
+
+/**
+ * H-4: whether `error` says that `column` does not exist — the code AND the column name, so a
+ * retry without one column never hides a different missing column.
+ */
+export function isMissingColumnError(error: unknown, column: string): boolean {
+  const { code, message } = (error ?? {}) as {
+    code?: string;
+    message?: string;
+  };
+  return (
+    typeof code === "string" &&
+    MISSING_COLUMN_CODES.has(code) &&
+    typeof message === "string" &&
+    message.includes(column)
+  );
+}
+
 /** H-3: `orders.discount_percent` (migration 0019) missing on create. */
 export const DISCOUNT_PERCENT_COLUMN_WARNING =
   "La orden se creó con el monto del descuento, pero el porcentaje no se guardó: falta aplicar la migración 0019.";
@@ -456,10 +479,15 @@ export class OrderService {
       } = orderData;
       const discountPercent =
         origin === "admin" ? parseDiscountPercent(rawPercent) : null;
-      const pricingInput =
-        discountPercent !== null
-          ? { ...orderData, discount_percent: discountPercent }
-          : { ...insertable, apply_iva: orderData.apply_iva };
+      // H-4: one shape for every origin — the insertable fields plus the two pricing-only inputs,
+      // the percentage only when an admin set a valid one.
+      const pricingInput = {
+        ...insertable,
+        apply_iva: orderData.apply_iva,
+        ...(discountPercent !== null
+          ? { discount_percent: discountPercent }
+          : {}),
+      };
 
       // The money is always recomputed here: client-sent calculated_* values are never persisted.
       const pricedFields = await OrderPricingService.priceNewOrder(
@@ -479,11 +507,9 @@ export class OrderService {
 
       let warning: string | undefined;
       let { data, error } = await insertRow(row);
-      const code = (error as { code?: string } | null)?.code;
       if (
-        error &&
-        (code === "42703" || code === "PGRST204") &&
-        "discount_percent" in row
+        "discount_percent" in row &&
+        isMissingColumnError(error, "discount_percent")
       ) {
         console.error(
           "[OrderService] orders.discount_percent no existe (migración 0019 pendiente):",
