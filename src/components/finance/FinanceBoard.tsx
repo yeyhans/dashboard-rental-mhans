@@ -46,6 +46,11 @@ import {
   type FinanceLists,
 } from "./financePaymentState";
 import { formatMonthDelta, paidMonthOverMonth } from "./financePaidDelta";
+import { FinanceCharts } from "./FinanceCharts";
+import {
+  dueSoon,
+  type FinanceCharts as FinanceChartsData,
+} from "../../lib/financeCharts";
 import {
   financeRowsToCsv,
   formatDay,
@@ -93,6 +98,8 @@ interface FinanceBoardProps {
   now?: Date;
   /** Tab shown first; Pendientes unless a test needs another one rendered. */
   initialTab?: Tab;
+  /** R-03b: `FinanceService.getCharts`; null when it failed to load. */
+  charts?: FinanceChartsData | null;
 }
 
 type Tab = "pendientes" | "pagados" | "finanzas";
@@ -278,6 +285,7 @@ export default function FinanceBoard({
   periodLabel,
   now: nowProp,
   initialTab = "pendientes",
+  charts,
 }: FinanceBoardProps) {
   const [tab, setTab] = useState<Tab>(initialTab);
   // R-03a: the rows live in state so a saved payment moves between tabs without a reload.
@@ -367,6 +375,12 @@ export default function FinanceBoard({
   const paidDelta = useMemo(
     () => paidMonthOverMonth(lists.paidRows, now),
     [lists.paidRows, now],
+  );
+
+  // R-03b: "Por Vencer — Próximos 7 Días", from every loaded pending row (not the filtered view).
+  const dueSoonRows = useMemo(
+    () => dueSoon(lists.pendingRows, now),
+    [lists.pendingRows, now],
   );
 
   const savePayment = async (
@@ -1033,29 +1047,8 @@ export default function FinanceBoard({
             />
           </div>
 
-          <section className="rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-            <h2 className="mb-3 text-sm font-semibold">
-              Composición del período
-            </h2>
-            <div
-              className="h-3 overflow-hidden rounded-full bg-[var(--color-surface-2)]"
-              role="img"
-              aria-label={`Cobrado ${summary.tasaCobranza}% de lo facturado`}
-            >
-              <div
-                className="h-full bg-[var(--color-ok)]"
-                style={{
-                  width: `${Math.min(100, Math.max(0, summary.tasaCobranza))}%`,
-                }}
-              />
-            </div>
-            <p className="mt-3 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
-              La reserva acordada en cada pedido cuenta como cobro recibido en
-              cuanto entra, porque es dinero en caja. El saldo restante sigue en
-              Por Cobrar hasta que el pedido queda pagado completo — mezclar
-              ambos haría desaparecer esa parte de la deuda.
-            </p>
-          </section>
+          {/* R-03b: the canon's charts, over their own 12-month window. */}
+          <FinanceCharts charts={charts ?? null} dueSoon={dueSoonRows} />
         </div>
       )}
 

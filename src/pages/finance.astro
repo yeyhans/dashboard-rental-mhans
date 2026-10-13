@@ -48,6 +48,20 @@ try {
     "No se pudo cargar la cobranza. Recarga la pagina o intentalo en unos minutos.";
 }
 
+// R-03b: the Finanzas tab charts load on their own — a failure there leaves the tables usable
+// and the tab shows its own message instead.
+let charts: Awaited<ReturnType<typeof FinanceService.getCharts>> | null = null;
+if (!loadError) {
+  try {
+    charts = await FinanceService.getCharts(now);
+  } catch (error) {
+    console.error("[finance] Error al cargar los gráficos de finanzas:", {
+      admin: adminSession.admin.email,
+      error,
+    });
+  }
+}
+
 const periodLabel = new Intl.DateTimeFormat("es-CL", {
   month: "long",
   year: "numeric",
@@ -79,7 +93,12 @@ const title = `Finanzas & Cobranza | ${adminSession.admin.email}`;
           </div>
         </>
       ) : (
-        <FinanceBoard client:load data={board} periodLabel={periodLabel} />
+        <FinanceBoard
+          client:load
+          data={board}
+          charts={charts}
+          periodLabel={periodLabel}
+        />
       )
     }
   </div>

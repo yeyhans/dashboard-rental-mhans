@@ -17,6 +17,20 @@ import {
   type PaymentUpdate,
   type PendingKpis,
 } from '../lib/finance';
+import { buildFinanceCharts, trailingMonths, type ChartOrder, type FinanceCharts } from '../lib/financeCharts';
+
+/**
+ * R-03b: rows fetched per request for the charts. PostgREST caps a response (1000 rows by
+ * default), so the window is read in pages instead of trusting one `limit`.
+ */
+const CHART_PAGE_SIZE = 1000;
+const CHART_MAX_PAGES = 20;
+
+function clientName(row: any): string {
+  const company = row.billing_company?.trim();
+  const person = `${row.billing_first_name ?? ''} ${row.billing_last_name ?? ''}`.trim();
+  return company || person || 'Sin cliente';
+}
 
 export interface FinanceRow {
   id: number;
@@ -141,6 +155,59 @@ export class FinanceService {
         .filter(r => r.fullyPaid)
         .sort((a, b) => (b.paidAt ?? '').localeCompare(a.paidAt ?? '')),
     };
+  }
+
+  /**
+   * R-03b: the Finanzas tab — 12-month series and indicators, aggregated here so the page
+   * receives a few hundred numbers instead of every order. `getBoard` keeps its 500-row cap for
+   * the tables; the charts must not inherit it, or the newest months would be the ones cut.
+   */
+  static async getCharts(now: Date = new Date(), months = 12): Promise<FinanceCharts> {
+    FinanceService.ensureSupabaseAdmin();
+
+    // One day before the first month, so the business-zone bucketing (Chile is behind UTC) can
+    // trim the edge instead of losing the first hours of the window.
+    const [year, month] = trailingMonths(now, months)[0]!.split('-').map(Number) as [number, number];
+    const since = new Date(Date.UTC(year, month - 1, 1) - 86_400_000).toISOString().slice(0, 10);
+
+    const rows: any[] = [];
+    for (let page = 0; page < CHART_MAX_PAGES; page++) {
+      const from = page * CHART_PAGE_SIZE;
+      const { data, error } = await supabaseAdmin!
+        .from('orders')
+        .select(
+          'id, status, date_created, calculated_total, pago_reserva, pago_completo, ' +
+            'reserve_type, reserve_value, numero_factura, ' +
+            'billing_first_name, billing_last_name, billing_company, user_profiles(tipo_cliente)'
+        )
+        .gte('date_created', since)
+        .order('id', { ascending: true })
+        .range(from, from + CHART_PAGE_SIZE - 1);
+
+      if (error) throw error;
+      rows.push(...(data ?? []));
+      if (!data || data.length < CHART_PAGE_SIZE) break;
+    }
+
+    const orders: ChartOrder[] = rows.map((row: any) => {
+      const profile = Array.isArray(row.user_profiles) ? row.user_profiles[0] : row.user_profiles;
+      const tipo = profile?.tipo_cliente;
+      return {
+        status: row.status,
+        total: Number(row.calculated_total) || 0,
+        reservePaid: !!row.pago_reserva,
+        fullyPaid: !!row.pago_completo,
+        endDate: null,
+        reserveType: row.reserve_type,
+        reserveValue: row.reserve_value,
+        createdAt: row.date_created,
+        client: clientName(row),
+        clientType: tipo === 'empresa' || tipo === 'natural' ? tipo : null,
+        invoiceNumber: row.numero_factura ?? null,
+      };
+    });
+
+    return buildFinanceCharts(orders, now, months);
   }
 
   /**

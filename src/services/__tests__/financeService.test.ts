@@ -13,6 +13,10 @@ const state = vi.hoisted(() => ({
     data: unknown;
     error: unknown;
   },
+  // R-03b: the chart query, paged with `range`.
+  gteArgs: [] as unknown[][],
+  ranges: [] as number[][],
+  pages: [] as unknown[][],
 }));
 
 vi.mock("../../lib/supabase", () => ({
@@ -28,6 +32,20 @@ vi.mock("../../lib/supabase", () => ({
                 limit: async () => ({ data: state.rows, error: null }),
               }),
             }),
+            gte: (...args: unknown[]) => {
+              state.gteArgs.push(args);
+              return {
+                order: () => ({
+                  range: async (from: number, to: number) => {
+                    state.ranges.push([from, to]);
+                    return {
+                      data: state.pages[state.ranges.length - 1] ?? [],
+                      error: null,
+                    };
+                  },
+                }),
+              };
+            },
           };
         },
         update: (payload: unknown) => {
@@ -154,5 +172,44 @@ describe("FinanceService.updatePayment", () => {
     await expect(
       FinanceService.updatePayment(7, { paid: false }, now),
     ).rejects.toEqual({ message: "boom" });
+  });
+});
+
+describe("FinanceService.getCharts (R-03b)", () => {
+  beforeEach(() => {
+    state.gteArgs = [];
+    state.ranges = [];
+    state.pages = [];
+  });
+
+  it("aggregates server-side over a dated window, paging past the row cap", async () => {
+    const chartRow = (id: number, overrides: Record<string, unknown> = {}) => ({
+      ...order({ id, date_created: "2026-10-05T12:00:00Z" }),
+      user_profiles: { tipo_cliente: "empresa" },
+      ...overrides,
+    });
+    const fullPage = Array.from({ length: 1000 }, (_, i) => chartRow(i + 1));
+    state.pages = [fullPage, [chartRow(1001, { status: "cancelled" })]];
+
+    const charts = await FinanceService.getCharts(
+      new Date("2026-10-13T15:00:00.000Z"),
+    );
+
+    // The window starts before the first month so the business-zone bucketing can trim it.
+    expect(state.gteArgs[0]![0]).toBe("date_created");
+    expect(String(state.gteArgs[0]![1]) < "2025-11-01").toBe(true);
+    expect(state.selectColumns).toContain("user_profiles(tipo_cliente)");
+    expect(state.ranges).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+    expect(charts.months.at(-1)).toMatchObject({
+      month: "2026-10",
+      pedidos: 1000,
+      ingresos: 100000000,
+    });
+    expect(charts.composition).toEqual([
+      { key: "empresa", label: "Empresa", value: 100000000, share: 100 },
+    ]);
   });
 });

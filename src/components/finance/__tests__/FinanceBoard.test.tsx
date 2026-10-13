@@ -277,3 +277,97 @@ describe("FinanceBoard — R-03a Pagados to canon", () => {
     expect(html).toContain("0% vs mes anterior");
   });
 });
+
+describe("FinanceBoard — R-03b Finanzas charts", () => {
+  const now = new Date("2026-10-13T15:00:00.000Z");
+  const charts = {
+    windowStart: "2025-11",
+    months: [
+      {
+        month: "2026-10",
+        ingresos: 200000,
+        cobrado: 125000,
+        pendiente: 75000,
+        brecha: 75000,
+        pedidos: 2,
+      },
+    ],
+    composition: [
+      { key: "empresa" as const, label: "Empresa", value: 300000, share: 75 },
+      {
+        key: "natural" as const,
+        label: "Persona natural",
+        value: 100000,
+        share: 25,
+      },
+    ],
+    collectionRate: 63,
+    dso: 42,
+    reserves: { cobradas: 15, pendientes: 3 },
+    invoices: { emitidas: 10, pendientes: 8 },
+    topClients: [
+      {
+        client: "Estudio Sur",
+        clientType: "empresa" as const,
+        total: 500000,
+        orders: 2,
+        cobranza: 80,
+      },
+    ],
+  };
+
+  it("draws the canon blocks backed by real data", () => {
+    const html = renderToStaticMarkup(
+      <FinanceBoard
+        data={makeData({
+          pendingRows: [
+            row({
+              id: 5,
+              reference: "#0005",
+              endDate: "2026-10-15",
+              outstanding: 75000,
+            }),
+          ],
+        })}
+        charts={charts}
+        periodLabel="octubre 2026"
+        now={now}
+        initialTab="finanzas"
+      />,
+    );
+
+    for (const title of [
+      "Ingresos Últimos 12 Meses",
+      "Cobrado vs. Pendiente",
+      "Pedidos Realizados",
+      "Flujo de Caja — Ingresos vs. Cobros",
+      "Composición del Ingreso",
+      "DSO — Días para cobrar",
+      "Tasa de cobranza",
+      "Facturas emitidas vs. pendientes",
+      "Reservas cobradas vs. pendientes",
+      "Top Clientes del Período",
+      "Por Vencer — Próximos 7 Días",
+    ]) {
+      expect(html).toContain(title);
+    }
+    expect(html).toContain("42 días");
+    expect(html).toContain("15 de 18");
+    expect(html).toContain("Estudio Sur");
+    expect(html).toContain("#0005");
+    expect(html).not.toContain("Salud Financiera");
+  });
+
+  it("says so when the charts could not load", () => {
+    const html = renderToStaticMarkup(
+      <FinanceBoard
+        data={makeData()}
+        charts={null}
+        periodLabel="octubre 2026"
+        now={now}
+        initialTab="finanzas"
+      />,
+    );
+    expect(html).toContain("No se pudieron cargar los gráficos de finanzas");
+  });
+});
