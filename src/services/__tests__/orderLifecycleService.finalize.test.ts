@@ -244,7 +244,7 @@ describe("OrderLifecycleService.finalizeReturn — resumable (H-2)", () => {
     expect(reportWrites).toEqual([]);
   });
 
-  it("saves the missing report when a previous close completed the order but not the report", async () => {
+  it("lets an admin write the missing report of an already completed order", async () => {
     getOrderById.mockResolvedValue({
       id: 7,
       status: "completed",
@@ -252,7 +252,9 @@ describe("OrderLifecycleService.finalizeReturn — resumable (H-2)", () => {
     });
     vi.spyOn(OrderLifecycleService, "getReturnReport").mockResolvedValue(null);
 
-    const result = await OrderLifecycleService.finalizeReturn(input());
+    const result = await OrderLifecycleService.finalizeReturn(
+      input({ role: "admin" }),
+    );
 
     expect(result.steps).toEqual([]);
     expect(updateOrderStatus).not.toHaveBeenCalled();
@@ -279,6 +281,49 @@ describe("OrderLifecycleService.finalizeReturn — resumable (H-2)", () => {
     expect(error.code).toBe("PARTIAL_CLOSE");
     expect(error.currentStatus).toBe("return");
     expect(error.message).toContain("Devolución");
+    expect(reportWrites).toEqual([]);
+  });
+});
+
+/* H-3: the completed shortcut never rewrites, and an operator cannot report on an order that
+   was completed by another path. */
+describe("OrderLifecycleService.finalizeReturn — completed orders (H-3)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    reportWrites.length = 0;
+  });
+
+  it("never rewrites an existing report, whoever asks", async () => {
+    getOrderById.mockResolvedValue({
+      id: 7,
+      status: "completed",
+      order_fecha_termino: "2026-10-12",
+    });
+    vi.spyOn(OrderLifecycleService, "getReturnReport").mockResolvedValue({
+      lines: [],
+    });
+
+    for (const role of ["admin", "operator"]) {
+      const result = await OrderLifecycleService.finalizeReturn(
+        input({ role }),
+      );
+      expect(result.steps).toEqual([]);
+    }
+    expect(reportWrites).toEqual([]);
+  });
+
+  it("refuses an operator report on a completed order without one (409)", async () => {
+    getOrderById.mockResolvedValue({
+      id: 7,
+      status: "completed",
+      order_fecha_termino: "2026-10-12",
+    });
+    vi.spyOn(OrderLifecycleService, "getReturnReport").mockResolvedValue(null);
+
+    await expect(
+      OrderLifecycleService.finalizeReturn(input({ role: "operator" })),
+    ).rejects.toMatchObject({ status: 409, code: "ALREADY_COMPLETED" });
     expect(reportWrites).toEqual([]);
   });
 });

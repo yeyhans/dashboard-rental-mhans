@@ -534,40 +534,68 @@ export default function CheckInReceptionPanel({
           <p className="text-xs text-[var(--color-text-secondary)]">
             El pedido pasará a Completado.
           </p>
-          {closeError && (
-            <p
-              role="alert"
-              className="rounded-[6px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-2 text-xs text-[var(--color-crit)]"
-            >
-              {closeError}
-            </p>
-          )}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={closing}
-              onClick={() => setConfirmOpen(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              variant={
-                finalize.variant === "incident" ? "destructive" : "default"
-              }
-              disabled={closing}
-              onClick={handleConfirmClose}
-            >
-              {closing
-                ? "Cerrando…"
-                : closeError
-                  ? "Reintentar cierre"
-                  : "Confirmar cierre"}
-            </Button>
-          </DialogFooter>
+          <FinalizeConfirmActions
+            closeError={closeError}
+            closing={closing}
+            variant={finalize.variant}
+            onCancel={() => setConfirmOpen(false)}
+            onConfirm={handleConfirmClose}
+          />
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/**
+ * The finalize dialog's alert + buttons. Its own component so the partial-close state (H-2) can be
+ * render-tested: a Radix dialog does not render its content until it is open.
+ */
+export function FinalizeConfirmActions({
+  closeError,
+  closing,
+  variant,
+  onCancel,
+  onConfirm,
+}: {
+  closeError: string | null;
+  closing: boolean;
+  variant: "ok" | "incident";
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <>
+      {closeError && (
+        <p
+          role="alert"
+          className="rounded-[6px] border border-[var(--color-crit)] bg-[var(--color-crit-bg)] p-2 text-xs text-[var(--color-crit)]"
+        >
+          {closeError}
+        </p>
+      )}
+      <DialogFooter>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={closing}
+          onClick={onCancel}
+        >
+          Cancelar
+        </Button>
+        <Button
+          type="button"
+          variant={variant === "incident" ? "destructive" : "default"}
+          disabled={closing}
+          onClick={onConfirm}
+        >
+          {closing
+            ? "Cerrando…"
+            : closeError
+              ? "Reintentar cierre"
+              : "Confirmar cierre"}
+        </Button>
+      </DialogFooter>
+    </>
   );
 }

@@ -128,7 +128,9 @@ export const POST: APIRoute = async (context) => {
     // la usa el frontend de clientes, una sesión admin no la envía.
     const origin = validateFrontendApiKey(context.request) ? 'frontend' : 'admin';
 
-    const order = await OrderService.createOrder({
+    // H-3: createOrderDetailed also returns the non-fatal warning of the save (e.g. the
+    // discount percentage not stored before migration 0019).
+    const { order, warning } = await OrderService.createOrderDetailed({
       ...orderData,
       date_created: new Date().toISOString(),
       date_modified: new Date().toISOString(),
@@ -140,7 +142,8 @@ export const POST: APIRoute = async (context) => {
 
     return new Response(JSON.stringify({
       success: true,
-      data: order
+      data: order,
+      ...(warning ? { warning } : {})
     }), {
       status: 201,
       headers: {

@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   PricingError,
   computeOrderTotals,
+  discountPercentPayload,
   initialManualDiscount,
   manualDiscountAmount,
   manualDiscountPricing,
@@ -132,5 +135,53 @@ describe("manual discount control helpers", () => {
       mode: "fixed",
       value: "",
     });
+  });
+});
+
+/** H-3: the edit form sends `discount_percent` only when the discount control was touched. */
+describe("discountPercentPayload", () => {
+  it("leaves the field out when the control was not touched", () => {
+    expect(
+      discountPercentPayload(
+        { mode: "fixed", value: "" },
+        { touched: false, couponApplied: false },
+      ),
+    ).toBeUndefined();
+  });
+
+  it("sends the percentage, or null to clear it, once touched", () => {
+    expect(
+      discountPercentPayload(
+        { mode: "percent", value: "10" },
+        { touched: true, couponApplied: false },
+      ),
+    ).toBe(10);
+    expect(
+      discountPercentPayload(
+        { mode: "fixed", value: "5000" },
+        { touched: true, couponApplied: false },
+      ),
+    ).toBeNull();
+  });
+
+  it("never sends it while a coupon is applied", () => {
+    expect(
+      discountPercentPayload(
+        { mode: "percent", value: "10" },
+        { touched: true, couponApplied: true },
+      ),
+    ).toBeUndefined();
+  });
+
+  it("is what ProcessOrder uses to build the payload", () => {
+    const source = readFileSync(
+      fileURLToPath(
+        new URL("../../components/orders/ProcessOrder.tsx", import.meta.url),
+      ),
+      "utf8",
+    );
+    expect(source).toContain(
+      "discount_percent: discountPercentPayload(manualDiscount, {",
+    );
   });
 });

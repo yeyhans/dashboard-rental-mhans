@@ -14,7 +14,9 @@ vi.mock("../../../services/apiClient", () => ({
   },
 }));
 
-import CheckInReceptionPanel from "../CheckInReceptionPanel";
+import CheckInReceptionPanel, {
+  FinalizeConfirmActions,
+} from "../CheckInReceptionPanel";
 import type { CheckInListEntry } from "../../../services/checkInService";
 
 const source = readFileSync(
@@ -144,5 +146,45 @@ describe("CheckInReceptionPanel — partial close (H-2)", () => {
     expect(source).toContain("setCloseError(");
     expect(source).toMatch(/role="alert"[\s\S]{0,200}\{closeError\}/);
     expect(source).toContain("Reintentar cierre");
+  });
+});
+
+/** H-3: render test of the partial-close state of the finalize dialog. */
+describe("FinalizeConfirmActions (H-3)", () => {
+  const props = {
+    closing: false,
+    variant: "ok" as const,
+    onCancel: () => {},
+    onConfirm: () => {},
+  };
+
+  it("shows the partial-close alert and turns the confirm button into a retry", () => {
+    const html = renderToStaticMarkup(
+      <FinalizeConfirmActions
+        {...props}
+        closeError="La devolución quedó a medias: el pedido está en «Devolución»."
+      />,
+    );
+    expect(html).toMatch(
+      /role="alert"[^>]*>La devolución quedó a medias: el pedido está en «Devolución»\.</,
+    );
+    expect(html).toContain(">Reintentar cierre<");
+    expect(html).not.toContain(">Confirmar cierre<");
+  });
+
+  it("offers a plain confirmation without an error", () => {
+    const html = renderToStaticMarkup(
+      <FinalizeConfirmActions {...props} closeError={null} />,
+    );
+    expect(html).not.toContain('role="alert"');
+    expect(html).toContain(">Confirmar cierre<");
+  });
+
+  it("disables both buttons while closing", () => {
+    const html = renderToStaticMarkup(
+      <FinalizeConfirmActions {...props} closing closeError={null} />,
+    );
+    expect(html.match(/disabled=""/g)).toHaveLength(2);
+    expect(html).toContain(">Cerrando…<");
   });
 });

@@ -55,3 +55,17 @@ describe("OrderDriverField — refresh (H-2)", () => {
     expect(source).toContain("Volver a comprobar");
   });
 });
+
+/** H-3: an older reload never lands after a newer one, and a good reload clears an old error. */
+describe("OrderDriverField — reload hygiene (H-3)", () => {
+  it("drops out-of-order responses", () => {
+    expect(source).toContain("const seq = ++loadSeq.current;");
+    expect(source).toContain("seq !== loadSeq.current");
+  });
+
+  it("clears a previous load error on a successful reload", () => {
+    expect(source).toContain(
+      'setFeedback((prev) => (prev?.tone === "error" ? null : prev));',
+    );
+  });
+});

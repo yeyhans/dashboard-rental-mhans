@@ -8,7 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const createOrder = vi.fn();
 
 vi.mock('../../../../services/orderService', () => ({
-  OrderService: { createOrder, getAllOrders: vi.fn(), getOrderStats: vi.fn() },
+  OrderService: {
+    createOrder,
+    createOrderDetailed: async (...args: unknown[]) => ({ order: await (createOrder as any)(...args) }), getAllOrders: vi.fn(), getOrderStats: vi.fn() },
 }));
 
 const isFrontendApiKeyOrAdmin = vi.fn();

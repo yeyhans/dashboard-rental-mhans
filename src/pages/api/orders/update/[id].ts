@@ -17,6 +17,11 @@ import { withAuth } from "../../../../middleware/auth";
 // The email hop runs after the order is saved and itself waits on the mail worker. Without a
 // deadline a slow hop froze the admin's tab (A-03); the worker call inside is bounded tighter.
 const NOTIFICATION_TIMEOUT_MS = 20_000;
+/** Several non-fatal problems in one save are all reported, never overwritten (H-2/H-3). */
+function appendWarning(current: string | undefined, next: string): string {
+  return current ? `${current} ${next}` : next;
+}
+
 const NOTIFICATION_WARNING =
   "La orden se guardó, pero no se pudo enviar el correo al cliente.";
 
@@ -324,9 +329,7 @@ export const PUT: APIRoute = withAuth(
                 error: errorText,
               },
             );
-            warning = warning
-              ? `${warning} ${NOTIFICATION_WARNING}`
-              : NOTIFICATION_WARNING;
+            warning = appendWarning(warning, NOTIFICATION_WARNING);
           } else {
             console.log(
               "✅ [Order Update] Notification email sent successfully",
@@ -345,9 +348,7 @@ export const PUT: APIRoute = withAuth(
                   : notificationError,
             },
           );
-          warning = warning
-            ? `${warning} ${NOTIFICATION_WARNING}`
-            : NOTIFICATION_WARNING;
+          warning = appendWarning(warning, NOTIFICATION_WARNING);
         }
       }
 
@@ -365,9 +366,7 @@ export const PUT: APIRoute = withAuth(
           String(newStatus),
         );
         if (lifecycle.warning) {
-          warning = warning
-            ? `${warning} ${lifecycle.warning}`
-            : lifecycle.warning;
+          warning = appendWarning(warning, lifecycle.warning);
         }
       }
 

@@ -11,6 +11,11 @@ import {
   type OrderCallerOrigin,
 } from "./orderPricingService";
 import { CouponService, type OrderCouponSnapshot } from "./couponService";
+import { parseDiscountPercent } from "../lib/pricing";
+
+/** H-3: `orders.discount_percent` (migration 0019) missing on create. */
+export const DISCOUNT_PERCENT_COLUMN_WARNING =
+  "La orden se creó con el monto del descuento, pero el porcentaje no se guardó: falta aplicar la migración 0019.";
 
 type Order = Database["public"]["Tables"]["orders"]["Row"];
 type OrderInsert = Database["public"]["Tables"]["orders"]["Insert"];
@@ -424,20 +429,70 @@ export class OrderService {
     orderData: OrderInsert & { apply_iva?: boolean },
     origin: OrderCallerOrigin = "admin",
   ): Promise<Order> {
+    return (await OrderService.createOrderDetailed(orderData, origin)).order;
+  }
+
+  /**
+   * `createOrder` plus the non-fatal warning of the save (H-3), for `POST /api/orders`.
+   *
+   * `discount_percent` (R-05, migration 0019): only an admin may set it — a customer's value is
+   * dropped, never stored, since a later admin edit would recompute the discount from it. Before
+   * 0019 is applied the insert is retried without the column; the discount amount is still saved
+   * and the warning says the percentage was not.
+   */
+  static async createOrderDetailed(
+    orderData: OrderInsert & {
+      apply_iva?: boolean;
+      discount_percent?: unknown;
+    },
+    origin: OrderCallerOrigin = "admin",
+  ): Promise<{ order: Order; warning?: string }> {
     try {
+      // `apply_iva` is a pricing input only; `orders` has no such column.
+      const {
+        apply_iva: _applyIva,
+        discount_percent: rawPercent,
+        ...insertable
+      } = orderData;
+      const discountPercent =
+        origin === "admin" ? parseDiscountPercent(rawPercent) : null;
+      const pricingInput =
+        discountPercent !== null
+          ? { ...orderData, discount_percent: discountPercent }
+          : { ...insertable, apply_iva: orderData.apply_iva };
+
       // The money is always recomputed here: client-sent calculated_* values are never persisted.
       const pricedFields = await OrderPricingService.priceNewOrder(
-        orderData,
+        pricingInput as never,
         origin,
       );
-      // `apply_iva` is a pricing input only; `orders` has no such column.
-      const { apply_iva: _applyIva, ...insertable } = orderData;
 
-      const { data, error } = await supabaseAdmin
-        .from("orders")
-        .insert([{ ...insertable, ...pricedFields }])
-        .select()
-        .single();
+      const row: Record<string, unknown> = { ...insertable, ...pricedFields };
+      if (discountPercent !== null) row.discount_percent = discountPercent;
+
+      const insertRow = (values: Record<string, unknown>) =>
+        supabaseAdmin
+          .from("orders")
+          .insert([values as never])
+          .select()
+          .single();
+
+      let warning: string | undefined;
+      let { data, error } = await insertRow(row);
+      const code = (error as { code?: string } | null)?.code;
+      if (
+        error &&
+        (code === "42703" || code === "PGRST204") &&
+        "discount_percent" in row
+      ) {
+        console.error(
+          "[OrderService] orders.discount_percent no existe (migración 0019 pendiente):",
+          { customerId: row.customer_id },
+        );
+        delete row.discount_percent;
+        ({ data, error } = await insertRow(row));
+        if (!error) warning = DISCOUNT_PERCENT_COLUMN_WARNING;
+      }
 
       if (error) {
         throw error;
@@ -462,7 +517,10 @@ export class OrderService {
         total_tax: data.total_tax || 0,
       };
 
-      return orderWithCalculatedFields;
+      return {
+        order: orderWithCalculatedFields,
+        ...(warning ? { warning } : {}),
+      };
     } catch (error) {
       console.error("Error creating order:", error);
       throw error;

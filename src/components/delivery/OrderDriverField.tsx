@@ -36,14 +36,18 @@ export default function OrderDriverField({ orderId }: OrderDriverFieldProps) {
   const dirtyRef = useRef(false);
   dirtyRef.current = value.trim() !== saved;
   const aliveRef = useRef(true);
+  // H-3: focus reloads can overlap; only the latest one may write state.
+  const loadSeq = useRef(0);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
+    const isCurrent = () => aliveRef.current && seq === loadSeq.current;
     try {
       const response = await apiClient.get(
         `/api/delivery/orders/${orderId}/driver`,
       );
       const payload = await response.json().catch(() => null);
-      if (!aliveRef.current) return;
+      if (!aliveRef.current || seq !== loadSeq.current) return;
       if (!response.ok || !payload?.success) {
         setFeedback({
           tone: "error",
@@ -56,11 +60,13 @@ export default function OrderDriverField({ orderId }: OrderDriverFieldProps) {
       setSaved(current);
       setKnownDrivers(payload.data.knownDrivers ?? []);
       setHasShipment(payload.data.shipmentId !== null);
+      // A good reload clears an earlier load error; a "guardado" message stays.
+      setFeedback((prev) => (prev?.tone === "error" ? null : prev));
     } catch {
-      if (aliveRef.current)
+      if (isCurrent())
         setFeedback({ tone: "error", message: "Error de conexión." });
     } finally {
-      if (aliveRef.current) setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, [orderId]);
 

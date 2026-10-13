@@ -20,7 +20,7 @@ import { apiClient } from '@/services/apiClient';
 import OrderDriverField from '@/components/delivery/OrderDriverField';
 import ReturnReportSummary from '@/components/checkin/ReturnReportSummary';
 import OrderDiscountControl from '@/components/orders/OrderDiscountControl';
-import { initialManualDiscount, manualDiscountPricing, type ManualDiscountInput } from '@/lib/pricing';
+import { discountPercentPayload, initialManualDiscount, manualDiscountPricing, type ManualDiscountInput } from '@/lib/pricing';
 import type { Database } from '@/types/database';
 import { toast } from 'sonner';
 import { WarrantyImageUpload } from './WarrantyImageUpload';
@@ -108,6 +108,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     const storedAmount = hasStoredCoupon ? 0 : parseFloat(String(orderData?.calculated_discount ?? 0)) || 0;
     return initialManualDiscount(hasStoredCoupon ? null : (orderData as any)?.discount_percent, storedAmount);
   });
+  // H-3: `discount_percent` is sent only once the admin touches the control.
+  const [manualDiscountTouched, setManualDiscountTouched] = useState(false);
 
   // Financial editing states
   const [isEditingFinancials, setIsEditingFinancials] = useState(false);
@@ -686,7 +688,11 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         calculated_subtotal: calculations.calculated_subtotal,
         calculated_discount: calculations.calculated_discount, // Descuento aplicado (cupones)
         // R-05: the percentage travels so the server recomputes; null clears it (flat or none).
-        discount_percent: appliedCoupon ? undefined : manualDiscountInputs.discountPercent,
+        // H-3: only when the discount control was touched (see `discountPercentPayload`).
+        discount_percent: discountPercentPayload(manualDiscount, {
+          touched: manualDiscountTouched,
+          couponApplied: Boolean(appliedCoupon),
+        }),
         calculated_iva: calculations.calculated_iva,
         apply_iva: applyIva,
         shipping_total: deliveryMethod === 'pickup' ? 0 : shipping,
@@ -3278,7 +3284,10 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                 <OrderDiscountControl
                   idPrefix={`order-${orderData.id}`}
                   value={manualDiscount}
-                  onChange={setManualDiscount}
+                  onChange={(next) => {
+                    setManualDiscount(next);
+                    setManualDiscountTouched(true);
+                  }}
                   productsSubtotal={calculateEditedSubtotal()}
                   disabled={Boolean(appliedCoupon)}
                 />

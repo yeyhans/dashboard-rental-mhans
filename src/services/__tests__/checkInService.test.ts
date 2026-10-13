@@ -182,3 +182,36 @@ describe("CheckInService.getBoard — bounds (H-2)", () => {
     }
   });
 });
+
+describe("CheckInService.getBoard — KPI limit (H-3)", () => {
+  afterEach(() => {
+    queries.length = 0;
+    results.length = 0;
+    fromCount = 0;
+    vi.restoreAllMocks();
+  });
+
+  it("warns when a KPI query hits the row limit instead of truncating silently", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    results[1] = {
+      data: Array.from({ length: CHECK_IN_KPI_ROW_LIMIT }, () => ({
+        status: "return",
+        order_fecha_termino: "2026-10-10",
+      })),
+      error: null,
+    };
+
+    await CheckInService.getBoard(NOW);
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("[CheckInService]"),
+      expect.objectContaining({ limit: CHECK_IN_KPI_ROW_LIMIT }),
+    );
+  });
+
+  it("stays quiet under the limit", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await CheckInService.getBoard(NOW);
+    expect(warn).not.toHaveBeenCalled();
+  });
+});

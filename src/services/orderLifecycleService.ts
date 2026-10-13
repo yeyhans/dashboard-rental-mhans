@@ -128,13 +128,27 @@ export class OrderLifecycleService {
       const existing = await OrderLifecycleService.getReturnReport(
         input.orderId,
       );
-      const warning = existing
-        ? undefined
-        : await OrderLifecycleService.saveReturnReport(input.orderId, {
-            finalized_at: new Date().toISOString(),
-            finalized_by: input.actorId ?? null,
-            lines: report.lines,
-          });
+      // H-3: an existing report is never rewritten — re-running the close is a no-op success.
+      if (existing) return { steps: [], order };
+
+      // A completed order without a report was either a close whose report write failed, or an
+      // order completed by another path (the admin status route). Only an admin may attach a
+      // report to it; an operator never decides about an order they did not close here.
+      if (input.role !== "admin" && input.role !== "super_admin") {
+        throw new ReturnFinalizeError(
+          409,
+          "El pedido ya está completado. Pide a un administrador que registre el informe de devolución.",
+          "ALREADY_COMPLETED",
+        );
+      }
+      const warning = await OrderLifecycleService.saveReturnReport(
+        input.orderId,
+        {
+          finalized_at: new Date().toISOString(),
+          finalized_by: input.actorId ?? null,
+          lines: report.lines,
+        },
+      );
       return { steps: [], order, ...(warning ? { warning } : {}) };
     }
 

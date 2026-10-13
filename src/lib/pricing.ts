@@ -189,13 +189,16 @@ function percentDiscount(productsSubtotal: number, percent: number): number {
  * R-05: server-side reading of `orders.discount_percent`. Empty means "no percentage"; anything
  * else must be a number in (0, 100] with at most two decimals (the column is numeric(5,2)).
  */
+/** The one range rule for a manual percentage: (0, 100]. */
+function isPercentInRange(value: number): boolean {
+  return Number.isFinite(value) && value > 0 && value <= 100;
+}
+
 export function parseDiscountPercent(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
   const parsed = toNumber(value as NumericLike);
   if (
-    !Number.isFinite(parsed) ||
-    parsed <= 0 ||
-    parsed > 100 ||
+    !isPercentInRange(parsed) ||
     Math.abs(Math.round(parsed * 100) - parsed * 100) > 1e-9
   ) {
     throw new PricingError('El descuento porcentual debe ser mayor que 0 y como máximo 100, con hasta dos decimales');
@@ -218,7 +221,7 @@ export function manualDiscountPricing(input: ManualDiscountInput): {
   const value = toNumber(input.value === '' ? null : input.value);
   if (!Number.isFinite(value) || value <= 0) return { discount: null, discountPercent: null };
   if (input.mode === 'percent') {
-    return { discount: null, discountPercent: value <= 100 ? value : null };
+    return { discount: null, discountPercent: isPercentInRange(value) ? value : null };
   }
   return { discount: value, discountPercent: null };
 }
@@ -228,6 +231,19 @@ export function manualDiscountAmount(input: ManualDiscountInput, productsSubtota
   const { discount, discountPercent } = manualDiscountPricing(input);
   if (discountPercent !== null) return percentDiscount(productsSubtotal, discountPercent);
   return discount !== null ? clampDiscount(discount, productsSubtotal) : 0;
+}
+
+/**
+ * H-3: the edit form's `discount_percent` field. Left out (`undefined`) unless the admin touched
+ * the discount control, so an ordinary save does not write a column that may not exist yet
+ * (migration 0019) or clear a percentage it never showed; left out while a coupon applies.
+ */
+export function discountPercentPayload(
+  input: ManualDiscountInput,
+  state: { touched: boolean; couponApplied: boolean },
+): number | null | undefined {
+  if (!state.touched || state.couponApplied) return undefined;
+  return manualDiscountPricing(input).discountPercent;
 }
 
 /** Initial control state from the stored order: its percentage, else its flat amount. */
@@ -274,7 +290,7 @@ export function computeOrderTotals(input: OrderTotalsInput): OrderTotals {
   const percent = toNumber(input.discountPercent ?? null);
   if (input.coupon) {
     discount = computeDiscount(input.coupon, productsSubtotal);
-  } else if (Number.isFinite(percent) && percent > 0 && percent <= 100) {
+  } else if (isPercentInRange(percent)) {
     discount = percentDiscount(productsSubtotal, percent);
   } else {
     const manual = toNumber(input.discount);

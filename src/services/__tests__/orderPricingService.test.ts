@@ -299,3 +299,16 @@ describe('OrderPricingService.priceOrderUpdate — discount_percent', () => {
     ).rejects.toThrow(PricingError);
   });
 });
+
+/** H-3: a new admin order may carry a manual percentage; a customer's is ignored. */
+describe('OrderPricingService.priceNewOrder — discount_percent', () => {
+  it('prices an admin order with its percentage', async () => {
+    const fields = await OrderPricingService.priceNewOrder({ ...order1573, discount_percent: 10 }, 'admin');
+    expect(fields.calculated_discount).toBe(8100);
+  });
+
+  it('ignores a percentage sent by the customer frontend', async () => {
+    const fields = await OrderPricingService.priceNewOrder({ ...order1573, discount_percent: 10 }, 'frontend');
+    expect(fields.calculated_discount).toBe(0);
+  });
+});

@@ -195,6 +195,9 @@ export class OrderPricingService {
         shippingTotal: asNumeric(orderData.shipping_total),
         coupon,
         discount: origin === 'admin' ? asNumeric(orderData.calculated_discount) : null,
+        // H-3: only an admin may set a manual percentage; a customer's is ignored here and
+        // stripped before the insert (`OrderService.createOrderDetailed`).
+        discountPercent: origin === 'admin' ? parseDiscountPercent(orderData.discount_percent) : null,
         applyIva: orderData.apply_iva !== false,
       })
     );

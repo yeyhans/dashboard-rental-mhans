@@ -173,6 +173,19 @@ export class CheckInService {
     if (open.error) throw open.error;
     if (closedToday.error) throw closedToday.error;
 
+    // H-3: hitting the bound means the counters may be short; say so in the logs.
+    for (const [query, rows] of [
+      ["devoluciones abiertas", open.data],
+      ["cerradas hoy", closedToday.data],
+    ] as const) {
+      if ((rows?.length ?? 0) >= CHECK_IN_KPI_ROW_LIMIT) {
+        console.warn(
+          "[CheckInService] Indicadores truncados: la consulta llegó al límite de filas",
+          { query, limit: CHECK_IN_KPI_ROW_LIMIT },
+        );
+      }
+    }
+
     const rows = [...(open.data ?? []), ...(closedToday.data ?? [])];
     return checkInKpis(
       rows.map((row: any) => ({
