@@ -12,6 +12,9 @@ import { supabaseAdmin } from "../lib/supabase";
 export const CONTRACT_GENERATION_WARNING =
   "El estado se actualizó, pero no se pudo generar el contrato de la orden. Genéralo manualmente desde la orden.";
 
+/** Upper bound for render + upload; matches the email hop's deadline in the update route. */
+export const CONTRACT_GENERATION_TIMEOUT_MS = 20_000;
+
 export interface LifecycleOrder {
   id: number;
   new_pdf_processing_url?: string | null;
@@ -57,8 +60,54 @@ export class OrderLifecycleService {
    * blocks as `POST /api/order/generate-processing-pdf`, but it throws on any failure instead
    * of falling back to a base64 URL, since a data URL must never be stored on the order.
    * The PDF modules are imported lazily so importing this service stays cheap.
+   *
+   * Bounded by `CONTRACT_GENERATION_TIMEOUT_MS`: the caller is a status request an admin is
+   * waiting on. At the deadline the upload is aborted and the URL is never stored, even if the
+   * render finishes later, so a late result cannot overwrite anything.
    */
   static async generateRentalContract(orderId: number): Promise<string> {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(
+          new Error(
+            `La generación del contrato superó el tiempo límite de ${CONTRACT_GENERATION_TIMEOUT_MS / 1000} s`,
+          ),
+        );
+      }, CONTRACT_GENERATION_TIMEOUT_MS);
+    });
+
+    try {
+      const pdfUrl = await Promise.race([
+        OrderLifecycleService.renderAndUpload(orderId, controller.signal),
+        deadline,
+      ]);
+      if (controller.signal.aborted) {
+        throw new Error("La generación del contrato fue cancelada");
+      }
+
+      const { error: updateError } = await supabaseAdmin
+        .from("orders")
+        .update({
+          new_pdf_processing_url: pdfUrl,
+          date_modified: new Date().toISOString(),
+        })
+        .eq("id", orderId);
+      if (updateError) throw updateError;
+
+      return pdfUrl;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Render + R2 upload; returns the uploaded URL. Stores nothing. */
+  private static async renderAndUpload(
+    orderId: number,
+    signal: AbortSignal,
+  ): Promise<string> {
     const { data: order, error: orderError } = await supabaseAdmin
       .from("orders")
       .select("*")
@@ -121,6 +170,7 @@ export class OrderLifecycleService {
       method: "POST",
       body: formData,
       headers: { Accept: "application/json" },
+      signal,
     });
     if (!uploadResponse.ok) {
       throw new Error(`La subida a R2 respondió ${uploadResponse.status}`);
@@ -131,15 +181,6 @@ export class OrderLifecycleService {
     if (!uploadResult?.success || !pdfUrl) {
       throw new Error("La subida a R2 no devolvió una URL");
     }
-
-    const { error: updateError } = await supabaseAdmin
-      .from("orders")
-      .update({
-        new_pdf_processing_url: pdfUrl,
-        date_modified: new Date().toISOString(),
-      })
-      .eq("id", orderId);
-    if (updateError) throw updateError;
 
     return pdfUrl;
   }

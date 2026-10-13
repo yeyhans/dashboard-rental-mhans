@@ -51,7 +51,8 @@ const FileCheckIcon = () => (
  */
 export function isSelectableStatus(current: string, value: string): boolean {
   if (value === current) return true;
-  return isOrderStatus(current) ? canTransition(current, value as never) : true;
+  if (!isOrderStatus(current)) return true;
+  return isOrderStatus(value) && canTransition(current, value);
 }
 
 // Format date

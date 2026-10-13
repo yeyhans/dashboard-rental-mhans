@@ -1,15 +1,9 @@
 import type { APIRoute } from "astro";
-import { validateOperatorStatusChange } from "../../../../lib/operatorOrderStatus";
+import { checkStatusChange } from "../../../../lib/orderTransitionGate";
 import { withAuth } from "../../../../middleware/auth";
 import { OrderService } from "../../../../services/orderService";
 import { OrderLifecycleService } from "../../../../services/orderLifecycleService";
-import {
-  ORDER_STATUSES,
-  canTransition,
-  isOrderStatus,
-  nextStatus,
-  statusLabel,
-} from "../../../../lib/orderStatus";
+import { ORDER_STATUSES, isOrderStatus } from "../../../../lib/orderStatus";
 
 /**
  * The accepted values come from `src/lib/orderStatus.ts`, which mirrors the `orders_status_check`
@@ -83,45 +77,17 @@ export const PUT: APIRoute = withAuth(async (context) => {
     return json({ success: false, error: "La orden no existe" }, 404);
   }
 
-  // Un operario (bodega) solo avanza un paso hacia adelante: confirmed -> preparation -> in-rental
-  // -> return. Nunca completa, cancela ni retrocede (decisión del dueño, 2026-10-02).
-  if (context.user?.role === "operator") {
-    const operatorGate = validateOperatorStatusChange(
-      current.status,
-      body.status,
-    );
-    if (!operatorGate.valid) {
-      return json(
-        {
-          success: false,
-          error: operatorGate.error,
-          code: "OPERATOR_TRANSITION_FORBIDDEN",
-        },
-        403,
-      );
-    }
-  }
-
-  // Durante la ventana, entre el despliegue del código y el apply de 0003, hay filas vivas con el
-  // vocabulario antiguo. La máquina no puede juzgar una transición cuyo origen no conoce, así que
-  // en ese caso se apoya solo en la validación de vocabulario: bloquear esas órdenes congelaría el
-  // panel justo cuando hay que migrarlas a mano.
-  if (
-    isOrderStatus(current.status) &&
-    !canTransition(current.status, body.status)
-  ) {
-    const legal = nextStatus(current.status);
-    const detalle = legal
-      ? `Desde "${statusLabel(current.status)}" solo se puede avanzar a "${statusLabel(legal)}" o cancelar.`
-      : `"${statusLabel(current.status)}" es un estado terminal y no admite cambios.`;
-
+  // Operator allowlist + state machine, shared with `PUT /api/orders/update/[id]`
+  // (`lib/orderTransitionGate.ts`). A legacy origin is not judged there either.
+  const rejection = checkStatusChange({
+    from: current.status,
+    to: body.status,
+    role: context.user?.role,
+  });
+  if (rejection) {
     return json(
-      {
-        success: false,
-        error: `Transición no permitida. ${detalle}`,
-        code: "INVALID_TRANSITION",
-      },
-      409,
+      { success: false, error: rejection.error, code: rejection.code },
+      rejection.status,
     );
   }
 

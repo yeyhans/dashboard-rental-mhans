@@ -1,12 +1,8 @@
 import type { APIRoute } from "astro";
-import {
-  canTransition,
-  canonicalStatus,
-  isOrderStatus,
-  statusLabel,
-} from "../../../../lib/orderStatus";
-import { validateOperatorStatusChange } from "../../../../lib/operatorOrderStatus";
+import { canonicalStatus } from "../../../../lib/orderStatus";
+import { checkStatusChange } from "../../../../lib/orderTransitionGate";
 import { OrderService } from "../../../../services/orderService";
+import { OrderLifecycleService } from "../../../../services/orderLifecycleService";
 import { OrderPricingService } from "../../../../services/orderPricingService";
 import { PricingError } from "../../../../lib/pricing";
 import { validateReserveInput } from "../../../../lib/finance";
@@ -70,36 +66,24 @@ export const PUT: APIRoute = withAuth(
       // Same state machine as `PUT /api/orders/[id]/status` (T-02). Re-sending the current status
       // is a no-op for the machine, so the edit form can save other fields untouched. Rows still
       // on the legacy vocabulary are not judged, for the same reason the status route skips them.
-      if (newStatus && newStatus !== previousStatus) {
-        const actor = user ?? locals?.user;
-        if (actor?.role === "operator") {
-          const operatorGate = validateOperatorStatusChange(
-            previousStatus,
-            newStatus,
-          );
-          if (!operatorGate.valid) {
-            return new Response(
-              JSON.stringify({
-                success: false,
-                error: operatorGate.error,
-                code: "OPERATOR_TRANSITION_FORBIDDEN",
-              }),
-              { status: 403, headers: { "Content-Type": "application/json" } },
-            );
-          }
-        }
-
-        if (
-          isOrderStatus(previousStatus) &&
-          !canTransition(previousStatus, newStatus)
-        ) {
+      const isStatusChange = Boolean(newStatus) && newStatus !== previousStatus;
+      if (isStatusChange) {
+        const rejection = checkStatusChange({
+          from: previousStatus,
+          to: newStatus,
+          role: (user ?? locals?.user)?.role,
+        });
+        if (rejection) {
           return new Response(
             JSON.stringify({
               success: false,
-              error: `Transición de estado no permitida: de "${statusLabel(previousStatus)}" a "${statusLabel(String(newStatus))}".`,
-              code: "INVALID_TRANSITION",
+              error: rejection.error,
+              code: rejection.code,
             }),
-            { status: 409, headers: { "Content-Type": "application/json" } },
+            {
+              status: rejection.status,
+              headers: { "Content-Type": "application/json" },
+            },
           );
         }
       }
@@ -337,6 +321,16 @@ export const PUT: APIRoute = withAuth(
           );
           warning = NOTIFICATION_WARNING;
         }
+      }
+
+      // R-14: same lifecycle side effects as the status route (contract on `in-rental`). The
+      // order is already saved; the service never throws and only reports a warning.
+      if (isStatusChange) {
+        const lifecycle = await OrderLifecycleService.onStatusChanged(
+          updatedOrder,
+          String(newStatus),
+        );
+        if (lifecycle.warning) warning = lifecycle.warning;
       }
 
       return new Response(

@@ -978,13 +978,20 @@ export class OrderService {
    * a `return`. Lo llama el cron horario (`POST /api/cron/rentals-to-return`).
    *
    * `todayChile` is the business day (`YYYY-MM-DD`, America/Santiago); an order moves once its
-   * `order_fecha_termino` is strictly before it. Each move goes through `updateOrderStatus` so it
-   * shares the side effects of a manual change. Idempotent: a moved order is no longer selected.
-   * One failing order does not stop the rest; it is logged and left for the next run.
+   * `order_fecha_termino` is strictly before it.
+   *
+   * The write is a compare-and-set (`WHERE id = ? AND status = 'in-rental'`), not
+   * `updateOrderStatus`: an admin may change the order between this read and the write, and the
+   * cron must never overwrite that. A row that no longer matches is counted in `skipped`.
+   * `updateOrderStatus` has no side effect for `return` (it only stamps `completed` and releases
+   * the coupon on `cancelled`), so nothing is lost by writing directly.
+   *
+   * Idempotent: a moved order is no longer selected. One failing order does not stop the rest;
+   * it is logged and left for the next run.
    */
   static async moveExpiredRentalsToReturn(
     todayChile: string,
-  ): Promise<{ moved: number; ids: number[] }> {
+  ): Promise<{ moved: number; ids: number[]; skipped: number }> {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(todayChile)) {
       throw new Error(`Fecha de negocio inválida: ${todayChile}`);
     }
@@ -998,10 +1005,22 @@ export class OrderService {
     if (error) throw error;
 
     const ids: number[] = [];
+    let skipped = 0;
     for (const row of (data ?? []) as { id: number }[]) {
       try {
-        await OrderService.updateOrderStatus(row.id, "return");
-        ids.push(row.id);
+        const { data: movedRows, error: moveError } = await supabaseAdmin
+          .from("orders")
+          .update({ status: "return", date_modified: new Date().toISOString() })
+          .eq("id", row.id)
+          .eq("status", "in-rental")
+          .select("id");
+        if (moveError) throw moveError;
+
+        if (Array.isArray(movedRows) && movedRows.length > 0) {
+          ids.push(row.id);
+        } else {
+          skipped += 1;
+        }
       } catch (moveError) {
         console.error(
           "[OrderService] No se pudo pasar la orden a devolución:",
@@ -1013,7 +1032,7 @@ export class OrderService {
       }
     }
 
-    return { moved: ids.length, ids };
+    return { moved: ids.length, ids, skipped };
   }
 
   /**

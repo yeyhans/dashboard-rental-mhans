@@ -20,7 +20,6 @@ import { apiClient } from '@/services/apiClient';
 import type { Database } from '@/types/database';
 import { toast } from 'sonner';
 import { WarrantyImageUpload } from './WarrantyImageUpload';
-import { generateOrderProcessingPdfFromId } from '@/lib/orderPdfGenerationService';
 // generateBudgetPdfFromId removed - now using dedicated endpoint
 import { createEventFromOrder, openGoogleCalendar } from '@/lib/simpleCalendar';
 import { sendManualEmail, validateManualEmailData, type ManualEmailData } from '@/services/manualEmailService';
@@ -1362,11 +1361,17 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     try {
       console.log('🚀 Generating order processing PDF for order:', orderData.id);
 
-      const result = await generateOrderProcessingPdfFromId(
-        orderData.id,
-        true, // uploadToR2
-        false // sendEmail (not needed for admin generation)
-      );
+      // Same-origin with the session cookie: the route requires an admin session and reads the
+      // order on the server (the browser's anon client cannot read `orders`).
+      const response = await fetch('/api/order/generate-processing-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ order_id: orderData.id }),
+      });
+      const result = await response.json().catch(() => ({ success: false }));
+      if (!response.ok) result.success = false;
+      result.message = result.message || result.error;
 
       if (result.success) {
         toast.success('Contrato de procesamiento generado exitosamente');

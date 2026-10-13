@@ -1,274 +1,64 @@
-import type { APIRoute } from 'astro';
-import React from 'react';
-import { ProcessingDocument } from '../../../lib/pdf/components/processing/ProcessingDocument';
-import { SiteSettingsService } from '../../../services/siteSettingsService';
-import { buildProcessingDocumentData } from '../../../lib/pdf/mappers/processingData';
-import { generatePdfBuffer } from '../../../lib/pdf/core/pdfService';
+import type { APIRoute } from "astro";
+import { withAuth } from "../../../middleware/auth";
+import { OrderLifecycleService } from "../../../services/orderLifecycleService";
 
-export const POST: APIRoute = async ({ request }) => {
-  try {
-    console.log('🚀 Order processing PDF generation API called');
+/**
+ * (Re)generates an order's processing PDF — the per-order contract — and stores its URL in
+ * `orders.new_pdf_processing_url`. Called from the "Generar contrato" button in `ProcessOrder`.
+ *
+ * This route used to be unauthenticated and wrote `orders` with the service role; it also kept
+ * its own copy of the render/upload steps, which fell back to storing nothing but returning a
+ * base64 data URL when R2 failed. It now requires an admin session and delegates to
+ * `OrderLifecycleService.generateRentalContract`, the same generator the `in-rental` transition
+ * uses (bounded by a deadline, never stores a data URL).
+ */
 
-    const requestData = await request.json();
+function json(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
-    // Support both formats: direct fields or nested orderData object
-    const orderDataNested = requestData.orderData;
-    const orderId = requestData.order_id || orderDataNested?.order_id || orderDataNested?.id;
-    const customer_id = requestData.customer_id || orderDataNested?.customer_id;
-    const uploadToR2 = requestData.uploadToR2 ?? true;
-    const sendEmail = requestData.sendEmail ?? false;
-
-    console.log('📋 Received request data:', {
-      order_id: orderId,
-      customer_id: customer_id,
-      uploadToR2: uploadToR2,
-      sendEmail: sendEmail,
-      hasNestedOrderData: !!orderDataNested
-    });
-
-    // Validate required fields
-    if (!orderId || !customer_id) {
-      console.error('❌ Missing required fields:', {
-        orderId,
-        customer_id,
-        requestKeys: Object.keys(requestData),
-        nestedKeys: orderDataNested ? Object.keys(orderDataNested) : []
-      });
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'Campos requeridos faltantes: order_id, customer_id'
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Get order data from database
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      import.meta.env.PUBLIC_SUPABASE_URL!,
-      import.meta.env.SUPABASE_SERVICE_ROLE_KEY || import.meta.env.PUBLIC_SUPABASE_ANON_KEY!
-    );
-
-    const { data: orderData, error: orderError } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('id', orderId)
-      .single();
-
-    if (orderError || !orderData) {
-      console.error('Error fetching order data:', orderError);
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'Orden no encontrada'
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Generate PDF using React-PDF (replaces Puppeteer)
-    console.log('📄 Generating PDF with React-PDF...');
-
-    let pdfBuffer: Buffer;
+export const POST: APIRoute = withAuth(
+  async ({ request, locals, user }: any) => {
+    let body: any;
     try {
-      // Client profile: RUT and company data for the annex signature block
-      const profileColumns = 'rut, tipo_cliente, empresa_nombre, empresa_rut';
-      let profile: {
-        rut?: string | null;
-        tipo_cliente?: string | null;
-        empresa_nombre?: string | null;
-        empresa_rut?: string | null;
-      } | null = null;
-      if (orderData.customer_id) {
-        const { data: byUserId } = await supabase
-          .from('user_profiles')
-          .select(profileColumns)
-          .eq('user_id', parseInt(orderData.customer_id))
-          .single();
-        if (byUserId) {
-          profile = byUserId;
-        } else {
-          const { data: byAuthUid } = await supabase
-            .from('user_profiles')
-            .select(profileColumns)
-            .eq('auth_uid', orderData.customer_id)
-            .single();
-          profile = byAuthUid;
-        }
-      }
+      body = await request.json();
+    } catch {
+      return json({ success: false, error: "JSON inválido" }, 400);
+    }
 
-      const settings = await SiteSettingsService.get();
-      const documentData = buildProcessingDocumentData(orderData, profile, new Date(), settings);
+    // Both shapes stay accepted: `{ order_id }` and the legacy `{ orderData: { order_id | id } }`.
+    const rawId =
+      body?.order_id ?? body?.orderData?.order_id ?? body?.orderData?.id;
+    const orderId = Number.parseInt(String(rawId), 10);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+      return json({ success: false, error: "ID de orden inválido" }, 400);
+    }
 
-      // Generate PDF using React-PDF
-      pdfBuffer = await generatePdfBuffer({
-        document: React.createElement(ProcessingDocument, { data: documentData })
-      });
-
-      console.log('✅ PDF generated successfully with React-PDF, size:', pdfBuffer.byteLength);
+    try {
+      const pdfUrl =
+        await OrderLifecycleService.generateRentalContract(orderId);
+      return json(
+        {
+          success: true,
+          message: "PDF de procesamiento generado exitosamente",
+          data: { order_id: orderId, pdf_url: pdfUrl },
+          pdf_url: pdfUrl,
+          pdfUrl,
+        },
+        200,
+      );
     } catch (error) {
-      console.error('❌ PDF generation error:', error);
-
-      // Check if it's a timeout error
-      if (error instanceof Error && error.message.includes('timeout')) {
-        return new Response(JSON.stringify({
-          success: false,
-          message: 'La generación del PDF excedió el tiempo límite. Por favor, intente nuevamente.',
-          error: 'PDF generation timeout - Vercel free tier limit',
-          retry: true
-        }), {
-          status: 504,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      // Re-throw other errors to be caught by outer try-catch
-      throw error;
+      console.error(
+        "[POST /api/order/generate-processing-pdf] Error al generar el contrato:",
+        { orderId, adminId: (user ?? locals?.user)?.id, error },
+      );
+      return json(
+        { success: false, error: "No se pudo generar el contrato de la orden" },
+        500,
+      );
     }
-
-    // Verify PDF content is valid
-    const pdfUint8Array = new Uint8Array(pdfBuffer);
-    const pdfHeader = pdfUint8Array.slice(0, 4);
-    const pdfHeaderString = String.fromCharCode(...pdfHeader);
-    console.log('📄 PDF header check:', pdfHeaderString, '(should start with %PDF)');
-
-    if (!pdfHeaderString.startsWith('%PDF')) {
-      console.error('❌ Invalid PDF content detected!');
-      console.log('First 100 bytes:', String.fromCharCode(...pdfUint8Array.slice(0, 100)));
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'PDF generado es inválido',
-        error: 'Generated content is not a valid PDF'
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    let finalPdfUrl = '';
-
-    // Upload to Cloudflare R2 if requested
-    if (uploadToR2) {
-      console.log('☁️ Uploading PDF to Cloudflare R2...');
-
-      const cloudflareWorkerUrl = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL;
-      if (!cloudflareWorkerUrl) {
-        console.warn('⚠️ PUBLIC_CLOUDFLARE_WORKER_URL not configured, skipping R2 upload');
-      } else {
-        try {
-          // Create FormData for Cloudflare Worker with proper PDF content
-          const formData = new FormData();
-          const fileName = `order_processing_${orderId}_${Date.now()}.pdf`;
-
-          // Create blob with explicit PDF content type and proper buffer
-          const pdfBlob = new Blob([pdfBuffer], {
-            type: 'application/pdf'
-          });
-
-          console.log('📦 Blob created - size:', pdfBlob.size, 'type:', pdfBlob.type);
-
-          formData.append('file', pdfBlob, fileName);
-          formData.append('userId', orderData.customer_id.toString());
-
-          // Upload to Cloudflare Worker with proper headers
-          const uploadResponse = await fetch(`${cloudflareWorkerUrl}/upload-pdf-only`, {
-            method: 'POST',
-            body: formData,
-            headers: {
-              'Accept': 'application/json'
-            }
-          });
-
-        if (uploadResponse.ok) {
-          const uploadResult = await uploadResponse.json();
-          console.log('📥 Upload response:', uploadResult);
-          if (uploadResult.success && (uploadResult.fileUrl || uploadResult.url)) {
-            finalPdfUrl = uploadResult.fileUrl || uploadResult.url;
-            console.log('✅ PDF uploaded to R2:', finalPdfUrl);
-
-            // Update order with new_pdf_processing_url
-            console.log('💾 Updating order with PDF URL...');
-            const { error: updateError } = await supabase
-              .from('orders')
-              .update({
-                new_pdf_processing_url: finalPdfUrl,
-                date_modified: new Date().toISOString()
-              })
-              .eq('id', orderId);
-
-            if (updateError) {
-              console.error('⚠️ Failed to update order with PDF URL:', updateError);
-            } else {
-              console.log('✅ Order updated with PDF URL');
-            }
-          } else {
-            console.warn('⚠️ R2 upload succeeded but no fileUrl in response:', uploadResult);
-          }
-        } else {
-          console.error('❌ R2 upload failed:', uploadResponse.status, uploadResponse.statusText);
-          const errorText = await uploadResponse.text();
-          console.error('Error details:', errorText);
-        }
-        } catch (uploadError) {
-          console.error('⚠️ R2 upload error (non-critical):', uploadError);
-        }
-      }
-    }
-
-    // If no R2 URL, provide base64 fallback
-    if (!finalPdfUrl) {
-      console.log('📄 No R2 URL available, using base64 fallback');
-      const base64PDF = Buffer.from(pdfBuffer).toString('base64');
-      finalPdfUrl = `data:application/pdf;base64,${base64PDF}`;
-    }
-
-    // Optional: Send email notification
-    if (sendEmail && orderData.billing?.email) {
-      console.log('📧 Sending email notification...');
-      try {
-        // Email sending logic would go here
-        console.log('✅ Email notification sent');
-      } catch (emailError) {
-        console.warn('⚠️ Email sending failed (non-critical):', emailError);
-      }
-    }
-
-    return new Response(JSON.stringify({
-      success: true,
-      message: 'PDF de procesamiento generado exitosamente',
-      pdf_url: finalPdfUrl,
-      pdfUrl: finalPdfUrl,
-      metadata: {
-        order_id: orderId,
-        pdfType: 'processing',
-        generatedAt: new Date().toISOString(),
-        projectName: orderData.metadata?.order_proyecto || orderData.order_proyecto,
-        totalAmount: orderData.metadata?.calculated_total || orderData.calculated_total,
-        numJornadas: orderData.metadata?.num_jornadas || orderData.num_jornadas,
-        hasLineItems: (orderData.line_items?.length || 0) > 0,
-        hasCoupon: (orderData.coupon_lines?.length || 0) > 0,
-        pdfValidation: {
-          size: pdfBuffer.byteLength,
-          header: pdfHeaderString,
-          isValid: pdfHeaderString.startsWith('%PDF')
-        }
-      }
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-  } catch (error) {
-    console.error('💥 Error in order processing PDF generation API:', error);
-
-    return new Response(JSON.stringify({
-      success: false,
-      message: 'Error interno del servidor',
-      error: error instanceof Error ? error.message : 'Error desconocido'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-};
+  },
+);

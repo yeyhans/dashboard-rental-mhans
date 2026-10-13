@@ -31,6 +31,18 @@ vi.mock("../../../../../lib/supabase", () => ({
   supabaseAdmin: { from },
 }));
 
+const onStatusChanged = vi.hoisted(() =>
+  vi.fn(
+    async (): Promise<{ generated: boolean; warning?: string }> => ({
+      generated: false,
+    }),
+  ),
+);
+
+vi.mock("../../../../../services/orderLifecycleService", () => ({
+  OrderLifecycleService: { onStatusChanged },
+}));
+
 describe("admin order update relay boundary", () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -526,6 +538,83 @@ describe("admin order update relay boundary", () => {
 
       expect(response.status).toBe(403);
       expect(updateOrder).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * R-14 on this route too: moving an order to `in-rental` from the edit form must generate the
+   * contract exactly like the status route does, and a failure only adds a warning.
+   */
+  describe("efectos del ciclo de vida", () => {
+    function stubOrder(status: string, saved: Record<string, unknown>) {
+      from.mockReturnValue({
+        select: () => ({
+          eq: () => ({
+            single: async () => ({ data: { id: 123, status }, error: null }),
+          }),
+        }),
+      });
+      updateOrder.mockResolvedValue(saved);
+    }
+
+    const ctx = (body: unknown) =>
+      ({
+        params: { id: "123" },
+        request: new Request(
+          "https://dashboard.mariohans.cl/api/orders/update/123",
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          },
+        ),
+        locals: { user: { id: "admin-1", role: "admin" } },
+      }) as never;
+
+    it("entrega la orden guardada al servicio de ciclo de vida al pasar a in-rental", async () => {
+      const saved = {
+        id: 123,
+        status: "in-rental",
+        new_pdf_processing_url: null,
+      };
+      stubOrder("preparation", saved);
+      const { PUT } = await import("../[id]");
+
+      const response = await PUT(ctx({ status: "in-rental" }));
+
+      expect(response.status).toBe(200);
+      expect(onStatusChanged).toHaveBeenCalledWith(saved, "in-rental");
+    });
+
+    it("mantiene el 200 y agrega el aviso si el contrato no se pudo generar", async () => {
+      stubOrder("preparation", { id: 123, status: "in-rental" });
+      onStatusChanged.mockResolvedValueOnce({
+        generated: false,
+        warning: "No se pudo generar el contrato",
+      });
+      const { PUT } = await import("../[id]");
+
+      const response = await PUT(ctx({ status: "in-rental" }));
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual(
+        expect.objectContaining({
+          success: true,
+          warning: "No se pudo generar el contrato",
+        }),
+      );
+    });
+
+    it("no llama al ciclo de vida si el estado no cambió", async () => {
+      stubOrder("in-rental", { id: 123, status: "in-rental" });
+      const { PUT } = await import("../[id]");
+
+      const response = await PUT(
+        ctx({ status: "in-rental", order_proyecto: "Rodaje" }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(onStatusChanged).not.toHaveBeenCalled();
     });
   });
 });
