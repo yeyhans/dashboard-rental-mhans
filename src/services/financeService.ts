@@ -7,10 +7,14 @@ import {
   isPending,
   outstandingAmount,
   paidKpis,
+  paymentDate,
+  paymentUpdateColumns,
   pendingKpis,
   reserveAmount,
   type FinanceSummary,
   type PaidKpis,
+  type PaymentDateSource,
+  type PaymentUpdate,
   type PendingKpis,
 } from '../lib/finance';
 
@@ -28,6 +32,18 @@ export interface FinanceRow {
   fullyPaid: boolean;
   overdue: boolean;
   endDate: string | null;
+  /** Best payment date available — see `paymentDate` in `lib/finance.ts`. */
+  paidAt: string | null;
+  paidAtSource: PaymentDateSource | null;
+  purchaseOrder: string | null;
+  invoiceNumber: string | null;
+}
+
+/** An order's payment state after `FinanceService.updatePayment`. */
+export interface SavedPayment {
+  id: number;
+  fullyPaid: boolean;
+  reservePaid: boolean;
   paidAt: string | null;
   purchaseOrder: string | null;
   invoiceNumber: string | null;
@@ -59,7 +75,7 @@ export class FinanceService {
     const { data, error } = await supabaseAdmin!
       .from('orders')
       .select(
-        'id, order_key, status, order_proyecto, order_fecha_termino, date_paid, ' +
+        'id, order_key, status, order_proyecto, order_fecha_termino, date_paid, date_completed, ' +
           'calculated_total, pago_reserva, pago_completo, reserve_type, reserve_value, ' +
           'orden_compra, numero_factura, ' +
           'billing_first_name, billing_last_name, billing_company'
@@ -82,6 +98,7 @@ export class FinanceService {
         reserveType: row.reserve_type,
         reserveValue: row.reserve_value,
       };
+      const paid = paymentDate({ datePaid: row.date_paid, dateCompleted: row.date_completed });
 
       return {
         id: row.id,
@@ -97,7 +114,8 @@ export class FinanceService {
         fullyPaid: like.fullyPaid,
         overdue: isOverdue(like, now),
         endDate: row.order_fecha_termino,
-        paidAt: row.date_paid,
+        paidAt: paid.date,
+        paidAtSource: paid.source,
         purchaseOrder: row.orden_compra,
         invoiceNumber: row.numero_factura,
       };
@@ -122,6 +140,36 @@ export class FinanceService {
       paidRows: rows
         .filter(r => r.fullyPaid)
         .sort((a, b) => (b.paidAt ?? '').localeCompare(a.paidAt ?? '')),
+    };
+  }
+
+  /**
+   * R-03a: the Pago select and the OC / Factura inputs of Finanzas & Cobranza.
+   *
+   * `update` is already validated (`validatePaymentUpdate`). Returns `null` when the order does
+   * not exist.
+   */
+  static async updatePayment(id: number, update: PaymentUpdate, now: Date = new Date()): Promise<SavedPayment | null> {
+    FinanceService.ensureSupabaseAdmin();
+
+    const { data, error } = await supabaseAdmin!
+      .from('orders')
+      .update(paymentUpdateColumns(update, now))
+      .eq('id', id)
+      .select('id, pago_completo, pago_reserva, date_paid, orden_compra, numero_factura')
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+
+    const row = data as any;
+    return {
+      id: row.id,
+      fullyPaid: !!row.pago_completo,
+      reservePaid: !!row.pago_reserva,
+      paidAt: row.date_paid ?? null,
+      purchaseOrder: row.orden_compra ?? null,
+      invoiceNumber: row.numero_factura ?? null,
     };
   }
 }

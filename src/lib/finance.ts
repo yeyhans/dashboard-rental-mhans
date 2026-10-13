@@ -280,3 +280,110 @@ export function periodDelta(current: number, previous: number): number | null {
   if (previous <= 0) return null;
   return Math.round(((current - previous) / previous) * 1000) / 10;
 }
+
+/** R-03a: longest `orden_compra` / `numero_factura` the Finanzas inputs accept. */
+export const PAYMENT_DOCUMENT_MAX_LENGTH = 64;
+
+/** What `PATCH /api/payments/[id]` may change on one order. */
+export interface PaymentUpdate {
+  /** The Pago select: `true` is "Pagado", `false` is "No pagado". */
+  paid?: boolean;
+  purchaseOrder?: string | null;
+  invoiceNumber?: string | null;
+}
+
+export type PaymentUpdateValidation =
+  | { ok: true; update: PaymentUpdate }
+  | { ok: false; error: string };
+
+function documentField(
+  value: unknown,
+  label: string
+): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (value === null) return { ok: true, value: null };
+  if (typeof value !== 'string') return { ok: false, error: `${label} debe ser texto` };
+  const trimmed = value.trim();
+  if (trimmed.length > PAYMENT_DOCUMENT_MAX_LENGTH) {
+    return { ok: false, error: `${label} no puede superar ${PAYMENT_DOCUMENT_MAX_LENGTH} caracteres` };
+  }
+  return { ok: true, value: trimmed === '' ? null : trimmed };
+}
+
+/**
+ * Validates the body of `PATCH /api/payments/[id]`, answering in Spanish for a 400.
+ *
+ * Only the three payment fields are read; anything else in the body is ignored, so this route
+ * can never move an order's status or totals.
+ */
+export function validatePaymentUpdate(body: unknown): PaymentUpdateValidation {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { ok: false, error: 'Cuerpo de la solicitud inválido' };
+  }
+  const input = body as Record<string, unknown>;
+  const update: PaymentUpdate = {};
+
+  if (input.paid !== undefined) {
+    if (typeof input.paid !== 'boolean') {
+      return { ok: false, error: 'El estado de pago debe ser Pagado o No pagado' };
+    }
+    update.paid = input.paid;
+  }
+
+  if (input.purchaseOrder !== undefined) {
+    const field = documentField(input.purchaseOrder, 'La orden de compra');
+    if (!field.ok) return field;
+    update.purchaseOrder = field.value;
+  }
+
+  if (input.invoiceNumber !== undefined) {
+    const field = documentField(input.invoiceNumber, 'El número de factura');
+    if (!field.ok) return field;
+    update.invoiceNumber = field.value;
+  }
+
+  if (Object.keys(update).length === 0) {
+    return { ok: false, error: 'No hay cambios de pago para guardar' };
+  }
+  return { ok: true, update };
+}
+
+/**
+ * The `orders` columns a payment update writes.
+ *
+ * "Pagado" also sets `pago_reserva` (a full payment includes the reserve — the same invariant
+ * `api/orders/update/[id].ts` enforces) and stamps `date_paid`, which nothing else writes.
+ * "No pagado" clears `date_paid` but leaves the reserve alone: reverting a mistaken full
+ * payment must not also erase a reserve that really came in.
+ */
+export function paymentUpdateColumns(update: PaymentUpdate, now: Date): Record<string, unknown> {
+  const columns: Record<string, unknown> = {};
+  if (update.paid === true) {
+    columns.pago_completo = true;
+    columns.pago_reserva = true;
+    columns.date_paid = now.toISOString();
+  } else if (update.paid === false) {
+    columns.pago_completo = false;
+    columns.date_paid = null;
+  }
+  if (update.purchaseOrder !== undefined) columns.orden_compra = update.purchaseOrder;
+  if (update.invoiceNumber !== undefined) columns.numero_factura = update.invoiceNumber;
+  return columns;
+}
+
+export type PaymentDateSource = 'date_paid' | 'date_completed';
+
+/**
+ * The best payment date an order carries, and where it came from.
+ *
+ * `date_paid` is the real one, but before R-03a nothing wrote it (0 of 536 orders in
+ * production, 2026-10-13). `date_completed` is the closest proxy those orders have. The source
+ * travels with the date so the screen can say when it is an approximation.
+ */
+export function paymentDate(order: {
+  datePaid?: string | null;
+  dateCompleted?: string | null;
+}): { date: string | null; source: PaymentDateSource | null } {
+  if (order.datePaid) return { date: order.datePaid, source: 'date_paid' };
+  if (order.dateCompleted) return { date: order.dateCompleted, source: 'date_completed' };
+  return { date: null, source: null };
+}
