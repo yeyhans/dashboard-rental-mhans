@@ -49,3 +49,48 @@ describe("DeliveryBoard — new shipping type button (04.1)", () => {
     expect(html).not.toContain("Nuevo tipo<");
   });
 });
+
+/** R-06: the driver (conductor) column and the "Filtrar por conductor" filter of the canon. */
+describe("DeliveryBoard — conductor (R-06)", () => {
+  function shipment(id: number, driverName: string | null) {
+    return {
+      id,
+      orderId: 100 + id,
+      orderReference: `PED-${100 + id}`,
+      client: "Fábula Films",
+      project: "KIA",
+      methodId: 1,
+      methodName: "Estándar",
+      cost: 15000,
+      status: "pending",
+      trackingNumber: null,
+      createdAt: "2026-10-13T12:00:00Z",
+      deliveredAt: null,
+      lineItems: [],
+      driverName,
+    };
+  }
+
+  function boardWithDrivers() {
+    const board = makeBoard();
+    board.active = [shipment(1, "Carlos R."), shipment(2, null)];
+    board.history = [shipment(1, "Carlos R."), shipment(3, "Juan P.")];
+    return board;
+  }
+
+  it("renders a Conductor column in the active and history tables", () => {
+    const html = renderToStaticMarkup(<DeliveryBoard data={boardWithDrivers()} />);
+    expect(html.split(">Conductor</th>").length - 1).toBe(2);
+    expect(html).toContain("Carlos R.");
+    expect(html).toContain("Juan P.");
+    expect(html).toContain("Sin asignar");
+  });
+
+  it("offers a driver filter built from the drivers in the history", () => {
+    const html = renderToStaticMarkup(<DeliveryBoard data={boardWithDrivers()} />);
+    expect(html).toContain('aria-label="Filtrar por conductor"');
+    expect(html).toContain("Todos los conductores");
+    expect(html).toMatch(/<option value="Carlos R.">Carlos R.<\/option>/);
+    expect(html).toMatch(/<option value="Juan P.">Juan P.<\/option>/);
+  });
+});

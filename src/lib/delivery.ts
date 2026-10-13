@@ -6,11 +6,11 @@
  * Entregados Hoy, and a Costo Delivery card broken into hoy / semana / mes), an active-today
  * table, and a history with its own totals row.
  *
- * What the canonical shows and the schema cannot back: the **Conductor** column and the **Pago
- * Delivery** state. `shipping_usage` has twelve columns and neither exists — only a free-form
- * `metadata` jsonb with no agreed shape. Inventing a key here would produce a column that reads
- * empty forever and looks like missing data rather than a missing feature, so both are omitted
- * and recorded instead.
+ * The **Conductor** is `shipping_usage.driver_name` (migration 0017, R-06), free text assigned
+ * from the order edit screen. What the canonical shows and the schema still cannot back: the
+ * **Pago Delivery** state — `shipping_usage` has no column for it, only a free-form `metadata`
+ * jsonb with no agreed shape, so it stays omitted rather than shown as a column that reads empty
+ * forever.
  */
 
 import { businessDay } from './businessDay';
@@ -208,4 +208,55 @@ export function historyTotals(shipments: readonly ShipmentLike[]): HistoryTotals
 /** CLP has no decimals. */
 export function formatCLP(amount: number): string {
   return `$${Math.round(amount).toLocaleString('es-CL')}`;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Driver (conductor) — R-06, `shipping_usage.driver_name` (migration 0017)
+ * ------------------------------------------------------------------------------------------ */
+
+export const DRIVER_NAME_MAX_LENGTH = 80;
+
+/** Messages the service throws and the API maps to a status; matched by prefix, never re-typed. */
+export const DRIVER_ERRORS = {
+  INVALID: 'El nombre del conductor debe ser texto.',
+  TOO_LONG: `El nombre del conductor no puede superar los ${DRIVER_NAME_MAX_LENGTH} caracteres.`,
+  NO_SHIPMENT:
+    'Este pedido no tiene un envío registrado. Elige un método de envío y guarda el pedido primero.',
+  COLUMN_MISSING:
+    'El campo conductor aún no está disponible: falta aplicar la migración 0017 en la base.',
+} as const;
+
+export type DriverNameResult = { ok: true; value: string | null } | { ok: false; error: string };
+
+/**
+ * Server-side validation of a driver name: trimmed, inner whitespace collapsed, at most
+ * `DRIVER_NAME_MAX_LENGTH` characters. Empty (or `null`) clears the assignment.
+ */
+export function normalizeDriverName(value: unknown): DriverNameResult {
+  if (value === null) return { ok: true, value: null };
+  if (typeof value !== 'string') return { ok: false, error: DRIVER_ERRORS.INVALID };
+  const clean = value.trim().replace(/\s+/g, ' ');
+  if (clean === '') return { ok: true, value: null };
+  if (clean.length > DRIVER_NAME_MAX_LENGTH) return { ok: false, error: DRIVER_ERRORS.TOO_LONG };
+  return { ok: true, value: clean };
+}
+
+/** Filter values of "Filtrar por conductor" besides a driver's own name. */
+export const ALL_DRIVERS = 'todos';
+export const NO_DRIVER = '__sin_conductor__';
+
+/** Distinct, sorted driver names, for the filter options and the order form's suggestions. */
+export function driverNameOptions(rows: ReadonlyArray<{ driverName: string | null }>): string[] {
+  const names = new Set<string>();
+  for (const row of rows) {
+    const name = row.driverName?.trim();
+    if (name) names.add(name);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b, 'es'));
+}
+
+export function matchesDriverFilter(row: { driverName: string | null }, filter: string): boolean {
+  if (filter === ALL_DRIVERS) return true;
+  if (filter === NO_DRIVER) return !row.driverName;
+  return row.driverName === filter;
 }

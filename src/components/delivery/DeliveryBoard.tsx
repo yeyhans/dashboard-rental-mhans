@@ -12,10 +12,14 @@ import {
 } from "lucide-react";
 import { itemsFromLineItems } from "../../lib/checkIn";
 import {
+  ALL_DRIVERS,
+  NO_DRIVER,
   SHIPMENT_STATUSES,
   canRecordCheckout,
+  driverNameOptions,
   formatCLP,
   isAwaitingDispatch,
+  matchesDriverFilter,
   shipmentLabel,
   type ShipmentStatus,
 } from "../../lib/delivery";
@@ -45,10 +49,11 @@ import type {
  * indicadores, tabla de delivery activos, tabla de tipos de envío, e historial con filtros y una
  * fila de totales.
  *
- * Dos columnas del canónico no se muestran: **Conductor** y **Pago Delivery**. `shipping_usage`
- * tiene doce columnas y ninguna de las dos existe; solo hay un `metadata` jsonb sin forma
- * acordada. Una columna inventada se vería vacía para siempre y se leería como datos faltantes en
- * vez de una función faltante, así que se omiten y queda constancia.
+ * **Conductor** (R-06): `shipping_usage.driver_name` (migración 0017), asignado desde la edición
+ * del pedido; columna en ambas tablas y "Filtrar por conductor" en el historial. Una columna del
+ * canónico sigue sin mostrarse: **Pago Delivery** — `shipping_usage` no tiene dónde guardarlo
+ * (solo un `metadata` jsonb sin forma acordada), y una columna inventada se leería como datos
+ * faltantes en vez de una función faltante.
  *
  * T-026 gap 2/4 (cierre de brecha, 2026-08-23): antes de este cambio ningún camino de código
  * registraba un movimiento `checkout` en `asset_movements`, así que el control de Check-In recién
@@ -324,6 +329,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [typeFilter, setTypeFilter] = useState("todos");
+  const [driverFilter, setDriverFilter] = useState<string>(ALL_DRIVERS);
 
   // R3-205: estado local de "Delivery activos" para que marcar despachado/entregado (`PUT
   // /api/delivery/shipments/:id`) refresque `canRecordCheckout` en esa fila sin recargar la
@@ -492,6 +498,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
       if (statusFilter !== "todos" && row.status !== statusFilter) return false;
       if (typeFilter !== "todos" && String(row.methodId) !== typeFilter)
         return false;
+      if (!matchesDriverFilter(row, driverFilter)) return false;
       if (!needle) return true;
       return (
         row.orderReference.toLowerCase().includes(needle) ||
@@ -499,7 +506,13 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
         (row.trackingNumber ?? "").toLowerCase().includes(needle)
       );
     });
-  }, [data.history, search, statusFilter, typeFilter]);
+  }, [data.history, search, statusFilter, typeFilter, driverFilter]);
+
+  // R-06: "Filtrar por conductor" offers the drivers that actually appear in the history.
+  const driverOptions = useMemo(
+    () => driverNameOptions(data.history),
+    [data.history],
+  );
 
   const variacion =
     data.kpis.variacionDiaria === null
@@ -602,6 +615,9 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
                   </th>
                   <th scope="col" className="px-4 py-2 font-medium">
                     Proyecto
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Conductor
                   </th>
                   <th scope="col" className="px-4 py-2 font-medium">
                     Tipo
@@ -800,6 +816,20 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
                 </option>
               ))}
             </select>
+            <select
+              value={driverFilter}
+              onChange={(e) => setDriverFilter(e.target.value)}
+              aria-label="Filtrar por conductor"
+              className="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-xs"
+            >
+              <option value={ALL_DRIVERS}>Todos los conductores</option>
+              {driverOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+              <option value={NO_DRIVER}>Sin conductor</option>
+            </select>
           </div>
         </div>
 
@@ -819,6 +849,9 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
                 <th scope="col" className="px-4 py-2 font-medium">
                   Tipo de Envío
                 </th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Conductor
+                </th>
                 <th scope="col" className="px-4 py-2 text-right font-medium">
                   Valor
                 </th>
@@ -831,7 +864,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
               {history.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="p-8 text-center text-[var(--color-text-secondary)]"
                   >
                     No se encontraron envíos con los filtros aplicados.
@@ -858,6 +891,7 @@ export default function DeliveryBoard({ data }: DeliveryBoardProps) {
                   <td className="px-4 py-2 text-[var(--color-text-secondary)]">
                     {row.methodName}
                   </td>
+                  <DriverCell driverName={row.driverName} />
                   <td className="px-4 py-2 text-right font-mono">
                     {formatCLP(row.cost)}
                   </td>
@@ -965,6 +999,15 @@ function nextDispatchAction(
   return null;
 }
 
+/** R-06: the shipment's driver, or a muted "Sin asignar" so an empty cell is not read as a gap. */
+function DriverCell({ driverName }: { driverName: string | null | undefined }) {
+  return driverName ? (
+    <td className="px-4 py-2">{driverName}</td>
+  ) : (
+    <td className="px-4 py-2 text-[var(--color-text-faint)]">Sin asignar</td>
+  );
+}
+
 function ShipmentTableRow({
   row,
   onStatusChanged,
@@ -1028,6 +1071,7 @@ function ShipmentTableRow({
       <td className="px-4 py-2 text-[var(--color-text-secondary)]">
         {row.project}
       </td>
+      <DriverCell driverName={row.driverName} />
       <td className="px-4 py-2 text-[var(--color-text-secondary)]">
         {row.methodName}
       </td>

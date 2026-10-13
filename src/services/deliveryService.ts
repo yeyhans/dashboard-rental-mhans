@@ -1,7 +1,10 @@
 import { supabaseAdmin } from '../lib/supabase';
 import {
+  DRIVER_ERRORS,
   SHIPMENT_TRANSITION_ERRORS,
   canTransitionShipment,
+  driverNameOptions,
+  normalizeDriverName,
   deliveryKpis,
   historyTotals,
   isAwaitingDispatch,
@@ -27,6 +30,8 @@ export interface ShipmentRow {
   trackingNumber: string | null;
   createdAt: string | null;
   deliveredAt: string | null;
+  /** R-06: `shipping_usage.driver_name` (migration 0017); `null` when unassigned or not migrated. */
+  driverName: string | null;
   /**
    * T-026 gap 2/4 (checkout registration). Solo se usa en `active` para ofrecer el control de
    * "Registrar salida" por equipo serializado — mismo insumo que `CheckInService` ya expone para
@@ -50,6 +55,21 @@ export interface DeliveryBoard {
   active: ShipmentRow[];
   history: ShipmentRow[];
   types: ShippingTypeRow[];
+}
+
+export interface OrderDriver {
+  shipmentId: number;
+  driverName: string | null;
+}
+
+/** PostgREST / Postgres codes for "this column does not exist" (migration 0017 not applied). */
+function isMissingColumnError(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  return code === '42703' || code === 'PGRST204';
+}
+
+function driverFromRow(row: { driver_name?: unknown }): string | null {
+  return typeof row.driver_name === 'string' && row.driver_name.trim() ? row.driver_name : null;
 }
 
 export interface UpdateShipmentStatusResult {
@@ -78,8 +98,10 @@ export class DeliveryService {
     const [{ data: usage, error: usageError }, { data: methods, error: methodsError }] = await Promise.all([
       db
         .from('shipping_usage')
+        // `*` instead of a column list (R-06): `driver_name` only exists once migration 0017 is
+        // applied, and naming it before then would fail the whole board.
         .select(
-          'id, order_id, shipping_method_id, shipping_cost, status, tracking_number, created_at, delivered_at, ' +
+          '*, ' +
             'shipping_methods (name), ' +
             'orders (order_key, order_proyecto, billing_first_name, billing_last_name, billing_company, line_items)'
         )
@@ -115,6 +137,7 @@ export class DeliveryService {
         trackingNumber: row.tracking_number,
         createdAt: row.created_at,
         deliveredAt: row.delivered_at,
+        driverName: driverFromRow(row),
         lineItems: Array.isArray(order.line_items) ? (order.line_items as LineItem[]) : [],
       };
     });
@@ -135,6 +158,68 @@ export class DeliveryService {
       history: rows,
       types: (methods ?? []).map(shippingMethodFromRecord),
     };
+  }
+
+  /**
+   * R-06: the driver of an order's shipment. Read by order id because the order edit screen does
+   * not know the `shipping_usage` row. `null` when the order has no shipment yet.
+   * Selects `*` so it keeps working before migration 0017.
+   */
+  static async getDriverForOrder(orderId: number): Promise<OrderDriver | null> {
+    DeliveryService.ensureSupabaseAdmin();
+    const { data, error } = await supabaseAdmin!
+      .from('shipping_usage')
+      .select('*')
+      .eq('order_id', orderId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return { shipmentId: (data as { id: number }).id, driverName: driverFromRow(data) };
+  }
+
+  /** Driver names already used, for the order form's suggestions. Empty before migration 0017. */
+  static async listDriverNames(limit = 500): Promise<string[]> {
+    DeliveryService.ensureSupabaseAdmin();
+    const { data, error } = await supabaseAdmin!
+      .from('shipping_usage')
+      .select('driver_name')
+      .not('driver_name', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) {
+      if (isMissingColumnError(error)) return [];
+      throw error;
+    }
+    return driverNameOptions(
+      (data ?? []).map((row: { driver_name?: unknown }) => ({ driverName: driverFromRow(row) }))
+    );
+  }
+
+  /**
+   * Assigns (or clears, with an empty name) the driver of an order's shipment. Validated here,
+   * on the server: trimmed, at most 80 characters (`normalizeDriverName`).
+   */
+  static async setDriverForOrder(orderId: number, rawName: unknown): Promise<OrderDriver> {
+    DeliveryService.ensureSupabaseAdmin();
+    const normalized = normalizeDriverName(rawName);
+    if (!normalized.ok) throw new Error(normalized.error);
+
+    const { data, error } = await supabaseAdmin!
+      .from('shipping_usage')
+      .update({ driver_name: normalized.value })
+      .eq('order_id', orderId)
+      .select('id, driver_name');
+
+    if (error) {
+      if (isMissingColumnError(error)) throw new Error(DRIVER_ERRORS.COLUMN_MISSING);
+      console.error('[DeliveryService] Error al asignar el conductor:', { orderId, error });
+      throw error;
+    }
+    const row = Array.isArray(data) ? data[0] : null;
+    if (!row) throw new Error(DRIVER_ERRORS.NO_SHIPMENT);
+
+    console.log('[DeliveryService] Conductor asignado:', { orderId, shipmentId: row.id });
+    return { shipmentId: row.id, driverName: driverFromRow(row) };
   }
 
   /**

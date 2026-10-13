@@ -17,6 +17,7 @@ import { ProductSelector } from './ProductSelector';
 import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliveryTime, getShippingTypeLabel } from '../../services/shippingService';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { apiClient } from '@/services/apiClient';
+import OrderDriverField from '@/components/delivery/OrderDriverField';
 import type { Database } from '@/types/database';
 import { toast } from 'sonner';
 import { WarrantyImageUpload } from './WarrantyImageUpload';
@@ -3615,6 +3616,9 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                           )}
                         </div>
                       )}
+
+                      {/* R-06: conductor del despacho, guardado aparte en shipping_usage. */}
+                      {orderData?.id && <OrderDriverField orderId={orderData.id} />}
                     </div>
                   )}
                 </div>
