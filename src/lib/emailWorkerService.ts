@@ -1,3 +1,5 @@
+import { FetchTimeoutError, fetchWithTimeout } from './fetchWithTimeout';
+
 /**
  * Email Service for Dashboard - Uses Cloudflare Worker send_email binding
  * Replaces Resend for all email sending
@@ -25,6 +27,12 @@ interface EmailPayload {
 }
 
 const DEFAULT_WORKER_URL = 'https://workers.mariohans.cl';
+
+/**
+ * H-4: upper bound for one send. Every caller runs inside a request (status change, order
+ * creation, PDF generation); a worker that never answers must not hold that request open.
+ */
+export const EMAIL_SEND_TIMEOUT_MS = 10_000;
 
 export function getEmailWorkerUrl(): string {
   const rawUrl = import.meta.env.EMAIL_WORKER_URL || import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL || DEFAULT_WORKER_URL;
@@ -94,11 +102,11 @@ export async function sendEmailViaWorker(
       payload.attachments = attachments;
     }
 
-    const response = await fetch(`${getEmailWorkerUrl()}/send-email`, {
+    const response = await fetchWithTimeout(`${getEmailWorkerUrl()}/send-email`, {
       method: 'POST',
       headers: createEmailWorkerHeaders(requestId),
       body: JSON.stringify(payload)
-    });
+    }, EMAIL_SEND_TIMEOUT_MS);
 
     if (!response.ok) {
       console.error('❌ Worker email error:', {
@@ -120,15 +128,16 @@ export async function sendEmailViaWorker(
       emailId: result.emailId
     };
   } catch (error) {
+    const timedOut = error instanceof FetchTimeoutError;
     console.error('💥 Error sending email via worker:', {
       requestId,
-      failureClass: 'worker_delivery_exception',
+      failureClass: timedOut ? 'worker_timeout' : 'worker_delivery_exception',
       errorName: error instanceof Error ? error.name : 'UnknownError',
     });
     return {
       success: false,
-      message: 'Error sending email',
-      error: 'worker_delivery_exception'
+      message: timedOut ? 'Email worker did not answer in time' : 'Error sending email',
+      error: timedOut ? 'worker_timeout' : 'worker_delivery_exception'
     };
   }
 }

@@ -10,7 +10,10 @@ const profileResult = vi.hoisted(() => ({
   value: { data: null as unknown, error: null },
 }));
 
-vi.mock("../../lib/emailWorkerService", () => ({ sendEmailViaWorker }));
+vi.mock("../../lib/emailWorkerService", () => ({
+  sendEmailViaWorker,
+  EMAIL_SEND_TIMEOUT_MS: 10_000,
+}));
 vi.mock("../../lib/supabase", () => ({
   supabaseAdmin: {
     from: () => ({
@@ -341,5 +344,42 @@ describe("TransactionalEmailService — bounded contract fetch (H-4)", () => {
 describe("TransactionalEmailService — warning wording (H-4)", () => {
   it("does not claim a status change for an account email", () => {
     expect(EMAIL_SEND_WARNING).not.toContain("estado");
+  });
+});
+
+/* H-4 (R3/R4): the email gets a time budget from the lifecycle; with too little left it skips
+   the attachment instead of starting a download it cannot finish. */
+describe("TransactionalEmailService — time budget (H-4)", () => {
+  it("skips the contract fetch when the budget cannot cover it", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const result = await TransactionalEmailService.sendForOrder(
+      "equipos-entregados",
+      ORDER,
+      {
+        contractUrl: "https://media.mariohans.cl/contracts/c.pdf",
+        budgetMs: 3_000,
+      },
+    );
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(sendEmailViaWorker).toHaveBeenCalledTimes(1);
+    expect(sendEmailViaWorker.mock.calls[0]![3]).toBeUndefined();
+    expect(result.warning).toContain("contrato");
+  });
+
+  it("fetches the contract when the budget allows it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("%PDF", { status: 200 })),
+    );
+
+    await TransactionalEmailService.sendForOrder("equipos-entregados", ORDER, {
+      contractUrl: "https://media.mariohans.cl/contracts/c.pdf",
+      budgetMs: 25_000,
+    });
+
+    expect(sendEmailViaWorker.mock.calls[0]![3]).toHaveLength(1);
   });
 });

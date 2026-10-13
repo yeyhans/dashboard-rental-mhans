@@ -1,5 +1,12 @@
 import type { APIRoute } from 'astro';
-import { TransactionalEmailService } from '../../../services/transactionalEmailService';
+import { EMAIL_SEND_WARNING, TransactionalEmailService } from '../../../services/transactionalEmailService';
+
+/**
+ * H-4 (R1-002/R4): the longest the Solicitud email may hold the 201. The worker call has its own
+ * deadline (`EMAIL_SEND_TIMEOUT_MS`); this one also covers the recipient lookup, so a slow email
+ * never turns a created order into a timed-out request (and a client retry into a duplicate).
+ */
+export const CREATE_EMAIL_DEADLINE_MS = 12_000;
 import { OrderService } from '../../../services/orderService';
 import { withAuth } from '../../../middleware/auth';
 import { isFrontendApiKeyOrAdmin, unauthorizedResponse, validateFrontendApiKey } from '../../../lib/serverApiAuth';
@@ -144,8 +151,25 @@ export const POST: APIRoute = async (context) => {
     // service never throws, and a failed email only adds a warning to the 201.
     let emailWarning: string | undefined;
     if (normalizedStatus === 'request') {
-      const email = await TransactionalEmailService.sendForOrder('solicitud-recibida', order);
-      emailWarning = email.warning;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const deadline = new Promise<{ sent: boolean; warning?: string }>((resolve) => {
+        timer = setTimeout(() => {
+          console.error('[POST /api/orders] El correo de solicitud superó el plazo:', {
+            orderId: order.id,
+            deadlineMs: CREATE_EMAIL_DEADLINE_MS,
+          });
+          resolve({ sent: false, warning: EMAIL_SEND_WARNING });
+        }, CREATE_EMAIL_DEADLINE_MS);
+      });
+      try {
+        const email = await Promise.race([
+          TransactionalEmailService.sendForOrder('solicitud-recibida', order),
+          deadline,
+        ]);
+        emailWarning = email.warning;
+      } finally {
+        clearTimeout(timer);
+      }
     }
     const warning = [saveWarning, emailWarning].filter(Boolean).join(' ') || undefined;
     console.log('📋 PDF generation will be handled by frontend via /api/orders/:id/generate-budget');

@@ -27,8 +27,18 @@ import { OrderService } from "./orderService";
 export const CONTRACT_GENERATION_WARNING =
   "El estado se actualizó, pero no se pudo generar el contrato de la orden. Genéralo manualmente desde la orden.";
 
-/** Upper bound for render + upload; matches the email hop's deadline in the update route. */
+/** Upper bound for the contract render + upload inside a status request. */
 export const CONTRACT_GENERATION_TIMEOUT_MS = 20_000;
+
+/**
+ * H-4 (R3/R4): overall time budget of `onStatusChanged` inside a status request — contract
+ * generation plus the email (attachment fetch and send). Whatever the contract used is no longer
+ * available to the email, which then skips the attachment rather than outlive the budget.
+ */
+export const LIFECYCLE_BUDGET_MS = 25_000;
+
+/** The delivery email (07), the one that carries the contract. */
+const DELIVERY_EMAIL_KEY: TransactionalEmailKey = "equipos-entregados";
 
 export interface LifecycleOrder extends EmailOrder {
   id: number;
@@ -179,7 +189,26 @@ export class OrderLifecycleService {
 
     let current = status;
     let updated: unknown = order;
-    for (const step of steps) {
+    let reportWarning: string | undefined;
+    for (const [index, step] of steps.entries()) {
+      // H-4: the report is written BEFORE the order is completed. If completing fails, a retry
+      // finds the report in place and only has the status step left — an operator is never
+      // locked out by ALREADY_COMPLETED, and an existing report is never rewritten.
+      if (index === steps.length - 1) {
+        const existing = await OrderLifecycleService.getReturnReport(
+          input.orderId,
+        );
+        if (!existing) {
+          reportWarning = await OrderLifecycleService.saveReturnReport(
+            input.orderId,
+            {
+              finalized_at: new Date().toISOString(),
+              finalized_by: input.actorId ?? null,
+              lines: report.lines,
+            },
+          );
+        }
+      }
       const rejection = checkStatusChange({
         from: current,
         to: step,
@@ -217,15 +246,6 @@ export class OrderLifecycleService {
       }
       current = step;
     }
-
-    const reportWarning = await OrderLifecycleService.saveReturnReport(
-      input.orderId,
-      {
-        finalized_at: new Date().toISOString(),
-        finalized_by: input.actorId ?? null,
-        lines: report.lines,
-      },
-    );
 
     // R-09c: the close enters `completed` like any other path, so it gets the same single
     // "Pedido completado" email — judged from where the order started, once for all steps.
@@ -312,6 +332,7 @@ export class OrderLifecycleService {
     newStatus: string,
     options: { previousStatus?: string | null } = {},
   ): Promise<LifecycleResult> {
+    const startedAt = Date.now();
     let generated = false;
     let contractUrl = order.new_pdf_processing_url ?? null;
     const warnings: string[] = [];
@@ -331,15 +352,19 @@ export class OrderLifecycleService {
       }
     }
 
+    // H-4: `null` is as unknown as `undefined` — neither may judge a transition.
     const emailKey =
-      options.previousStatus !== undefined
+      options.previousStatus != null
         ? emailOnTransition(options.previousStatus, newStatus)
         : null;
     if (emailKey) {
       const result = await TransactionalEmailService.sendForOrder(
         emailKey as TransactionalEmailKey,
         order,
-        emailKey === "equipos-entregados" ? { contractUrl } : {},
+        {
+          ...(emailKey === DELIVERY_EMAIL_KEY ? { contractUrl } : {}),
+          budgetMs: Math.max(0, LIFECYCLE_BUDGET_MS - (Date.now() - startedAt)),
+        },
       );
       if (result.warning) warnings.push(result.warning);
     }

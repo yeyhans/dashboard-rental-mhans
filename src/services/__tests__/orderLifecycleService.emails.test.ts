@@ -12,7 +12,9 @@ vi.mock("../transactionalEmailService", () => ({
 }));
 vi.mock("../../lib/supabase", () => ({ supabaseAdmin: { from: vi.fn() } }));
 
-const { OrderLifecycleService } = await import("../orderLifecycleService");
+const { OrderLifecycleService, LIFECYCLE_BUDGET_MS } = await import(
+  "../orderLifecycleService"
+);
 
 const ORDER = {
   id: 7,
@@ -76,7 +78,7 @@ describe("OrderLifecycleService.onStatusChanged — emails", () => {
     expect(sendForOrder).toHaveBeenCalledWith(
       "equipos-entregados",
       expect.objectContaining({ id: 7 }),
-      { contractUrl: "https://f/nuevo.pdf" },
+      expect.objectContaining({ contractUrl: "https://f/nuevo.pdf" }),
     );
   });
 
@@ -88,7 +90,7 @@ describe("OrderLifecycleService.onStatusChanged — emails", () => {
     });
 
     expect(generate).not.toHaveBeenCalled();
-    expect(sendForOrder.mock.calls[0]![2]).toEqual({
+    expect(sendForOrder.mock.calls[0]![2]).toMatchObject({
       contractUrl: "https://f/c.pdf",
     });
   });
@@ -128,5 +130,41 @@ describe("OrderLifecycleService.onStatusChanged — emails", () => {
 
     expect(result.warning).toContain("contrato");
     expect(result.warning).toContain("Correo no enviado.");
+  });
+});
+
+/* H-4 (R3/R4): guard and time budget of the in-request email chain. */
+describe("OrderLifecycleService.onStatusChanged — guard and budget (H-4)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("sends nothing for a null previous status", async () => {
+    await OrderLifecycleService.onStatusChanged(ORDER, "completed", {
+      previousStatus: null,
+    });
+    expect(sendForOrder).not.toHaveBeenCalled();
+  });
+
+  it("hands the email only the time left of the overall budget", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-13T12:00:00Z"));
+    vi.spyOn(
+      OrderLifecycleService,
+      "generateRentalContract",
+    ).mockImplementation(async () => {
+      vi.setSystemTime(new Date("2026-10-13T12:00:20Z"));
+      return "https://media.mariohans.cl/c.pdf";
+    });
+
+    await OrderLifecycleService.onStatusChanged(
+      { ...ORDER, new_pdf_processing_url: null },
+      "in-rental",
+      { previousStatus: "preparation" },
+    );
+
+    const options = sendForOrder.mock.calls[0]![2];
+    expect(options.contractUrl).toBe("https://media.mariohans.cl/c.pdf");
+    expect(options.budgetMs).toBe(LIFECYCLE_BUDGET_MS - 20_000);
   });
 });

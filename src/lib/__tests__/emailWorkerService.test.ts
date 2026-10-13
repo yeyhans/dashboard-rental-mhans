@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createEmailWorkerHeaders, sendEmailViaWorker, validateEmailConfig } from '../emailWorkerService';
+import { EMAIL_SEND_TIMEOUT_MS, createEmailWorkerHeaders, sendEmailViaWorker, validateEmailConfig } from '../emailWorkerService';
 
 describe('dashboard emailWorkerService', () => {
   afterEach(() => {
@@ -83,5 +83,34 @@ describe('sendEmailViaWorker — fails closed without the shared secret (R-09a)'
         headers: expect.objectContaining({ Authorization: 'Bearer worker-secret' }),
       }),
     );
+  });
+});
+
+describe('sendEmailViaWorker — deadline (H-4)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('gives up after its deadline instead of hanging the request', async () => {
+    vi.useFakeTimers();
+    vi.stubEnv('EMAIL_WORKER_SHARED_SECRET', 'worker-secret');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+          })
+      )
+    );
+
+    const pending = sendEmailViaWorker('cliente@x.cl', 'Asunto', '<p>Hola</p>');
+    await vi.advanceTimersByTimeAsync(EMAIL_SEND_TIMEOUT_MS + 1);
+
+    await expect(pending).resolves.toMatchObject({ success: false, error: 'worker_timeout' });
   });
 });

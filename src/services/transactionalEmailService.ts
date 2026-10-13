@@ -1,4 +1,7 @@
-import { sendEmailViaWorker } from "../lib/emailWorkerService";
+import {
+  EMAIL_SEND_TIMEOUT_MS,
+  sendEmailViaWorker,
+} from "../lib/emailWorkerService";
 import { FetchTimeoutError, fetchWithTimeout } from "../lib/fetchWithTimeout";
 import { supabaseAdmin } from "../lib/supabase";
 import {
@@ -21,6 +24,8 @@ export const CONTRACT_ATTACHMENT_WARNING =
 /** Bounds for the contract attachment (handoff §7: contract attached). */
 export const CONTRACT_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
 const CONTRACT_FETCH_TIMEOUT_MS = 10_000;
+/** Below this, a download is not worth starting (H-4). */
+const MIN_CONTRACT_FETCH_MS = 2_000;
 
 /** Where the app's own PDFs are served from (orders/user_profiles rows, verified 2026-10-13). */
 const DEFAULT_ATTACHMENT_HOSTS = ["media.mariohans.cl", "workers.mariohans.cl"];
@@ -114,6 +119,11 @@ export interface SendForOrderOptions {
   contractUrl?: string | null;
   /** Text for "pedido-actualizado". */
   detalleModificaciones?: string | null;
+  /**
+   * H-4: milliseconds this send may still take (the lifecycle's overall budget minus what the
+   * contract generation used). Undefined means no outer budget.
+   */
+  budgetMs?: number;
 }
 
 export interface SendResult {
@@ -150,10 +160,29 @@ export class TransactionalEmailService {
 
       let warning: string | undefined;
       let attachments: { filename: string; content: string }[] | undefined;
-      if (key === "equipos-entregados" && options.contractUrl) {
+      // H-4: time left for the download once the send itself is reserved; too little, no fetch.
+      const fetchBudgetMs =
+        options.budgetMs === undefined
+          ? CONTRACT_FETCH_TIMEOUT_MS
+          : Math.min(
+              CONTRACT_FETCH_TIMEOUT_MS,
+              options.budgetMs - EMAIL_SEND_TIMEOUT_MS,
+            );
+      if (
+        key === "equipos-entregados" &&
+        options.contractUrl &&
+        fetchBudgetMs < MIN_CONTRACT_FETCH_MS
+      ) {
+        console.error(
+          "[Email] Sin tiempo para adjuntar el contrato, se envía sin él:",
+          { orderId: order.id, budgetMs: options.budgetMs },
+        );
+        warning = CONTRACT_ATTACHMENT_WARNING;
+      } else if (key === "equipos-entregados" && options.contractUrl) {
         const content = await TransactionalEmailService.fetchContract(
           options.contractUrl,
           order.id,
+          fetchBudgetMs,
         );
         if (content) {
           attachments = [
@@ -308,6 +337,7 @@ export class TransactionalEmailService {
   private static async fetchContract(
     url: string,
     orderId: number,
+    timeoutMs: number = CONTRACT_FETCH_TIMEOUT_MS,
   ): Promise<string | null> {
     try {
       if (!isAllowedAttachmentUrl(url)) {
@@ -316,7 +346,7 @@ export class TransactionalEmailService {
       const response = await fetchWithTimeout(
         url,
         { redirect: "error" },
-        CONTRACT_FETCH_TIMEOUT_MS,
+        timeoutMs,
       );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const declared = Number(response.headers.get("content-length"));

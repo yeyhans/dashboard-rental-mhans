@@ -22,6 +22,7 @@ const sendForOrder = vi.hoisted(() =>
 );
 vi.mock("../../../../services/transactionalEmailService", () => ({
   TransactionalEmailService: { sendForOrder },
+  EMAIL_SEND_WARNING: "No se pudo enviar el correo al cliente.",
 }));
 
 vi.mock("../../../../lib/serverApiAuth", () => ({
@@ -118,5 +119,28 @@ describe("POST /api/orders — Solicitud email (R-09d)", () => {
     expect(response.status).toBe(201);
     expect(body.warning).toContain("0019");
     expect(body.warning).toContain("No se pudo enviar el correo.");
+  });
+});
+
+/** H-4 (R1-002/R4): the Solicitud email cannot hold the 201 past the route's deadline. */
+describe("POST /api/orders — email deadline (H-4)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("answers 201 with a warning when the email does not finish in time", async () => {
+    vi.useFakeTimers();
+    createOrderDetailed.mockResolvedValue({
+      order: { id: 9, status: "request" },
+    });
+    sendForOrder.mockImplementationOnce(() => new Promise(() => {}));
+    const { POST, CREATE_EMAIL_DEADLINE_MS } = await import("../index");
+
+    const pending = POST(postOrder());
+    await vi.advanceTimersByTimeAsync(CREATE_EMAIL_DEADLINE_MS + 1);
+    const response = await pending;
+
+    expect(response.status).toBe(201);
+    expect((await response.json()).warning).toContain("correo");
   });
 });
