@@ -1,6 +1,7 @@
 import {
   PricingError,
   computeOrderTotals,
+  parseDiscountPercent,
   type OrderTotals,
   type PricingCoupon,
   type PricingLineInput,
@@ -19,6 +20,11 @@ export interface PricedOrderFields {
   calculated_iva: number;
   calculated_total: number;
   total: number;
+  /**
+   * R-05: present only when the update set it (a number, or null to clear it), so an edit that
+   * does not touch the discount never writes a column that may not exist yet (migration 0019).
+   */
+  discount_percent?: number | null;
 }
 
 type OrderRecord = Record<string, unknown>;
@@ -36,6 +42,7 @@ const PRICING_KEYS = [
   'calculated_total',
   'coupon_lines',
   'apply_iva',
+  'discount_percent',
 ] as const;
 
 function parseLineItems(value: unknown): PricingLineInput[] {
@@ -225,14 +232,21 @@ export class OrderPricingService {
       orderId: asId(current.id),
     });
 
-    return toFields(
+    // R-05: a manual percentage (stored, or set by this update) is recomputed here from the
+    // products subtotal; the client's `calculated_discount` is only used for a flat discount.
+    // A coupon still wins over both (`computeOrderTotals` precedence).
+    const discountPercent = parseDiscountPercent(pick('discount_percent'));
+
+    const fields = toFields(
       computeOrderTotals({
         ...timing,
         shippingTotal: asNumeric(pick('shipping_total')),
         coupon,
         discount: asNumeric(pick('calculated_discount')),
+        discountPercent,
         applyIva,
       })
     );
+    return update.discount_percent !== undefined ? { ...fields, discount_percent: discountPercent } : fields;
   }
 }

@@ -254,12 +254,36 @@ export const PUT: APIRoute = withAuth(
 
       // The status change is saved FIRST. The customer email is best effort: if it fails or times out
       // the order stays saved and the response carries a non-fatal warning (D-9).
-      const updatedOrder = await OrderService.updateOrder(
-        Number(orderId),
-        sanitizedData,
-      );
+      // R-05: `orders.discount_percent` arrives with migration 0019. Until it is applied, the
+      // order is saved without it (the recomputed `calculated_discount` still lands) and the
+      // response says so, instead of the whole edit failing on one missing column.
+      let discountPercentWarning: string | undefined;
+      let updatedOrder;
+      try {
+        updatedOrder = await OrderService.updateOrder(
+          Number(orderId),
+          sanitizedData,
+        );
+      } catch (saveError) {
+        const code = (saveError as { code?: string } | null)?.code;
+        const missingColumn = code === "42703" || code === "PGRST204";
+        if (!missingColumn || !("discount_percent" in sanitizedData)) {
+          throw saveError;
+        }
+        console.error(
+          "[PUT /api/orders/update/:id] orders.discount_percent no existe (migración 0019 pendiente):",
+          { orderId },
+        );
+        delete sanitizedData.discount_percent;
+        updatedOrder = await OrderService.updateOrder(
+          Number(orderId),
+          sanitizedData,
+        );
+        discountPercentWarning =
+          "La orden se guardó con el monto del descuento, pero el porcentaje no: falta aplicar la migración 0019.";
+      }
 
-      let warning: string | undefined;
+      let warning: string | undefined = discountPercentWarning;
       if (notificationTarget) {
         const notificationOrder = { ...currentOrder, ...sanitizedData };
         const notificationUrl = new URL(
@@ -300,7 +324,9 @@ export const PUT: APIRoute = withAuth(
                 error: errorText,
               },
             );
-            warning = NOTIFICATION_WARNING;
+            warning = warning
+              ? `${warning} ${NOTIFICATION_WARNING}`
+              : NOTIFICATION_WARNING;
           } else {
             console.log(
               "✅ [Order Update] Notification email sent successfully",
@@ -319,7 +345,9 @@ export const PUT: APIRoute = withAuth(
                   : notificationError,
             },
           );
-          warning = NOTIFICATION_WARNING;
+          warning = warning
+            ? `${warning} ${NOTIFICATION_WARNING}`
+            : NOTIFICATION_WARNING;
         }
       }
 

@@ -19,6 +19,8 @@ import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { apiClient } from '@/services/apiClient';
 import OrderDriverField from '@/components/delivery/OrderDriverField';
 import ReturnReportSummary from '@/components/checkin/ReturnReportSummary';
+import OrderDiscountControl from '@/components/orders/OrderDiscountControl';
+import { initialManualDiscount, manualDiscountPricing, type ManualDiscountInput } from '@/lib/pricing';
 import type { Database } from '@/types/database';
 import { toast } from 'sonner';
 import { WarrantyImageUpload } from './WarrantyImageUpload';
@@ -93,6 +95,19 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   const [reserveType, setReserveType] = useState<string>((orderData as any)?.reserve_type || 'percent');
   const [reserveValue, setReserveValue] = useState<string>(String((orderData as any)?.reserve_value ?? 25));
   const [savingReserve, setSavingReserve] = useState(false);
+
+  // R-05: manual discount by % or by $ (no coupon). Starts from the stored percentage
+  // (`orders.discount_percent`, migration 0019), else the stored flat amount of an order without
+  // a coupon. The server recomputes the amount from the percentage on save. Declared with the
+  // other state, before the early returns below.
+  const [manualDiscount, setManualDiscount] = useState<ManualDiscountInput>(() => {
+    const lines = typeof orderData?.coupon_lines === 'string'
+      ? (() => { try { return JSON.parse(orderData.coupon_lines); } catch { return []; } })()
+      : orderData?.coupon_lines;
+    const hasStoredCoupon = Array.isArray(lines) && lines.length > 0;
+    const storedAmount = hasStoredCoupon ? 0 : parseFloat(String(orderData?.calculated_discount ?? 0)) || 0;
+    return initialManualDiscount(hasStoredCoupon ? null : (orderData as any)?.discount_percent, storedAmount);
+  });
 
   // Financial editing states
   const [isEditingFinancials, setIsEditingFinancials] = useState(false);
@@ -515,15 +530,7 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     toast.info('Cupón removido');
   };
 
-  // Manual discount stored on the order (no coupon). A stored coupon discount is not manual: it is
-  // recomputed from the coupon, so removing the coupon removes its discount.
-  const storedManualDiscount = (() => {
-    const lines = typeof orderData?.coupon_lines === 'string'
-      ? (() => { try { return JSON.parse(orderData.coupon_lines); } catch { return []; } })()
-      : orderData?.coupon_lines;
-    const hasStoredCoupon = Array.isArray(lines) && lines.length > 0;
-    return hasStoredCoupon ? 0 : parseFloat(String(orderData?.calculated_discount ?? 0)) || 0;
-  })();
+  const manualDiscountInputs = manualDiscountPricing(manualDiscount);
 
   // Order money with the shared pricing module (src/lib/pricing.ts). Preview only: the server
   // recomputes and persists the same figures when the order is saved.
@@ -540,7 +547,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         jornadas: Math.max(1, numDays || 1),
         shippingTotal: shipping,
         coupon: appliedCoupon,
-        discount: appliedCoupon ? null : storedManualDiscount,
+        discount: appliedCoupon ? null : manualDiscountInputs.discount,
+        discountPercent: appliedCoupon ? null : manualDiscountInputs.discountPercent,
         applyIva,
       });
       return {
@@ -677,6 +685,8 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
         // Usar los cálculos actualizados siguiendo la fórmula de CreateOrderForm
         calculated_subtotal: calculations.calculated_subtotal,
         calculated_discount: calculations.calculated_discount, // Descuento aplicado (cupones)
+        // R-05: the percentage travels so the server recomputes; null clears it (flat or none).
+        discount_percent: appliedCoupon ? undefined : manualDiscountInputs.discountPercent,
         calculated_iva: calculations.calculated_iva,
         apply_iva: applyIva,
         shipping_total: deliveryMethod === 'pickup' ? 0 : shipping,
@@ -3261,6 +3271,17 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
                   }
                   return null;
                 })()
+              )}
+
+              {/* R-05: descuento manual por % o $ (sin cupón) */}
+              {isEditingFinancials && (
+                <OrderDiscountControl
+                  idPrefix={`order-${orderData.id}`}
+                  value={manualDiscount}
+                  onChange={setManualDiscount}
+                  productsSubtotal={calculateEditedSubtotal()}
+                  disabled={Boolean(appliedCoupon)}
+                />
               )}
 
               {/* Calculated Discount Display */}

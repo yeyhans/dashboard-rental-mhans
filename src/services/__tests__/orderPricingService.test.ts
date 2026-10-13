@@ -261,3 +261,41 @@ describe('OrderPricingService.priceOrderUpdate', () => {
     expect(fields?.calculated_subtotal).toBe(91000);
   });
 });
+
+/** R-05: percentage discount without a coupon, recomputed on the server. */
+describe('OrderPricingService.priceOrderUpdate — discount_percent', () => {
+  const current = { ...order1573, id: 1573, customer_id: 7, calculated_iva: 18000, calculated_subtotal: 96000 };
+
+  it('recomputes the discount from the percentage and ignores the client amount', async () => {
+    const fields = await OrderPricingService.priceOrderUpdate(current, {
+      discount_percent: 10,
+      calculated_discount: 999,
+    });
+    expect(fields?.calculated_discount).toBe(8100);
+    expect(fields?.discount_percent).toBe(10);
+  });
+
+  it('keeps applying the stored percentage when the items change', async () => {
+    const fields = await OrderPricingService.priceOrderUpdate(
+      { ...current, discount_percent: 10 },
+      { num_jornadas: 1, order_fecha_inicio: '2026-09-20', order_fecha_termino: '2026-09-20' }
+    );
+    expect(fields?.calculated_discount).toBe(2700);
+    expect(fields).not.toHaveProperty('discount_percent');
+  });
+
+  it('switches back to a flat amount when the percentage is cleared', async () => {
+    const fields = await OrderPricingService.priceOrderUpdate(
+      { ...current, discount_percent: 10 },
+      { discount_percent: null, calculated_discount: 5000 }
+    );
+    expect(fields?.calculated_discount).toBe(5000);
+    expect(fields?.discount_percent).toBeNull();
+  });
+
+  it('rejects an out-of-range percentage', async () => {
+    await expect(
+      OrderPricingService.priceOrderUpdate(current, { discount_percent: 150 })
+    ).rejects.toThrow(PricingError);
+  });
+});

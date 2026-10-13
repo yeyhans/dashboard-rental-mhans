@@ -9,7 +9,9 @@
  *  1. line subtotal = round(unit daily price x quantity x jornadas)
  *  2. jornadas = inclusive calendar days, computed in UTC from the Y-M-D parts
  *  3. products subtotal = sum of line subtotals
- *  4. discount applies to products only, clamped to [0, products subtotal]
+ *  4. discount applies to products only, clamped to [0, products subtotal]. Precedence: coupon,
+ *     then a manual percentage (R-05, same base and rounding as a percent coupon), then a manual
+ *     flat amount
  *  5. net (`calculated_subtotal`) = products subtotal - discount + shipping (shipping is taxed)
  *  6. iva = round(net x 19%) when IVA applies; total = net + iva
  *  7. reserve = `finance.reserveAmount`; balance = total - reserve
@@ -52,8 +54,13 @@ export interface OrderTotalsInput {
   readonly shippingTotal?: NumericLike | undefined;
   /** Takes precedence over `discount`. */
   readonly coupon?: PricingCoupon | null | undefined;
-  /** Manual flat discount, used when there is no coupon. */
+  /** Manual flat discount, used when there is no coupon and no `discountPercent`. */
   readonly discount?: NumericLike | undefined;
+  /**
+   * R-05: manual percentage (0, 100] over the products subtotal, used when there is no coupon.
+   * Wins over `discount`. Validate with `parseDiscountPercent` before calling.
+   */
+  readonly discountPercent?: NumericLike | null | undefined;
   /** Defaults to true. */
   readonly applyIva?: boolean | undefined;
   readonly reserveType?: string | null | undefined;
@@ -173,6 +180,63 @@ export function computeDiscount(coupon: PricingCoupon | null | undefined, produc
   return clampDiscount(discount, productsSubtotal);
 }
 
+/** Same arithmetic as a percent coupon: products x % / 100, half-up, clamped. */
+function percentDiscount(productsSubtotal: number, percent: number): number {
+  return clampDiscount(roundHalfUp((productsSubtotal * percent) / 100), productsSubtotal);
+}
+
+/**
+ * R-05: server-side reading of `orders.discount_percent`. Empty means "no percentage"; anything
+ * else must be a number in (0, 100] with at most two decimals (the column is numeric(5,2)).
+ */
+export function parseDiscountPercent(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = toNumber(value as NumericLike);
+  if (
+    !Number.isFinite(parsed) ||
+    parsed <= 0 ||
+    parsed > 100 ||
+    Math.abs(Math.round(parsed * 100) - parsed * 100) > 1e-9
+  ) {
+    throw new PricingError('El descuento porcentual debe ser mayor que 0 y como máximo 100, con hasta dos decimales');
+  }
+  return parsed;
+}
+
+/** The order form's "Descuento" control: a mode and the raw text the admin typed. */
+export type ManualDiscountMode = 'percent' | 'fixed';
+export interface ManualDiscountInput {
+  readonly mode: ManualDiscountMode;
+  readonly value: string;
+}
+
+/** Control -> pricing inputs. An empty or invalid value means no manual discount of that kind. */
+export function manualDiscountPricing(input: ManualDiscountInput): {
+  discount: number | null;
+  discountPercent: number | null;
+} {
+  const value = toNumber(input.value === '' ? null : input.value);
+  if (!Number.isFinite(value) || value <= 0) return { discount: null, discountPercent: null };
+  if (input.mode === 'percent') {
+    return { discount: null, discountPercent: value <= 100 ? value : null };
+  }
+  return { discount: value, discountPercent: null };
+}
+
+/** The CLP amount the control would discount, for the preview next to it. */
+export function manualDiscountAmount(input: ManualDiscountInput, productsSubtotal: number): number {
+  const { discount, discountPercent } = manualDiscountPricing(input);
+  if (discountPercent !== null) return percentDiscount(productsSubtotal, discountPercent);
+  return discount !== null ? clampDiscount(discount, productsSubtotal) : 0;
+}
+
+/** Initial control state from the stored order: its percentage, else its flat amount. */
+export function initialManualDiscount(storedPercent: unknown, storedAmount: number): ManualDiscountInput {
+  const percent = toNumber((storedPercent ?? null) as NumericLike);
+  if (Number.isFinite(percent) && percent > 0) return { mode: 'percent', value: String(percent) };
+  return { mode: 'fixed', value: storedAmount > 0 ? String(storedAmount) : '' };
+}
+
 function clampDiscount(discount: number, productsSubtotal: number): number {
   return Math.min(productsSubtotal, Math.max(0, roundHalfUp(discount)));
 }
@@ -207,8 +271,11 @@ export function computeOrderTotals(input: OrderTotalsInput): OrderTotals {
   const shippingTotal = roundHalfUp(optionalNonNegative(input.shippingTotal, 'envío'));
 
   let discount = 0;
+  const percent = toNumber(input.discountPercent ?? null);
   if (input.coupon) {
     discount = computeDiscount(input.coupon, productsSubtotal);
+  } else if (Number.isFinite(percent) && percent > 0 && percent <= 100) {
+    discount = percentDiscount(productsSubtotal, percent);
   } else {
     const manual = toNumber(input.discount);
     discount = Number.isFinite(manual) ? clampDiscount(manual, productsSubtotal) : 0;

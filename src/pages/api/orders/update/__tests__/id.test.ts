@@ -670,3 +670,58 @@ describe("avisos combinados", () => {
     expect(body.warning).toContain("Aviso del ciclo de vida.");
   });
 });
+
+/** R-05: `orders.discount_percent` may not exist yet (migration 0019 not applied). */
+describe("descuento porcentual sin la columna", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("saves the order without discount_percent and warns, instead of failing", async () => {
+    from.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          single: async () => ({
+            data: { id: 123, status: "confirmed" },
+            error: null,
+          }),
+        }),
+      }),
+    });
+    priceOrderUpdate.mockResolvedValueOnce({
+      calculated_discount: 8100,
+      discount_percent: 10,
+    });
+    updateOrder
+      .mockRejectedValueOnce({
+        code: "42703",
+        message:
+          'column "discount_percent" of relation "orders" does not exist',
+      })
+      .mockResolvedValueOnce({ id: 123 });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { PUT } = await import("../[id]");
+
+    const response = await PUT({
+      params: { id: "123" },
+      request: new Request(
+        "https://dashboard.mariohans.cl/api/orders/update/123",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ discount_percent: 10 }),
+        },
+      ),
+      locals: { user: { id: "admin-1", role: "admin" } },
+    } as never);
+
+    expect(response.status).toBe(200);
+    expect(updateOrder).toHaveBeenCalledTimes(2);
+    expect(updateOrder.mock.calls[1][1]).not.toHaveProperty("discount_percent");
+    expect(updateOrder.mock.calls[1][1]).toMatchObject({
+      calculated_discount: 8100,
+    });
+    const body = await response.json();
+    expect(body.warning).toContain("0019");
+  });
+});

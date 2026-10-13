@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import {
   Sheet,
@@ -19,7 +19,8 @@ import type { Database } from '../../types/database';
 import type { Product } from '../../types/product';
 import { ShippingService, type ShippingMethod, formatShippingCost, formatDeliveryTime } from '../../services/shippingService';
 import { isBudgetStatus } from '../../lib/orderStatus';
-import { PricingError, computeOrderTotals, countJornadas } from '../../lib/pricing';
+import { PricingError, computeOrderTotals, countJornadas, manualDiscountPricing, type ManualDiscountInput } from '../../lib/pricing';
+import OrderDiscountControl from './OrderDiscountControl';
 
 type Coupon = Database['public']['Tables']['coupons']['Row'];
 
@@ -132,6 +133,12 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers, triggerCla
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<NewOrderForm>(initialFormState);
+  // R-05: manual discount by % or $ without a coupon. Read through a ref because the totals are
+  // recomputed inside setFormData callbacks. On create only the resulting amount is sent
+  // (`calculated_discount`, an admin flat discount the server clamps); the percentage itself is
+  // persisted from the order edit screen.
+  const [manualDiscount, setManualDiscount] = useState<ManualDiscountInput>({ mode: 'percent', value: '' });
+  const manualDiscountRef = useRef<ManualDiscountInput>(manualDiscount);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
@@ -374,6 +381,7 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers, triggerCla
         jornadas: Math.max(1, numDays),
         shippingTotal: parseFloat(shipping) || 0,
         coupon,
+        ...(coupon ? {} : manualDiscountPricing(manualDiscountRef.current)),
         applyIva,
       });
     } catch (error) {
@@ -1288,6 +1296,30 @@ const CreateOrderForm = ({ onOrderCreated, sessionData, initialUsers, triggerCla
             showCoupons={true}
             showShipping={false}
             showManualDiscount={false}
+          />
+
+          {/* R-05: descuento manual por % o $ (sin cupón) */}
+          <OrderDiscountControl
+            idPrefix="new-order"
+            value={manualDiscount}
+            onChange={(next) => {
+              manualDiscountRef.current = next;
+              setManualDiscount(next);
+              setFormData(prev => ({
+                ...prev,
+                metadata: {
+                  ...prev.metadata,
+                  ...updateAllCalculations(
+                    prev.line_items,
+                    parseInt(prev.metadata.num_jornadas) || 1,
+                    prev.metadata.shipping_total,
+                    appliedCoupon
+                  )
+                }
+              }));
+            }}
+            productsSubtotal={calculateProductsSubtotal(formData.line_items, parseInt(formData.metadata.num_jornadas) || 1)}
+            disabled={Boolean(appliedCoupon)}
           />
 
         </div>
