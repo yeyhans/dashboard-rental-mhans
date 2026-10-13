@@ -2,7 +2,12 @@ import {
   EMAIL_SEND_TIMEOUT_MS,
   sendEmailViaWorker,
 } from "../lib/emailWorkerService";
-import { FetchTimeoutError, fetchWithTimeout } from "../lib/fetchWithTimeout";
+import { FetchTimeoutError } from "../lib/fetchWithTimeout";
+import {
+  ATTACHMENT_FETCH_TIMEOUT_MS,
+  ATTACHMENT_MAX_BYTES,
+  fetchAttachment,
+} from "../lib/safeFetch";
 import { supabaseAdmin } from "../lib/supabase";
 import {
   renderTransactionalEmail,
@@ -22,79 +27,9 @@ export const CONTRACT_ATTACHMENT_WARNING =
   "El correo se envió sin el contrato adjunto: no se pudo obtener el PDF.";
 
 /** Bounds for the contract attachment (handoff §7: contract attached). */
-export const CONTRACT_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
-const CONTRACT_FETCH_TIMEOUT_MS = 10_000;
+export const CONTRACT_ATTACHMENT_MAX_BYTES = ATTACHMENT_MAX_BYTES;
 /** Below this, a download is not worth starting (H-4). */
 const MIN_CONTRACT_FETCH_MS = 2_000;
-
-/** Where the app's own PDFs are served from (orders/user_profiles rows, verified 2026-10-13). */
-const DEFAULT_ATTACHMENT_HOSTS = ["media.mariohans.cl", "workers.mariohans.cl"];
-
-/**
- * H-4 (R1-001): the hosts a contract attachment may be downloaded from — the public media host,
- * the upload worker the app writes through (`PUBLIC_CLOUDFLARE_WORKER_URL`, the same base
- * `generateRentalContract` uploads to), and any extra listed in `EMAIL_ATTACHMENT_HOSTS`.
- */
-export function contractAttachmentHosts(): string[] {
-  const hosts = new Set(DEFAULT_ATTACHMENT_HOSTS);
-  try {
-    const worker = import.meta.env.PUBLIC_CLOUDFLARE_WORKER_URL;
-    if (worker) hosts.add(new URL(worker).hostname);
-  } catch {
-    // An invalid worker URL adds nothing.
-  }
-  for (const extra of String(
-    import.meta.env.EMAIL_ATTACHMENT_HOSTS ?? "",
-  ).split(",")) {
-    if (extra.trim()) hosts.add(extra.trim().toLowerCase());
-  }
-  return [...hosts];
-}
-
-function isAllowedAttachmentUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === "https:" &&
-      contractAttachmentHosts().includes(url.hostname)
-    );
-  } catch {
-    return false;
-  }
-}
-
-/** Reads a body up to `max` bytes, cancelling the stream as soon as it would exceed it. */
-async function readCapped(
-  response: Response,
-  max: number,
-): Promise<Uint8Array> {
-  if (!response.body) {
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > max)
-      throw new Error(`Tamaño fuera de rango: ${bytes.byteLength} bytes`);
-    return bytes;
-  }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > max) {
-      await reader.cancel();
-      throw new Error(`Tamaño fuera de rango: más de ${max} bytes`);
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
-}
 
 /** Decoded size of a base64 string, without decoding it. */
 function base64Bytes(content: string): number {
@@ -163,9 +98,9 @@ export class TransactionalEmailService {
       // H-4: time left for the download once the send itself is reserved; too little, no fetch.
       const fetchBudgetMs =
         options.budgetMs === undefined
-          ? CONTRACT_FETCH_TIMEOUT_MS
+          ? ATTACHMENT_FETCH_TIMEOUT_MS
           : Math.min(
-              CONTRACT_FETCH_TIMEOUT_MS,
+              ATTACHMENT_FETCH_TIMEOUT_MS,
               options.budgetMs - EMAIL_SEND_TIMEOUT_MS,
             );
       if (
@@ -330,34 +265,22 @@ export class TransactionalEmailService {
   /**
    * The contract PDF as base64, or null (disallowed URL, redirect, timeout, error status,
    * oversized). H-4 (R1-001): the URL comes from the order row, so it is fetched only over https
-   * from a host the app itself writes PDFs to (`contractAttachmentHosts`), never following a
-   * redirect, and read with a hard byte cap — checked on `content-length` first, then enforced
+   * from a host the app itself writes PDFs to (`attachmentHosts` in `lib/safeFetch.ts`), never
+   * following a redirect, and read with a hard byte cap — checked on `content-length` first, then enforced
    * on the stream, so a lying or missing header cannot make the server buffer an unbounded body.
    */
   private static async fetchContract(
     url: string,
     orderId: number,
-    timeoutMs: number = CONTRACT_FETCH_TIMEOUT_MS,
+    timeoutMs: number = ATTACHMENT_FETCH_TIMEOUT_MS,
   ): Promise<string | null> {
     try {
-      if (!isAllowedAttachmentUrl(url)) {
-        throw new Error("URL del contrato fuera de los hosts permitidos");
-      }
-      const response = await fetchWithTimeout(
-        url,
-        { redirect: "error" },
+      // D1-c: the allowlist, redirect refusal and byte cap live in `fetchAttachment`, shared
+      // with the manual email route.
+      const bytes = await fetchAttachment(url, {
+        maxBytes: CONTRACT_ATTACHMENT_MAX_BYTES,
         timeoutMs,
-      );
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const declared = Number(response.headers.get("content-length"));
-      if (
-        Number.isFinite(declared) &&
-        declared > CONTRACT_ATTACHMENT_MAX_BYTES
-      ) {
-        throw new Error(`Tamaño declarado fuera de rango: ${declared} bytes`);
-      }
-      const bytes = await readCapped(response, CONTRACT_ATTACHMENT_MAX_BYTES);
-      if (bytes.byteLength === 0) throw new Error("PDF vacío");
+      });
       return Buffer.from(bytes).toString("base64");
     } catch (error) {
       console.error(

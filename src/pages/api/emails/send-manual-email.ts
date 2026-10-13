@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { withAuth } from '../../../middleware/auth';
 import { checkRateLimit, getClientIp, rateLimitResponse, RATE_LIMITS } from '../../../lib/rateLimit';
 import { sendEmailViaWorker } from '../../../lib/emailWorkerService';
+import { fetchAttachment } from '../../../lib/safeFetch';
 
 interface ManualEmailRequest {
   to: string;
@@ -168,14 +169,18 @@ async function sendViaWorker(
       const processedAttachments = await Promise.all(
         metadata.attachments.map(async (att: any) => {
           if (att.url) {
-            // Fetch content from URL
-            const response = await fetch(att.url);
-            if (!response.ok) {
-              console.warn(`⚠️ Failed to fetch attachment: ${att.url}`);
+            // D1-c: admin-supplied URL — only the app's own hosts, no redirects, byte cap.
+            let bytes: Uint8Array;
+            try {
+              bytes = await fetchAttachment(String(att.url));
+            } catch (error) {
+              console.error('[Email] Adjunto descartado en correo manual:', {
+                orderId: metadata?.order_id,
+                error: error instanceof Error ? error.message : error,
+              });
               return null;
             }
-            const arrayBuffer = await response.arrayBuffer();
-            const base64 = Buffer.from(arrayBuffer).toString('base64');
+            const base64 = Buffer.from(bytes).toString('base64');
             return {
               filename: att.filename || att.url.split('/').pop() || 'attachment',
               content: base64,
