@@ -135,7 +135,9 @@ describe("renderTransactionalEmail — environment (H-4)", () => {
     });
 
     expect(html).toContain('src="https://dash.example.cl/logo-white.png"');
-    expect(html).toContain('href="https://tienda.example.cl/registro"');
-    expect(html).not.toContain("https://dash.example.cl/registro");
+    // D1-d: the customer site serves the sign-up page at /register (register.astro).
+    expect(html).toContain('href="https://tienda.example.cl/register"');
+    expect(html).not.toContain('/registro"');
+    expect(html).not.toContain("https://dash.example.cl/register");
   });
 });
