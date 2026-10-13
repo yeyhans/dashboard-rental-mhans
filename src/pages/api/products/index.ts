@@ -3,8 +3,9 @@ import { ProductService } from '../../../services/productService';
 import { withAuth } from '../../../middleware/auth';
 // withCors removed - global middleware handles CORS
 
-// GET is public - no auth required for product listing
-export const GET: APIRoute = async (context) => {
+// GET requires admin authentication (T-07): the payload carries internal catalogue fields
+// (purchase cost, supplier, stock). The public site reads its catalogue from its own Supabase client.
+export const GET: APIRoute = withAuth(async (context) => {
   try {
     const url = new URL(context.request.url);
     const page = parseInt(url.searchParams.get('page') || '1');
@@ -48,7 +49,7 @@ export const GET: APIRoute = async (context) => {
       }
     });
   }
-};
+});
 
 // POST requires admin authentication
 export const POST: APIRoute = withAuth(async (context) => {
