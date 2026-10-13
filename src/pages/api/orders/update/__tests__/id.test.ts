@@ -23,7 +23,10 @@ vi.mock("../../../../../middleware/auth", () => ({
     },
 }));
 
-vi.mock("../../../../../services/orderService", () => ({
+vi.mock("../../../../../services/orderService", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../../../../../services/orderService")
+  >()),
   OrderService: { updateOrder },
 }));
 
@@ -719,5 +722,46 @@ describe("descuento porcentual sin la columna", () => {
     });
     const body = await response.json();
     expect(body.warning).toContain("0019");
+  });
+
+  it("does not mask a different missing column behind the discount_percent retry (D1-b)", async () => {
+    from.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          single: async () => ({
+            data: { id: 123, status: "confirmed" },
+            error: null,
+          }),
+        }),
+      }),
+    });
+    priceOrderUpdate.mockResolvedValueOnce({
+      calculated_discount: 8100,
+      discount_percent: 10,
+    });
+    updateOrder
+      .mockRejectedValueOnce({
+        code: "42703",
+        message: 'column "other_column" of relation "orders" does not exist',
+      })
+      .mockResolvedValueOnce({ id: 123 });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { PUT } = await import("../[id]");
+
+    const response = await PUT({
+      params: { id: "123" },
+      request: new Request(
+        "https://dashboard.mariohans.cl/api/orders/update/123",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ discount_percent: 10 }),
+        },
+      ),
+      locals: { user: { id: "admin-1", role: "admin" } },
+    } as never);
+
+    expect(updateOrder).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(500);
   });
 });

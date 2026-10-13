@@ -1,7 +1,10 @@
 import type { APIRoute } from "astro";
 import { canonicalStatus } from "../../../../lib/orderStatus";
 import { checkStatusChange } from "../../../../lib/orderTransitionGate";
-import { OrderService } from "../../../../services/orderService";
+import {
+  isMissingColumnError,
+  OrderService,
+} from "../../../../services/orderService";
 import { OrderLifecycleService } from "../../../../services/orderLifecycleService";
 import { OrderPricingService } from "../../../../services/orderPricingService";
 import { PricingError } from "../../../../lib/pricing";
@@ -241,9 +244,11 @@ export const PUT: APIRoute = withAuth(
           sanitizedData,
         );
       } catch (saveError) {
-        const code = (saveError as { code?: string } | null)?.code;
-        const missingColumn = code === "42703" || code === "PGRST204";
-        if (!missingColumn || !("discount_percent" in sanitizedData)) {
+        // D1-b: the code AND the column name, so a different missing column still fails loudly.
+        if (
+          !isMissingColumnError(saveError, "discount_percent") ||
+          !("discount_percent" in sanitizedData)
+        ) {
           throw saveError;
         }
         console.error(
