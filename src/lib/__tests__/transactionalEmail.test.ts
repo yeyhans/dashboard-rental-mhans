@@ -109,3 +109,13 @@ describe("renderTransactionalEmail", () => {
     ).toThrow();
   });
 });
+
+describe("renderTransactionalEmail — order without a PDF yet (R-09d)", () => {
+  it("points the download button at the customer's orders page", () => {
+    const { html } = renderTransactionalEmail("solicitud-recibida", {
+      nombre_cliente: "Ana",
+      numero_pedido: 9,
+    });
+    expect(html).toMatch(/href="https:\/\/[^"]+\/cuenta\/pedidos"/);
+  });
+});

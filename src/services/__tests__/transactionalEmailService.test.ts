@@ -190,3 +190,50 @@ describe("TransactionalEmailService.sendForOrder", () => {
     expect(result.warning).toContain("contrato");
   });
 });
+
+/* R-09d: account emails (Contrato) are not tied to an order. */
+describe("TransactionalEmailService.sendToCustomer", () => {
+  it("sends the contract email with the signed contract attached", async () => {
+    const result = await TransactionalEmailService.sendToCustomer(
+      "contrato",
+      { email: "ana@example.com", name: "Ana Pérez" },
+      {
+        attachment: { filename: "Contrato_arriendo.pdf", content: "JVBERg==" },
+      },
+    );
+
+    expect(result).toEqual({ sent: true });
+    const [to, subject, html, attachments] = sendEmailViaWorker.mock.calls[0]!;
+    expect(to).toBe("ana@example.com");
+    expect(subject).toBe("Mario Hans FotoRental · Contrato de arriendo");
+    expect(html).toContain("Ana Pérez");
+    expect(attachments).toEqual([
+      { filename: "Contrato_arriendo.pdf", content: "JVBERg==" },
+    ]);
+  });
+
+  it("warns and sends nothing without an address", async () => {
+    const result = await TransactionalEmailService.sendToCustomer("contrato", {
+      email: " ",
+      name: "Ana",
+    });
+    expect(sendEmailViaWorker).not.toHaveBeenCalled();
+    expect(result).toEqual({ sent: false, warning: EMAIL_SEND_WARNING });
+  });
+});
+
+describe("contract route wiring (R-09d)", () => {
+  it("sends the Contrato design through the service instead of its own worker call", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const source = readFileSync(
+      fileURLToPath(
+        new URL("../../pages/api/contracts/generate-pdf.ts", import.meta.url),
+      ),
+      "utf8",
+    );
+    expect(source).toContain("TransactionalEmailService.sendToCustomer(");
+    expect(source).toContain('"contrato"');
+    expect(source).not.toContain("/send-email");
+  });
+});

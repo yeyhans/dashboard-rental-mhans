@@ -15,6 +15,15 @@ vi.mock("../../../../services/orderService", () => ({
   },
 }));
 
+const sendForOrder = vi.hoisted(() =>
+  vi.fn(
+    async (): Promise<{ sent: boolean; warning?: string }> => ({ sent: true }),
+  ),
+);
+vi.mock("../../../../services/transactionalEmailService", () => ({
+  TransactionalEmailService: { sendForOrder },
+}));
+
 vi.mock("../../../../lib/serverApiAuth", () => ({
   isFrontendApiKeyOrAdmin: vi.fn(async () => true),
   validateFrontendApiKey: vi.fn(() => false),
@@ -75,5 +84,39 @@ describe("POST /api/orders — save warning (H-3)", () => {
 
     const body = await (await POST(postOrder())).json();
     expect(body).not.toHaveProperty("warning");
+  });
+});
+
+/** R-09d: a new order sends "Solicitud recibida" (03) once, after the insert, best effort. */
+describe("POST /api/orders — Solicitud email (R-09d)", () => {
+  it("sends solicitud-recibida for the created order", async () => {
+    const order = { id: 9, status: "request", billing_email: "c@x.cl" };
+    createOrderDetailed.mockResolvedValue({ order });
+    const { POST } = await import("../index");
+
+    const response = await POST(postOrder());
+
+    expect(response.status).toBe(201);
+    expect(sendForOrder).toHaveBeenCalledTimes(1);
+    expect(sendForOrder).toHaveBeenCalledWith("solicitud-recibida", order);
+  });
+
+  it("keeps the 201 and reports a failed email as a warning", async () => {
+    createOrderDetailed.mockResolvedValue({
+      order: { id: 9, status: "request" },
+      warning: "falta aplicar la migración 0019",
+    });
+    sendForOrder.mockResolvedValueOnce({
+      sent: false,
+      warning: "No se pudo enviar el correo.",
+    });
+    const { POST } = await import("../index");
+
+    const response = await POST(postOrder());
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.warning).toContain("0019");
+    expect(body.warning).toContain("No se pudo enviar el correo.");
   });
 });

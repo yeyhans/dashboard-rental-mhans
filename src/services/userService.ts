@@ -161,6 +161,11 @@ export class UserService {
 
   /**
    * Enviar email de bienvenida con credenciales temporales
+   *
+   * R-09d: no usa el diseño aprobado "Registro" (01) a propósito. Este correo lo dispara un admin
+   * al crear la cuenta y lleva la contraseña temporal; la plantilla de Registro no tiene dónde
+   * mostrarla (solo Nombre y usuario) y cambiarlo dejaría al cliente sin forma de entrar. El
+   * Registro del cliente que se registra solo lo envía el frontend, fuera de este repo.
    */
   private static async sendWelcomeEmail(
     email: string,

@@ -119,6 +119,55 @@ export class TransactionalEmailService {
     }
   }
 
+  /**
+   * R-09d: an account email not tied to an order (02 Contrato). The caller already knows the
+   * customer; an optional attachment travels as is (the contract PDF it just generated).
+   */
+  static async sendToCustomer(
+    key: TransactionalEmailKey,
+    recipient: {
+      email: string | null | undefined;
+      name?: string | null;
+      usuario?: string | null;
+    },
+    options: { attachment?: { filename: string; content: string } } = {},
+  ): Promise<SendResult> {
+    try {
+      const email = trimmed(recipient.email);
+      if (!email) {
+        console.error("[Email] Correo transaccional sin destinatario:", {
+          key,
+        });
+        return { sent: false, warning: EMAIL_SEND_WARNING };
+      }
+      const { subject, html } = renderTransactionalEmail(key, {
+        nombre_cliente: trimmed(recipient.name) || "cliente",
+        usuario: recipient.usuario ?? null,
+      });
+      const result = await sendEmailViaWorker(
+        email,
+        subject,
+        html,
+        options.attachment ? [options.attachment] : undefined,
+      );
+      if (!result.success) {
+        console.error("[Email] El worker no envió el correo transaccional:", {
+          key,
+          error: result.error,
+        });
+        return { sent: false, warning: EMAIL_SEND_WARNING };
+      }
+      console.log("[Email] Correo transaccional enviado:", { key });
+      return { sent: true };
+    } catch (error) {
+      console.error("[Email] Error al enviar el correo transaccional:", {
+        key,
+        error,
+      });
+      return { sent: false, warning: EMAIL_SEND_WARNING };
+    }
+  }
+
   /** Billing data first (what the existing senders use), then the customer profile. */
   private static async resolveRecipient(
     order: EmailOrder,

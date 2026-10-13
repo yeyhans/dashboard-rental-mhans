@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { TransactionalEmailService } from '../../../services/transactionalEmailService';
 import { OrderService } from '../../../services/orderService';
 import { withAuth } from '../../../middleware/auth';
 import { isFrontendApiKeyOrAdmin, unauthorizedResponse, validateFrontendApiKey } from '../../../lib/serverApiAuth';
@@ -130,7 +131,7 @@ export const POST: APIRoute = async (context) => {
 
     // H-3: createOrderDetailed also returns the non-fatal warning of the save (e.g. the
     // discount percentage not stored before migration 0019).
-    const { order, warning } = await OrderService.createOrderDetailed({
+    const { order, warning: saveWarning } = await OrderService.createOrderDetailed({
       ...orderData,
       date_created: new Date().toISOString(),
       date_modified: new Date().toISOString(),
@@ -138,6 +139,15 @@ export const POST: APIRoute = async (context) => {
     }, origin);
 
     console.log('✅ Order created successfully:', order.id);
+
+    // R-09d: "Solicitud recibida" (03) for a new request, after the insert. Best effort: the
+    // service never throws, and a failed email only adds a warning to the 201.
+    let emailWarning: string | undefined;
+    if (normalizedStatus === 'request') {
+      const email = await TransactionalEmailService.sendForOrder('solicitud-recibida', order);
+      emailWarning = email.warning;
+    }
+    const warning = [saveWarning, emailWarning].filter(Boolean).join(' ') || undefined;
     console.log('📋 PDF generation will be handled by frontend via /api/orders/:id/generate-budget');
 
     return new Response(JSON.stringify({

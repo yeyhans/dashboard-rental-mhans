@@ -100,24 +100,33 @@ function templateFor(key: TransactionalEmailKey): string {
   return entry[1];
 }
 
-/** Defaults resolved from the environment: the customer site and the hosted logo. */
+/**
+ * Defaults resolved from the environment: the customer site, the hosted logo, and — for an order
+ * whose PDF does not exist yet (a fresh Solicitud) — the customer's orders page as the download
+ * target, so the design's button never points nowhere (R-09d).
+ */
 function defaults(
   key: TransactionalEmailKey,
 ): Required<
-  Pick<TransactionalEmailData, "logo_url" | "whatsapp_url" | "site_url">
+  Pick<
+    TransactionalEmailData,
+    "logo_url" | "whatsapp_url" | "site_url" | "link_pdf"
+  >
 > {
   const dashboard = httpsOrigin(
     import.meta.env.PUBLIC_SITE_URL,
     DEFAULT_DASHBOARD_URL,
   );
+  const site = httpsOrigin(
+    import.meta.env.PUBLIC_FRONTEND_URL,
+    DEFAULT_SITE_URL,
+  );
   const logo = DARK_HEADER.has(key) ? "logo-white.png" : "logo-black.png";
   return {
     logo_url: import.meta.env.EMAIL_LOGO_URL || `${dashboard}/${logo}`,
     whatsapp_url: BUSINESS_WHATSAPP_URL,
-    site_url: httpsOrigin(
-      import.meta.env.PUBLIC_FRONTEND_URL,
-      DEFAULT_SITE_URL,
-    ),
+    site_url: site,
+    link_pdf: `${site}/cuenta/pedidos`,
   };
 }
 
