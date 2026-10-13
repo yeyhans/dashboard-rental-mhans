@@ -1,14 +1,15 @@
-import type { APIRoute } from 'astro';
-import { validateOperatorStatusChange } from '../../../../lib/operatorOrderStatus';
-import { withAuth } from '../../../../middleware/auth';
-import { OrderService } from '../../../../services/orderService';
+import type { APIRoute } from "astro";
+import { validateOperatorStatusChange } from "../../../../lib/operatorOrderStatus";
+import { withAuth } from "../../../../middleware/auth";
+import { OrderService } from "../../../../services/orderService";
+import { OrderLifecycleService } from "../../../../services/orderLifecycleService";
 import {
   ORDER_STATUSES,
   canTransition,
   isOrderStatus,
   nextStatus,
   statusLabel,
-} from '../../../../lib/orderStatus';
+} from "../../../../lib/orderStatus";
 
 /**
  * The accepted values come from `src/lib/orderStatus.ts`, which mirrors the `orders_status_check`
@@ -23,7 +24,7 @@ import {
 function json(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -34,24 +35,27 @@ function json(body: unknown, status: number) {
 export const PUT: APIRoute = withAuth(async (context) => {
   const orderId = parseInt(String(context.params.id), 10);
   if (Number.isNaN(orderId) || orderId <= 0) {
-    return json({ success: false, error: 'ID de orden inválido' }, 400);
+    return json({ success: false, error: "ID de orden inválido" }, 400);
   }
 
   let body: any;
   try {
     body = await context.request.json();
   } catch {
-    return json({ success: false, error: 'JSON inválido' }, 400);
+    return json({ success: false, error: "JSON inválido" }, 400);
   }
 
   if (!body?.status) {
-    return json({ success: false, error: 'El estado es requerido' }, 400);
+    return json({ success: false, error: "El estado es requerido" }, 400);
   }
 
   if (!isOrderStatus(body.status)) {
     return json(
-      { success: false, error: `Estado inválido. Debe ser uno de: ${ORDER_STATUSES.join(', ')}` },
-      400
+      {
+        success: false,
+        error: `Estado inválido. Debe ser uno de: ${ORDER_STATUSES.join(", ")}`,
+      },
+      400,
     );
   }
 
@@ -64,24 +68,37 @@ export const PUT: APIRoute = withAuth(async (context) => {
   try {
     current = await OrderService.getOrderById(orderId);
   } catch (error) {
-    console.error('[PUT /api/orders/[id]/status] Error al leer la orden:', {
+    console.error("[PUT /api/orders/[id]/status] Error al leer la orden:", {
       orderId,
       adminId: context.user?.id,
       error,
     });
-    return json({ success: false, error: 'Error al actualizar el estado de la orden' }, 500);
+    return json(
+      { success: false, error: "Error al actualizar el estado de la orden" },
+      500,
+    );
   }
 
   if (!current) {
-    return json({ success: false, error: 'La orden no existe' }, 404);
+    return json({ success: false, error: "La orden no existe" }, 404);
   }
 
   // Un operario (bodega) solo avanza un paso hacia adelante: confirmed -> preparation -> in-rental
   // -> return. Nunca completa, cancela ni retrocede (decisión del dueño, 2026-10-02).
-  if (context.user?.role === 'operator') {
-    const operatorGate = validateOperatorStatusChange(current.status, body.status);
+  if (context.user?.role === "operator") {
+    const operatorGate = validateOperatorStatusChange(
+      current.status,
+      body.status,
+    );
     if (!operatorGate.valid) {
-      return json({ success: false, error: operatorGate.error, code: 'OPERATOR_TRANSITION_FORBIDDEN' }, 403);
+      return json(
+        {
+          success: false,
+          error: operatorGate.error,
+          code: "OPERATOR_TRANSITION_FORBIDDEN",
+        },
+        403,
+      );
     }
   }
 
@@ -89,31 +106,57 @@ export const PUT: APIRoute = withAuth(async (context) => {
   // vocabulario antiguo. La máquina no puede juzgar una transición cuyo origen no conoce, así que
   // en ese caso se apoya solo en la validación de vocabulario: bloquear esas órdenes congelaría el
   // panel justo cuando hay que migrarlas a mano.
-  if (isOrderStatus(current.status) && !canTransition(current.status, body.status)) {
+  if (
+    isOrderStatus(current.status) &&
+    !canTransition(current.status, body.status)
+  ) {
     const legal = nextStatus(current.status);
     const detalle = legal
       ? `Desde "${statusLabel(current.status)}" solo se puede avanzar a "${statusLabel(legal)}" o cancelar.`
       : `"${statusLabel(current.status)}" es un estado terminal y no admite cambios.`;
 
-    return json({ success: false, error: `Transición no permitida. ${detalle}`, code: 'INVALID_TRANSITION' }, 409);
+    return json(
+      {
+        success: false,
+        error: `Transición no permitida. ${detalle}`,
+        code: "INVALID_TRANSITION",
+      },
+      409,
+    );
   }
 
+  let order;
   try {
     // `reason` sigue sin persistirse a propósito: el parámetro `notes` de updateOrderStatus
     // escribe en `customer_note`, que pertenece al cliente, no al admin.
-    const order = await OrderService.updateOrderStatus(orderId, body.status);
-
-    return json(
-      { success: true, data: order, message: `Estado de la orden actualizado a ${body.status}` },
-      200
-    );
+    order = await OrderService.updateOrderStatus(orderId, body.status);
   } catch (error) {
-    console.error('[PUT /api/orders/[id]/status] Error:', {
+    console.error("[PUT /api/orders/[id]/status] Error:", {
       orderId,
       status: body.status,
       adminId: context.user?.id,
       error,
     });
-    return json({ success: false, error: 'Error al actualizar el estado de la orden' }, 500);
+    return json(
+      { success: false, error: "Error al actualizar el estado de la orden" },
+      500,
+    );
   }
+
+  // R-14: side effects of the new stage (contract on `in-rental`). The status is already saved,
+  // so a failure here only adds a warning; it never turns the change into an error.
+  const lifecycle = await OrderLifecycleService.onStatusChanged(
+    order,
+    body.status,
+  );
+
+  return json(
+    {
+      success: true,
+      data: order,
+      message: `Estado de la orden actualizado a ${body.status}`,
+      ...(lifecycle.warning ? { warning: lifecycle.warning } : {}),
+    },
+    200,
+  );
 });
