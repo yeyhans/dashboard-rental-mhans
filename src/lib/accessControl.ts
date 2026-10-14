@@ -16,7 +16,9 @@
  *
  * The allowlist is deliberately narrow and enumerated: an operator can hit the asset lookup
  * (`GET /api/inventory/assets?tag=`), record a movement (`POST /api/inventory/movements`), the
- * garage's own endpoints (`/api/bodega/*`), and the auth endpoints so they can log out. Adding a
+ * garage's own endpoints (`/api/bodega/*`), read the warehouse plan (`GET /api/inventory/locations`)
+ * and move a unit (`POST /api/inventory/assets/<id>/relocate`, 0021), and the auth endpoints so
+ * they can log out. Adding a
  * capability to the garage means adding a line here — and a test.
  *
  * `resolveAccess` sees the path and the method, not the query string. For `GET
@@ -90,7 +92,15 @@ const OPERATOR_PUBLIC_PAGES = ['/', '/login', '/logout'];
 const OPERATOR_API_EXACT: ReadonlyArray<readonly [string, string]> = [
   ['GET', '/api/inventory/assets'],
   ['POST', '/api/inventory/movements'],
+  // 0021: the garage reads the warehouse plan; creating or editing locations stays admin work.
+  ['GET', '/api/inventory/locations'],
 ];
+
+/**
+ * 0021: an operator may move a unit between warehouse locations (numeric unit id, POST only).
+ * Editing, archiving and bulk intake of units stay admin-only.
+ */
+const OPERATOR_RELOCATE_PATH = /^\/api\/inventory\/assets\/\d+\/relocate$/;
 
 /** Any method under these prefixes. */
 const OPERATOR_API_PREFIXES = ['/api/bodega', '/api/auth'];
@@ -105,6 +115,7 @@ const OPERATOR_ORDER_STATUS_PATHS = [/^\/api\/orders\/\d+\/status$/, /^\/api\/or
 function operatorApiAccess(pathname: string, method: string): AccessDecision {
   const verb = method.toUpperCase();
   if (verb === 'PUT' && OPERATOR_ORDER_STATUS_PATHS.some((pattern) => pattern.test(pathname))) return 'allow';
+  if (verb === 'POST' && OPERATOR_RELOCATE_PATH.test(pathname)) return 'allow';
   if (OPERATOR_API_EXACT.some(([m, p]) => m === verb && p === pathname)) return 'allow';
   if (OPERATOR_API_PREFIXES.some((prefix) => isUnder(pathname, prefix))) return 'allow';
   return 'forbidden';

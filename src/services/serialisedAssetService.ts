@@ -5,6 +5,19 @@ import {
   normalizeAssetTag,
 } from '../lib/assetTag';
 import { findMissingFields } from '../lib/inventory/dataQuality';
+import {
+  InventoryError,
+  UNIT_ERRORS,
+  assertEditableCondition,
+  deriveUnitStatus,
+  isUnitWear,
+  isValidRowVersion,
+  normalizeSerialPrefix,
+  planBulkUnits,
+  sanitizeUnitPatch,
+  serialKey,
+} from '../lib/inventoryUnits';
+import { LOCATION_ERRORS, describeLocation } from '../lib/warehouseLocations';
 import { quantityDiscrepancy, totalValueClp } from '../lib/productValuation';
 import { supabaseAdmin } from '../lib/supabase';
 import {
@@ -14,6 +27,11 @@ import {
   type IntakeProgress,
   type SerialisedAsset,
   type SerialisedAssetInput,
+  type InventoryUnit,
+  type LocationKind,
+  type UnitCondition,
+  type UnitDisplayStatus,
+  type UnitWear,
 } from '../types/inventory';
 
 /**
@@ -36,6 +54,35 @@ const PUBLISHED_STATUS = 'publish';
  */
 const ASSET_COLUMNS =
   'id, product_id, asset_tag, serial_number, condition, location, kit_code, notes, created_at, updated_at';
+
+/** Every `serialised_assets` column the 0021 unit screens read (InventoryUnit). */
+const UNIT_COLUMNS =
+  'id, product_id, asset_tag, serial_number, condition, wear, location, location_id, kit_code, notes, row_version, created_at, updated_at';
+
+/** Postgres unique-violation error code. */
+const UNIQUE_VIOLATION = '23505';
+
+/** One unit as the product's "Inventario" tab shows it. */
+export interface InventoryUnitView extends InventoryUnit {
+  /** "En arriendo" derived from `asset_current_state`; otherwise the stored condition. */
+  status: UnitDisplayStatus;
+  /** The order the unit is out on, when `status` is `in_rental`. */
+  open_order_id: number | null;
+  location_detail: { id: string; code: string; name: string; kind: LocationKind } | null;
+}
+
+/** Defaults applied to every unit of a bulk intake. */
+export interface BulkUnitDefaults {
+  wear?: UnitWear;
+  condition?: UnitCondition;
+  /** A `warehouse_locations` id; wins over `location`. */
+  location_id?: string | null;
+  /** Free-text location, for units not yet placed in the structured plan. */
+  location?: string | null;
+  serial_prefix?: string | null;
+  kit_code?: string | null;
+  notes?: string | null;
+}
 
 /** Name of the UNIQUE index on `asset_tag` (0009). Postgres quotes it inside the 23505 message. */
 const ASSET_TAG_UNIQUE_INDEX = 'serialised_assets_asset_tag_key';
@@ -376,5 +423,270 @@ export class SerialisedAssetService {
       completion_percentage:
         publishedProducts === 0 ? 0 : Math.round((productsWithAssets / publishedProducts) * 100),
     };
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Units (migration 0021). Written against the 0021 contract; the migration is not applied yet.
+  // ---------------------------------------------------------------------------------------------
+
+  /**
+   * `as any`: the 0021 columns and tables (`wear`, `row_version`, `location_id`,
+   * `warehouse_locations`, `asset_current_state`) are not in the generated `Database` type yet.
+   * Same reasoning as `AssetMovementService.ensureSupabaseAdmin`.
+   */
+  private static untypedClient(): any {
+    return this.ensureSupabaseAdmin() as any;
+  }
+
+  /**
+   * Edits one unit under optimistic concurrency: the UPDATE matches `id` AND the `row_version` the
+   * editor read, and the DB trigger bumps the version. Zero rows means either the unit is gone
+   * (404) or someone saved first (409, the editor must reload). Location is not editable here:
+   * a move goes through `AssetRelocationService.relocateAsset` so it leaves an audit row.
+   */
+  static async updateAsset(id: number, rawPatch: unknown, expectedRowVersion: number): Promise<InventoryUnit> {
+    if (!Number.isInteger(id) || id <= 0) throw new InventoryError(UNIT_ERRORS.INVALID_ID, 400);
+    if (!isValidRowVersion(expectedRowVersion)) throw new InventoryError(UNIT_ERRORS.ROW_VERSION_REQUIRED, 400);
+    const patch = sanitizeUnitPatch(rawPatch);
+
+    const { data, error } = await this.untypedClient()
+      .from('serialised_assets')
+      .update(patch)
+      .eq('id', id)
+      .eq('row_version', expectedRowVersion)
+      .select(UNIT_COLUMNS)
+      .maybeSingle();
+
+    if (error) {
+      const { code, message } = error as { code?: string; message?: string };
+      if (code === UNIQUE_VIOLATION && (message || '').includes(SERIAL_UNIQUE_INDEX)) {
+        throw new InventoryError(UNIT_ERRORS.SERIAL_TAKEN, 409);
+      }
+      console.error('[SerialisedAssetService] Error al actualizar la unidad:', { id, error });
+      throw error;
+    }
+    if (!data) await this.throwMissingOrConflict(id);
+
+    console.log('[SerialisedAssetService] Unidad actualizada:', { id, fields: Object.keys(patch) });
+    return data as InventoryUnit;
+  }
+
+  /**
+   * Archives a unit (condition `retired`). Never DELETE: movements and relocations reference the
+   * row, and the count history needs it. Refused while the unit is out on a rental.
+   */
+  static async archiveAsset(id: number, expectedRowVersion: number): Promise<InventoryUnit> {
+    if (!Number.isInteger(id) || id <= 0) throw new InventoryError(UNIT_ERRORS.INVALID_ID, 400);
+    if (!isValidRowVersion(expectedRowVersion)) throw new InventoryError(UNIT_ERRORS.ROW_VERSION_REQUIRED, 400);
+
+    const client = this.untypedClient();
+    const { data: open, error: stateError } = await client
+      .from('asset_current_state')
+      .select('asset_id, order_id, direction')
+      .eq('asset_id', id)
+      .eq('direction', 'checkout')
+      .maybeSingle();
+    if (stateError) {
+      console.error('[SerialisedAssetService] Error al leer el estado de la unidad:', { id, error: stateError });
+      throw stateError;
+    }
+    if (open) throw new InventoryError(UNIT_ERRORS.IN_RENTAL, 409);
+
+    const { data, error } = await client
+      .from('serialised_assets')
+      .update({ condition: 'retired' })
+      .eq('id', id)
+      .eq('row_version', expectedRowVersion)
+      .select(UNIT_COLUMNS)
+      .maybeSingle();
+    if (error) {
+      console.error('[SerialisedAssetService] Error al archivar la unidad:', { id, error });
+      throw error;
+    }
+    if (!data) await this.throwMissingOrConflict(id);
+
+    console.log('[SerialisedAssetService] Unidad archivada:', { id });
+    return data as InventoryUnit;
+  }
+
+  /** After a guarded UPDATE matched nothing: 404 if the row is gone, 409 if its version moved on. */
+  private static async throwMissingOrConflict(id: number): Promise<never> {
+    const { data, error } = await this.untypedClient()
+      .from('serialised_assets')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) {
+      console.error('[SerialisedAssetService] Error al verificar la unidad:', { id, error });
+      throw error;
+    }
+    if (!data) throw new InventoryError(UNIT_ERRORS.NOT_FOUND, 404);
+    throw new InventoryError(UNIT_ERRORS.CONFLICT, 409);
+  }
+
+  /**
+   * Registers `count` units of one product in a single INSERT (all or nothing). Tags continue
+   * from the highest assigned (`nextAssetTag`); serials come from the optional prefix or are the
+   * tag itself (see `planBulkUnits`). Two intakes racing for the same tags: the second INSERT hits
+   * the tag UNIQUE index and is answered with a retryable 409.
+   */
+  static async bulkCreateAssets(
+    productId: number,
+    count: number,
+    defaults: BulkUnitDefaults = {}
+  ): Promise<InventoryUnit[]> {
+    if (!Number.isInteger(productId) || productId <= 0) throw new InventoryError(UNIT_ERRORS.PRODUCT_INVALID, 400);
+    const condition = defaults.condition ?? 'operational';
+    assertEditableCondition(condition);
+    const wear = defaults.wear ?? 'used';
+    if (!isUnitWear(wear)) throw new InventoryError(UNIT_ERRORS.INVALID_WEAR, 400);
+    const prefix = normalizeSerialPrefix(defaults.serial_prefix);
+    const locationId =
+      typeof defaults.location_id === 'string' && defaults.location_id.trim() ? defaults.location_id.trim() : null;
+    const freeText = typeof defaults.location === 'string' ? defaults.location.trim() : '';
+    if (!locationId && !freeText) throw new InventoryError(UNIT_ERRORS.LOCATION_REQUIRED, 400);
+    // Validates the count before any query.
+    planBulkUnits({ highestTag: null, count, serialPrefix: prefix });
+
+    const client = this.untypedClient();
+
+    const { data: product, error: productError } = await client
+      .from('products')
+      .select('id')
+      .eq('id', productId)
+      .maybeSingle();
+    if (productError) {
+      console.error('[SerialisedAssetService] Error al verificar el producto:', { productId, error: productError });
+      throw productError;
+    }
+    if (!product) throw new InventoryError(UNIT_ERRORS.PRODUCT_NOT_FOUND, 404);
+
+    let locationLabel = freeText;
+    if (locationId) {
+      const { data: location, error: locationError } = await client
+        .from('warehouse_locations')
+        .select('id, code, name, is_active')
+        .eq('id', locationId)
+        .maybeSingle();
+      if (locationError) {
+        console.error('[SerialisedAssetService] Error al leer la ubicación:', { locationId, error: locationError });
+        throw locationError;
+      }
+      if (!location) throw new InventoryError(LOCATION_ERRORS.NOT_FOUND, 404);
+      if (!location.is_active) throw new InventoryError(LOCATION_ERRORS.INACTIVE, 400);
+      locationLabel = describeLocation(location);
+    }
+
+    const plan = planBulkUnits({ highestTag: await this.getHighestAssetTag(), count, serialPrefix: prefix });
+
+    // Serial uniqueness is case- and space-insensitive (`lower(btrim(serial))`), so read every
+    // serial sharing the generated prefix and compare keys here, in one round trip.
+    const likePrefix = `${(prefix ?? 'MH').replace(/([\\%_])/g, '\\$1')}-%`;
+    const { data: existing, error: serialError } = await client
+      .from('serialised_assets')
+      .select('serial_number')
+      .ilike('serial_number', likePrefix);
+    if (serialError) {
+      console.error('[SerialisedAssetService] Error al verificar números de serie:', { productId, error: serialError });
+      throw serialError;
+    }
+    const taken = new Set(
+      ((existing as Array<{ serial_number: string }>) || []).map((row) => serialKey(row.serial_number))
+    );
+    const collisions = plan
+      .filter((unit) => taken.has(serialKey(unit.serial_number)))
+      .map((unit) => unit.serial_number);
+    if (collisions.length > 0) {
+      throw new InventoryError(`${UNIT_ERRORS.BULK_SERIAL_TAKEN}: ${collisions.join(', ')}`, 409);
+    }
+
+    const kitCode = typeof defaults.kit_code === 'string' && defaults.kit_code.trim() ? defaults.kit_code.trim() : null;
+    const notes = typeof defaults.notes === 'string' && defaults.notes.trim() ? defaults.notes.trim() : null;
+    const rows = plan.map((unit) => ({
+      product_id: productId,
+      asset_tag: unit.asset_tag,
+      serial_number: unit.serial_number,
+      condition,
+      wear,
+      location: locationLabel,
+      location_id: locationId,
+      kit_code: kitCode,
+      notes,
+    }));
+
+    const { data, error } = await client.from('serialised_assets').insert(rows).select(UNIT_COLUMNS);
+    if (error) {
+      const { code, message } = error as { code?: string; message?: string };
+      if (code === UNIQUE_VIOLATION && (message || '').includes(ASSET_TAG_UNIQUE_INDEX)) {
+        throw new InventoryError(UNIT_ERRORS.TAG_RACE, 409);
+      }
+      if (code === UNIQUE_VIOLATION && (message || '').includes(SERIAL_UNIQUE_INDEX)) {
+        throw new InventoryError(UNIT_ERRORS.BULK_SERIAL_TAKEN, 409);
+      }
+      console.error('[SerialisedAssetService] Error en el ingreso masivo:', { productId, count, error });
+      throw error;
+    }
+
+    console.log('[SerialisedAssetService] Ingreso masivo registrado:', {
+      productId,
+      count: rows.length,
+      firstTag: rows[0]?.asset_tag,
+      lastTag: rows[rows.length - 1]?.asset_tag,
+    });
+    return (data as InventoryUnit[]) || [];
+  }
+
+  /**
+   * Every unit of a product (archived included; the UI filters), ordered by tag, with its derived
+   * status and its structured location. "En arriendo" comes from `asset_current_state` (0012).
+   */
+  static async listByProduct(productId: number): Promise<InventoryUnitView[]> {
+    if (!Number.isInteger(productId) || productId <= 0) throw new InventoryError(UNIT_ERRORS.PRODUCT_INVALID, 400);
+    const client = this.untypedClient();
+
+    const { data, error } = await client
+      .from('serialised_assets')
+      .select(`${UNIT_COLUMNS}, warehouse_locations (id, code, name, kind)`)
+      .eq('product_id', productId)
+      .order('asset_tag', { ascending: true });
+    if (error) {
+      console.error('[SerialisedAssetService] Error al listar las unidades del producto:', { productId, error });
+      throw error;
+    }
+
+    type Row = InventoryUnit & { warehouse_locations?: InventoryUnitView['location_detail'] };
+    const rows = (data as Row[]) || [];
+    if (rows.length === 0) return [];
+
+    const { data: openRows, error: stateError } = await client
+      .from('asset_current_state')
+      .select('asset_id, order_id')
+      .in(
+        'asset_id',
+        rows.map((row) => row.id)
+      )
+      .eq('direction', 'checkout');
+    if (stateError) {
+      console.error('[SerialisedAssetService] Error al leer el estado de las unidades:', {
+        productId,
+        error: stateError,
+      });
+      throw stateError;
+    }
+    const openOrderByAsset = new Map<number, number>();
+    for (const row of (openRows as Array<{ asset_id: number; order_id: number }>) || []) {
+      openOrderByAsset.set(row.asset_id, row.order_id);
+    }
+
+    return rows.map(({ warehouse_locations: location, ...unit }) => {
+      const openOrderId = openOrderByAsset.get(unit.id) ?? null;
+      const status = deriveUnitStatus(unit.condition, openOrderId !== null);
+      return {
+        ...unit,
+        status,
+        open_order_id: status === 'in_rental' ? openOrderId : null,
+        location_detail: location ?? null,
+      };
+    });
   }
 }

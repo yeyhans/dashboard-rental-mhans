@@ -30,7 +30,8 @@ check-in/check-out/relocation.
 - [x] T1 Migration 0021 (+down, +tests): wear, blocked state, warehouse_locations, location_id + text sync,
       asset_relocations, row_version, incident_type, product_unit_counts view, RLS/grants.
       Route: delegated (workflow worker). Not applied to any database.
-- [ ] T2 Dashboard services: unit update/archive/bulk create, locations CRUD, relocation, counts; tests.
+- [x] T2 Dashboard services: unit update/archive/bulk create, locations CRUD, relocation, counts; tests.
+      Route: delegated (workflow worker).
 - [ ] T3 Dashboard UI: product list Stock/Disp/Arriendo + KPIs, product detail "Inventario" tab per canon.
 - [ ] T4 Ops: ported validations + services + write APIs (role-gated), SSE inventory feed.
 - [ ] T5 Ops UI: 2D plan editor + 3D warehouse with units by location; button check-in/out/relocate.
@@ -53,5 +54,18 @@ check-in/check-out/relocation.
   (total = available + in_rental + maintenance + damaged + blocked; maintenance includes cleaning).
 - Pending: runtime rehearsal on a disposable DB (needs authorization); production apply (needs authorization).
 
+### T2 (2026-10-14)
+- Pure libs: `src/lib/inventoryUnits.ts` (InventoryError with status/code, deriveUnitStatus, sanitizeUnitPatch,
+  planBulkUnits), `src/lib/warehouseLocations.ts` (parseLocationDraft, validateLocation with hard rules + overlap /
+  outside-room warnings, buildLocationTree, describeLocation). `lib/assetMovements.ts`: validateIncidentType.
+- Services: SerialisedAssetService.updateAsset/archiveAsset/bulkCreateAssets/listByProduct; new
+  WarehouseLocationService, AssetRelocationService (single INSERT into asset_relocations; trigger moves the unit,
+  PT409 -> 409), ProductUnitCountsService; AssetMovementService accepts incident_type on checkin only.
+- API: locations (GET/POST, PUT/DELETE [id]), products/[productId]/units (GET/POST bulk), assets/[id] PUT,
+  assets/[id]/archive, assets/[id]/relocate, counts. Operator allowlist: GET locations, POST relocate.
+- RED: 6 new suites failed on missing modules + 8 assertions (incident, access control); route suites 25 failing.
+  GREEN: full `pnpm test` 2917 passed, 7 failed (same pre-existing OrdersDashboard.sourceAssertions, mhans-50).
+- Coordination: mhans-50 notified of accessControl.ts / movements.ts edits.
+
 ## Next step
-Run workflow.
+T3 dashboard UI.
