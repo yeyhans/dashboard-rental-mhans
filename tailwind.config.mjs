@@ -15,6 +15,12 @@ export default {
   		}
   	},
   	extend: {
+  		// Canon Área 01 typography (globals.css `--font-ui` / `--font-mono`): without this,
+  		// `font-mono` resolved to Tailwind's default ui-monospace stack, not JetBrains Mono.
+  		fontFamily: {
+  			sans: ["var(--font-ui)"],
+  			mono: ["var(--font-mono)"]
+  		},
   		colors: {
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',

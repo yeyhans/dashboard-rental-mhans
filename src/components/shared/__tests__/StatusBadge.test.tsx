@@ -32,6 +32,24 @@ describe("StatusBadge", () => {
     expect(html).toContain("bg-[var(--color-neutral-bg)]");
   });
 
+  it("keeps the default pill typography (12px, sentence case)", () => {
+    const html = renderToStaticMarkup(<StatusBadge tone="ok" label="Ok" />);
+    expect(html).toContain("text-xs font-medium");
+    expect(html).not.toContain("uppercase");
+  });
+
+  it("renders the canon Pedidos badge: 10px semibold uppercase, tracked, 3x9 padding", () => {
+    const html = renderToStaticMarkup(
+      <StatusBadge tone="ok" label="Confirmado" variant="canon" />,
+    );
+    expect(html).toMatch(
+      /text-\[10px\][^"]*font-semibold[^"]*uppercase[^"]*tracking-\[0\.04em\]/,
+    );
+    expect(html).toContain("px-[9px] py-[3px]");
+    expect(html).toContain("bg-[var(--color-ok-bg)]");
+    expect(html).not.toContain("text-xs font-medium");
+  });
+
   it("hides the dot from assistive tech", () => {
     const html = renderToStaticMarkup(<StatusBadge tone="info" label="Info" />);
     expect(html).toContain('aria-hidden="true"');

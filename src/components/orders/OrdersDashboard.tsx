@@ -1,20 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "../ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -32,6 +18,7 @@ import {
   ListChecks,
 } from "lucide-react";
 import CreateOrderForm from "./CreateOrderForm";
+import { OrdersTable, formatCurrency } from "./OrdersTable";
 import ProcessOrder from "./ProcessOrder";
 import {
   statusTone,
@@ -54,12 +41,6 @@ import {
   formatOrderDateWithWeekday,
   summarizeOrderProducts,
 } from "../../lib/orderDateFormat";
-
-// Helper function to format currency with thousands separator
-const formatCurrency = (value: string | number) => {
-  const numValue = typeof value === "string" ? parseFloat(value) : value;
-  return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-};
 
 // Canon `.btn` geometry (RC2.1.2: padding 7px 14px, 12px) for the two header actions; full width
 // on mobile where they share the row, auto from `sm:`.
@@ -633,225 +614,15 @@ const OrdersDashboard = ({
       );
     }
 
-    // Desktop view - Table layout
+    // Desktop view - Table layout (canon RC2.1.2, presentational OrdersTable)
     return (
-      <div className="border">
-        {/* 02.4 / T-16: compact cell padding and a single Monto column (Total over "IVA · Neto")
-            so the 9 columns fit at 1440px; whatever still overflows scrolls inside `Table`'s own
-            wrapper while the actions column stays pinned right. */}
-        <Table className="[&_td]:px-2 [&_th]:px-2">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-foreground font-semibold">
-                Nº Pedido
-              </TableHead>
-              <TableHead className="text-foreground font-semibold">
-                Estado
-              </TableHead>
-              <TableHead className="text-foreground font-semibold">
-                Cliente
-              </TableHead>
-              <TableHead className="text-foreground font-semibold">
-                Proyecto
-              </TableHead>
-              <TableHead className="text-foreground font-semibold">
-                Productos
-              </TableHead>
-              <TableHead className="text-foreground font-semibold whitespace-nowrap">
-                Inicio - Término
-              </TableHead>
-              <TableHead className="text-foreground font-semibold text-right">
-                Jornadas
-              </TableHead>
-              <TableHead className="text-foreground font-semibold text-right">
-                Monto
-              </TableHead>
-              <TableHead className="sticky right-0 bg-background text-right text-foreground font-semibold">
-                Acciones
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {currentOrders.map((order) => (
-              <TableRow key={`${order.customer_id}-${order.date_created}`}>
-                <TableCell className="text-foreground font-medium">
-                  {order.id}
-                </TableCell>
-                <TableCell>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button
-                        onClick={() => setSelectedOrder(order)}
-                        variant="ghost"
-                        size="sm"
-                        className="hover:opacity-80"
-                      >
-                        <StatusBadge
-                          tone={toBadgeTone(order.status)}
-                          label={statusLabel(order.status)}
-                        />
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle>
-                          Detalles del Proceso - Orden #{order.id}
-                        </DialogTitle>
-                      </DialogHeader>
-                      <ProcessOrder
-                        order={{
-                          orders: {
-                            success: true,
-                            orders: [
-                              {
-                                ...order, // Usar todos los campos directos de la DB
-                                customer: {
-                                  id: order.customer_id,
-                                  first_name: order.billing_first_name,
-                                  last_name: order.billing_last_name,
-                                  email: order.billing_email,
-                                },
-                              },
-                            ],
-                          },
-                        }}
-                      />
-                    </DialogContent>
-                  </Dialog>
-                </TableCell>
-                <TableCell className="text-foreground">
-                  <div className="font-medium">
-                    {order.billing_first_name} {order.billing_last_name}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {order.billing_email}
-                  </div>
-                </TableCell>
-                <TableCell className="text-foreground font-medium">
-                  {order.order_proyecto || ""}
-                </TableCell>
-                <TableCell
-                  className="text-foreground max-w-[14rem] truncate"
-                  title={summarizeOrderProducts(order.line_items).title}
-                >
-                  {summarizeOrderProducts(order.line_items).label || (
-                    <span className="text-xs text-muted-foreground">-</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-foreground whitespace-nowrap">
-                  {order.order_fecha_inicio && order.order_fecha_termino ? (
-                    <div className="flex flex-col gap-1 text-sm">
-                      <div className="whitespace-nowrap">
-                        Inicio{" "}
-                        <span className="font-medium text-foreground">
-                          {formatOrderDateWithWeekday(order.order_fecha_inicio)}
-                        </span>
-                      </div>
-                      <div className="whitespace-nowrap">
-                        Término{" "}
-                        <span className="font-medium text-foreground">
-                          {formatOrderDateWithWeekday(
-                            order.order_fecha_termino,
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">
-                      Sin fechas
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell className="text-foreground text-right whitespace-nowrap">
-                  {order.num_jornadas ?? ""}
-                </TableCell>
-                <TableCell className="text-foreground text-right whitespace-nowrap">
-                  <div className="font-bold">
-                    ${formatCurrency(order.calculated_total || "0")}
-                  </div>
-                  <div className="font-mono text-xs text-muted-foreground">
-                    IVA ${formatCurrency(order.calculated_iva || "0")} · Neto $
-                    {formatCurrency(order.calculated_subtotal || "0")}
-                  </div>
-                </TableCell>
-                <TableCell className="sticky right-0 bg-background text-right">
-                  <div className="flex flex-row gap-2 justify-end items-center">
-                    {order.new_pdf_on_hold_url &&
-                      (() => {
-                        const budgetUrls = order.new_pdf_on_hold_url
-                          .split(",")
-                          .filter((url) => url.trim());
-                        const latestUrl =
-                          budgetUrls[budgetUrls.length - 1]?.trim();
-
-                        return (
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="bg-muted text-foreground hover:bg-muted/80"
-                              onClick={() => window.open(latestUrl, "_blank")}
-                              title={`Ver presupuesto más reciente ${budgetUrls.length > 1 ? `(v${budgetUrls.length})` : ""}`}
-                            >
-                              <FileText className="h-4 w-4" />
-                              {budgetUrls.length > 1 && (
-                                <span className="ml-1 text-xs">
-                                  v{budgetUrls.length}
-                                </span>
-                              )}
-                            </Button>
-
-                            {budgetUrls.length > 1 && (
-                              <div className="flex gap-1">
-                                {budgetUrls.slice(0, -1).map((url, index) => (
-                                  <Button
-                                    key={index}
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-6 w-6 p-0 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
-                                    onClick={() =>
-                                      window.open(url.trim(), "_blank")
-                                    }
-                                    title={`Ver versión ${index + 1} del presupuesto`}
-                                  >
-                                    {index + 1}
-                                  </Button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    {order.new_pdf_processing_url && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="bg-green-200 text-green-900 hover:bg-green-300"
-                        onClick={() =>
-                          window.open(order.new_pdf_processing_url, "_blank")
-                        }
-                      >
-                        <FileCheck className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <RowActionsMenu
-                      items={[
-                        {
-                          label: "Ver detalles",
-                          icon: ChevronRight,
-                          onSelect: () => {
-                            window.open(`/orders/${order.id}`, "_blank");
-                          },
-                        },
-                      ]}
-                    />
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <OrdersTable
+        orders={currentOrders}
+        onChangeStatus={(order) => {
+          setSelectedOrder(order);
+          setIsDialogOpen(true);
+        }}
+      />
     );
   };
 
@@ -1071,6 +842,44 @@ const OrdersDashboard = ({
           </div>
         </CardContent>
       </Card>
+
+      {/* "Cambiar estado" in each row's ⋯ menu opens ProcessOrder here — one controlled dialog
+          instead of one per row (the status badge click did this before RC2.1.2). */}
+      <Dialog
+        open={isDialogOpen}
+        onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setSelectedOrder(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Detalles del Proceso - Orden #{selectedOrder?.id}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedOrder && (
+            <ProcessOrder
+              order={{
+                orders: {
+                  success: true,
+                  orders: [
+                    {
+                      ...selectedOrder, // Usar todos los campos directos de la DB
+                      customer: {
+                        id: selectedOrder.customer_id,
+                        first_name: selectedOrder.billing_first_name,
+                        last_name: selectedOrder.billing_last_name,
+                        email: selectedOrder.billing_email,
+                      },
+                    },
+                  ],
+                },
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

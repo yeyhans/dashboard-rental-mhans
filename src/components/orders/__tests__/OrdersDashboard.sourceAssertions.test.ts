@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -12,6 +12,14 @@ const source = readFileSync(
   path.resolve(__dirname, "../OrdersDashboard.tsx"),
   "utf-8",
 );
+
+/** RC2.1.2 T2: the table markup lives in the presentational `OrdersTable.tsx`. */
+const readOptional = (relative: string) => {
+  const file = path.resolve(__dirname, relative);
+  return existsSync(file) ? readFileSync(file, "utf-8") : "";
+};
+const tableSource = readOptional("../OrdersTable.tsx");
+const tailwindConfig = readOptional("../../../../tailwind.config.mjs");
 
 describe("OrdersDashboard — source assertions (D-22)", () => {
   it("does not color the Inicio/Término date cells green/red (02d)", () => {
@@ -66,27 +74,20 @@ describe("OrdersDashboard — canon pass (02.1-02.5)", () => {
   });
 
   it("adds the Productos column fed by the shared line-items summary (02.4)", () => {
-    expect(source).toContain("summarizeOrderProducts");
-    expect(source).toMatch(/>\s*Productos\s*<\/TableHead>/);
+    expect(tableSource).toContain("summarizeOrderProducts");
+    expect(tableSource).toMatch(/>\s*Productos\s*<\/th>/);
   });
 
-  it("keeps the Acciones column reachable: sticky actions cell and compact padding (02.4)", () => {
-    const desktop = source.slice(
-      source.indexOf("// Desktop view - Table layout"),
-    );
-    expect(desktop).toContain("sticky right-0");
-    expect(desktop).not.toContain('<div className="border overflow-hidden">');
+  it("keeps the Acciones column reachable: sticky actions cell (02.4)", () => {
+    expect(tableSource).toContain("sticky right-0");
   });
 
   it("never lets the date cells wrap onto extra lines (02.5)", () => {
-    const desktop = source.slice(
-      source.indexOf("// Desktop view - Table layout"),
-    );
-    expect(desktop).toMatch(/whitespace-nowrap/);
-    expect(desktop).toMatch(/Inicio\{" "\}/);
-    expect(desktop).toMatch(/Término\{" "\}/);
-    expect(desktop).not.toContain("Inicio:");
-    expect(desktop).not.toContain("Término:");
+    expect(tableSource).toMatch(/whitespace-nowrap/);
+    expect(tableSource).toMatch(/Inicio\{" "\}/);
+    expect(tableSource).toMatch(/Término\{" "\}/);
+    expect(tableSource).not.toContain("Inicio:");
+    expect(tableSource).not.toContain("Término:");
   });
 });
 
@@ -117,37 +118,54 @@ describe("OrdersDashboard — mobile pass (D-25)", () => {
   });
 });
 
-describe("OrdersDashboard — table fits at 1440 px (T-16)", () => {
-  const desktop = source.slice(
-    source.indexOf("// Desktop view - Table layout"),
-  );
-  const header = desktop.slice(
-    desktop.indexOf("<TableHeader>"),
-    desktop.indexOf("</TableHeader>"),
+describe("OrdersTable — table fits at 1440 px (T-16, canon RC2.1.2)", () => {
+  const header = tableSource.slice(
+    tableSource.indexOf("<thead"),
+    tableSource.indexOf("</thead>"),
   );
 
   it("merges Neto, IVA and Total into a single Monto column", () => {
-    expect(header).toMatch(/>\s*Monto\s*<\/TableHead>/);
-    expect(header).not.toMatch(/>\s*Neto\s*<\/TableHead>/);
-    expect(header).not.toMatch(/>\s*IVA\s*<\/TableHead>/);
-    expect(header).not.toMatch(/>\s*Total\s*<\/TableHead>/);
+    expect(header).toMatch(/>\s*Monto\s*<\/th>/);
+    expect(header).not.toMatch(/>\s*Neto\s*<\/th>/);
+    expect(header).not.toMatch(/>\s*IVA\s*<\/th>/);
+    expect(header).not.toMatch(/>\s*Total\s*<\/th>/);
   });
 
-  it("renders the Total on top and 'IVA · Neto' in small mono text below", () => {
-    const body = desktop.slice(desktop.indexOf("<TableBody>"));
+  it("renders the Total on top and 'IVA · Neto' in the canon 10px faint line below", () => {
+    const body = tableSource.slice(tableSource.indexOf("<tbody"));
     const totalAt = body.indexOf("order.calculated_total");
     const ivaAt = body.indexOf("order.calculated_iva");
     const netAt = body.indexOf("order.calculated_subtotal");
     expect(totalAt).toBeGreaterThan(-1);
     expect(totalAt).toBeLessThan(ivaAt);
     expect(ivaAt).toBeLessThan(netAt);
-    expect(body).toMatch(/font-mono text-xs[^"]*"[\s\S]{0,200}IVA \$/);
+    expect(body).toMatch(/text-\[10px\][^"]*"[\s\S]{0,200}IVA \$/);
     expect(body).toContain("· Neto $");
   });
 
-  it("keeps the header to 9 columns with the actions column pinned right", () => {
-    expect((header.match(/<TableHead\b/g) ?? []).length).toBe(9);
-    expect(header).toMatch(/sticky right-0[^"]*">\s*Acciones/);
+  it("keeps the header to the 8 canon columns with the actions column pinned right", () => {
+    expect((header.match(/<th\b/g) ?? []).length).toBe(8);
+    expect(header).toMatch(/sticky right-0[^>]*>\s*Acciones/);
+    expect(header).not.toMatch(/>\s*Estado\s*<\/th>/);
+  });
+});
+
+describe("OrdersDashboard — table extracted to OrdersTable (RC2.1.2 T2)", () => {
+  it("renders the desktop list through the presentational OrdersTable", () => {
+    expect(source).toContain('from "./OrdersTable"');
+    expect(source).toMatch(/<OrdersTable[\s\S]*onChangeStatus=/);
+    expect(source).not.toContain('from "../ui/table"');
+  });
+
+  it("opens ProcessOrder from one controlled dialog, not a dialog per row", () => {
+    expect((source.match(/<Dialog\b/g) ?? []).length).toBe(1);
+    expect(source).toMatch(/<Dialog[^>]*open=\{isDialogOpen\}/);
+    expect(source).toContain("<ProcessOrder");
+  });
+
+  it("maps Tailwind's font-mono to the canon JetBrains Mono stack", () => {
+    expect(tailwindConfig).toMatch(/mono:\s*\[\s*"var\(--font-mono\)"/);
+    expect(tailwindConfig).toMatch(/sans:\s*\[\s*"var\(--font-ui\)"/);
   });
 });
 
