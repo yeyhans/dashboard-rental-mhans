@@ -69,7 +69,7 @@ describe("OrdersTable — canon columns (RC2.1.2 .tbl)", () => {
 
   it("stacks the canon status badge under the order number", () => {
     const firstCell = html.slice(html.indexOf("<td"), html.indexOf("</td>"));
-    expect(firstCell).toContain("1234");
+    expect(firstCell).toContain("#1234");
     expect(firstCell).toContain("Confirmado");
     expect(firstCell).toContain("uppercase");
     expect(firstCell.indexOf("1234")).toBeLessThan(

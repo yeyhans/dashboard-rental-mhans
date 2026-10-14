@@ -259,7 +259,7 @@ export function OrdersTable<T extends OrdersTableRow>({
                 <td data-label="Nº Pedido" className={TD_CLASS}>
                   <div className="flex flex-col items-start gap-1">
                     <span className="font-mono text-xs font-semibold text-foreground">
-                      {order.id}
+                      #{order.id}
                     </span>
                     <StatusBadge
                       variant="canon"
