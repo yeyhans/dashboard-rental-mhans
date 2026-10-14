@@ -6,9 +6,29 @@ import {
   orderListTabCounts,
   resolveOrderListTabParam,
   toBadgeTone,
+  ORDER_LIST_KPI_TABS,
 } from "../orderListMetrics";
+import { ORDER_LIST_TABS } from "../../../lib/orderStatus";
 
 const HOY = new Date("2026-06-11T09:00:00-04:00");
+
+describe("ORDER_LIST_KPI_TABS (canon data-tab on each .kpi-card)", () => {
+  it("sends each KPI to the tab the canon filters it to", () => {
+    expect(ORDER_LIST_KPI_TABS).toEqual({
+      retirosHoy: "preparation",
+      entregasHoy: "in-rental",
+      devolucionesHoy: "return",
+      pedidosActivos: "todos",
+    });
+  });
+
+  it("only targets tabs that exist in the tab strip", () => {
+    const tabs = ORDER_LIST_TABS.map((tab) => tab.value as string);
+    for (const target of Object.values(ORDER_LIST_KPI_TABS)) {
+      expect(tabs).toContain(target);
+    }
+  });
+});
 
 function order(status: string, inicio: string, termino: string) {
   return { status, order_fecha_inicio: inicio, order_fecha_termino: termino };

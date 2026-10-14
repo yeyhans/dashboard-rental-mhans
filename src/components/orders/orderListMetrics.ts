@@ -25,6 +25,20 @@ export interface OrderListKpis {
 }
 
 /**
+ * The tab each KPI card selects when clicked — the canon's `data-tab` on every `.kpi-card`
+ * (Pedidos RC2.1.2): Retiros → Preparación, Entregas → En Arriendo, Devoluciones → Devolución,
+ * Activos → Todos.
+ */
+export const ORDER_LIST_KPI_TABS: Readonly<
+  Record<keyof OrderListKpis, OrderListTab>
+> = {
+  retirosHoy: "preparation",
+  entregasHoy: "in-rental",
+  devolucionesHoy: "return",
+  pedidosActivos: "todos",
+};
+
+/**
  * Day calendar string in `YYYY-MM-DD`.
  *
  * Duplicated from `DashboardService`'s private `toIsoDay` rather than imported: that module is

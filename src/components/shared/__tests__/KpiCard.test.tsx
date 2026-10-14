@@ -172,3 +172,70 @@ describe("KpiCard", () => {
     expect(empty).not.toContain("<polyline");
   });
 });
+
+describe("KpiCard — canon variant (Pedidos RC2.1.2 .kpi-card)", () => {
+  it("keeps the default variant unchanged: a div with the 40px icon and no 28px value", () => {
+    const html = renderToStaticMarkup(
+      <KpiCard icon={FakeIcon} label="Pedidos activos" value={12} />,
+    );
+    expect(html.startsWith("<div")).toBe(true);
+    expect(html).toContain("h-10 w-10");
+    expect(html).not.toContain("text-[28px]");
+  });
+
+  it("renders the canon geometry: 30px round icon, 11px label, 28px bold value", () => {
+    const html = renderToStaticMarkup(
+      <KpiCard variant="canon" icon={FakeIcon} label="Retiros Hoy" value={5} />,
+    );
+    expect(html).toMatch(/h-\[30px\] w-\[30px\][^"]*rounded-full/);
+    expect(html).toContain("text-[11px]");
+    expect(html).toMatch(/text-\[28px\][^"]*font-bold/);
+    expect(html).toContain("Retiros Hoy");
+    expect(html).toContain(">5<");
+  });
+
+  it("renders the meta line only when given", () => {
+    const withMeta = renderToStaticMarkup(
+      <KpiCard
+        variant="canon"
+        label="Retiros Hoy"
+        value={5}
+        meta="Programados →"
+      />,
+    );
+    const withoutMeta = renderToStaticMarkup(
+      <KpiCard variant="canon" label="Retiros Hoy" value={5} />,
+    );
+    expect(withMeta).toContain("Programados →");
+    expect(withoutMeta).not.toContain("color-text-faint");
+  });
+
+  it("renders a real button when the card is clickable, and a div otherwise", () => {
+    const clickable = renderToStaticMarkup(
+      <KpiCard
+        variant="canon"
+        label="Retiros Hoy"
+        value={5}
+        onClick={() => {}}
+      />,
+    );
+    const inert = renderToStaticMarkup(
+      <KpiCard variant="canon" label="Retiros Hoy" value={5} />,
+    );
+    expect(clickable).toMatch(/^<button[^>]*type="button"/);
+    expect(inert.startsWith("<div")).toBe(true);
+  });
+
+  it("marks the clickable card pressed when its filter is the active one", () => {
+    const html = renderToStaticMarkup(
+      <KpiCard
+        variant="canon"
+        label="Retiros Hoy"
+        value={5}
+        onClick={() => {}}
+        isActive
+      />,
+    );
+    expect(html).toContain('aria-pressed="true"');
+  });
+});

@@ -23,6 +23,74 @@ interface KpiCardProps {
   /** 01.1: when the KPI has a destination, the footer shows a "Ver detalle" link to it. */
   href?: string;
   className?: string;
+  /**
+   * Opt-in canon geometry from Pedidos RC2.1.2 `.kpi-card`: 30px icon beside an 11px label,
+   * 28px bold value, faint meta line. `default` keeps the original layout for every other caller.
+   */
+  variant?: "default" | "canon";
+  /** Canon variant only: the faint line under the value (e.g. "Programados →"). */
+  meta?: ReactNode;
+  /** Canon variant only: makes the whole card a button (the canon's KPI → tab filter). */
+  onClick?: () => void;
+  /** Canon variant only: exposes the card's filter as pressed while its tab is active. */
+  isActive?: boolean;
+}
+
+type CanonKpiCardProps = Pick<
+  KpiCardProps,
+  "icon" | "label" | "value" | "meta" | "onClick" | "isActive" | "className"
+>;
+
+function CanonKpiCard({
+  icon: Icon,
+  label,
+  value,
+  meta,
+  onClick,
+  isActive,
+  className,
+}: CanonKpiCardProps) {
+  const body = (
+    <>
+      <div className="mb-2 flex items-center gap-2">
+        {Icon && (
+          <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <Icon className="h-4 w-4" />
+          </span>
+        )}
+        <p className="text-[11px] leading-tight text-muted-foreground">
+          {label}
+        </p>
+      </div>
+      <p className="mb-[3px] text-[28px] font-bold leading-none tracking-[-0.03em] text-foreground">
+        {value}
+      </p>
+      {hasSlotContent(meta) && (
+        <p className="text-[11px] text-[var(--color-text-faint)]">{meta}</p>
+      )}
+    </>
+  );
+  const frame = cn(
+    "block w-full rounded-[10px] border border-border bg-card px-[18px] py-4 text-left",
+    className,
+  );
+
+  if (!onClick) return <div className={frame}>{body}</div>;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={isActive ?? false}
+      className={cn(
+        frame,
+        "transition-colors hover:border-[var(--color-border-strong)] hover:bg-[#FDFCF9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        isActive && "border-[var(--color-border-strong)]",
+      )}
+    >
+      {body}
+    </button>
+  );
 }
 
 /**
@@ -37,7 +105,25 @@ export function KpiCard({
   sparkline,
   href,
   className,
+  variant = "default",
+  meta,
+  onClick,
+  isActive,
 }: KpiCardProps) {
+  if (variant === "canon") {
+    return (
+      <CanonKpiCard
+        icon={Icon}
+        label={label}
+        value={value}
+        meta={meta}
+        onClick={onClick}
+        isActive={isActive}
+        className={className}
+      />
+    );
+  }
+
   const points =
     sparkline && sparkline.length > 1
       ? sparklinePoints(sparkline, 56, 18)

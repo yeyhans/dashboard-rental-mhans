@@ -40,7 +40,8 @@ describe("OrdersDashboard — canon pass (02.1-02.5)", () => {
   it("renders the title as an uppercase H1 through PageHeader with the total (02.2)", () => {
     expect(source).toContain('from "../shared/PageHeader"');
     expect(returned).toMatch(/<PageHeader[\s\S]*title="Pedidos"/);
-    expect(returned).toMatch(/<PageHeader[\s\S]*date=\{/);
+    // Canon RC2.1.2: date and total share one subtitle line ("fecha · N pedidos en sistema").
+    expect(returned).not.toMatch(/<PageHeader[^>]*date=\{/);
     // T-19 (a): the header total uses the Todos tab basis, not the raw row count.
     expect(returned).toMatch(/<PageHeader[\s\S]*\{tabCounts\.todos\}/);
     expect(returned).not.toContain("<CardTitle");
@@ -98,13 +99,13 @@ describe("OrdersDashboard — mobile pass (D-25)", () => {
     expect(mobileCardBlock).toMatch(/order\.order_proyecto\s*&&/);
   });
 
-  it("pairs 'Nuevo Pedido' and 'Registrar Devolución' at equal width on mobile", () => {
-    expect(source).toContain('triggerClassName="w-full sm:w-auto sm:ml-3"');
+  it("pairs 'Registrar Devolución' and 'Nuevo Pedido' at equal width on mobile, inside the header actions", () => {
     const actionsBlock = source.slice(
-      source.indexOf("grid grid-cols-2 gap-2 sm:contents"),
-      source.indexOf("</Tabs>"),
+      source.indexOf("actions={"),
+      source.indexOf("<KpiCard"),
     );
-    expect(actionsBlock).toMatch(/<CreateOrderForm[\s\S]*Registrar Devolución/);
+    expect(actionsBlock).toContain("grid w-full grid-cols-2 gap-2 sm:flex");
+    expect(actionsBlock).toMatch(/Registrar Devolución[\s\S]*<CreateOrderForm/);
   });
 
   it("keeps the mobile card's Total pinned to the right column even without Proyecto (D-27 R3-orders-total-shifts-left-without-proyecto)", () => {
@@ -152,9 +153,50 @@ describe("OrdersDashboard — table fits at 1440 px (T-16)", () => {
 
 describe("OrdersDashboard — header total matches the Todos tab (T-19a)", () => {
   it("counts the header total on the same basis as the Todos tab", () => {
-    expect(source).toMatch(
-      /subtitle=\{`Gestiona y visualiza todos los pedidos \(\$\{tabCounts\.todos\} en total\)`\}/,
-    );
+    expect(source).toMatch(/\$\{tabCounts\.todos\} pedidos en sistema/);
     expect(source).toMatch(/\(\{tabCounts\.todos\} total\)/);
+  });
+});
+
+describe("OrdersDashboard — canon header, KPIs and tabs (RC2.1.2 T1)", () => {
+  const returned = source.slice(source.lastIndexOf("  return (\n    <div"));
+  const header = returned.slice(
+    returned.indexOf("<PageHeader"),
+    returned.indexOf("<KpiCard"),
+  );
+
+  it("puts the secondary 'Registrar Devolución' and the primary 'Nuevo Pedido' in the header actions slot", () => {
+    expect(header).toContain("actions={");
+    expect(header).toContain('href="/check-in"');
+    expect(header).toMatch(/variant="outline"[\s\S]*Registrar Devolución/);
+    expect(header).toContain("<CreateOrderForm");
+    // No anchor wrapping a button: the link itself is the control.
+    expect(header).not.toMatch(/<a href="\/check-in"[^>]*>\s*<Button/);
+  });
+
+  it("renders the four KPIs with the canon variant, a meta line and a tab target", () => {
+    const kpis = returned.match(/<KpiCard[\s\S]*?\/>/g) ?? [];
+    expect(kpis).toHaveLength(4);
+    for (const kpi of kpis) {
+      expect(kpi).toContain('variant="canon"');
+      expect(kpi).toContain("meta=");
+      expect(kpi).toContain("ORDER_LIST_KPI_TABS.");
+    }
+  });
+
+  it("lays the KPIs out 4 per row, 2 per row up to 900px", () => {
+    expect(returned).toContain(
+      "grid grid-cols-2 gap-3 min-[901px]:grid-cols-4",
+    );
+  });
+
+  it("shows each tab count in a mono pill that turns black when active", () => {
+    const tabsBlock = returned.slice(
+      returned.indexOf("<Tabs "),
+      returned.indexOf("</Tabs>"),
+    );
+    expect(tabsBlock).toContain("font-mono");
+    expect(tabsBlock).toContain("group-data-[state=active]:bg-foreground");
+    expect(tabsBlock).toContain("group-data-[state=active]:text-background");
   });
 });

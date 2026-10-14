@@ -48,6 +48,7 @@ import {
   orderListTabCounts,
   resolveOrderListTabParam,
   toBadgeTone,
+  ORDER_LIST_KPI_TABS,
 } from "./orderListMetrics";
 import {
   formatOrderDateWithWeekday,
@@ -59,6 +60,10 @@ const formatCurrency = (value: string | number) => {
   const numValue = typeof value === "string" ? parseFloat(value) : value;
   return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
+
+// Canon `.btn` geometry (RC2.1.2: padding 7px 14px, 12px) for the two header actions; full width
+// on mobile where they share the row, auto from `sm:`.
+const HEADER_BUTTON_CLASS = "h-8 w-full gap-1.5 px-3.5 text-xs sm:w-auto";
 
 // Status translations and colors based on WooCommerce
 
@@ -139,13 +144,20 @@ const OrdersDashboard = ({
   // browser would otherwise format different instants and hydrate with a mismatch.
   const [todayLabel, setTodayLabel] = useState<string | undefined>(undefined);
   useEffect(() => {
+    // Canon subtitle date: "Miércoles, 11 jun 2026".
+    // Built from parts: es-CL's own pattern inserts "de" ("14 de oct de 2026").
+    const parts = new Intl.DateTimeFormat("es-CL", {
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "America/Santiago",
+    }).formatToParts(new Date());
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((p) => p.type === type)?.value.replace(/\./g, "") ?? "";
+    const weekday = part("weekday");
     setTodayLabel(
-      new Intl.DateTimeFormat("es-CL", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        timeZone: "America/Santiago",
-      }).format(new Date()),
+      `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${part("day")} ${part("month")} ${part("year")}`,
     );
   }, []);
 
@@ -845,34 +857,67 @@ const OrdersDashboard = ({
 
   return (
     <div className="space-y-6">
-      {/* 02.1/02.2: cabecera canónica primero (H1 en mayúsculas, fecha y total), KPI debajo. */}
+      {/* 02.1/02.2 + RC2.1.2: cabecera canónica primero (H1 en mayúsculas, "fecha · N pedidos en
+          sistema") con las dos acciones a la derecha; KPI debajo. */}
       <PageHeader
         title="Pedidos"
-        subtitle={`Gestiona y visualiza todos los pedidos (${tabCounts.todos} en total)`}
-        date={todayLabel}
+        subtitle={`${todayLabel ? `${todayLabel} · ` : ""}${tabCounts.todos} pedidos en sistema`}
+        actions={
+          // D-25: on mobile both actions share the row at equal width (canon `.hd-actions .btn{flex:1}`).
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+            <Button asChild variant="outline" className={HEADER_BUTTON_CLASS}>
+              <a href="/check-in">
+                <RotateCcw className="h-3.5 w-3.5" />
+                Registrar Devolución
+              </a>
+            </Button>
+            <CreateOrderForm
+              onOrderCreated={handleOrderCreated}
+              sessionData={sessionData}
+              initialUsers={initialUsers}
+              triggerClassName={HEADER_BUTTON_CLASS}
+            />
+          </div>
+        }
       />
 
-      {/* D-05: franja de 4 KPI del canon */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* D-05 + RC2.1.2: franja de 4 KPI del canon; cada tarjeta filtra su pestaña. */}
+      <div className="grid grid-cols-2 gap-3 min-[901px]:grid-cols-4">
         <KpiCard
+          variant="canon"
           icon={Package}
           label="Retiros Hoy"
           value={orderListKpis.retirosHoy}
+          meta="Programados →"
+          onClick={() => setActiveTab(ORDER_LIST_KPI_TABS.retirosHoy)}
+          isActive={activeTab === ORDER_LIST_KPI_TABS.retirosHoy}
         />
         <KpiCard
+          variant="canon"
           icon={Truck}
           label="Entregas Hoy"
           value={orderListKpis.entregasHoy}
+          meta="Programadas →"
+          onClick={() => setActiveTab(ORDER_LIST_KPI_TABS.entregasHoy)}
+          isActive={activeTab === ORDER_LIST_KPI_TABS.entregasHoy}
         />
         <KpiCard
+          variant="canon"
           icon={RotateCcw}
           label="Devoluciones Hoy"
           value={orderListKpis.devolucionesHoy}
+          meta="Programadas →"
+          onClick={() => setActiveTab(ORDER_LIST_KPI_TABS.devolucionesHoy)}
+          isActive={activeTab === ORDER_LIST_KPI_TABS.devolucionesHoy}
         />
         <KpiCard
+          variant="canon"
           icon={ListChecks}
           label="Pedidos Activos"
           value={orderListKpis.pedidosActivos}
+          meta="En operación →"
+          onClick={() => setActiveTab(ORDER_LIST_KPI_TABS.pedidosActivos)}
+          isActive={activeTab === ORDER_LIST_KPI_TABS.pedidosActivos}
         />
       </div>
 
@@ -921,41 +966,20 @@ const OrdersDashboard = ({
                 />
                 {loading ? "Actualizando..." : "Actualizar"}
               </Button>
-
-              {/*
-                D-25: "Nuevo Pedido" and "Registrar Devolución" are the two primary actions —
-                paired at equal width on mobile instead of each stacking full-width on its own.
-                `sm:contents` dissolves this wrapper at the `sm:` breakpoint so both children fall
-                back into the surrounding flex row with their own `sm:w-auto` sizing, unchanged.
-              */}
-              <div className="grid grid-cols-2 gap-2 sm:contents">
-                <CreateOrderForm
-                  onOrderCreated={handleOrderCreated}
-                  sessionData={sessionData}
-                  initialUsers={initialUsers}
-                  triggerClassName="w-full sm:w-auto sm:ml-3"
-                />
-
-                <a href="/check-in" className="w-full sm:w-auto">
-                  <Button variant="outline" className="w-full sm:w-auto">
-                    Registrar Devolución
-                  </Button>
-                </a>
-              </div>
             </div>
 
-            {/* D-05/02.3: pestañas de estado del canon, subrayadas en una sola fila, con el
-                contador de cada una en una píldora */}
+            {/* D-05/02.3 + RC2.1.2: pestañas de estado del canon, subrayadas en una sola fila, con
+                el contador en una píldora mono que se vuelve negra en la pestaña activa */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-4 overflow-x-auto rounded-none border-b border-border bg-transparent p-0">
+              <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-0.5 overflow-x-auto rounded-none border-b border-border bg-transparent p-0">
                 {ORDER_LIST_TABS.map((tab) => (
                   <TabsTrigger
                     key={tab.value}
                     value={tab.value}
-                    className="-mb-px gap-2 rounded-none border-b-2 border-transparent bg-transparent px-1 pb-2 pt-1 data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                    className="group -mb-px gap-[5px] rounded-none border-b-2 border-transparent bg-transparent px-3 py-[7px] text-xs font-normal text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:font-medium data-[state=active]:text-foreground data-[state=active]:shadow-none"
                   >
                     {tab.label}
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    <span className="rounded-full bg-muted px-[5px] py-px font-mono text-[10px] text-muted-foreground group-data-[state=active]:bg-foreground group-data-[state=active]:text-background">
                       {tabCounts[tab.value]}
                     </span>
                   </TabsTrigger>
