@@ -48,7 +48,7 @@
 -- Idempotent: IF NOT EXISTS / CREATE OR REPLACE / DROP ... IF EXISTS before CREATE TRIGGER /
 -- ON CONFLICT DO NOTHING; the condition CHECK is dropped and re-added under the same name.
 --
--- NOT APPLIED ANYWHERE. Applying it to production needs a separate explicit authorization.
+-- Applied to production (supabase-9cd8-db) on 2026-10-14.
 --
 
 SET lock_timeout = '5s';
