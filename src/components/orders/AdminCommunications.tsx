@@ -433,7 +433,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
   }
 
   return (
-    <Card className="h-[500px] flex min-w-0 max-w-full flex-col overflow-hidden">
+    <Card className="h-auto md:h-[500px] flex min-w-0 max-w-full flex-col overflow-hidden">
       <CardHeader className="flex-shrink-0 pb-2">
         <CardTitle className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -526,9 +526,9 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
         )}
       </CardHeader>
 
-      <CardContent className="flex-1 flex flex-col p-0">
+      <CardContent className="flex-1 min-h-0 flex flex-col p-0">
         {/* Área de mensajes con scroll mejorado */}
-        <ScrollArea className="flex-1 px-3 [&>[data-radix-scroll-area-viewport]>div]:!block" type="always">
+        <ScrollArea className="h-[320px] md:h-auto flex-1 min-h-0 px-3 [&>[data-radix-scroll-area-viewport]>div]:!block" type="always">
           {filteredMessages.length === 0 ? (
             searchTerm ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
