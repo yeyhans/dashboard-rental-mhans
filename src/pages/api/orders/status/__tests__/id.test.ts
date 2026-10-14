@@ -123,10 +123,11 @@ describe('PUT /api/orders/status/[id]', () => {
 
   it('enforces the state machine on this URL too, not just the other one', async () => {
     asAdmin();
+    // Admins may jump between states, but the gate still runs on this URL: a no-op change is rejected.
     getOrderById.mockResolvedValue({ id: 123, status: 'request' });
     const { PUT } = await import('../[id]');
 
-    const response = await PUT(context({ status: 'completed' }) as never);
+    const response = await PUT(context({ status: 'request' }) as never);
 
     expect(response.status).toBe(409);
     expect(updateOrderStatus).not.toHaveBeenCalled();
