@@ -7,7 +7,13 @@ import {
   type ReturnReportLine,
 } from "../lib/checkInReception";
 import { checkStatusChange } from "../lib/orderTransitionGate";
-import { emailOnTransition, statusLabel } from "../lib/orderStatus";
+import {
+  canTransition,
+  canonicalStatus,
+  emailOnTransition,
+  isOrderStatus,
+  statusLabel,
+} from "../lib/orderStatus";
 import type { TransactionalEmailKey } from "../lib/transactionalEmail";
 import {
   TransactionalEmailService,
@@ -256,7 +262,9 @@ export class OrderLifecycleService {
         id: input.orderId,
       } as LifecycleOrder,
       "completed",
-      { previousStatus: status },
+      // The close walks the machine step by step; only the email is judged from the start, so
+      // `in-rental -> completed` must not be read as an admin jump.
+      { previousStatus: status, notify: true },
     );
 
     const warning = [reportWarning, lifecycle.warning]
@@ -326,11 +334,15 @@ export class OrderLifecycleService {
    *    place status emails are sent from, so every route sends the same single email. Without
    *    `previousStatus` no email is sent: the transition cannot be judged, and guessing would
    *    re-send on every save.
+   * 3. Admin status jump (2026-10-14): a change the state machine would reject (a skip, a step
+   *    back, leaving a terminal status) sends its email only when `notify` is `true` — the admin
+   *    ticked "Notificar al cliente". Sequential changes ignore `notify`. An origin outside the
+   *    vocabulary is not judged a jump, so legacy rows keep today's behaviour.
    */
   static async onStatusChanged(
     order: LifecycleOrder,
     newStatus: string,
-    options: { previousStatus?: string | null } = {},
+    options: { previousStatus?: string | null; notify?: boolean } = {},
   ): Promise<LifecycleResult> {
     const startedAt = Date.now();
     let generated = false;
@@ -357,7 +369,11 @@ export class OrderLifecycleService {
       options.previousStatus != null
         ? emailOnTransition(options.previousStatus, newStatus)
         : null;
-    if (emailKey) {
+    const isJump = OrderLifecycleService.isStatusJump(
+      options.previousStatus,
+      newStatus,
+    );
+    if (emailKey && (!isJump || options.notify === true)) {
       const result = await TransactionalEmailService.sendForOrder(
         emailKey as TransactionalEmailKey,
         order,
@@ -372,6 +388,15 @@ export class OrderLifecycleService {
     return warnings.length > 0
       ? { generated, warning: warnings.join(" ") }
       : { generated };
+  }
+
+  /**
+   * A change the state machine would reject. A legacy origin (`processing`, `on-hold`, …) is
+   * never a jump, the same way `checkStatusChange` does not judge it.
+   */
+  static isStatusJump(previous: unknown, next: unknown): boolean {
+    const to = canonicalStatus(next);
+    return isOrderStatus(previous) && to !== null && !canTransition(previous, to);
   }
 
   /**

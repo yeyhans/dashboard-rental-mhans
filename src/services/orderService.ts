@@ -999,17 +999,22 @@ export class OrderService {
   }
 
   /**
-   * Actualizar estado de orden
+   * Actualizar estado de orden. `extra.cancellationReason` lands in `orders.cancellation_reason`
+   * (migration 0003): the admin's reason, kept apart from the customer's `customer_note`.
    */
   static async updateOrderStatus(
     orderId: number,
     status: string,
     notes?: string,
+    extra: { cancellationReason?: string } = {},
   ): Promise<Order> {
     try {
-      const updates: OrderUpdate = {
+      const updates: OrderUpdate & { cancellation_reason?: string } = {
         status,
         date_modified: new Date().toISOString(),
+        ...(extra.cancellationReason
+          ? { cancellation_reason: extra.cancellationReason }
+          : {}),
       };
 
       if (status === "completed") {

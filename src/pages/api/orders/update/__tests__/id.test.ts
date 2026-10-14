@@ -476,11 +476,13 @@ describe("admin order update relay boundary", () => {
         locals: { user },
       }) as never;
 
+    // Desde 2026-10-14 admin y super_admin pueden saltar estados; un rol sin ese permiso sigue
+    // atado a la máquina.
     it("rechaza con 409 un salto ilegal (request -> completed) sin escribir", async () => {
       stubOrderStatus("request");
       const { PUT } = await import("../[id]");
 
-      const response = await PUT(ctx({ status: "completed" }));
+      const response = await PUT(ctx({ status: "completed" }, { id: "user-1" }));
 
       expect(response.status).toBe(409);
       expect(updateOrder).not.toHaveBeenCalled();
