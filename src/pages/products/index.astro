@@ -6,6 +6,13 @@ import { ProductService } from "../../services/productService";
 import { CategoryService } from "../../services/categoryService";
 import { CatalogService } from "../../services/catalogService";
 import CatalogKpiRow from "../../components/CatalogKpiRow.astro";
+import { InventoryKpiRow } from "../../components/inventory/canon/InventoryKpiRow";
+import {
+  summarizeInventoryKpis,
+  type InventoryKpis,
+} from "../../components/inventory/canon/inventoryKpis";
+import { chunkProductIds } from "../../components/products/productUnitCounts";
+import { ProductUnitCountsService } from "../../services/productUnitCountsService";
 
 export const prerender = false;
 
@@ -64,6 +71,27 @@ try {
   });
 }
 
+/**
+ * Canon RC2.1.3 KPIs from real units (`product_unit_counts`, migration 0021). Until the view exists
+ * (or if it fails) the page keeps the previous availability strip instead of showing zeros.
+ */
+let inventoryKpis: InventoryKpis | null = null;
+try {
+  const productIds = (products || []).map((product: { id: number }) => product.id);
+  const chunks = await Promise.all(
+    chunkProductIds(productIds).map((chunk) => ProductUnitCountsService.getByProductIds(chunk)),
+  );
+  const publishedModels = (products || []).filter(
+    (product: { status?: string | null }) => product.status === "publish",
+  ).length;
+  inventoryKpis = summarizeInventoryKpis(chunks.flat(), publishedModels);
+} catch (error) {
+  console.error("[products] Error al calcular los KPI de unidades (0021):", {
+    admin: adminSession.admin.email,
+    error,
+  });
+}
+
 const title = `Catálogo de Equipos | ${adminSession.admin.email}`;
 ---
 
@@ -80,7 +108,13 @@ const title = `Catálogo de Equipos | ${adminSession.admin.email}`;
       initialCategories={categoriesData.categories as any}
       accessToken={accessToken}
     >
-      <CatalogKpiRow kpis={availability} />
+      {
+        inventoryKpis ? (
+          <InventoryKpiRow kpis={inventoryKpis} />
+        ) : (
+          <CatalogKpiRow kpis={availability} />
+        )
+      }
     </ProductsDashboard>
   </div>
 </Base>

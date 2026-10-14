@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import * as DOMPurifyModule from 'dompurify';
 
 const purify = (DOMPurifyModule.default || DOMPurifyModule) as typeof DOMPurifyModule.default;
@@ -22,6 +22,7 @@ import type { Database } from '../../types/database';
 import type { ProductCategory } from '../../types/product';
 import { CategorySelector } from './CategorySelector';
 import { ProductImageUpload } from './ProductImageUpload';
+import { ProductInventoryTab } from '../inventory/units/ProductInventoryTab';
 
 type Product = Database['public']['Tables']['products']['Row'];
 
@@ -187,6 +188,18 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
 
   const productImages = parseImages(product.images);
 
+  // `#inventario` deep-links straight to the units (from the catalog's stock columns).
+  const [viewTab, setViewTab] = useState<'ficha' | 'inventario'>('ficha');
+  useEffect(() => {
+    if (window.location.hash === '#inventario') setViewTab('inventario');
+  }, []);
+  const handleViewTabChange = (value: string) => {
+    const next = value === 'inventario' ? 'inventario' : 'ficha';
+    setViewTab(next);
+    const url = `${window.location.pathname}${window.location.search}${next === 'inventario' ? '#inventario' : ''}`;
+    window.history.replaceState(null, '', url);
+  };
+
   const getStatusBadgeVariant = (status: string | null) => {
     switch (status) {
       case 'publish': return 'default';
@@ -245,7 +258,7 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
             <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="basic">Básico</TabsTrigger>
               <TabsTrigger value="pricing">Precios</TabsTrigger>
-              <TabsTrigger value="inventory">Inventario</TabsTrigger>
+              <TabsTrigger value="inventory">Stock y medidas</TabsTrigger>
               <TabsTrigger value="seo">SEO</TabsTrigger>
               <TabsTrigger value="advanced">Avanzado</TabsTrigger>
             </TabsList>
@@ -609,7 +622,20 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
             </div>
           </Tabs>
         ) : (
-          /* View Mode */
+          /* View Mode — canon RC2.1.3 ficha: "Inventario" holds the physical units of this model. */
+          <Tabs value={viewTab} onValueChange={handleViewTabChange} className="w-full">
+            <TabsList>
+              <TabsTrigger value="ficha">Ficha</TabsTrigger>
+              <TabsTrigger value="inventario">Inventario</TabsTrigger>
+            </TabsList>
+            <TabsContent value="inventario" className="mt-4">
+              <ProductInventoryTab
+                productId={product.id}
+                productName={product.name || 'Producto sin nombre'}
+                accessToken={accessToken}
+              />
+            </TabsContent>
+            <TabsContent value="ficha" className="mt-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Product Images */}
             <div className="lg:col-span-1">
@@ -760,6 +786,8 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
               )}
             </div>
           </div>
+            </TabsContent>
+          </Tabs>
         )}
       </div>
     </div>

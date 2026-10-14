@@ -87,13 +87,14 @@ describe("ProductsDashboard — KPI strip placement (05.1)", () => {
     expect(filters).toBeGreaterThan(kpi);
   });
 
-  it("the catalog page hands CatalogKpiRow to ProductsDashboard as a child, not above it", () => {
-    expect(page).toMatch(
-      /<ProductsDashboard[\s\S]*?>\s*<CatalogKpiRow[^>]*\/>\s*<\/ProductsDashboard>/,
-    );
-    expect(page.indexOf("<CatalogKpiRow")).toBeGreaterThan(
-      page.indexOf("<ProductsDashboard"),
-    );
+  // T3 (0021): the unit-based InventoryKpiRow replaces CatalogKpiRow when the counts load; the
+  // older strip stays as the fallback. Either way the strip is a child, not above the header.
+  it("the catalog page hands the KPI strip to ProductsDashboard as a child, not above it", () => {
+    const children = page.match(/<ProductsDashboard[\s\S]*?>([\s\S]*?)<\/ProductsDashboard>/)?.[1] ?? "";
+    expect(children).toMatch(/<InventoryKpiRow[^>]*\/>/);
+    expect(children).toMatch(/<CatalogKpiRow[^>]*\/>/);
+    expect(page.indexOf("<CatalogKpiRow")).toBeGreaterThan(page.indexOf("<ProductsDashboard"));
+    expect(page.indexOf("<InventoryKpiRow")).toBeGreaterThan(page.indexOf("<ProductsDashboard"));
   });
 });
 

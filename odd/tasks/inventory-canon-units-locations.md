@@ -67,5 +67,32 @@ check-in/check-out/relocation.
   GREEN: full `pnpm test` 2917 passed, 7 failed (same pre-existing OrdersDashboard.sourceAssertions, mhans-50).
 - Coordination: mhans-50 notified of accessControl.ts / movements.ts edits.
 
+### T3 (2026-10-14) — partial, committed
+- Route: delegated (workflow worker); resumed an interrupted run, kept its uncommitted work after review.
+- Canon pieces (local, Tailwind arbitrary values, no shared canon variants): `components/inventory/canon/`
+  (UnitStatusPill with 5px dot, InventoryKpi/InventoryKpiRow, unitStatus, inventoryKpis).
+- Product list: `pages/products/index.astro` renders the 4 unit KPIs (Modelos Publicados + "N unidades en
+  inventario", Disponibles Hoy %, En Arriendo, Mantención / Bloqueadas) from ProductUnitCountsService; on failure
+  (DB without 0021) it falls back to the previous CatalogKpiRow. `ProductUnitCountCells` + `useProductUnitCounts` +
+  `fetchProductUnitCounts` (GET /api/inventory/counts, chunked, all-or-nothing, "—" on failure) are built and tested
+  but NOT wired into the table: the list lives in `src/components/ProductsDashboard.tsx`, outside the T3 edit surface.
+- Product detail: view mode has tabs Ficha | Inventario (`#inventario` deep link); the edit-mode stock tab was
+  renamed "Stock y medidas". `ProductInventoryTab` + `UnitsTable`: # | Código (mono) | N° de serie | Condición |
+  Estado | Ubicación (tree select + legacy text) | Observaciones | Reubicar/Archivar; inline edit sends row_version,
+  409 CONFLICT -> toast + quiet reload; footer count, Agregar unidad, Agregar varias (BulkUnitsDialog: cantidad,
+  condición, estado, ubicación, prefijo), Imprimir etiquetas (/inventory/labels?tags=...), mobile cards "Unidad 001",
+  empty state.
+- `/inventory/ubicaciones` (admins; operators redirected): SVG 5x5 m plan with walls N/E/S/W, create shelf (levels),
+  box, floor spot; drag with 0.1 m snap; arrow nudge (shift 0.5 m); edit name/code; deactivate. Unit count per location
+  is supported by the component but the page passes `unitCounts={null}`: no service returns counts per location.
+- Tests: no jsdom/@testing-library in this project (adding them is outside the surface); component tests use
+  `react-dom/server` render + fetch-mocked api/edit modules. RED for the earlier work happened in the interrupted run
+  and was not re-observed here.
+- GREEN: `pnpm test` 2990 passed, 7 failed (OrdersDashboard.sourceAssertions, CRLF checkout `core.autocrlf=true`);
+  `pnpm build` complete.
+
 ## Next step
-T3 dashboard UI.
+- Authorize editing `src/components/ProductsDashboard.tsx` to swap its Disp./Arriendo placeholders for
+  `ProductUnitCountCells` (plus a Stock column) using `useProductUnitCounts`.
+- Add a service/API for unit counts per location (outside T3 surface) and pass it to `/inventory/ubicaciones`.
+- T4 ops.

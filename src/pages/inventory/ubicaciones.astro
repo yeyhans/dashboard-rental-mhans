@@ -1,0 +1,47 @@
+---
+import Base from "../../layout/Base.astro";
+import { WarehouseLocationsDashboard } from "../../components/inventory/locations/WarehouseLocationsDashboard";
+import { clearAuthCookies, getServerAdmin } from "../../lib/supabase";
+import { hasFullAccess } from "../../lib/accessControl";
+import { WarehouseLocationService } from "../../services/warehouseLocationService";
+import type { WarehouseLocation } from "../../types/inventory";
+
+export const prerender = false;
+
+// Warehouse map editor (0021). Admins only: operators move units from /bodega, they do not edit the map.
+const adminSession = await getServerAdmin(Astro);
+
+if (!adminSession) {
+  clearAuthCookies(Astro);
+  return Astro.redirect("/");
+}
+if (!hasFullAccess(adminSession.admin.role)) {
+  return Astro.redirect("/bodega");
+}
+
+let locations: WarehouseLocation[] = [];
+let loadError: string | null = null;
+try {
+  locations = await WarehouseLocationService.list({ includeInactive: true });
+} catch (error) {
+  console.error("[inventory/ubicaciones] Error al cargar las ubicaciones:", {
+    admin: adminSession.admin.email,
+    error,
+  });
+  loadError =
+    "No pudimos cargar las ubicaciones de bodega. Si la base aún no tiene la migración 0021, este plano queda disponible cuando se aplique.";
+}
+
+const title = `Ubicaciones de bodega | ${adminSession.admin.email}`;
+---
+
+<Base title={title}>
+  <div class="container py-6">
+    <WarehouseLocationsDashboard
+      client:load
+      initialLocations={locations}
+      unitCounts={null}
+      loadError={loadError}
+    />
+  </div>
+</Base>
