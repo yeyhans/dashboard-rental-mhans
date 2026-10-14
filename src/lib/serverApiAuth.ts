@@ -1,3 +1,5 @@
+import { hasFullAccess } from "./accessControl";
+
 const encoder = new TextEncoder();
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -15,7 +17,7 @@ function constantTimeEqual(a: string, b: string): boolean {
 
 export function validateFrontendApiKey(request: Request): boolean {
   const expectedSecret = import.meta.env.FRONTEND_API_SECRET;
-  const providedSecret = request.headers.get('X-API-Key');
+  const providedSecret = request.headers.get("X-API-Key");
 
   if (!expectedSecret || !providedSecret) {
     return false;
@@ -25,32 +27,42 @@ export function validateFrontendApiKey(request: Request): boolean {
 }
 
 export function unauthorizedResponse(headers: HeadersInit = {}): Response {
-  return new Response(JSON.stringify({ success: false, error: 'No autorizado' }), {
-    status: 401,
-    headers: { 'Content-Type': 'application/json', ...headers },
-  });
+  return new Response(
+    JSON.stringify({ success: false, error: "No autorizado" }),
+    {
+      status: 401,
+      headers: { "Content-Type": "application/json", ...headers },
+    },
+  );
 }
 
-export function createInternalApiHeaders(requestId = crypto.randomUUID()): HeadersInit {
+export function createInternalApiHeaders(
+  requestId = crypto.randomUUID(),
+): HeadersInit {
   const frontendSecret = import.meta.env.FRONTEND_API_SECRET;
   if (!frontendSecret) {
-    throw new Error('Missing FRONTEND_API_SECRET');
+    throw new Error("Missing FRONTEND_API_SECRET");
   }
 
   return {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    'X-API-Key': frontendSecret,
-    'X-Request-ID': requestId,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "X-API-Key": frontendSecret,
+    "X-Request-ID": requestId,
   };
 }
 
-export async function isFrontendApiKeyOrAdmin(context: { request: Request }): Promise<boolean> {
+export async function isFrontendApiKeyOrAdmin(context: {
+  request: Request;
+}): Promise<boolean> {
   if (validateFrontendApiKey(context.request)) {
     return true;
   }
 
-  const { getServerAdmin } = await import('./supabase');
+  // An `operator` session is a dashboard session too, but operators are confined to the garage
+  // scan endpoints (lib/accessControl.ts). The routes behind this helper create orders, send
+  // customer e-mails and render customer documents, so only full-access roles pass (B-2 sweep).
+  const { getServerAdmin } = await import("./supabase");
   const adminSession = await getServerAdmin(context as any);
-  return !!adminSession;
+  return !!adminSession && hasFullAccess(adminSession.admin.role);
 }
