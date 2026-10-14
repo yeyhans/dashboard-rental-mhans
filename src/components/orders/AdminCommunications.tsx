@@ -322,7 +322,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
   // Renderizar contenido MDX/Markdown de forma básica
   const renderMessageContent = (message: string) => {
     if (!isMarkdownMessage(message)) {
-      return <p className="text-sm whitespace-pre-wrap break-words">{message}</p>;
+      return <p className="text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">{message}</p>;
     }
 
     // Procesar contenido markdown básico
@@ -348,7 +348,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
 
     return (
       <div
-        className="text-sm break-words leading-relaxed"
+        className="text-sm [overflow-wrap:anywhere] leading-relaxed"
         dangerouslySetInnerHTML={{ __html: sanitizedContent }}
       />
     );
@@ -392,7 +392,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
       <div className="mt-2 p-2 bg-muted/30 rounded border">
         <div className="flex items-center gap-2">
           {isImage ? <Image className="h-4 w-4" /> : <Paperclip className="h-4 w-4" />}
-          <span className="text-xs font-medium">{message.file_name}</span>
+          <span className="min-w-0 text-xs font-medium [overflow-wrap:anywhere]">{message.file_name}</span>
           <Button
             variant="ghost"
             size="sm"
@@ -433,10 +433,10 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
   }
 
   return (
-    <Card className="h-[500px] flex flex-col">
+    <Card className="h-[500px] flex min-w-0 max-w-full flex-col overflow-hidden">
       <CardHeader className="flex-shrink-0 pb-2">
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <MessageSquare className="h-5 w-5" />
             Comunicaciones con Cliente
             {unreadCount > 0 && (
@@ -445,7 +445,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
@@ -468,7 +468,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
               {totalMessages} mensaje{totalMessages !== 1 ? 's' : ''}
             </Badge>
             {customerInfo && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="secondary" className="max-w-full truncate text-xs">
                 {customerInfo.name}
               </Badge>
             )}
@@ -528,7 +528,7 @@ export function AdminCommunications({ orderId, customerInfo, adminInfo }: AdminC
 
       <CardContent className="flex-1 flex flex-col p-0">
         {/* Área de mensajes con scroll mejorado */}
-        <ScrollArea className="flex-1 px-3" type="always">
+        <ScrollArea className="flex-1 px-3 [&>[data-radix-scroll-area-viewport]>div]:!block" type="always">
           {filteredMessages.length === 0 ? (
             searchTerm ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
