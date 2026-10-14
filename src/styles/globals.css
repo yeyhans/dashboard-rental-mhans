@@ -286,3 +286,67 @@
     align-items: flex-end;
   }
 }
+
+/* ============================================================================
+   Detalle de pedido: tabla de equipos canónica RC2.1.2 (`OrderItemsTable.tsx`,
+   clase `.order-items-table`). Hasta 768px cada fila se lee como tarjeta
+   etiqueta/valor (canon `.prod-tbl` en @media max-width:768px); la etiqueta
+   sale de `data-label`.
+   ============================================================================ */
+.order-items-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+@media (max-width: 768px) {
+  .order-items-table table,
+  .order-items-table tbody,
+  .order-items-table tr,
+  .order-items-table td {
+    display: block;
+    width: 100%;
+  }
+  .order-items-table thead {
+    display: none;
+  }
+  .order-items-table tbody tr {
+    border-bottom: 2px solid var(--color-border-soft);
+    padding: 6px 0;
+  }
+  .order-items-table tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    padding: 5px 12px;
+    border-bottom: none;
+    text-align: right;
+  }
+  .order-items-table td[data-label]::before {
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-faint);
+    text-align: left;
+    flex-shrink: 0;
+  }
+  .order-items-table .order-item-main {
+    justify-content: flex-end;
+    text-align: right;
+  }
+  .order-items-table tfoot,
+  .order-items-table tfoot tr {
+    display: flex;
+    width: 100%;
+  }
+  .order-items-table tfoot tr {
+    justify-content: space-between;
+    background: var(--color-surface-2);
+  }
+  .order-items-table tfoot td {
+    display: block;
+    width: auto;
+    border-top: none;
+  }
+}
