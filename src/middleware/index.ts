@@ -2,36 +2,19 @@ import { defineMiddleware } from "astro:middleware";
 import { getServerAdmin } from "../lib/supabase";
 import { getAllowedOrigin } from "../middleware/auth";
 import { homeFor, resolveAccess } from "../lib/accessControl";
+import { isProtectedPage } from "../lib/protectedPages";
 import micromatch from "micromatch";
 
 const { isMatch } = micromatch;
 
-// Rutas que requieren autenticación de administrador
-const protectedRoutes = [
-  "/dashboard(|/)",
-  "/dashboard/**",
-  "/orders/**",
-  "/users/**",
-  "/payments-table(|/)",
-  "/products/**",
-  "/analytics/**",
-  "/delivery(|/)",
-  "/check-in(|/)",
-  "/finance(|/)",
-  "/profitability(|/)",
-  "/inventory(|/)",
-  "/inventory/**",
-  "/operators(|/)",
-  "/bodega(|/)",
-  "/bodega/**"
-];
+// Las rutas que requieren autenticación de administrador viven en lib/protectedPages.ts (testeable).
 
 // Rutas de autenticación que no requieren verificación
 const authRoutes = [
   "/api/auth/login",
   "/api/auth/logout",
   "/api/auth/session",
-  "/api/auth/refresh"
+  "/api/auth/refresh",
 ];
 
 const homeRoute = "/";
@@ -42,11 +25,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   // ===== CORS HANDLING - DEBE SER LO PRIMERO =====
   // Manejar CORS para todas las rutas API usando whitelist de orígenes permitidos
-  if (url.pathname.startsWith('/api/')) {
-    const allowedOrigin = getAllowedOrigin(request.headers.get('origin'));
+  if (url.pathname.startsWith("/api/")) {
+    const allowedOrigin = getAllowedOrigin(request.headers.get("origin"));
 
     // Manejar preflight OPTIONS requests ANTES de cualquier autenticación
-    if (request.method === 'OPTIONS') {
+    if (request.method === "OPTIONS") {
       // Si el origen no está en la whitelist, responder sin headers CORS (browser bloqueará)
       if (!allowedOrigin) {
         return new Response(null, { status: 204 });
@@ -54,11 +37,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
       return new Response(null, {
         status: 204,
         headers: {
-          'Access-Control-Allow-Origin': allowedOrigin,
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie, Accept',
-          'Access-Control-Allow-Credentials': 'true',
-          'Access-Control-Max-Age': '86400',
+          "Access-Control-Allow-Origin": allowedOrigin,
+          "Access-Control-Allow-Methods":
+            "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+          "Access-Control-Allow-Headers":
+            "Content-Type, Authorization, Cookie, Accept",
+          "Access-Control-Allow-Credentials": "true",
+          "Access-Control-Max-Age": "86400",
         },
       });
     }
@@ -66,10 +51,16 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // Para requests normales, continuar y agregar headers CORS solo a orígenes permitidos
     const response = await next();
     if (allowedOrigin) {
-      response.headers.set('Access-Control-Allow-Origin', allowedOrigin);
-      response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-      response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie, Accept');
-      response.headers.set('Access-Control-Allow-Credentials', 'true');
+      response.headers.set("Access-Control-Allow-Origin", allowedOrigin);
+      response.headers.set(
+        "Access-Control-Allow-Methods",
+        "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+      );
+      response.headers.set(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization, Cookie, Accept",
+      );
+      response.headers.set("Access-Control-Allow-Credentials", "true");
     }
     return response;
   }
@@ -90,11 +81,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   // Si no es una ruta protegida, continuar sin verificación
-  if (!isMatch(url.pathname, protectedRoutes)) {
+  if (!isProtectedPage(url.pathname)) {
     return next();
   }
 
-  console.log('🔒 Verificando admin para ruta protegida:', url.pathname);
+  console.log("🔒 Verificando admin para ruta protegida:", url.pathname);
 
   // SIEMPRE verificar admin en base de datos (usa cache interno de 5 min)
   const adminSession = await getServerAdmin(context);
@@ -103,14 +94,22 @@ export const onRequest = defineMiddleware(async (context, next) => {
     // NO borrar cookies aquí: un null puede ser fallo transitorio (red, race de
     // refresh entre lambdas). Borrar el refresh token aquí mataba sesiones válidas.
     // Las cookies se limpian solo en logout explícito o refresh confirmado inválido.
-    console.log('🚫 Acceso denegado al dashboard - Usuario no es administrador');
+    console.log(
+      "🚫 Acceso denegado al dashboard - Usuario no es administrador",
+    );
     return redirect(homeRoute);
   }
 
   // Gating por rol (lib/accessControl.ts, cubierto por tests): un `operator` solo ve /bodega.
   // Cualquier otra página protegida lo devuelve a su inicio en vez de mostrarle el panel.
-  if (resolveAccess(adminSession.admin.role, url.pathname, request.method) !== 'allow') {
-    console.log('🚫 Página fuera del alcance del rol:', { role: adminSession.admin.role, path: url.pathname });
+  if (
+    resolveAccess(adminSession.admin.role, url.pathname, request.method) !==
+    "allow"
+  ) {
+    console.log("🚫 Página fuera del alcance del rol:", {
+      role: adminSession.admin.role,
+      path: url.pathname,
+    });
     return redirect(homeFor(adminSession.admin.role));
   }
 
@@ -119,4 +118,4 @@ export const onRequest = defineMiddleware(async (context, next) => {
   locals.email = adminSession.admin.email;
 
   return next();
-}); 
+});
