@@ -103,7 +103,9 @@ describe("ProductsDashboard — SKU and Estado columns (05.3)", () => {
     const html = render();
     expect(html).toMatch(/<th[^>]*>\s*SKU/);
     expect(html).toMatch(/<th[^>]*>\s*Estado/);
-    expect(html).not.toMatch(/<th[^>]*>\s*Stock/);
+    // T3 (0021): "Stock" is back as the unit-count column, after Estado (the stock_status
+    // badge keeps the Estado header and its sort).
+    expect(html.indexOf(">Stock</th>")).toBeGreaterThan(html.search(/<th[^>]*>\s*Estado/));
   });
 
   it("renders the SKU in its own monospaced cell", () => {

@@ -95,6 +95,27 @@ check-in/check-out/relocation.
 - GREEN: `pnpm test` 2990 passed, 7 failed (OrdersDashboard.sourceAssertions, CRLF checkout `core.autocrlf=true`);
   `pnpm build` complete.
 
+### T3 follow-up (2026-10-14) — catalog stock columns + unit counts per location
+- Route: delegated (bounded writer); surface widened by the parent to `ProductsDashboard.tsx`, the
+  location service/API and `ubicaciones.astro`.
+- Catalog table (`src/components/ProductsDashboard.tsx`): `useProductUnitCounts(allProducts ids, accessToken)`
+  feeds `ProductUnitCountCells`; headers Equipo | SKU | Ubicación | Estado | Stock | Disp. | Arriendo |
+  Inventario | Precio/día | Acciones. Estado keeps the stock_status badge, sort and filter; the unit status pill
+  sits under "Inventario" to avoid a second "Estado". Counts missing / endpoint failing -> "—" in all 4 cells.
+- `WarehouseLocationService.countUnitsByLocation()`: `{location_id -> non-retired units}` (direct counts; the plan
+  rolls children up), reads only `location_id`, pages by 1000 (PostgREST max-rows), throws on DB error.
+  `GET /api/inventory/locations?with_counts=1` adds `unit_counts` (`null` on failure, list still 200).
+  `/inventory/ubicaciones` reads the counts in their own try/catch and passes `unitCounts={unitCounts}`
+  (null -> existing "aún no está disponible" notice).
+- RED: 15 failing (4 service, 2 route, 3 page source, 5 dashboard wiring, 1 updated layout header assertion
+  that used to forbid a "Stock" header). GREEN: targeted 22 files / 229 tests passed.
+- Full `pnpm test`: 3002 passed, 10 failed = 7 OrdersDashboard.sourceAssertions (CRLF checkout,
+  `core.autocrlf=true`) + 3 timeouts under load in `api/order/generate-contract-pdf`, `api/orders/create-pricing`,
+  `api/orders/create-status`; `vitest run src/pages/api/order src/pages/api/orders` alone: 123/123 passed.
+  `pnpm build`: Complete.
+- Not done: no browser check of `/products` or `/inventory/ubicaciones` (no DB with 0021 reachable from here),
+  so the T3 checkbox stays open until a visual pass.
+
 ### T4 + T5 ops (2026-10-14) — see `mariohans-3d-ops/odd/tasks/mariohans-3d-ops.md` (T7a, T7b)
 - T4 cec760a: ported rules (inventoryRules/*), services, write APIs (movements, relocate, orders advance,
   locations CRUD), role gates, Origin check, 503 INVENTORY_UNAVAILABLE without 0021, SSE `inventory` snapshot.
@@ -137,7 +158,6 @@ check-in/check-out/relocation.
   integrates): cherry-pick only 0239e92, fcf01e5, 8329a56 (+ this docs commit) onto origin/main 224350b in an LF
   checkout; full `pnpm test` + `pnpm build` there; backup + dry-run + apply 0021 on production as supabase_admin;
   push main; deploy ops (cec760a, 9181ea3).
-- Authorize editing `src/components/ProductsDashboard.tsx` to swap its Disp./Arriendo placeholders for
-  `ProductUnitCountCells` (plus a Stock column) using `useProductUnitCounts`.
-- Add a service/API for unit counts per location and pass it to `/inventory/ubicaciones`.
+- Browser pass of `/products` (Stock/Disp./Arriendo/Inventario) and `/inventory/ubicaciones` (count badges)
+  against a database with 0021, then close T3. The ship cherry-pick list must include the T3 follow-up commit.
 - Ops: badge overlap S-E2/S-P1 in the 2D plan; no unit create/edit API or UI ('manage_units' unused).

@@ -13,6 +13,9 @@ import type { WarehouseLocation } from '../types/inventory';
 /** Postgres unique-violation error code. */
 const UNIQUE_VIOLATION = '23505';
 
+/** PostgREST's default `max-rows`; counting pages through units in slices of this size. */
+const COUNT_PAGE_SIZE = 1000;
+
 const LOCATION_COLUMNS =
   'id, code, name, kind, parent_id, wall, pos_x, pos_y, width, depth, height, level_index, rotation_deg, ' +
   'is_active, row_version, created_at, updated_at, updated_by';
@@ -146,6 +149,38 @@ export class WarehouseLocationService {
 
     console.log('[WarehouseLocationService] Ubicación desactivada:', { id, code: current.code });
     return data as WarehouseLocation;
+  }
+
+  /**
+   * Non-retired units stored at each location, keyed by location id (direct counts only; the plan
+   * rolls children up into their parents). Units without a location are left out. Reads only
+   * `location_id`, one PostgREST page at a time, so a large inventory is not cut at the
+   * server's row cap. Throws on a database error (e.g. 0021 not applied); callers fail soft.
+   */
+  static async countUnitsByLocation(): Promise<Record<string, number>> {
+    const client = this.client();
+    const counts: Record<string, number> = {};
+
+    for (let from = 0; ; from += COUNT_PAGE_SIZE) {
+      const { data, error } = await client
+        .from('serialised_assets')
+        .select('location_id')
+        .not('location_id', 'is', null)
+        .neq('condition', 'retired')
+        .order('id', { ascending: true })
+        .range(from, from + COUNT_PAGE_SIZE - 1);
+
+      if (error) {
+        console.error('[WarehouseLocationService] Error al contar unidades por ubicación:', { from, error });
+        throw error;
+      }
+
+      const rows = (data as Array<{ location_id: string | null }> | null) ?? [];
+      for (const { location_id: locationId } of rows) {
+        if (locationId) counts[locationId] = (counts[locationId] ?? 0) + 1;
+      }
+      if (rows.length < COUNT_PAGE_SIZE) return counts;
+    }
   }
 
   private static assertValid(draft: LocationDraft, all: WarehouseLocation[], selfId: string | null): string[] {

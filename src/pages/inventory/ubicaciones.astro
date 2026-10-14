@@ -32,6 +32,19 @@ try {
     "No pudimos cargar las ubicaciones de bodega. Si la base aún no tiene la migración 0021, este plano queda disponible cuando se aplique.";
 }
 
+// Units per location, read on their own: a failure leaves the plan without counts, never hides it.
+let unitCounts: Record<string, number> | null = null;
+if (!loadError) {
+  try {
+    unitCounts = await WarehouseLocationService.countUnitsByLocation();
+  } catch (error) {
+    console.error("[inventory/ubicaciones] Error al contar unidades por ubicación:", {
+      admin: adminSession.admin.email,
+      error,
+    });
+  }
+}
+
 const title = `Ubicaciones de bodega | ${adminSession.admin.email}`;
 ---
 
@@ -40,7 +53,7 @@ const title = `Ubicaciones de bodega | ${adminSession.admin.email}`;
     <WarehouseLocationsDashboard
       client:load
       initialLocations={locations}
-      unitCounts={null}
+      unitCounts={unitCounts}
       loadError={loadError}
     />
   </div>

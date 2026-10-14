@@ -156,3 +156,46 @@ describe('WarehouseLocationService.deactivate', () => {
     await expectInventoryError(WarehouseLocationService.deactivate('shelf-1', 1, 'u'), 409, `${LOCATION_ERRORS.HAS_UNITS} (3)`);
   });
 });
+
+describe('WarehouseLocationService.countUnitsByLocation', () => {
+  it('counts non-retired units with a location, keyed by location id', async () => {
+    db.queue('serialised_assets', {
+      data: [{ location_id: 'shelf-1' }, { location_id: 'rug' }, { location_id: 'shelf-1' }],
+      error: null,
+    });
+
+    expect(await WarehouseLocationService.countUnitsByLocation()).toEqual({ 'shelf-1': 2, rug: 1 });
+
+    const [query] = db.buildersFor('serialised_assets');
+    expect(callArgs(query, 'select')).toEqual(['location_id']);
+    expect(allCallArgs(query, 'neq')).toEqual([['condition', 'retired']]);
+    expect(allCallArgs(query, 'not')).toEqual([['location_id', 'is', null]]);
+    expect(callArgs(query, 'range')).toEqual([0, 999]);
+  });
+
+  it('pages through more than one PostgREST page', async () => {
+    const fullPage = Array.from({ length: 1000 }, () => ({ location_id: 'shelf-1' }));
+    db.queue('serialised_assets', { data: fullPage, error: null }, { data: [{ location_id: 'rug' }], error: null });
+
+    expect(await WarehouseLocationService.countUnitsByLocation()).toEqual({ 'shelf-1': 1000, rug: 1 });
+    const pages = db.buildersFor('serialised_assets');
+    expect(pages.map((page) => callArgs(page, 'range'))).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+  });
+
+  it('returns an empty map when no unit has a location', async () => {
+    db.queue('serialised_assets', { data: [], error: null });
+    expect(await WarehouseLocationService.countUnitsByLocation()).toEqual({});
+  });
+
+  it('throws the database error (e.g. 0021 not applied) after logging it', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failure = { code: '42703', message: 'column serialised_assets.location_id does not exist' };
+    db.queue('serialised_assets', { data: null, error: failure });
+
+    await expect(WarehouseLocationService.countUnitsByLocation()).rejects.toBe(failure);
+    expect(log).toHaveBeenCalled();
+  });
+});
