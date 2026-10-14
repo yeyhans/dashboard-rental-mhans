@@ -62,6 +62,12 @@ describe("shouldOfferNotify", () => {
     expect(shouldOfferNotify("request", "in-rental")).toBe(true);
     expect(shouldOfferNotify("completed", "return")).toBe(true);
   });
+
+  it("is false for a legacy origin, which the server never treats as a jump", () => {
+    expect(shouldOfferNotify("on-hold", "request")).toBe(false);
+    expect(shouldOfferNotify("on-hold", "in-rental")).toBe(false);
+    expect(shouldOfferNotify("processing", "completed")).toBe(false);
+  });
 });
 
 describe("readStatusChangeResponse", () => {
@@ -161,12 +167,12 @@ describe("ProcessOrder wiring", () => {
     expect(source).toContain("onChangeStatus={handleStatusChange}");
   });
 
-  it("sends notify and the open-checkout acknowledgement to the status route", () => {
-    expect(source).toContain("notify: request.notify === true");
-    expect(source).toContain(
-      "acknowledge_open_checkouts: request.acknowledgeOpenCheckouts === true",
-    );
-    expect(source).toContain("readStatusChangeResponse(response.status, result)");
+  it("sends the change through the tested status change flow", () => {
+    // The body (notify, acknowledge_open_checkouts) and the follow-up handling are unit-tested
+    // in statusChangeFlow.test.ts; here only that ProcessOrder goes through it.
+    expect(source).toContain("executeStatusChange(oldStatus, request, {");
+    expect(source).toContain("body: JSON.stringify(body)");
+    expect(source).toContain("if (execution.followUpError) toast.warning(execution.followUpError);");
   });
 
   it("keeps the email action", () => {

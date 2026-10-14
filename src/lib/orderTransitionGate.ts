@@ -48,6 +48,18 @@ export function isSequentialTransition(from: unknown, to: unknown): boolean {
   return isOrderStatus(from) && isOrderStatus(to) && canTransition(from, to);
 }
 
+/**
+ * Whether the server treats the change as an admin jump, whose customer email (and order-chat
+ * note) only goes out when the admin ticked "Notificar al cliente". A legacy origin
+ * (`processing`, `on-hold`, …) is never a jump: the gate does not judge it and those rows keep
+ * today's emails. The target is read canonically. The single classifier for the lifecycle's
+ * email rule and the quick actions' notify checkbox.
+ */
+export function isStatusJump(from: unknown, to: unknown): boolean {
+  const target = canonicalStatus(to);
+  return isOrderStatus(from) && target !== null && !canTransition(from, target);
+}
+
 const PRE_RENTAL_STATUSES: readonly OrderStatus[] = [
   "request",
   "evaluation",

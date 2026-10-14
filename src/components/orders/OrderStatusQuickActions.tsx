@@ -15,7 +15,6 @@ import { Textarea } from "../ui/textarea";
 import {
   STATUS_REASON_MAX_LENGTH,
   canJumpStatus,
-  isSequentialTransition,
 } from "../../lib/orderTransitionGate";
 import { operatorNextStatus } from "../../lib/operatorOrderStatus";
 import {
@@ -26,6 +25,24 @@ import {
   statusLabel,
   type OrderStatus,
 } from "../../lib/orderStatus";
+import {
+  acknowledgeOpenCheckouts,
+  buildAdvanceRequest,
+  buildCancelRequest,
+  buildJumpRequest,
+  shouldOfferNotify,
+  submitStatusChange,
+  type StatusChangeOutcome,
+  type StatusChangeRequest,
+} from "./statusChangeFlow";
+
+// The flow lives in `statusChangeFlow` (pure, tested without a DOM); re-exported for callers.
+export {
+  readStatusChangeResponse,
+  shouldOfferNotify,
+  type StatusChangeOutcome,
+  type StatusChangeRequest,
+} from "./statusChangeFlow";
 
 /**
  * Quick status actions of the order detail "Acciones" card (admin status jump, 2026-10-14,
@@ -38,17 +55,6 @@ import {
  *    machine would not take offers "Notificar al cliente", unchecked by default.
  *  - A 409 `OPEN_CHECKOUTS` lists the units still out and asks "Confirmar de todos modos".
  */
-
-export interface StatusChangeRequest {
-  status: OrderStatus;
-  notify?: boolean;
-  reason?: string;
-  acknowledgeOpenCheckouts?: boolean;
-}
-
-export type StatusChangeOutcome =
-  | { ok: true }
-  | { ok: false; error: string; code?: string; assetTags?: string[] };
 
 export interface StatusQuickActions {
   advanceTo: OrderStatus | null;
@@ -85,38 +91,6 @@ export function buildStatusQuickActions(
     jumpTargets: canJump
       ? ORDER_STATUSES.filter((status) => status !== currentStatus)
       : [],
-  };
-}
-
-/** The notify checkbox only makes sense for a jump: sequential changes always email. */
-export function shouldOfferNotify(from: unknown, to: unknown): boolean {
-  return !isSequentialTransition(canonicalStatus(from), to);
-}
-
-/** Reads the status route's JSON answer into an outcome the dialogs can act on. */
-export function readStatusChangeResponse(
-  httpStatus: number,
-  body: unknown,
-): StatusChangeOutcome {
-  const result = (body ?? {}) as {
-    success?: boolean;
-    error?: string;
-    code?: string;
-    data?: { asset_tags?: unknown };
-  };
-  if (httpStatus >= 200 && httpStatus < 300 && result.success) {
-    return { ok: true };
-  }
-  const assetTags = Array.isArray(result.data?.asset_tags)
-    ? result.data.asset_tags.filter(
-        (tag): tag is string => typeof tag === "string",
-      )
-    : undefined;
-  return {
-    ok: false,
-    error: result.error || "No se pudo actualizar el estado de la orden",
-    ...(result.code ? { code: result.code } : {}),
-    ...(assetTags ? { assetTags } : {}),
   };
 }
 
@@ -158,25 +132,24 @@ export function OrderStatusQuickActions({
     setPending(true);
     setError(null);
     try {
-      const outcome = await onChangeStatus(request);
-      if (outcome.ok) {
+      const result = await submitStatusChange(request, onChangeStatus);
+      if (result.kind === "done") {
         setDialog(null);
         setOpenCheckouts(null);
         resetForm();
         return;
       }
-      if (outcome.code === "OPEN_CHECKOUTS" && !request.acknowledgeOpenCheckouts) {
+      if (result.kind === "confirm-open-checkouts") {
         setDialog(null);
-        setOpenCheckouts({ request, assetTags: outcome.assetTags ?? [] });
+        setOpenCheckouts({ request: result.request, assetTags: result.assetTags });
         return;
       }
-      setError(outcome.error);
+      setError(result.error);
     } finally {
       setPending(false);
     }
   }
 
-  const trimmedReason = reason.trim();
   const offerNotify = target !== "" && shouldOfferNotify(currentStatus, target);
   const asksReason = target === "cancelled";
 
@@ -190,7 +163,7 @@ export function OrderStatusQuickActions({
           size="sm"
           className="w-full"
           disabled={isBusy}
-          onClick={() => submit({ status: actions.advanceTo as OrderStatus })}
+          onClick={() => submit(buildAdvanceRequest(actions.advanceTo as OrderStatus))}
         >
           {pending && !dialog ? (
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -281,12 +254,7 @@ export function OrderStatusQuickActions({
               type="button"
               variant="destructive"
               disabled={pending}
-              onClick={() =>
-                submit({
-                  status: "cancelled",
-                  ...(trimmedReason ? { reason: trimmedReason } : {}),
-                })
-              }
+              onClick={() => submit(buildCancelRequest(reason))}
             >
               {pending && (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -380,11 +348,9 @@ export function OrderStatusQuickActions({
               disabled={pending || target === ""}
               onClick={() =>
                 target !== "" &&
-                submit({
-                  status: target,
-                  ...(offerNotify && notify ? { notify: true } : {}),
-                  ...(asksReason && trimmedReason ? { reason: trimmedReason } : {}),
-                })
+                submit(
+                  buildJumpRequest({ currentStatus, target, notify, reason }),
+                )
               }
             >
               {pending && (
@@ -432,7 +398,7 @@ export function OrderStatusQuickActions({
               disabled={pending || openCheckouts === null}
               onClick={() =>
                 openCheckouts &&
-                submit({ ...openCheckouts.request, acknowledgeOpenCheckouts: true })
+                submit(acknowledgeOpenCheckouts(openCheckouts.request))
               }
             >
               {pending && (

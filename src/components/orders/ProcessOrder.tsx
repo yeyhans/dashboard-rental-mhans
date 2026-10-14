@@ -40,7 +40,8 @@ import { OrderPipeline } from './detail/OrderPipeline';
 import { OrderItemsTable } from './detail/OrderItemsTable';
 import { BudgetVersionList } from './detail/BudgetVersionList';
 import { OrderActionsCard, OrderClientCard, OrderDatesCard, OrderFinancialCard, OrderNoteBlock, OrderPaymentCard } from './detail/OrderSideCards';
-import { OrderStatusQuickActions, readStatusChangeResponse, shouldOfferNotify, type StatusChangeOutcome, type StatusChangeRequest } from './OrderStatusQuickActions';
+import { OrderStatusQuickActions, type StatusChangeOutcome, type StatusChangeRequest } from './OrderStatusQuickActions';
+import { executeStatusChange } from './statusChangeFlow';
 
 // Above the server-side budget (20 s email hop + 12 s worker) so the server's own error wins.
 const SAVE_ORDER_TIMEOUT_MS = 45_000;
@@ -1620,54 +1621,47 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     const oldStatus = orderData.status || 'unknown';
     const { status: newStatus, reason } = request;
 
-    try {
-      // Antes esto solo notificaba: el comentario decía "aquí iría la lógica para actualizar el
-      // estado" y el toast anunciaba un cambio que nunca ocurría. Al recargar, el admin veía el
-      // estado anterior y volvía a intentarlo. El endpoint valida además la transición contra la
-      // cadena del canónico, así que un salto ilegal se rechaza con un mensaje en español.
-      const response = await fetch(`/api/orders/${orderData.id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: newStatus,
-          ...(reason ? { reason } : {}),
-          notify: request.notify === true,
-          acknowledge_open_checkouts: request.acknowledgeOpenCheckouts === true,
-        }),
-      });
-      const result = await response.json().catch(() => null);
-      const outcome = readStatusChangeResponse(response.status, result);
-
-      if (!outcome.ok) {
-        // Units still out are a question for the admin (the quick actions ask it), not an error.
-        if (outcome.code !== 'OPEN_CHECKOUTS') toast.error(outcome.error);
-        return outcome;
-      }
-
-      // The chat note reaches the customer too: a jump without "Notificar al cliente" stays silent.
-      if (request.notify === true || !shouldOfferNotify(oldStatus, newStatus)) await notifyStatusChange(
+    // Antes esto solo notificaba: el comentario decía "aquí iría la lógica para actualizar el
+    // estado" y el toast anunciaba un cambio que nunca ocurría. Al recargar, el admin veía el
+    // estado anterior y volvía a intentarlo. El endpoint valida además la transición contra la
+    // cadena del canónico, así que un salto ilegal se rechaza con un mensaje en español.
+    // A failure after the route committed (chat note) is a warning, never a failed change.
+    const execution = await executeStatusChange(oldStatus, request, {
+      send: async (body) => {
+        const response = await fetch(`/api/orders/${orderData.id}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        return { httpStatus: response.status, body: await response.json().catch(() => null) };
+      },
+      postChatNote: () => notifyStatusChange(
         oldStatus,
         newStatus,
         reason,
         `Cambio realizado desde el panel administrativo por ${sessionData?.user?.name || 'Administrador'}`
-      );
+      ),
+      onUnexpectedError: (stage, error) => console.error('[ProcessOrder] Error al cambiar el estado de la orden:', {
+        orderId: orderData.id, oldStatus, newStatus, stage, error,
+      }),
+    });
+    const { outcome } = execution;
 
-      toast.success(`Estado cambiado de ${statusLabel(oldStatus)} a ${statusLabel(newStatus)}`);
-      if (result?.warning) toast.warning(result.warning);
-
-      // Recargar la página para mostrar el nuevo estado
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
+    if (!outcome.ok) {
+      // Units still out are a question for the admin (the quick actions ask it), not an error.
+      if (outcome.code !== 'OPEN_CHECKOUTS') toast.error(outcome.error);
       return outcome;
-    } catch (error) {
-      console.error('[ProcessOrder] Error al cambiar el estado de la orden:', {
-        orderId: orderData.id, oldStatus, newStatus, error,
-      });
-      const message = error instanceof Error ? error.message : 'Error al cambiar el estado de la orden';
-      toast.error(message);
-      return { ok: false, error: message };
     }
+
+    toast.success(`Estado cambiado de ${statusLabel(oldStatus)} a ${statusLabel(newStatus)}`);
+    if (execution.warning) toast.warning(execution.warning);
+    if (execution.followUpError) toast.warning(execution.followUpError);
+
+    // Recargar la página para mostrar el nuevo estado
+    setTimeout(() => {
+      window.location.reload();
+    }, 1500);
+    return outcome;
   };
 
   // Manual email handlers

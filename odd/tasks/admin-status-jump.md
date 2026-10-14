@@ -56,3 +56,24 @@ forward-only rules.
   `openCheckoutsRejection` unit tests and the component helper tests (written alongside the code).
 - GREEN: `pnpm test` 2883 passed / 8 failed: 7 `OrdersDashboard.sourceAssertions` (CRLF checkout, file
   untouched, `git ls-files --eol` = `i/lf w/crlf`) + 1 alias test (T1b). `pnpm build` Complete.
+
+## Review follow-up (Gentle AI advisory findings, 2026-10-14) — route: inline (bounded, 3 findings)
+- [x] R3-notify-classification-mismatch: the UI judged a jump with the canonical origin, the server with the
+  raw one (a legacy origin is never a jump). New shared `isStatusJump` in `orderTransitionGate.ts`; the quick
+  actions' `shouldOfferNotify`, `buildJumpRequest` (drops a stale `notify`) and the chat-note rule all use it.
+  `orderTransitionGate.jumpParity.test.ts` checks it against `OrderLifecycleService.isStatusJump` for every
+  vocabulary + legacy origin and every target. RED: parity tests (5 failed, `isStatusJump` missing) and the
+  legacy-origin case against the old component (`on-hold -> request` offered notify: expected true to be false).
+- [x] R4-post-commit-failure-reported-as-failure: new pure `statusChangeFlow.executeStatusChange`; once the route
+  answered OK, a failing order-chat note returns `followUpError` and `ProcessOrder` shows success plus a
+  separate `toast.warning`. `ProcessOrder.tsx` edited by a CRLF-preserving node script (no reformat).
+- [x] R3-ui-submit-flow-unproved: the submit flow moved to `statusChangeFlow` (`buildAdvanceRequest`,
+  `buildCancelRequest`, `buildJumpRequest`, `acknowledgeOpenCheckouts`, `submitStatusChange`), which the
+  component calls; `statusChangeFlow.test.ts` covers advance, cancel with reason, jump with notify on/off,
+  `OPEN_CHECKOUTS` then "Confirmar de todos modos" re-sending `acknowledge_open_checkouts`, and route errors.
+  RED: the suite failed to import the missing module before the helper existed.
+- Evidence: `pnpm test` 2910 passed / 7 failed (only the CRLF `OrdersDashboard.sourceAssertions`; one earlier
+  full run also timed out `generate-contract-pdf` "rejects an unauthenticated request" at 6.6 s, which passes
+  alone and in the rerun). `pnpm build` Complete.
+- Open: `OrderLifecycleService.isStatusJump` still carries its own copy (outside this edit surface); the parity
+  test guards drift until it delegates to the gate's `isStatusJump`.
