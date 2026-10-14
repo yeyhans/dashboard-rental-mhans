@@ -254,7 +254,7 @@ export function OrdersTable<T extends OrdersTableRow>({
             return (
               <tr
                 key={order.id}
-                className="group transition-colors hover:bg-[#FAFAF2] [&:last-child>td]:border-b-0"
+                className="group transition-colors hover:bg-[#FAFAF2]"
               >
                 <td data-label="Nº Pedido" className={TD_CLASS}>
                   <div className="flex flex-col items-start gap-1">
@@ -268,12 +268,16 @@ export function OrdersTable<T extends OrdersTableRow>({
                     />
                   </div>
                 </td>
+                {/* Two-line cells keep one wrapper so the mobile card (flex row: label | value)
+                    stacks the lines on the right instead of spreading them across the row. */}
                 <td data-label="Cliente" className={TD_CLASS}>
-                  <div className="font-medium text-foreground">
-                    {`${order.billing_first_name ?? ""} ${order.billing_last_name ?? ""}`.trim()}
-                  </div>
-                  <div className="mt-px text-[10px] text-[var(--color-text-faint)]">
-                    {order.billing_email}
+                  <div>
+                    <div className="font-medium text-foreground">
+                      {`${order.billing_first_name ?? ""} ${order.billing_last_name ?? ""}`.trim()}
+                    </div>
+                    <div className="mt-px text-[10px] text-[var(--color-text-faint)]">
+                      {order.billing_email}
+                    </div>
                   </div>
                 </td>
                 <td
@@ -287,7 +291,7 @@ export function OrdersTable<T extends OrdersTableRow>({
                   className={`${TD_CLASS} whitespace-nowrap`}
                 >
                   {order.order_fecha_inicio && order.order_fecha_termino ? (
-                    <>
+                    <div>
                       <div className="text-[11px] text-foreground">
                         Inicio{" "}
                         <strong className="font-semibold">
@@ -298,7 +302,7 @@ export function OrdersTable<T extends OrdersTableRow>({
                         Término{" "}
                         {formatOrderDateWithWeekday(order.order_fecha_termino)}
                       </div>
-                    </>
+                    </div>
                   ) : (
                     <span className="text-[11px] text-[var(--color-text-faint)]">
                       Sin fechas
@@ -315,11 +319,13 @@ export function OrdersTable<T extends OrdersTableRow>({
                   data-label="Monto"
                   className={`${TD_CLASS} whitespace-nowrap`}
                 >
-                  <div className="font-semibold text-foreground">
-                    {`$${formatCurrency(order.calculated_total)}`}
-                  </div>
-                  <div className="mt-px text-[10px] text-[var(--color-text-faint)]">
-                    {`IVA $${formatCurrency(order.calculated_iva)} · Neto $${formatCurrency(order.calculated_subtotal)}`}
+                  <div>
+                    <div className="font-semibold text-foreground">
+                      {`$${formatCurrency(order.calculated_total)}`}
+                    </div>
+                    <div className="mt-px text-[10px] text-[var(--color-text-faint)]">
+                      {`IVA $${formatCurrency(order.calculated_iva)} · Neto $${formatCurrency(order.calculated_subtotal)}`}
+                    </div>
                   </div>
                 </td>
                 <td

@@ -1,46 +1,33 @@
 import React, { useState, useEffect } from "react";
-import { Card, CardContent } from "../ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import type { Order } from "../../types/order";
 import {
-  ChevronRight,
-  RefreshCw,
-  Search,
-  FileText,
-  FileCheck,
-  Package,
-  Truck,
-  RotateCcw,
+  Filter,
   ListChecks,
+  Loader2,
+  Package,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Truck,
 } from "lucide-react";
 import CreateOrderForm from "./CreateOrderForm";
-import { OrdersTable, formatCurrency } from "./OrdersTable";
+import { OrdersTable } from "./OrdersTable";
+import { OrdersPagination } from "./OrdersPagination";
 import ProcessOrder from "./ProcessOrder";
-import {
-  statusTone,
-  statusLabel,
-  ORDER_LIST_TABS,
-} from "../../lib/orderStatus";
-import { StatusBadge } from "../shared/StatusBadge";
+import { ORDER_LIST_TABS } from "../../lib/orderStatus";
 import { KpiCard } from "../shared/KpiCard";
 import { PageHeader } from "../shared/PageHeader";
-import { RowActionsMenu } from "../shared/RowActionsMenu";
 import {
   computeOrderListKpis,
   matchesOrderListTab,
   orderListTabCounts,
   resolveOrderListTabParam,
-  toBadgeTone,
   ORDER_LIST_KPI_TABS,
 } from "./orderListMetrics";
-import {
-  formatOrderDateWithWeekday,
-  summarizeOrderProducts,
-} from "../../lib/orderDateFormat";
 
 // Canon `.btn` geometry (RC2.1.2: padding 7px 14px, 12px) for the two header actions; full width
 // on mobile where they share the row, auto from `sm:`.
@@ -115,7 +102,6 @@ const OrdersDashboard = ({
   const [shippingFilter, setShippingFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [isMobileView, setIsMobileView] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [total, setTotal] = useState(parseInt(initialTotal));
@@ -140,20 +126,6 @@ const OrdersDashboard = ({
     setTodayLabel(
       `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${part("day")} ${part("month")} ${part("year")}`,
     );
-  }, []);
-
-  // Detect mobile view
-  useEffect(() => {
-    const checkIfMobile = () => {
-      setIsMobileView(window.innerWidth < 768);
-    };
-
-    checkIfMobile();
-    window.addEventListener("resize", checkIfMobile);
-
-    return () => {
-      window.removeEventListener("resize", checkIfMobile);
-    };
   }, []);
 
   // Filter orders based on search and status usando campos directos de la DB
@@ -426,195 +398,71 @@ const OrdersDashboard = ({
     }
   };
 
-  // Render loading state
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
-          <p className="mt-2 text-foreground">Cargando pedidos...</p>
-        </div>
-      </div>
-    );
-  }
+  const hasActiveFilters =
+    searchTerm !== "" || shippingFilter !== "" || activeTab !== "todos";
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setShippingFilter("");
+    setActiveTab("todos");
+  };
 
   // Render error state
   if (error) {
     return (
-      <div className="p-4 bg-destructive/10 text-destructive">
+      <div className="flex flex-col items-start gap-3 rounded-[10px] border border-[var(--color-crit-bg)] bg-[var(--color-crit-bg)] p-4 text-sm text-[var(--color-crit)]">
         <p>{error}</p>
+        <Button variant="outline" size="sm" onClick={refreshData}>
+          Reintentar
+        </Button>
       </div>
     );
   }
 
-  // Render the table rows or mobile cards for each order
+  // The canon does not design loading/empty states: rule 04 (Loader2; message + action).
   const renderOrderItems = () => {
+    if (loading) {
+      return (
+        <div
+          className="flex flex-col items-center justify-center gap-2 rounded-[10px] border border-border py-16 text-xs text-muted-foreground"
+          role="status"
+        >
+          <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+          Cargando pedidos...
+        </div>
+      );
+    }
+
     if (filteredOrders.length === 0) {
+      const emptyState = hasActiveFilters ? (
+        <Button variant="outline" size="sm" onClick={clearFilters}>
+          Limpiar filtros
+        </Button>
+      ) : (
+        <CreateOrderForm
+          onOrderCreated={handleOrderCreated}
+          sessionData={sessionData}
+          initialUsers={initialUsers}
+          triggerClassName={HEADER_BUTTON_CLASS}
+        />
+      );
       return (
-        <div className="text-center py-8 text-muted-foreground">
-          No se encontraron pedidos
+        <div className="flex flex-col items-center justify-center gap-3 rounded-[10px] border border-border px-4 py-16 text-center">
+          <Package
+            className="h-10 w-10 text-muted-foreground opacity-40"
+            aria-hidden="true"
+          />
+          <p className="text-sm text-muted-foreground">
+            {hasActiveFilters
+              ? "No hay pedidos que coincidan con estos filtros."
+              : "Todavía no hay pedidos registrados."}
+          </p>
+          {emptyState}
         </div>
       );
     }
 
-    // Mobile view - Card layout
-    if (isMobileView) {
-      return (
-        <div className="space-y-4">
-          {currentOrders.map((order) => (
-            <Card
-              key={`${order.customer_id}-${order.date_created}`}
-              className="overflow-hidden"
-            >
-              <CardContent className="p-4">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Nº Pedido {order.id}
-                    </span>
-                    <StatusBadge
-                      tone={toBadgeTone(order.status)}
-                      label={statusLabel(order.status)}
-                    />
-                  </div>
-                  <div className="text-right">
-                    {order.order_fecha_inicio && order.order_fecha_termino ? (
-                      <div className="flex flex-col gap-1 text-xs">
-                        <div className="flex items-center justify-end gap-1">
-                          <span className="text-muted-foreground">Inicio:</span>
-                          <span className="font-medium text-foreground">
-                            {formatOrderDateWithWeekday(
-                              order.order_fecha_inicio,
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-end gap-1">
-                          <span className="text-muted-foreground">
-                            Término:
-                          </span>
-                          <span className="font-medium text-foreground">
-                            {formatOrderDateWithWeekday(
-                              order.order_fecha_termino,
-                            )}
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-muted-foreground">
-                        Sin fechas
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <h3 className="font-semibold text-foreground text-lg mb-1">
-                  {order.billing_first_name} {order.billing_last_name}
-                </h3>
-                <p className="text-sm text-muted-foreground mb-2">
-                  {order.billing_email}
-                </p>
-
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  {order.order_proyecto && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Proyecto</p>
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {order.order_proyecto}
-                      </p>
-                    </div>
-                  )}
-                  {/* D-27 (R3-orders-total-shifts-left-without-proyecto): `col-start-2` pins
-                      Total to the right-hand grid column even when Proyecto is hidden — without
-                      it, grid auto-placement drops this as the only child into column 1. */}
-                  <div className="text-right col-start-2">
-                    <p className="text-xs text-muted-foreground">Total</p>
-                    <p className="text-lg font-bold text-foreground">
-                      ${formatCurrency(order.calculated_total || "0")}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-2 flex gap-2">
-                  {order.new_pdf_on_hold_url &&
-                    (() => {
-                      const budgetUrls = order.new_pdf_on_hold_url
-                        .split(",")
-                        .filter((url) => url.trim());
-                      const latestUrl =
-                        budgetUrls[budgetUrls.length - 1]?.trim();
-
-                      return (
-                        <div className="flex items-center gap-1 flex-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="bg-muted text-foreground hover:bg-muted/80"
-                            onClick={() => window.open(latestUrl, "_blank")}
-                            title={`Ver presupuesto más reciente ${budgetUrls.length > 1 ? `(v${budgetUrls.length})` : ""}`}
-                          >
-                            <FileText className="h-4 w-4" />
-                            {budgetUrls.length > 1 && (
-                              <span className="ml-1 text-xs">
-                                v{budgetUrls.length}
-                              </span>
-                            )}
-                          </Button>
-
-                          {budgetUrls.length > 1 && (
-                            <div className="flex gap-1">
-                              {budgetUrls.slice(0, -1).map((url, index) => (
-                                <Button
-                                  key={index}
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-6 w-6 p-0 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
-                                  onClick={() =>
-                                    window.open(url.trim(), "_blank")
-                                  }
-                                  title={`Ver versión ${index + 1} del presupuesto`}
-                                >
-                                  {index + 1}
-                                </Button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  {order.new_pdf_processing_url && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="flex-1 bg-green-200 text-green-900 hover:bg-green-300"
-                      onClick={() =>
-                        window.open(order.new_pdf_processing_url, "_blank")
-                      }
-                    >
-                      <FileCheck className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-                <div className="mt-2 flex w-full justify-end">
-                  <RowActionsMenu
-                    items={[
-                      {
-                        label: "Ver detalles",
-                        icon: ChevronRight,
-                        onSelect: () => {
-                          window.location.href = `/orders/${order.id}`;
-                        },
-                      },
-                    ]}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      );
-    }
-
-    // Desktop view - Table layout (canon RC2.1.2, presentational OrdersTable)
+    // Canon RC2.1.2 table; at 768px and below `.orders-table` turns into label/value cards in CSS.
     return (
       <OrdersTable
         orders={currentOrders}
@@ -627,7 +475,7 @@ const OrdersDashboard = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* 02.1/02.2 + RC2.1.2: cabecera canónica primero (H1 en mayúsculas, "fecha · N pedidos en
           sistema") con las dos acciones a la derecha; KPI debajo. */}
       <PageHeader
@@ -692,156 +540,91 @@ const OrdersDashboard = ({
         />
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-4 mb-6">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="search"
-                  placeholder="Buscar por cliente, proyecto, email..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="text-foreground pl-10"
-                />
-              </div>
-
-              <div className="w-full sm:w-48">
-                <select
-                  id="shipping"
-                  className="flex h-9 w-full border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
-                  value={shippingFilter}
-                  onChange={(e) => setShippingFilter(e.target.value)}
-                >
-                  <option value="">Con y sin delivery</option>
-                  <option value="con_envios">Con delivery</option>
-                  <option value="sin_envios">Sin delivery</option>
-                </select>
-              </div>
-
-              <Button
-                className="w-full sm:w-auto"
-                onClick={refreshData}
-                disabled={loading}
-                variant="outline"
-                title={
-                  lastRefreshTime
-                    ? `Última actualización: ${lastRefreshTime.toLocaleTimeString()}`
-                    : "Actualizar datos"
-                }
+      <div>
+        {/* D-05/02.3 + RC2.1.2: pestañas de estado del canon, subrayadas en una sola fila, con
+            el contador en una píldora mono que se vuelve negra en la pestaña activa */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-0.5 overflow-x-auto rounded-none border-b border-border bg-transparent p-0">
+            {ORDER_LIST_TABS.map((tab) => (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className="group -mb-px gap-[5px] rounded-none border-b-2 border-transparent bg-transparent px-3 py-[7px] text-xs font-normal text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:font-medium data-[state=active]:text-foreground data-[state=active]:shadow-none"
               >
-                <RefreshCw
-                  className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
-                />
-                {loading ? "Actualizando..." : "Actualizar"}
-              </Button>
-            </div>
+                {tab.label}
+                <span className="rounded-full bg-muted px-[5px] py-px font-mono text-[10px] text-muted-foreground group-data-[state=active]:bg-foreground group-data-[state=active]:text-background">
+                  {tabCounts[tab.value]}
+                </span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
-            {/* D-05/02.3 + RC2.1.2: pestañas de estado del canon, subrayadas en una sola fila, con
-                el contador en una píldora mono que se vuelve negra en la pestaña activa */}
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="flex h-auto w-full flex-nowrap justify-start gap-0.5 overflow-x-auto rounded-none border-b border-border bg-transparent p-0">
-                {ORDER_LIST_TABS.map((tab) => (
-                  <TabsTrigger
-                    key={tab.value}
-                    value={tab.value}
-                    className="group -mb-px gap-[5px] rounded-none border-b-2 border-transparent bg-transparent px-3 py-[7px] text-xs font-normal text-muted-foreground hover:text-foreground data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:font-medium data-[state=active]:text-foreground data-[state=active]:shadow-none"
-                  >
-                    {tab.label}
-                    <span className="rounded-full bg-muted px-[5px] py-px font-mono text-[10px] text-muted-foreground group-data-[state=active]:bg-foreground group-data-[state=active]:text-background">
-                      {tabCounts[tab.value]}
-                    </span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </div>
+        {/* canon .search-row: búsqueda (máx. 340px), filtro de delivery y Actualizar */}
+        <div className="mb-3.5 flex flex-wrap items-center gap-2 md:flex-nowrap">
+          <label className="flex min-w-0 flex-[1_1_100%] items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs text-[var(--color-text-faint)] focus-within:ring-2 focus-within:ring-ring md:max-w-[340px] md:flex-1">
+            <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="sr-only">Buscar pedidos</span>
+            <input
+              id="search"
+              type="search"
+              placeholder="Buscar pedido, cliente o proyecto…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full border-none bg-transparent text-xs text-foreground outline-none placeholder:text-[var(--color-text-faint)]"
+            />
+          </label>
 
-          {/* Orders table or cards */}
-          {renderOrderItems()}
+          <label className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground focus-within:ring-2 focus-within:ring-ring hover:bg-muted">
+            <Filter
+              className="h-3.5 w-3.5 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <span className="sr-only">Filtrar por delivery</span>
+            <select
+              id="shipping"
+              className="cursor-pointer border-none bg-transparent text-xs text-foreground outline-none"
+              value={shippingFilter}
+              onChange={(e) => setShippingFilter(e.target.value)}
+            >
+              <option value="">Con y sin delivery</option>
+              <option value="con_envios">Con delivery</option>
+              <option value="sin_envios">Sin delivery</option>
+            </select>
+          </label>
 
-          {/* Pagination */}
-          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="text-sm text-muted-foreground order-2 sm:order-1">
-              Mostrando {Math.min(startIndex + 1, totalFilteredOrders)}-
-              {Math.min(endIndex, totalFilteredOrders)} de {totalFilteredOrders}{" "}
-              pedidos filtrados ({tabCounts.todos} total)
-            </div>
+          <button
+            type="button"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45"
+            onClick={refreshData}
+            disabled={loading}
+            title={
+              lastRefreshTime
+                ? `Última actualización: ${lastRefreshTime.toLocaleTimeString()}`
+                : "Actualizar datos"
+            }
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 text-muted-foreground ${loading ? "animate-spin" : ""}`}
+              aria-hidden="true"
+            />
+            {loading ? "Actualizando..." : "Actualizar"}
+          </button>
+        </div>
 
-            <div className="flex flex-wrap justify-center gap-2 order-1 sm:order-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1 || loading}
-                className="px-3"
-                aria-label="Página anterior"
-              >
-                Anterior
-              </Button>
+        {renderOrderItems()}
 
-              <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  // Calculamos las páginas a mostrar
-                  let pageToShow;
-                  if (totalPages <= 5) {
-                    // Si hay 5 o menos páginas, mostramos todas
-                    pageToShow = i + 1;
-                  } else if (currentPage <= 3) {
-                    // Si estamos en las primeras páginas
-                    pageToShow = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    // Si estamos en las últimas páginas
-                    pageToShow = totalPages - 4 + i;
-                  } else {
-                    // Estamos en medio, mostramos 2 antes y 2 después
-                    pageToShow = currentPage - 2 + i;
-                  }
-
-                  return (
-                    <Button
-                      key={pageToShow}
-                      variant={
-                        currentPage === pageToShow ? "default" : "outline"
-                      }
-                      size="sm"
-                      onClick={() => handlePageChange(pageToShow)}
-                      disabled={loading}
-                      className="w-9 h-9 hidden sm:flex items-center justify-center"
-                      aria-label={`Ir a página ${pageToShow}`}
-                      aria-current={
-                        currentPage === pageToShow ? "page" : undefined
-                      }
-                    >
-                      {pageToShow}
-                    </Button>
-                  );
-                })}
-
-                {/* En móvil mostramos el indicador de página actual */}
-                <div className="sm:hidden flex items-center px-3 h-9 border rounded">
-                  <span className="text-sm font-medium">
-                    {currentPage} / {totalPages}
-                  </span>
-                </div>
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages || loading}
-                className="px-3"
-                aria-label="Página siguiente"
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        {!loading && filteredOrders.length > 0 && (
+          <OrdersPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={itemsPerPage}
+            totalItems={totalFilteredOrders}
+            onPageChange={handlePageChange}
+            disabled={loading}
+          />
+        )}
+      </div>
 
       {/* "Cambiar estado" in each row's ⋯ menu opens ProcessOrder here — one controlled dialog
           instead of one per row (the status badge click did this before RC2.1.2). */}

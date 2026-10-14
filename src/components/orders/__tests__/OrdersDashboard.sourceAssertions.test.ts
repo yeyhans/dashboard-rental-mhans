@@ -20,6 +20,7 @@ const readOptional = (relative: string) => {
 };
 const tableSource = readOptional("../OrdersTable.tsx");
 const tailwindConfig = readOptional("../../../../tailwind.config.mjs");
+const globalsCss = readOptional("../../../styles/globals.css");
 
 describe("OrdersDashboard — source assertions (D-22)", () => {
   it("does not color the Inicio/Término date cells green/red (02d)", () => {
@@ -28,7 +29,10 @@ describe("OrdersDashboard — source assertions (D-22)", () => {
   });
 
   it("formats the Inicio/Término dates with the shared weekday helper (02d)", () => {
-    expect(source).toContain("formatOrderDateWithWeekday");
+    // RC2.1.2 T2: the date cells live in the presentational OrdersTable.
+    expect(tableSource).toContain("formatOrderDateWithWeekday");
+    expect(tableSource).not.toContain("text-green-600");
+    expect(tableSource).not.toContain("text-red-600");
   });
 
   it('keeps "Registrar Devolución" next to "Nuevo Pedido" (02c)', () => {
@@ -93,11 +97,11 @@ describe("OrdersDashboard — canon pass (02.1-02.5)", () => {
 
 describe("OrdersDashboard — mobile pass (D-25)", () => {
   it("hides the empty 'Proyecto' label on the mobile card instead of showing a blank value", () => {
-    const mobileCardBlock = source.slice(
-      source.indexOf("if (isMobileView) {"),
-      source.indexOf("// Desktop view - Table layout"),
+    // RC2.1.2 T3: the card is the same table restyled by CSS; an empty cell drops its label.
+    expect(globalsCss).toMatch(
+      /\.orders-table td:empty\s*\{\s*display:\s*none/,
     );
-    expect(mobileCardBlock).toMatch(/order\.order_proyecto\s*&&/);
+    expect(tableSource).toMatch(/order\.order_proyecto \?\? ""/);
   });
 
   it("pairs 'Registrar Devolución' and 'Nuevo Pedido' at equal width on mobile, inside the header actions", () => {
@@ -109,12 +113,10 @@ describe("OrdersDashboard — mobile pass (D-25)", () => {
     expect(actionsBlock).toMatch(/Registrar Devolución[\s\S]*<CreateOrderForm/);
   });
 
-  it("keeps the mobile card's Total pinned to the right column even without Proyecto (D-27 R3-orders-total-shifts-left-without-proyecto)", () => {
-    const mobileCardBlock = source.slice(
-      source.indexOf("if (isMobileView) {"),
-      source.indexOf("// Desktop view - Table layout"),
+  it("keeps each mobile card value right-aligned beside its label, even without Proyecto (D-27)", () => {
+    expect(globalsCss).toMatch(
+      /\.orders-table td\s*\{[^}]*justify-content:\s*space-between[^}]*text-align:\s*right/,
     );
-    expect(mobileCardBlock).toMatch(/className="text-right col-start-2"/);
   });
 });
 
@@ -172,7 +174,6 @@ describe("OrdersDashboard — table extracted to OrdersTable (RC2.1.2 T2)", () =
 describe("OrdersDashboard — header total matches the Todos tab (T-19a)", () => {
   it("counts the header total on the same basis as the Todos tab", () => {
     expect(source).toMatch(/\$\{tabCounts\.todos\} pedidos en sistema/);
-    expect(source).toMatch(/\(\{tabCounts\.todos\} total\)/);
   });
 });
 
@@ -216,5 +217,54 @@ describe("OrdersDashboard — canon header, KPIs and tabs (RC2.1.2 T1)", () => {
     expect(tabsBlock).toContain("font-mono");
     expect(tabsBlock).toContain("group-data-[state=active]:bg-foreground");
     expect(tabsBlock).toContain("group-data-[state=active]:text-background");
+  });
+});
+
+describe("OrdersDashboard — responsive cards, search row, pagination and states (RC2.1.2 T3)", () => {
+  it("switches to cards with CSS at 768px instead of a JS isMobileView branch", () => {
+    expect(source).not.toContain("isMobileView");
+    expect(source).not.toContain("window.innerWidth");
+    expect(globalsCss).toContain("@media (max-width: 768px)");
+    expect(globalsCss).toMatch(
+      /\.orders-table td\[data-label\]::before\s*\{[^}]*content:\s*attr\(data-label\)/,
+    );
+    expect(globalsCss).toMatch(/\.orders-table thead\s*\{\s*display:\s*none/);
+  });
+
+  it("drops the filter Card wrapper and the off-palette green PDF button", () => {
+    expect(source).not.toContain('from "../ui/card"');
+    expect(source).not.toContain("<Card");
+    expect(source).not.toContain("bg-green-200");
+  });
+
+  it("renders the canon search row: search box up to 340px, delivery filter and Actualizar", () => {
+    const searchRow = source.slice(
+      source.indexOf("canon .search-row"),
+      source.indexOf("{renderOrderItems()}"),
+    );
+    expect(searchRow).toContain("max-w-[340px]");
+    expect(searchRow).toContain(
+      'placeholder="Buscar pedido, cliente o proyecto…"',
+    );
+    expect(searchRow).toContain('id="shipping"');
+    expect(searchRow).toContain("Actualizar");
+  });
+
+  it("orders the list like the canon: tabs, then search row, then table, then pagination", () => {
+    const tabs = source.indexOf("<Tabs ");
+    const search = source.indexOf("canon .search-row");
+    const table = source.indexOf("renderOrderItems()");
+    const pagination = source.indexOf("<OrdersPagination");
+    expect(tabs).toBeGreaterThan(-1);
+    expect(tabs).toBeLessThan(search);
+    expect(search).toBeLessThan(table);
+    expect(table).toBeLessThan(pagination);
+  });
+
+  it("shows Loader2 while refreshing and an empty state with an action", () => {
+    expect(source).toContain("Loader2");
+    expect(source).not.toContain("border-r-transparent");
+    expect(source).toContain("Limpiar filtros");
+    expect(source).toMatch(/emptyState[\s\S]*<CreateOrderForm/);
   });
 });
