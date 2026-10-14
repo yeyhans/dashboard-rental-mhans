@@ -5,7 +5,7 @@ import type { OrderItemRow } from "../orderDetail";
 
 export interface OrderItemsTableRow extends OrderItemRow {
   key: string;
-  imageUrl?: string;
+  imageUrl?: string | undefined;
   /** Extra lines under the name: stock badge, availability conflicts. */
   details?: ReactNode;
 }

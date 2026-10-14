@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { AddressInput } from '@/components/ui/AddressInput';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Edit, Package, Image as ImageIcon, Hash, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, Paperclip, MapPin, CheckCircle, Camera, Eye, Settings, Calendar, AlertTriangle, Percent, DollarSign } from 'lucide-react';
+import { Edit, Package, Image as ImageIcon, Save, X, Tag, Truck, Plus, Minus, Trash2, FileText, FileCheck, Mail, Send, MapPin, CheckCircle, Camera, Eye, Settings, Calendar, AlertTriangle, Percent, DollarSign, Loader2 } from 'lucide-react';
 import EditOrderForm from './EditOrderForm';
 import { apiErrorMessage } from '../../lib/apiError';
 import { formatBusinessDate, formatBusinessDateTimeFull } from '../../lib/businessDay';
@@ -30,9 +29,17 @@ import { createEventFromOrder, openGoogleCalendar } from '@/lib/simpleCalendar';
 import { sendManualEmail, validateManualEmailData, type ManualEmailData } from '@/services/manualEmailService';
 import { AdminCommunications } from './AdminCommunications';
 import { useOrderNotifications } from '../../hooks/useOrderNotifications';
-import { statusBadgeClass, statusLabel } from '../../lib/orderStatus';
+import { statusLabel } from '../../lib/orderStatus';
 import { computeOrderTotals } from '../../lib/pricing';
-import { reserveAmount as computeReserveAmount } from '../../lib/finance';
+import { StatusBadge } from '../shared/StatusBadge';
+import { toBadgeTone } from './orderListMetrics';
+import { budgetVersions, clientLine, orderFinancialSummary, orderItemRows, orderPaymentSummary, rentalDateParts } from './orderDetail';
+import { DetailCard, canonPrimaryButtonClass, canonSecondaryButtonClass } from './detail/DetailCard';
+import { OrderDetailHeader } from './detail/OrderDetailHeader';
+import { OrderPipeline } from './detail/OrderPipeline';
+import { OrderItemsTable } from './detail/OrderItemsTable';
+import { BudgetVersionList } from './detail/BudgetVersionList';
+import { OrderActionsCard, OrderClientCard, OrderDatesCard, OrderFinancialCard, OrderNoteBlock, OrderPaymentCard } from './detail/OrderSideCards';
 
 // Above the server-side budget (20 s email hop + 12 s worker) so the server's own error wins.
 const SAVE_ORDER_TIMEOUT_MS = 45_000;
@@ -1847,555 +1854,1011 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
     );
   }
 
+  // Stock and availability-conflict lines under each product name in the items table.
+  const renderItemDetails = (item: (typeof enhancedLineItems)[number]) => {
+    const conflictsForProduct = productConflicts.filter(conflict =>
+      conflict.conflictingProducts.some((p: any) => p.productId === Number(item.product_id))
+    );
+    const stockLabel =
+      item.stock_status === 'instock' ? 'Disponible' :
+        item.stock_status === 'not_found' ? 'Producto no encontrado' :
+          item.stock_status === 'outofstock' ? 'Sin stock' :
+            item.stock_status === 'onbackorder' ? 'En pedido' :
+              'Estado desconocido';
+    const stockTone =
+      item.stock_status === 'instock' ? 'bg-[var(--color-ok-bg)] text-[var(--color-ok)]' :
+        item.stock_status === 'not_found' ? 'bg-[var(--color-crit-bg)] text-[var(--color-crit)]' :
+          'bg-[var(--color-neutral-bg)] text-[var(--color-neutral)]';
+
+    return (
+      <div className="mt-1 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+          <span className={`rounded-full px-[7px] py-px font-semibold ${stockTone}`}>Stock: {stockLabel}</span>
+          {item.product_id > 0 && (
+            <span className="font-mono text-[var(--color-text-faint)]">ID {item.product_id}</span>
+          )}
+        </div>
+        {conflictsForProduct.length > 0 && (
+          <div className="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-warn-bg)] bg-[var(--color-warn-bg)] p-2.5 text-left">
+            {conflictsForProduct.map((conflict, cIdx) => (
+              <div key={cIdx} className="flex items-start gap-2 text-[11px] text-[var(--color-warn)]">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                <div>
+                  <span className="mb-0.5 block font-semibold">¡Alerta de coincidencia en fechas!</span>
+                  Este equipo ya se encuentra procesado u ocupado para el proyecto <span className="font-medium">"{conflict.orderProject}"</span> (
+                  <a href={`/orders/${conflict.orderId}`} target="_blank" rel="noopener noreferrer" className="mr-1 font-bold underline">
+                    Orden #{conflict.orderId}
+                  </a>
+                  <StatusBadge variant="canon" tone={toBadgeTone(conflict.status)} label={statusLabel(conflict.status)} />
+                  ) entre las fechas {rentalDateParts(conflict.startDate).date} y {rentalDateParts(conflict.endDate).date}.
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Canon RC2.1.2 detail view-model (pure helpers in `orderDetail.ts`).
+  const itemTable = orderItemRows(enhancedLineItems, orderData.num_jornadas);
+  const itemRows = enhancedLineItems.map((item, index) => ({
+    ...itemTable.rows[index]!,
+    key: `${item.product_id}-${index}`,
+    imageUrl: item.images && item.images.length > 0 ? item.images[0] : undefined,
+    details: renderItemDetails(item),
+  }));
+  const hasFinancialData = Boolean(orderData.calculated_subtotal || orderData.calculated_discount || orderData.calculated_iva || orderData.shipping_total || orderData.coupon_lines);
+  const editNumDays = parseInt(orderData.num_jornadas?.toString() || '1');
+  const editCalculations = updateAllCalculations(
+    editedProducts,
+    editNumDays,
+    parseFloat(editedShipping || '0'),
+    couponDiscountAmount,
+    applyIva
+  );
+  const versions = budgetVersions(orderData.new_pdf_on_hold_url);
+  const paymentSummary = orderPaymentSummary({
+    total: parseFloat(String(orderData.calculated_total || 0)) || 0,
+    reserveType,
+    reserveValue,
+    isPaid: isPaymentComplete,
+  });
+  const financialSummary = orderFinancialSummary(orderData, itemTable.total);
+  const couponCodes = (() => {
+    try {
+      const lines = typeof orderData.coupon_lines === 'string' ? JSON.parse(orderData.coupon_lines) : orderData.coupon_lines;
+      return Array.isArray(lines) ? lines.map((coupon: any) => String(coupon?.code ?? '')).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  })();
+  const shippingInfo = (() => {
+    try {
+      const lines = typeof orderData.shipping_lines === 'string' ? JSON.parse(orderData.shipping_lines) : orderData.shipping_lines;
+      if (!Array.isArray(lines) || lines.length === 0) return null;
+      const line = lines[0];
+      return {
+        isShipping: line?.meta_data?.delivery_method === 'shipping',
+        isPickup: line?.meta_data?.delivery_method === 'pickup',
+        methodTitle: line?.method_title || 'N/A',
+        address: line?.meta_data?.shipping_address || '',
+        phone: line?.meta_data?.shipping_phone || '',
+        cost: parseFloat(line?.total || '0') || 0,
+      };
+    } catch {
+      return null;
+    }
+  })();
+
   return (
-    <div className="mt-6 space-y-4">
-      {/* Header with Edit Button */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Detalles del Pedido #{orderData.id}</h2>
-        <Button
-          onClick={() => setIsEditing(true)}
-          disabled={loading}
-          className="flex items-center gap-2"
-        >
-          <Edit className="w-4 h-4" />
-          Editar Pedido
-        </Button>
-      </div>
-
-
-      {/* Order Status and Payment Status */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Estado del Pedido</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge className={statusBadgeClass(orderData.status)}>
-              {statusLabel(orderData.status)}
-            </Badge>
-            {/* R-04b: informe guardado al finalizar la devolución (migración 0018). */}
-            <ReturnReportSummary orderId={orderData.id} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Estado de Pago</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${isPaymentComplete ? 'bg-green-500' : 'bg-yellow-500'
-                }`} />
-              <span className="text-sm font-medium">
-                {isPaymentComplete ? 'Pagado' : 'Pendiente'}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      {/* Order Information Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Basic Order Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Información Básica</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between">
-              <span className="font-medium">ID:</span>
-              <span>{orderData.id}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="font-medium">Fecha Creación:</span>
-              <span>{formatBusinessDate(orderData.date_created)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="font-medium">Total:</span>
-              <span className="font-bold">{formatCLP(Number(orderData.calculated_total || orderData.total || 0))}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="font-medium">Moneda:</span>
-              <span>{orderData.currency || 'CLP'}</span>
-            </div>
-            {orderData.payment_method && (
-              <div className="flex justify-between">
-                <span className="font-medium">Método de pago:</span>
-                <span>{orderData.payment_method_title || orderData.payment_method}</span>
-              </div>
-            )}
-            {orderData.transaction_id && (
-              <div className="flex justify-between">
-                <span className="font-medium">ID Transacción:</span>
-                <span>{orderData.transaction_id}</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Customer Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Información del Cliente</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between">
-              <span className="font-medium">Cliente:</span>
-              <span>{getCustomerName()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="font-medium">Email:</span>
-              <span>{getCustomerEmail()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="font-medium">ID Cliente:</span>
-              <span>{orderData.customer_id || orderData.customer?.id || 'N/A'}</span>
-            </div>
-            {orderData.billing_phone && (
-              <div className="flex justify-between">
-                <span className="font-medium">Teléfono:</span>
-                <span>{orderData.billing_phone}</span>
-              </div>
-            )}
-            {orderData.billing_company && (
-              <div className="flex justify-between">
-                <span className="font-medium">Empresa:</span>
-                <span>{orderData.billing_company}</span>
-              </div>
-            )}
-            {orderData.company_rut && (
-              <div className="flex justify-between">
-                <span className="font-medium">RUT Empresa:</span>
-                <span>{orderData.company_rut}</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Shipping Information */}
-        {(() => {
-          const shippingLines = typeof orderData?.shipping_lines === 'string'
-            ? JSON.parse(orderData.shipping_lines)
-            : orderData?.shipping_lines;
-
-          const hasShippingInfo = Array.isArray(shippingLines) && shippingLines.length > 0;
-          const firstShippingLine = hasShippingInfo ? shippingLines[0] : null;
-          const deliveryMethodFromData = firstShippingLine?.meta_data?.delivery_method;
-          const shippingAddressFromData = firstShippingLine?.meta_data?.shipping_address;
-          const shippingPhoneFromData = firstShippingLine?.meta_data?.shipping_phone;
-
-          if (!hasShippingInfo) return null;
-
-          return (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {deliveryMethodFromData === 'shipping' ? (
-                    <><Truck className="h-4 w-4" /> Información de Delivery</>
-                  ) : (
-                    <><MapPin className="h-4 w-4" /> Información de Retiro</>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="font-medium">Método de entrega:</span>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${deliveryMethodFromData === 'shipping'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-green-100 text-green-800'
-                    }`}>
-                    {deliveryMethodFromData === 'shipping' ? 'Delivery a domicilio' : 'Retiro en tienda'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Método:</span>
-                  <span>{firstShippingLine.method_title || 'N/A'}</span>
-                </div>
-                {shippingAddressFromData && (
-                  <div className="flex justify-between">
-                    <span className="font-medium">Dirección de delivery:</span>
-                    <span className="text-right max-w-xs">{shippingAddressFromData}</span>
-                  </div>
-                )}
-                {shippingPhoneFromData && (
-                  <div className="flex justify-between">
-                    <span className="font-medium">Teléfono de delivery:</span>
-                    <span className="text-right max-w-xs">{shippingPhoneFromData}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="font-medium">Costo:</span>
-                  <span className={deliveryMethodFromData === 'pickup' ? 'text-green-600 font-medium' : ''}>
-                    {deliveryMethodFromData === 'pickup'
-                      ? 'Gratis'
-                      : `$${parseFloat(firstShippingLine.total || '0').toLocaleString('es-CL')}`
-                    }
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })()}
-      </div>
-
-      {/* Reserve Configuration Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            Configuración de Reserva
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant={reserveType === 'percent' ? 'default' : 'outline'}
-              onClick={() => setReserveType('percent')}
-              className="flex-1"
+    <div className="mt-2">
+      <OrderDetailHeader
+        orderId={orderData.id}
+        project={orderData.order_proyecto}
+        clientLine={clientLine(getCustomerName(), orderData.billing_company)}
+        createdLabel={`Creado el ${formatBusinessDate(orderData.date_created ?? '')}`}
+        status={orderData.status}
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              disabled={loading}
+              className={canonSecondaryButtonClass}
             >
-              <Percent className="h-3 w-3 mr-1" /> Porcentaje
-            </Button>
-            <Button
-              size="sm"
-              variant={reserveType === 'fixed' ? 'default' : 'outline'}
-              onClick={() => setReserveType('fixed')}
-              className="flex-1"
+              <Edit className="h-3.5 w-3.5" aria-hidden="true" />
+              Editar pedido
+            </button>
+            <button
+              type="button"
+              onClick={handleAddToCalendar}
+              className={canonSecondaryButtonClass}
+              title="Agregar recordatorio a Google Calendar"
             >
-              <DollarSign className="h-3 w-3 mr-1" /> Monto Fijo
-            </Button>
-          </div>
-          <div>
-            <Label className="text-sm font-medium">
-              {reserveType === 'fixed' ? 'Monto en CLP' : 'Porcentaje (%)'}
-            </Label>
-            <Input
-              type="number"
-              min="0"
-              max={reserveType === 'percent' ? '100' : undefined}
-              value={reserveValue}
-              onChange={(e) => setReserveValue(e.target.value)}
-              className="mt-1"
-            />
-          </div>
-          {(() => {
-            const total = parseFloat(String(orderData.calculated_total || 0));
-            const numValue = parseFloat(reserveValue) || 0;
-            const reserveAmount = computeReserveAmount({ total, reserveType, reserveValue: numValue });
-            const pending = total - reserveAmount;
-            return (
-              <div className="rounded-md bg-muted p-3 space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span>Total de la orden:</span>
-                  <span className="font-medium">${total.toLocaleString('es-CL')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Reserva ({reserveType === 'percent' ? `${numValue}%` : 'fijo'}):</span>
-                  <span className="font-medium text-blue-600">${reserveAmount.toLocaleString('es-CL')}</span>
-                </div>
-                <div className="flex justify-between border-t pt-1">
-                  <span>Saldo pendiente:</span>
-                  <span className="font-medium text-orange-600">${pending.toLocaleString('es-CL')}</span>
-                </div>
-              </div>
-            );
-          })()}
-          <Button
-            size="sm"
-            onClick={handleSaveReserveConfig}
-            disabled={savingReserve}
-            className="w-full"
-          >
-            <Save className="h-3 w-3 mr-1" />
-            {savingReserve ? 'Guardando...' : 'Guardar Reserva'}
-          </Button>
-        </CardContent>
-      </Card>
+              <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+              Calendario
+            </button>
+          </>
+        }
+      />
 
-      {/* Project Information */}
-      {(orderData.order_proyecto || orderData.order_fecha_inicio || orderData.order_fecha_termino) && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Información del Proyecto</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {orderData.order_proyecto && (
-                <div>
-                  <span className="font-medium text-sm text-muted-foreground">Proyecto:</span>
-                  <p>{orderData.order_proyecto}</p>
-                </div>
-              )}
-              {orderData.order_fecha_inicio && (
-                <div>
-                  <span className="font-medium text-sm text-muted-foreground">Fecha Inicio:</span>
-                  <p>{orderData.order_fecha_inicio}</p>
-                </div>
-              )}
-              {orderData.order_fecha_termino && (
-                <div>
-                  <span className="font-medium text-sm text-muted-foreground">Fecha Término:</span>
-                  <p>{orderData.order_fecha_termino}</p>
-                </div>
-              )}
-              {orderData.num_jornadas && (
-                <div>
-                  <span className="font-medium text-sm text-muted-foreground">Jornadas:</span>
-                  <p>{orderData.num_jornadas}</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <OrderPipeline status={orderData.status} />
 
-      {/*PDF View */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Documentación</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3 flex-wrap">
-            {orderData.new_pdf_on_hold_url && (() => {
-              const budgetUrls = orderData.new_pdf_on_hold_url.split(',').filter(url => url.trim());
-              const latestUrl = budgetUrls[budgetUrls.length - 1]?.trim();
-
-              return (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
+      <div className="grid grid-cols-1 items-start gap-4 min-[1025px]:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="flex min-w-0 flex-col gap-[14px]">
+          {isEditingFinancials ? (
+            <DetailCard
+              title="Editor de pedido"
+              icon={<Edit className="h-3.5 w-3.5" aria-hidden="true" />}
+              actions={
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSaveFinancials}
+                    disabled={savingFinancials}
+                    className={canonPrimaryButtonClass}
+                  >
+                    <Save className="h-3.5 w-3.5" aria-hidden="true" />
+                    {savingFinancials ? 'Guardando...' : 'Guardar cambios'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelFinancialEdit}
+                    className={canonSecondaryButtonClass}
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    Cancelar
+                  </button>
+                </>
+              }
+            >
+            <div className="space-y-4">
+              {/* Editable Products Section */}
+              {isEditingFinancials && (
+                <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-soft)] p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Package className="w-4 h-4 text-muted-foreground" />
+                      <Label className="font-medium">Productos del Pedido</Label>
+                    </div>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="bg-blue-200 text-blue-900 hover:bg-blue-300"
-                      onClick={() => window.open(latestUrl, '_blank')}
-                      title={`Ver presupuesto más reciente (${budgetUrls.length > 1 ? `Versión ${budgetUrls.length} de ${budgetUrls.length}` : 'Versión única'})`}
+                      onClick={() => setShowProductSelector(true)}
+                      disabled={savingFinancials}
+                      className="flex items-center gap-2"
                     >
-                      <FileText className="h-4 w-4 mr-2" />
-                      Presupuesto {budgetUrls.length > 1 && `(v${budgetUrls.length})`}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 text-red-600 hover:bg-red-100"
-                      onClick={() => handleDeleteBudgetPdf(latestUrl)}
-                      disabled={deletingPdf}
-                      title="Eliminar presupuesto"
-                    >
-                      <Trash2 className="h-3 w-3" />
+                      <Plus className="w-4 h-4" />
+                      Agregar Producto
                     </Button>
                   </div>
 
-                  {budgetUrls.length > 1 && (
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-muted-foreground">Historial:</span>
-                      {budgetUrls.slice(0, -1).map((url, index) => (
-                        <div key={index} className="flex items-center gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-6 px-2 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200"
-                            onClick={() => window.open(url.trim(), '_blank')}
-                            title={`Ver versión ${index + 1} del presupuesto`}
-                          >
-                            v{index + 1}
-                          </Button>
+                  {/* Product Selector Modal */}
+                  {showProductSelector && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                      <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-semibold">Seleccionar Producto</h3>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-5 w-5 p-0 text-red-600 hover:bg-red-100"
-                            onClick={() => handleDeleteBudgetPdf(url.trim())}
-                            disabled={deletingPdf}
-                            title="Eliminar versión"
+                            onClick={() => setShowProductSelector(false)}
                           >
-                            <Trash2 className="h-2.5 w-2.5" />
+                            <X className="w-4 h-4" />
                           </Button>
                         </div>
-                      ))}
+                        <ProductSelector
+                          products={availableProducts.map(product => ({
+                            ...product,
+                            images: product.images ? (typeof product.images === 'string' ? JSON.parse(product.images) : product.images) : null
+                          }))}
+                          lineItems={editedProducts.map(item => ({
+                            id: item.id,
+                            product_id: item.product_id,
+                            product_name: item.name,
+                            product_price: parseFloat(item.price?.toString() || '0'),
+                            quantity: item.quantity,
+                            total: parseFloat(item.total?.toString() || '0'),
+                            sku: item.sku,
+                            image: item.images && item.images.length > 0 ? (typeof item.images[0] === 'string' ? item.images[0] : item.images[0]?.src || item.images[0]?.url) : undefined,
+                            meta_data: {}
+                          }))}
+                          onAddProduct={handleAddProduct}
+                          onRemoveProduct={handleRemoveProductFromSelector}
+                          mode="edit"
+                          loading={loadingProducts}
+                          currency="CLP"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Edited Products List */}
+                  <div className="space-y-3">
+                    {editedProducts.map((item, index) => {
+                      // Debug logging for images
+
+                      const imageUrl = item.images && item.images.length > 0
+                        ? (typeof item.images[0] === 'string'
+                          ? item.images[0]
+                          : item.images[0]?.src || item.images[0]?.url || item.images[0])
+                        : null;
+
+
+                      return (
+                        <div key={`${item.product_id}-${index}`} className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+                          {/* Product Image */}
+                          <div className="flex-shrink-0">
+                            {imageUrl ? (
+                              <img
+                                src={imageUrl}
+                                alt={item.name}
+                                className="w-12 h-12 object-cover rounded border"
+                                onError={(e) => {
+                                  console.error('[ProcessOrder] No se pudo cargar la imagen del producto:', imageUrl);
+                                  e.currentTarget.style.display = 'none';
+                                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                }}
+                                onLoad={() => {
+                                }}
+                              />
+                            ) : null}
+                            <div className={`w-12 h-12 bg-gray-100 rounded border flex items-center justify-center ${imageUrl ? 'hidden' : ''}`}>
+                              <ImageIcon className="w-6 h-6 text-gray-400" />
+                            </div>
+                          </div>
+
+                          {/* Product Info */}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium truncate">{item.name}</h4>
+                            {item.sku && (
+                              <p className="text-sm text-muted-foreground">SKU: {item.sku}</p>
+                            )}
+                            <p className="text-sm text-muted-foreground">
+                              ${parseFloat(item.price?.toString() || '0').toLocaleString('es-CL')} c/u
+                            </p>
+                          </div>
+
+                          {/* Quantity Controls */}
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleQuantityChange(index, item.quantity - 1)}
+                              disabled={item.quantity <= 1 || savingFinancials}
+                              className="w-8 h-8 p-0"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </Button>
+                            <span className="w-8 text-center font-medium">{item.quantity}</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleQuantityChange(index, item.quantity + 1)}
+                              disabled={savingFinancials}
+                              className="w-8 h-8 p-0"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
+                          </div>
+
+                          {/* Total */}
+                          <div className="text-right">
+                            <p className="font-medium">
+                              ${parseFloat(item.total?.toString() || '0').toLocaleString('es-CL')}
+                            </p>
+                          </div>
+
+                          {/* Remove Button */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRemoveProduct(index)}
+                            disabled={savingFinancials}
+                            className="w-8 h-8 p-0 text-red-600 border-red-300 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+
+                    {editedProducts.length === 0 && (
+                      <div className="text-center py-6 text-muted-foreground">
+                        <Package className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                        <p>No hay productos seleccionados</p>
+                        <p className="text-sm">Haz clic en "Agregar Producto" para comenzar</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Subtotal Display */}
+                  <div className="mt-4 pt-3 border-t border-[var(--color-border)]">
+                    <div className="flex justify-between items-center font-medium">
+                      <span>Subtotal de productos:</span>
+                      <span className="font-mono">
+                        ${calculateEditedSubtotal().toLocaleString('es-CL')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Editable Coupon Section */}
+                <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-soft)] p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Tag className="w-4 h-4 text-muted-foreground" />
+                    <Label className="font-medium">Cupón de Descuento</Label>
+                  </div>
+                  <CouponSelector
+                    subtotal={(() => {
+                      // Usar el subtotal de productos (sin envío ni cupones) para validar cupones
+                      const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
+                      return calculateProductsSubtotal(editedProducts, numDays);
+                    })()}
+                    onCouponApplied={handleCouponApplied}
+                    onCouponRemoved={handleCouponRemoved}
+                    appliedCoupon={appliedCoupon}
+                    appliedDiscountAmount={couponDiscountAmount}
+                    userId={orderData.customer_id}
+                    accessToken={sessionData?.access_token}
+                    disabled={savingFinancials}
+                  />
+                </div>
+
+              {/* R-05: descuento manual por % o $ (sin cupón) */}
+                <OrderDiscountControl
+                  idPrefix={`order-${orderData.id}`}
+                  value={manualDiscount}
+                  onChange={(next) => {
+                    setManualDiscount(next);
+                    setManualDiscountTouched(true);
+                  }}
+                  productsSubtotal={calculateEditedSubtotal()}
+                  disabled={Boolean(appliedCoupon)}
+                />
+
+              {/* Calculated Discount Display */}
+              {editCalculations.calculated_discount > 0 && (
+                <div className="flex justify-between items-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-soft)] p-3 text-sm">
+                  <span className="font-medium text-[var(--color-text-secondary)]">Descuento total aplicado:</span>
+                  <span className="font-mono font-medium text-[var(--color-ok)]">
+                    -{formatCLP(editCalculations.calculated_discount)}
+                  </span>
+                </div>
+              )}
+
+              {/* Delivery Method & Shipping Section */}
+                <div className="space-y-4">
+                  {/* Método de Entrega */}
+                  <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-soft)] p-4">
+                    <h4 className="font-medium text-sm mb-3">¿Cómo desea entregar el pedido?</h4>
+                    <div className="mb-2 rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text-secondary)]">
+                      <strong>Estado actual:</strong> {deliveryMethod === 'pickup' ? 'Retiro en tienda' : 'Delivery a domicilio'}
+                    </div>
+                    <RadioGroup
+                      value={deliveryMethod}
+                      onValueChange={handleDeliveryMethodChange}
+                      className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                    >
+                      <div className="flex items-center space-x-3 p-3 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
+                        <RadioGroupItem value="pickup" id="pickup-edit" />
+                        <div className="flex-1">
+                          <Label htmlFor="pickup-edit" className="flex items-center space-x-2 cursor-pointer">
+                            <MapPin className="h-4 w-4" />
+                            <span className="font-medium">Retiro en tienda</span>
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            El cliente retira el pedido en tienda (Gratis)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-3 p-3 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
+                        <RadioGroupItem value="shipping" id="shipping-edit" />
+                        <div className="flex-1">
+                          <Label htmlFor="shipping-edit" className="flex items-center space-x-2 cursor-pointer">
+                            <Truck className="h-4 w-4" />
+                            <span className="font-medium">Delivery a domicilio</span>
+                          </Label>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Delivery del pedido a la dirección del cliente
+                          </p>
+                        </div>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  {/* Selector de Métodos de Envío (solo si se selecciona shipping) */}
+                  {deliveryMethod === 'shipping' && (
+                    <div className="space-y-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-soft)] p-4">
+                      <h4 className="font-medium text-sm flex items-center gap-2 mb-3">
+                        <Truck className="h-4 w-4 text-muted-foreground" />
+                        Información de Delivery
+                      </h4>
+
+                      {/* Campos de dirección y teléfono según requisitos del método */}
+                      {selectedShippingMethod?.requires_address && (
+                        <div className="space-y-2">
+                          <Label htmlFor="shippingAddressEdit" className="text-sm font-medium text-gray-700">
+                            Dirección de delivery *
+                          </Label>
+                          <AddressInput
+                            id="shippingAddressEdit"
+                            placeholder="Dirección completa de delivery"
+                            value={shippingAddress}
+                            onChange={setShippingAddress}
+                            onSelect={(address) => setShippingAddress(address.formattedAddress)}
+                            className="w-full bg-white"
+                            required
+                          />
+                          {shippingAddress && (
+                            <p className="rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text-secondary)]">
+                              <strong>Dirección guardada:</strong> {shippingAddress}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {selectedShippingMethod?.requires_phone && (
+                        <div className="space-y-2">
+                          <Label htmlFor="shippingPhoneEdit" className="text-sm font-medium text-gray-700">
+                            Teléfono de contacto *
+                          </Label>
+                          <Input
+                            id="shippingPhoneEdit"
+                            type="tel"
+                            placeholder="Teléfono para coordinar la entrega"
+                            value={shippingPhone}
+                            onChange={(e) => setShippingPhone(e.target.value)}
+                            className="w-full bg-white"
+                            required
+                          />
+                          {shippingPhone && (
+                            <p className="rounded bg-[var(--color-surface-2)] p-2 text-xs text-[var(--color-text-secondary)]">
+                              <strong>Teléfono guardado:</strong> {shippingPhone}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Información sobre campos requeridos */}
+                      {selectedShippingMethod && (selectedShippingMethod.requires_address || selectedShippingMethod.requires_phone) && (
+                        <div className="text-xs text-gray-600 bg-gray-100 p-2 rounded">
+                          <strong>Campos requeridos para este método de delivery:</strong>
+                          <ul className="list-disc list-inside mt-1">
+                            {selectedShippingMethod.requires_address && <li>Dirección de delivery</li>}
+                            {selectedShippingMethod.requires_phone && <li>Teléfono de contacto</li>}
+                          </ul>
+                        </div>
+                      )}
+                      {shippingLoading ? (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                          Cargando métodos de delivery...
+                        </div>
+                      ) : (
+                        <div className="grid gap-3">
+                          {shippingMethods.map((method) => {
+                            const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
+                            const productsSubtotal = calculateProductsSubtotal(editedProducts, numDays);
+                            const validation = validateShippingMethod(method, productsSubtotal);
+                            const isSelected = selectedShippingMethod?.id === method.id;
+
+                            return (
+                              <div
+                                key={method.id}
+                                className={`border rounded-lg p-3 cursor-pointer transition-colors ${isSelected
+                                  ? 'border-primary bg-primary/5'
+                                  : validation.isValid
+                                    ? 'border-border hover:border-primary/50'
+                                    : 'border-border bg-muted/50 cursor-not-allowed opacity-60'
+                                  }`}
+                                onClick={() => validation.isValid && handleShippingMethodSelect(method)}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
+                                      }`}>
+                                      {isSelected && <CheckCircle className="h-3 w-3 text-primary-foreground" />}
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="font-medium">{method.name}</span>
+                                        <Badge variant="outline" className="text-xs px-2 py-0.5">
+                                          {getShippingTypeLabel(method.shipping_type)}
+                                        </Badge>
+                                        {method.metadata?.custom && (
+                                          <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                                            <Settings className="h-3 w-3 mr-1" />
+                                            Personalizado
+                                          </Badge>
+                                        )}
+                                        <span className="font-mono text-sm font-semibold">
+                                          {formatShippingCost(method.cost)}
+                                        </span>
+                                      </div>
+                                      {method.description && (
+                                        <p className="text-sm text-muted-foreground">{method.description}</p>
+                                      )}
+                                      <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+                                        <span>Entrega: {formatDeliveryTime(method.estimated_days_min, method.estimated_days_max)}</span>
+                                        {method.requires_address && (
+                                          <span>Requiere dirección</span>
+                                        )}
+                                        {method.requires_phone && (
+                                          <span>Requiere teléfono</span>
+                                        )}
+                                      </div>
+                                      {(method.min_amount || method.max_amount) && (
+                                        <div className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                                          {method.min_amount && `Mín: ${formatShippingCost(method.min_amount)}`}
+                                          {method.min_amount && method.max_amount && ' • '}
+                                          {method.max_amount && `Máx: ${formatShippingCost(method.max_amount)}`}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                {!validation.isValid && validation.message && (
+                                  <div className="mt-2 text-xs text-destructive">
+                                    {validation.message}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {shippingMethods.length === 0 && !shippingLoading && (
+                            <div className="text-sm text-muted-foreground text-center py-4">
+                              No hay métodos de delivery disponibles
+                            </div>
+                          )}
+
+                          {/* Indicador de fuente de métodos */}
+                          {shippingMethodsSource && (
+                            <div className={`text-xs p-2 rounded mt-2 ${shippingMethodsSource === 'database'
+                              ? 'bg-[var(--color-ok-bg)] text-[var(--color-ok)]'
+                              : 'bg-[var(--color-warn-bg)] text-[var(--color-warn)]'
+                              }`}>
+                              {shippingMethodsSource === 'database' ? (
+                                <>Métodos cargados desde base de datos ({shippingMethods.length} disponibles)</>
+                              ) : (
+                                <>Usando métodos de respaldo (base de datos no disponible)</>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Botón para agregar envío customizado */}
+                          <div className="mt-4 pt-3 border-t border-gray-200">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowCustomShippingForm(true)}
+                              className="w-full flex items-center gap-2"
+                            >
+                              <Plus className="h-4 w-4" />
+                              Crear Delivery Personalizado
+                            </Button>
+                          </div>
+
+                          {/* Formulario de envío customizado */}
+                          {showCustomShippingForm && (
+                            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                              <h5 className="font-medium text-sm mb-3 flex items-center gap-2">
+                                <Settings className="h-4 w-4" />
+                                Crear Delivery Personalizado
+                              </h5>
+
+                              <div className="space-y-3">
+                                <div>
+                                  <Label htmlFor="customShippingName" className="text-xs font-medium">
+                                    Nombre del delivery *
+                                  </Label>
+                                  <Input
+                                    id="customShippingName"
+                                    type="text"
+                                    placeholder="Ej: Delivery Express Personalizado"
+                                    value={customShippingData.name}
+                                    onChange={(e) => setCustomShippingData(prev => ({ ...prev, name: e.target.value }))}
+                                    className="mt-1"
+                                  />
+                                </div>
+
+                                <div>
+                                  <Label htmlFor="customShippingDescription" className="text-xs font-medium">
+                                    Descripción
+                                  </Label>
+                                  <Input
+                                    id="customShippingDescription"
+                                    type="text"
+                                    placeholder="Descripción del método de delivery"
+                                    value={customShippingData.description}
+                                    onChange={(e) => setCustomShippingData(prev => ({ ...prev, description: e.target.value }))}
+                                    className="mt-1"
+                                  />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <Label htmlFor="customShippingCost" className="text-xs font-medium">
+                                      Costo *
+                                    </Label>
+                                    <Input
+                                      id="customShippingCost"
+                                      type="number"
+                                      placeholder="0"
+                                      value={customShippingData.cost}
+                                      onChange={(e) => setCustomShippingData(prev => ({ ...prev, cost: e.target.value }))}
+                                      className="mt-1"
+                                    />
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <Label htmlFor="customShippingMinDays" className="text-xs font-medium">
+                                        Días mín.
+                                      </Label>
+                                      <Input
+                                        id="customShippingMinDays"
+                                        type="number"
+                                        min="1"
+                                        value={customShippingData.estimated_days_min}
+                                        onChange={(e) => setCustomShippingData(prev => ({ ...prev, estimated_days_min: e.target.value }))}
+                                        className="mt-1"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <Label htmlFor="customShippingMaxDays" className="text-xs font-medium">
+                                        Días máx.
+                                      </Label>
+                                      <Input
+                                        id="customShippingMaxDays"
+                                        type="number"
+                                        min="1"
+                                        value={customShippingData.estimated_days_max}
+                                        onChange={(e) => setCustomShippingData(prev => ({ ...prev, estimated_days_max: e.target.value }))}
+                                        className="mt-1"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={handleCustomShippingSubmit}
+                                    className="flex-1"
+                                  >
+                                    Crear Delivery
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleCustomShippingCancel}
+                                    className="flex-1"
+                                  >
+                                    Cancelar
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* R-06: conductor del despacho, guardado aparte en shipping_usage. */}
+                      {orderData?.id && <OrderDriverField orderId={orderData.id} />}
                     </div>
                   )}
                 </div>
-              );
-            })()}
 
+              {/* Subtotal Calculado (productos + envío - cupón) */}
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Subtotal calculado:</span>
+                <span className="font-mono font-medium">{formatCLP(editCalculations.calculated_subtotal)}</span>
+              </div>
+
+              {/* IVA Toggle Checkbox - Only visible when editing */}
+                <div className="flex items-center justify-between gap-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="apply-iva-order"
+                      checked={applyIva}
+                      onCheckedChange={(checked) => setApplyIva(checked === true)}
+                    />
+                    <Label
+                      htmlFor="apply-iva-order"
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      Incluir IVA (19%)
+                    </Label>
+                  </div>
+                </div>
+
+              {/* IVA */}
+              {editCalculations.calculated_iva > 0 && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">IVA (19%):</span>
+                  <span className="font-mono font-medium">{formatCLP(editCalculations.calculated_iva)}</span>
+                </div>
+              )}
+
+              <div className="my-3 border-t border-[var(--color-border)]"></div>
+
+              {/* Final Total */}
+              <div className="flex justify-between items-center rounded-[var(--radius-md)] bg-[var(--color-surface-2)] p-3 text-base font-bold">
+                <span className="text-[var(--color-text-primary)]">Total final:</span>
+                <span className="font-mono text-[var(--color-text-primary)]">{formatCLP(calculateUpdatedTotal())}</span>
+              </div>
+            </div>
+            </DetailCard>
+          ) : (
+            <DetailCard
+              title="Equipos & Productos"
+              icon={<Package className="h-3.5 w-3.5" aria-hidden="true" />}
+              meta={`${enhancedLineItems.length} equipo${enhancedLineItems.length === 1 ? '' : 's'}`}
+              actions={
+                hasFinancialData ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingFinancials(true)}
+                    className={canonSecondaryButtonClass}
+                  >
+                    <Edit className="h-3.5 w-3.5" aria-hidden="true" />
+                    Editar
+                  </button>
+                ) : undefined
+              }
+              noPad
+            >
+              {loadingProducts ? (
+                <div className="space-y-3 p-[14px]">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <Skeleton className="h-9 w-9 rounded" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-3 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : itemRows.length > 0 ? (
+                <OrderItemsTable rows={itemRows} total={itemTable.total} />
+              ) : (
+                <div className="px-[14px] py-10 text-center text-[var(--color-text-faint)]">
+                  <Package className="mx-auto mb-3 h-8 w-8 opacity-40" aria-hidden="true" />
+                  <p className="m-0 text-sm font-medium text-[var(--color-text-secondary)]">No hay productos en este pedido</p>
+                  <p className="m-0 mt-1 text-xs">Usa Editar pedido para agregarlos.</p>
+                </div>
+              )}
+            </DetailCard>
+          )}
+
+          <DetailCard
+            title="Presupuestos y contrato"
+            icon={<FileText className="h-3.5 w-3.5" aria-hidden="true" />}
+            meta={versions.length > 0 ? `${versions.length} ${versions.length === 1 ? 'versión' : 'versiones'}` : undefined}
+            noPad
+          >
+            {versions.length > 0 ? (
+              <BudgetVersionList
+                versions={versions}
+                onOpen={(url) => window.open(url, '_blank')}
+                onDelete={handleDeleteBudgetPdf}
+                disabled={deletingPdf}
+              />
+            ) : (
+              <p className="m-0 border-b border-[var(--color-border-soft)] px-[14px] py-3 text-xs text-[var(--color-text-faint)]">
+                Sin presupuesto generado.
+              </p>
+            )}
             {orderData.new_pdf_processing_url && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="bg-green-200 text-green-900 hover:bg-green-300"
-                  onClick={() => window.open(orderData.new_pdf_processing_url, '_blank')}
-                  title="Ver contrato de procesamiento"
+              <div className="flex items-center gap-2.5 border-t border-[var(--color-border-soft)] px-[14px] py-[9px]">
+                <FileCheck className="h-3.5 w-3.5 text-[var(--color-text-faint)]" aria-hidden="true" />
+                <span className="flex-1 text-xs text-[var(--color-text-primary)]">Contrato</span>
+                <button
+                  type="button"
+                  onClick={() => window.open(orderData.new_pdf_processing_url || undefined, '_blank')}
+                  className="whitespace-nowrap rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-[3px] text-[11px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
                 >
-                  <FileCheck className="h-4 w-4 mr-2" />
-                  Contrato
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 text-red-600 hover:bg-red-100"
+                  Ver
+                </button>
+                <button
+                  type="button"
                   onClick={handleDeleteContractPdf}
                   disabled={deletingPdf}
+                  aria-label="Eliminar contrato"
                   title="Eliminar contrato"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--color-crit)] hover:bg-[var(--color-crit-bg)] disabled:opacity-50"
                 >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
               </div>
             )}
-
-            {!orderData.new_pdf_processing_url && (
-              <Button
-                variant="default"
-                size="sm"
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 shadow-lg"
-                onClick={handleGenerateOrderPdf}
-                disabled={generatingPdf}
-                title="Generar contrato de procesamiento"
-              >
-                {generatingPdf ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Generando...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Generar Contrato
-                  </>
-                )}
-              </Button>
-            )}
-
-            {!orderData.new_pdf_on_hold_url && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-gradient-to-r from-green-600 to-teal-600 text-white hover:from-green-700 hover:to-teal-700 shadow-lg border-0"
-                onClick={handleGenerateBudgetPdf}
-                disabled={generatingBudget}
-                title="Generar presupuesto"
-              >
-                {generatingBudget ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Generando...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Generar Presupuesto
-                  </>
-                )}
-              </Button>
-            )}
-
-            {orderData.new_pdf_on_hold_url && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-gradient-to-r from-orange-600 to-amber-600 text-white hover:from-orange-700 hover:to-amber-700 shadow-lg border-0"
-                onClick={handleUpdateBudgetPdf}
-                disabled={generatingBudget}
-                title="Actualizar presupuesto - Genera una nueva versión y mantiene el historial"
-              >
-                {generatingBudget ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Actualizando...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Actualizar Presupuesto
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-
-      {/* Manual Email Communication Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Mail className="w-5 h-5" />
-              Comunicación Manual
+            <div className="flex flex-wrap gap-1.5 border-t border-[var(--color-border)] bg-[var(--color-surface-soft)] px-[14px] py-2.5">
+              {!orderData.new_pdf_on_hold_url ? (
+                <button
+                  type="button"
+                  onClick={handleGenerateBudgetPdf}
+                  disabled={generatingBudget}
+                  className={canonSecondaryButtonClass}
+                  title="Generar presupuesto"
+                >
+                  {generatingBudget ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <FileText className="h-3.5 w-3.5" aria-hidden="true" />}
+                  {generatingBudget ? 'Generando...' : 'Generar presupuesto'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleUpdateBudgetPdf}
+                  disabled={generatingBudget}
+                  className={canonSecondaryButtonClass}
+                  title="Actualizar presupuesto - Genera una nueva versión y mantiene el historial"
+                >
+                  {generatingBudget ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <FileText className="h-3.5 w-3.5" aria-hidden="true" />}
+                  {generatingBudget ? 'Actualizando...' : 'Actualizar presupuesto'}
+                </button>
+              )}
+              {!orderData.new_pdf_processing_url && (
+                <button
+                  type="button"
+                  onClick={handleGenerateOrderPdf}
+                  disabled={generatingPdf}
+                  className={canonSecondaryButtonClass}
+                  title="Generar contrato de procesamiento"
+                >
+                  {generatingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <FileCheck className="h-3.5 w-3.5" aria-hidden="true" />}
+                  {generatingPdf ? 'Generando...' : 'Generar contrato'}
+                </button>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleAddToCalendar}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100"
-                title="Agregar recordatorio a Google Calendar"
-              >
-                <Calendar className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowEmailModal(true)}
-                className="flex items-center gap-2 bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100"
-              >
-                <Send className="w-4 h-4" />
-                Enviar Correo
-              </Button>
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="font-medium text-blue-900 mb-2">📧 Envío de Correos al Cliente</h4>
-              <p className="text-sm text-blue-700 mb-3">
-                Envíe correos personalizados al cliente para confirmar disponibilidad,
-                actualizar el estado del pedido o comunicar información importante.
-              </p>
+          </DetailCard>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white p-3 rounded border">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span className="font-medium text-sm">Cliente:</span>
+          <OrderNoteBlock text={orderData.order_comments} />
+
+          {/* Warranty Photos Section */}
+          <WarrantyImageUpload
+            orderId={orderData?.id || null}
+            currentImages={warrantyPhotos}
+            onImagesUpdate={handleWarrantyPhotosUpdate}
+          />
+
+          {/* Admin Communications Section */}
+          <AdminCommunications
+            orderId={orderData?.id || 0}
+            customerInfo={{
+              id: orderData?.customer_id?.toString() || '',
+              name: `${orderData?.billing_first_name || ''} ${orderData?.billing_last_name || ''}`.trim(),
+              email: orderData?.billing_email || ''
+            }}
+            adminInfo={{
+              id: sessionData?.user?.id || 'admin',
+              name: sessionData?.user?.name || 'Administrador',
+              email: sessionData?.user?.email || 'admin@rental.com'
+            }}
+          />
+        </div>
+
+        <aside className="flex min-w-0 flex-col gap-[14px] min-[1025px]:sticky min-[1025px]:top-5">
+          <OrderActionsCard
+            primary={{
+              label: 'Enviar correo al cliente',
+              icon: <Send className="h-4 w-4" aria-hidden="true" />,
+              onClick: () => setShowEmailModal(true),
+            }}
+            note="Puedes adjuntar al correo el presupuesto y el contrato generados. El estado del pedido se cambia desde Editar pedido."
+          />
+
+          <OrderClientCard
+            name={getCustomerName().trim()}
+            company={orderData.billing_company}
+            email={getCustomerEmail()}
+            phone={orderData.billing_phone}
+            customerId={String(orderData.customer_id || orderData.customer?.id || 'N/A')}
+            rut={orderData.company_rut}
+          />
+
+          <OrderDatesCard
+            start={orderData.order_fecha_inicio}
+            end={orderData.order_fecha_termino}
+            jornadas={orderData.num_jornadas}
+          />
+
+          {shippingInfo && (
+            <DetailCard
+              title={shippingInfo.isShipping ? 'Delivery' : 'Retiro'}
+              icon={shippingInfo.isShipping ? <Truck className="h-3.5 w-3.5" aria-hidden="true" /> : <MapPin className="h-3.5 w-3.5" aria-hidden="true" />}
+              noPad
+            >
+              <dl className="m-0 text-[11px]">
+                {[
+                  ['Método de entrega', shippingInfo.isShipping ? 'Delivery a domicilio' : 'Retiro en tienda'],
+                  ['Método', shippingInfo.methodTitle],
+                  ...(shippingInfo.address ? [['Dirección', shippingInfo.address]] : []),
+                  ...(shippingInfo.phone ? [['Teléfono', shippingInfo.phone]] : []),
+                  ['Costo', shippingInfo.isPickup ? 'Gratis' : formatCLP(shippingInfo.cost)],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex justify-between gap-3 border-b border-[var(--color-border-soft)] px-[14px] py-[7px] last:border-b-0">
+                    <dt className="text-[var(--color-text-secondary)]">{label}</dt>
+                    <dd className={`m-0 text-right text-[var(--color-text-primary)]${label === 'Costo' ? ' font-mono' : ''}`}>{value}</dd>
                   </div>
-                  <p className="text-sm text-gray-700">{getCustomerName()}</p>
-                  <p className="text-xs text-gray-500">{getCustomerEmail()}</p>
+                ))}
+              </dl>
+            </DetailCard>
+          )}
+
+          <OrderPaymentCard
+            statusLabel={statusLabel(orderData.status)}
+            summary={paymentSummary}
+            paymentMethod={orderData.payment_method ? (orderData.payment_method_title || orderData.payment_method) : null}
+            transactionId={orderData.transaction_id}
+          >
+            {/* R-04b: informe guardado al finalizar la devolución (migración 0018). */}
+            <ReturnReportSummary orderId={orderData.id} />
+            <details className="mt-2 border-t border-[var(--color-border-soft)] pt-2">
+              <summary className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]">
+                <Settings className="h-3.5 w-3.5" aria-hidden="true" />
+                Configurar reserva
+              </summary>
+              <div className="mt-2.5 space-y-2.5">
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setReserveType('percent')}
+                    aria-pressed={reserveType === 'percent'}
+                    className={`flex-1 ${reserveType === 'percent' ? canonPrimaryButtonClass : canonSecondaryButtonClass}`}
+                  >
+                    <Percent className="h-3 w-3" aria-hidden="true" /> Porcentaje
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReserveType('fixed')}
+                    aria-pressed={reserveType === 'fixed'}
+                    className={`flex-1 ${reserveType === 'fixed' ? canonPrimaryButtonClass : canonSecondaryButtonClass}`}
+                  >
+                    <DollarSign className="h-3 w-3" aria-hidden="true" /> Monto fijo
+                  </button>
                 </div>
-
-                <div className="bg-white p-3 rounded border">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <span className="font-medium text-sm">Documentos Disponibles:</span>
-                  </div>
-                  <div className="space-y-1">
-                    {orderData.new_pdf_on_hold_url && (
-                      <div className="flex items-center gap-1 text-xs text-green-600">
-                        <FileText className="w-3 h-3" />
-                        Presupuesto PDF
-                      </div>
-                    )}
-                    {orderData.new_pdf_processing_url && (
-                      <div className="flex items-center gap-1 text-xs text-blue-600">
-                        <FileCheck className="w-3 h-3" />
-                        Contrato PDF
-                      </div>
-                    )}
-                    {!orderData.new_pdf_on_hold_url && !orderData.new_pdf_processing_url && (
-                      <span className="text-xs text-gray-500">Sin documentos generados</span>
-                    )}
-                  </div>
+                <div>
+                  <Label htmlFor="reserve-value" className="text-[11px] font-medium text-[var(--color-text-secondary)]">
+                    {reserveType === 'fixed' ? 'Monto en CLP' : 'Porcentaje (%)'}
+                  </Label>
+                  <Input
+                    id="reserve-value"
+                    type="number"
+                    min="0"
+                    max={reserveType === 'percent' ? '100' : undefined}
+                    value={reserveValue}
+                    onChange={(e) => setReserveValue(e.target.value)}
+                    className="mt-1 h-8 text-xs"
+                  />
                 </div>
+                <button
+                  type="button"
+                  onClick={handleSaveReserveConfig}
+                  disabled={savingReserve}
+                  className={`w-full ${canonSecondaryButtonClass}`}
+                >
+                  <Save className="h-3 w-3" aria-hidden="true" />
+                  {savingReserve ? 'Guardando...' : 'Guardar reserva'}
+                </button>
               </div>
+            </details>
+          </OrderPaymentCard>
 
-              <div className="mt-3 flex items-center gap-2 text-xs text-blue-600">
-                <Paperclip className="w-3 h-3" />
-                <span>Los documentos disponibles pueden adjuntarse automáticamente al correo</span>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          <OrderFinancialCard
+            summary={financialSummary}
+            couponCodes={couponCodes}
+            footer={`Moneda: ${orderData.currency || 'CLP'} · Última actualización: ${formatBusinessDateTimeFull(orderData.date_modified ?? '')}`}
+          />
+        </aside>
+      </div>
 
       {/* Email Modal */}
       {showEmailModal && (
@@ -2705,1001 +3168,6 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
           </div>
         </div>
       )}
-
-      {/* Enhanced Products Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Package className="w-5 h-5" />
-            Productos del Pedido <span className="text-sm text-muted-foreground">({orderData.line_items?.length || 0})</span>
-            {isEditing && (
-              <Badge variant="secondary" className="ml-auto">
-                Modo Edición - Información Detallada
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-
-          {loadingProducts ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center space-x-4">
-                  <Skeleton className="h-16 w-16 rounded" />
-                  <div className="space-y-2 flex-1">
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-4 w-1/2" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : enhancedLineItems.length > 0 ? (
-            <div className="space-y-4">
-              {enhancedLineItems.map((item, index) => (
-                <div key={index} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex gap-4">
-                    {/* Product Image */}
-                    <div className="flex-shrink-0">
-                      {item.images && item.images.length > 0 ? (
-                        <div className="relative w-20 h-20 rounded-lg overflow-hidden border">
-                          <img
-                            src={item.images[0]}
-                            alt={item.name}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                            }}
-                          />
-                          <div className="hidden absolute inset-0 bg-gray-100 flex items-center justify-center">
-                            <ImageIcon className="w-8 h-8 text-gray-400" />
-                          </div>
-                          {item.images.length > 1 && (
-                            <Badge className="absolute -top-1 -right-1 text-xs">
-                              +{item.images.length - 1}
-                            </Badge>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center border">
-                          <ImageIcon className="w-8 h-8 text-gray-400" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Product Details */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h4 className="font-semibold text-lg truncate">{item.name}</h4>
-                          {item.sku && (
-                            <p className="text-sm text-muted-foreground flex items-center gap-1">
-                              <Hash className="w-3 h-3" />
-                              SKU: {item.sku}
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-lg font-bold">
-                            {new Intl.NumberFormat('es-CL', {
-                              style: 'currency',
-                              currency: orderData.currency || 'CLP'
-                            }).format(Number(item.quantity) * Number(item.price))}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {item.quantity} × {new Intl.NumberFormat('es-CL', {
-                              style: 'currency',
-                              currency: orderData.currency || 'CLP'
-                            }).format(Number(item.price))}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Additional Details - Always Shown */}
-                      <div className="mt-3 space-y-2">
-
-                        {/* Product conflict alert */}
-                        {(() => {
-                          const conflictsForProduct = productConflicts.filter(conflict =>
-                            conflict.conflictingProducts.some((p: any) => p.productId === Number(item.product_id))
-                          );
-
-                          if (conflictsForProduct.length > 0) {
-                            return (
-                              <div className="flex flex-col gap-2 mt-2 mb-3 p-3 bg-amber-50 border border-amber-200 rounded-md">
-                                {conflictsForProduct.map((conflict, cIdx) => {
-                                  // Local helper function to format dates correctly (avoiding UTC timezone shifting -1 day)
-                                  const formatConflictDate = (ds: string) => {
-                                    if (!ds) return '';
-                                    const d = new Date(ds);
-                                    return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
-                                  };
-
-                                  return (
-                                    <div key={cIdx} className="flex items-start gap-2 text-sm text-amber-800">
-                                      <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" />
-                                      <div>
-                                        <span className="font-semibold block mb-0.5 text-amber-900">¡Alerta de coincidencia en fechas!</span>
-                                        Este equipo ya se encuentra procesado u ocupado para el proyecto <span className="font-medium">"{conflict.orderProject}"</span> (
-                                        <a href={`/orders/${conflict.orderId}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-700 font-medium font-bold mr-1">
-                                          Orden #{conflict.orderId}
-                                        </a>
-                                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 leading-none uppercase align-middle ${statusBadgeClass(conflict.status)}`}>
-                                          {statusLabel(conflict.status)}
-                                        </Badge>
-                                        ) entre las fechas {formatConflictDate(conflict.startDate)} y {formatConflictDate(conflict.endDate)}.
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
-
-                        <div className="flex flex-wrap gap-2 text-xs">
-                          <Badge variant={
-                            item.stock_status === 'instock' ? 'default' :
-                              item.stock_status === 'not_found' ? 'destructive' :
-                                'secondary'
-                          }>
-                            Stock: {
-                              item.stock_status === 'instock' ? 'Disponible' :
-                                item.stock_status === 'not_found' ? 'Producto no encontrado' :
-                                  item.stock_status === 'outofstock' ? 'Sin stock' :
-                                    item.stock_status === 'onbackorder' ? 'En pedido' :
-                                      'Estado desconocido'
-                            }
-                          </Badge>
-                          <Badge variant="outline">
-                            Cantidad: {item.quantity}
-                          </Badge>
-                          {item.product_id > 0 && (
-                            <Badge variant="outline">
-                              ID: {item.product_id}
-                            </Badge>
-                          )}
-                        </div>
-
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
-              <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <Package className="w-6 h-6 text-gray-400" />
-              </div>
-              <p className="font-medium">No hay productos en este pedido</p>
-              <p className="text-sm mt-1">Los productos aparecerán aquí una vez que sean agregados</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Enhanced Financial Summary with Editable Coupons and Shipping */}
-      {Boolean(orderData.calculated_subtotal || orderData.calculated_discount || orderData.calculated_iva || orderData.shipping_total || orderData.coupon_lines) && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                💰 {isEditingFinancials ? 'Editor de Pedido Completo' : 'Resumen Financiero Detallado'}
-              </span>
-              <div className="flex items-center gap-2">
-                {!isEditingFinancials ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditingFinancials(true)}
-                    className="flex items-center gap-2"
-                  >
-                    <Edit className="w-4 h-4" />
-                    Editar Pedido
-                  </Button>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleSaveFinancials}
-                      disabled={savingFinancials}
-                      className="flex items-center gap-2 text-green-700 border-green-300 hover:bg-green-50"
-                    >
-                      <Save className="w-4 h-4" />
-                      {savingFinancials ? 'Guardando...' : 'Guardar Cambios'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCancelFinancialEdit}
-                      className="flex items-center gap-2 text-red-700 border-red-300 hover:bg-red-50"
-                    >
-                      <X className="w-4 h-4" />
-                      Cancelar
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Editable Products Section */}
-              {isEditingFinancials && (
-                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 mb-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Package className="w-4 h-4 text-purple-600" />
-                      <Label className="text-purple-700 font-medium">Productos del Pedido</Label>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowProductSelector(true)}
-                      disabled={savingFinancials}
-                      className="flex items-center gap-2 text-purple-700 border-purple-300 hover:bg-purple-100"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Agregar Producto
-                    </Button>
-                  </div>
-
-                  {/* Product Selector Modal */}
-                  {showProductSelector && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                      <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-lg font-semibold">Seleccionar Producto</h3>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setShowProductSelector(false)}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                        <ProductSelector
-                          products={availableProducts.map(product => ({
-                            ...product,
-                            images: product.images ? (typeof product.images === 'string' ? JSON.parse(product.images) : product.images) : null
-                          }))}
-                          lineItems={editedProducts.map(item => ({
-                            id: item.id,
-                            product_id: item.product_id,
-                            product_name: item.name,
-                            product_price: parseFloat(item.price?.toString() || '0'),
-                            quantity: item.quantity,
-                            total: parseFloat(item.total?.toString() || '0'),
-                            sku: item.sku,
-                            image: item.images && item.images.length > 0 ? (typeof item.images[0] === 'string' ? item.images[0] : item.images[0]?.src || item.images[0]?.url) : undefined,
-                            meta_data: {}
-                          }))}
-                          onAddProduct={handleAddProduct}
-                          onRemoveProduct={handleRemoveProductFromSelector}
-                          mode="edit"
-                          loading={loadingProducts}
-                          currency="CLP"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Edited Products List */}
-                  <div className="space-y-3">
-                    {editedProducts.map((item, index) => {
-                      // Debug logging for images
-
-                      const imageUrl = item.images && item.images.length > 0
-                        ? (typeof item.images[0] === 'string'
-                          ? item.images[0]
-                          : item.images[0]?.src || item.images[0]?.url || item.images[0])
-                        : null;
-
-
-                      return (
-                        <div key={`${item.product_id}-${index}`} className="flex items-center gap-3 p-3 bg-white rounded-lg border">
-                          {/* Product Image */}
-                          <div className="flex-shrink-0">
-                            {imageUrl ? (
-                              <img
-                                src={imageUrl}
-                                alt={item.name}
-                                className="w-12 h-12 object-cover rounded border"
-                                onError={(e) => {
-                                  console.error('[ProcessOrder] No se pudo cargar la imagen del producto:', imageUrl);
-                                  e.currentTarget.style.display = 'none';
-                                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                }}
-                                onLoad={() => {
-                                }}
-                              />
-                            ) : null}
-                            <div className={`w-12 h-12 bg-gray-100 rounded border flex items-center justify-center ${imageUrl ? 'hidden' : ''}`}>
-                              <ImageIcon className="w-6 h-6 text-gray-400" />
-                            </div>
-                          </div>
-
-                          {/* Product Info */}
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-medium truncate">{item.name}</h4>
-                            {item.sku && (
-                              <p className="text-sm text-muted-foreground">SKU: {item.sku}</p>
-                            )}
-                            <p className="text-sm text-muted-foreground">
-                              ${parseFloat(item.price?.toString() || '0').toLocaleString('es-CL')} c/u
-                            </p>
-                          </div>
-
-                          {/* Quantity Controls */}
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleQuantityChange(index, item.quantity - 1)}
-                              disabled={item.quantity <= 1 || savingFinancials}
-                              className="w-8 h-8 p-0"
-                            >
-                              <Minus className="w-4 h-4" />
-                            </Button>
-                            <span className="w-8 text-center font-medium">{item.quantity}</span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleQuantityChange(index, item.quantity + 1)}
-                              disabled={savingFinancials}
-                              className="w-8 h-8 p-0"
-                            >
-                              <Plus className="w-4 h-4" />
-                            </Button>
-                          </div>
-
-                          {/* Total */}
-                          <div className="text-right">
-                            <p className="font-medium">
-                              ${parseFloat(item.total?.toString() || '0').toLocaleString('es-CL')}
-                            </p>
-                          </div>
-
-                          {/* Remove Button */}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleRemoveProduct(index)}
-                            disabled={savingFinancials}
-                            className="w-8 h-8 p-0 text-red-600 border-red-300 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      );
-                    })}
-
-                    {editedProducts.length === 0 && (
-                      <div className="text-center py-6 text-muted-foreground">
-                        <Package className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                        <p>No hay productos seleccionados</p>
-                        <p className="text-sm">Haz clic en "Agregar Producto" para comenzar</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Subtotal Display */}
-                  <div className="mt-4 pt-3 border-t border-purple-200">
-                    <div className="flex justify-between items-center font-medium">
-                      <span className="text-purple-700">Subtotal de Productos:</span>
-                      <span className="text-purple-700">
-                        ${calculateEditedSubtotal().toLocaleString('es-CL')}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Subtotal de Productos (solo mostrar en modo lectura) */}
-              {!isEditingFinancials && Boolean(orderData.calculated_subtotal) && (
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Subtotal de Productos:</span>
-                  <span className="font-medium">${(() => {
-                    const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
-                    const productsSubtotal = calculateProductsSubtotal(enhancedLineItems, numDays);
-                    return productsSubtotal.toLocaleString('es-CL');
-                  })()}</span>
-                </div>
-              )}
-
-
-              {/* Editable Coupon Section */}
-              {isEditingFinancials ? (
-                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Tag className="w-4 h-4 text-green-600" />
-                    <Label className="text-green-700 font-medium">Cupón de Descuento</Label>
-                  </div>
-                  <CouponSelector
-                    subtotal={(() => {
-                      // Usar el subtotal de productos (sin envío ni cupones) para validar cupones
-                      const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
-                      return calculateProductsSubtotal(editedProducts, numDays);
-                    })()}
-                    onCouponApplied={handleCouponApplied}
-                    onCouponRemoved={handleCouponRemoved}
-                    appliedCoupon={appliedCoupon}
-                    appliedDiscountAmount={couponDiscountAmount}
-                    userId={orderData.customer_id}
-                    accessToken={sessionData?.access_token}
-                    disabled={savingFinancials}
-                  />
-                </div>
-              ) : (
-                // Display applied coupons (read-only)
-                orderData.coupon_lines && (() => {
-                  try {
-                    const couponLines = typeof orderData.coupon_lines === 'string'
-                      ? JSON.parse(orderData.coupon_lines)
-                      : orderData.coupon_lines;
-
-                    if (Array.isArray(couponLines) && couponLines.length > 0) {
-                      return couponLines.map((coupon: any, index: number) => (
-                        <div key={index} className="flex justify-between items-center bg-green-50 p-3 rounded-lg border border-green-200">
-                          <div className="flex items-center gap-2">
-                            <span className="text-green-700">🎫 Cupón Aplicado:</span>
-                            <Badge variant="secondary" className="bg-green-100 text-green-800 font-mono">
-                              {coupon.code}
-                            </Badge>
-                            <span className="text-xs text-green-600">
-                              ({coupon.discount_type === 'percent'
-                                ? `${coupon.amount}%`
-                                : `$${coupon.amount.toLocaleString('es-CL')}`
-                              })
-                            </span>
-                          </div>
-                          <span className="font-medium text-green-600">
-                            -${parseFloat(coupon.discount || 0).toLocaleString('es-CL')}
-                          </span>
-                        </div>
-                      ));
-                    }
-                  } catch (error) {
-                    console.error('[ProcessOrder] Error al leer coupon_lines:', error);
-                  }
-                  return null;
-                })()
-              )}
-
-              {/* R-05: descuento manual por % o $ (sin cupón) */}
-              {isEditingFinancials && (
-                <OrderDiscountControl
-                  idPrefix={`order-${orderData.id}`}
-                  value={manualDiscount}
-                  onChange={(next) => {
-                    setManualDiscount(next);
-                    setManualDiscountTouched(true);
-                  }}
-                  productsSubtotal={calculateEditedSubtotal()}
-                  disabled={Boolean(appliedCoupon)}
-                />
-              )}
-
-              {/* Calculated Discount Display */}
-              {(() => {
-                const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
-                const shipping = parseFloat(editedShipping || '0');
-
-                if (isEditingFinancials) {
-                  const calculations = updateAllCalculations(
-                    editedProducts,
-                    numDays,
-                    shipping,
-                    couponDiscountAmount,
-                    applyIva
-                  );
-                  return calculations.calculated_discount > 0 ? (
-                    <div className="flex justify-between items-center bg-orange-50 p-3 rounded-lg border border-orange-200">
-                      <span className="text-orange-700 font-medium">💰 Descuento Total Aplicado:</span>
-                      <span className="font-medium text-orange-700">
-                        -${calculations.calculated_discount.toLocaleString('es-CL')}
-                      </span>
-                    </div>
-                  ) : null;
-                } else {
-                  // En modo lectura, mostrar el descuento calculado original si existe
-                  return parseFloat(String(orderData.calculated_discount ?? 0)) > 0 ? (
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Descuento Total Aplicado:</span>
-                      <span className="font-medium text-orange-600">
-                        -${parseFloat(orderData.calculated_discount.toString()).toLocaleString('es-CL')}
-                      </span>
-                    </div>
-                  ) : null;
-                }
-              })()}
-
-              {/* Delivery Method & Shipping Section */}
-              {isEditingFinancials ? (
-                <div className="space-y-4">
-                  {/* Método de Entrega */}
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <h4 className="font-medium text-sm mb-3">¿Cómo desea entregar el pedido?</h4>
-                    <div className="mb-2 text-xs text-blue-600 bg-blue-50 p-2 rounded">
-                      <strong>Estado actual:</strong> {deliveryMethod === 'pickup' ? '📦 Retiro en tienda' : '🚚 Delivery a domicilio'}
-                    </div>
-                    <RadioGroup
-                      value={deliveryMethod}
-                      onValueChange={handleDeliveryMethodChange}
-                      className="grid grid-cols-1 sm:grid-cols-2 gap-3"
-                    >
-                      <div className="flex items-center space-x-3 p-3 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
-                        <RadioGroupItem value="pickup" id="pickup-edit" />
-                        <div className="flex-1">
-                          <Label htmlFor="pickup-edit" className="flex items-center space-x-2 cursor-pointer">
-                            <MapPin className="h-4 w-4" />
-                            <span className="font-medium">Retiro en tienda</span>
-                          </Label>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            El cliente retira el pedido en tienda (Gratis)
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-3 p-3 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
-                        <RadioGroupItem value="shipping" id="shipping-edit" />
-                        <div className="flex-1">
-                          <Label htmlFor="shipping-edit" className="flex items-center space-x-2 cursor-pointer">
-                            <Truck className="h-4 w-4" />
-                            <span className="font-medium">Delivery a domicilio</span>
-                          </Label>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Delivery del pedido a la dirección del cliente
-                          </p>
-                        </div>
-                      </div>
-                    </RadioGroup>
-                  </div>
-
-                  {/* Selector de Métodos de Envío (solo si se selecciona shipping) */}
-                  {deliveryMethod === 'shipping' && (
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
-                      <h4 className="font-medium text-sm flex items-center gap-2 mb-3">
-                        <Truck className="h-4 w-4 text-blue-600" />
-                        Información de Delivery
-                      </h4>
-
-                      {/* Campos de dirección y teléfono según requisitos del método */}
-                      {selectedShippingMethod?.requires_address && (
-                        <div className="space-y-2">
-                          <Label htmlFor="shippingAddressEdit" className="text-sm font-medium text-gray-700">
-                            Dirección de delivery *
-                          </Label>
-                          <AddressInput
-                            id="shippingAddressEdit"
-                            placeholder="Dirección completa de delivery"
-                            value={shippingAddress}
-                            onChange={setShippingAddress}
-                            onSelect={(address) => setShippingAddress(address.formattedAddress)}
-                            className="w-full bg-white"
-                            required
-                          />
-                          {shippingAddress && (
-                            <p className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
-                              📍 <strong>Dirección guardada:</strong> {shippingAddress}
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {selectedShippingMethod?.requires_phone && (
-                        <div className="space-y-2">
-                          <Label htmlFor="shippingPhoneEdit" className="text-sm font-medium text-gray-700">
-                            Teléfono de contacto *
-                          </Label>
-                          <Input
-                            id="shippingPhoneEdit"
-                            type="tel"
-                            placeholder="Teléfono para coordinar la entrega"
-                            value={shippingPhone}
-                            onChange={(e) => setShippingPhone(e.target.value)}
-                            className="w-full bg-white"
-                            required
-                          />
-                          {shippingPhone && (
-                            <p className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
-                              📞 <strong>Teléfono guardado:</strong> {shippingPhone}
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Información sobre campos requeridos */}
-                      {selectedShippingMethod && (selectedShippingMethod.requires_address || selectedShippingMethod.requires_phone) && (
-                        <div className="text-xs text-gray-600 bg-gray-100 p-2 rounded">
-                          <strong>Campos requeridos para este método de delivery:</strong>
-                          <ul className="list-disc list-inside mt-1">
-                            {selectedShippingMethod.requires_address && <li>Dirección de delivery</li>}
-                            {selectedShippingMethod.requires_phone && <li>Teléfono de contacto</li>}
-                          </ul>
-                        </div>
-                      )}
-                      {shippingLoading ? (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
-                          Cargando métodos de delivery...
-                        </div>
-                      ) : (
-                        <div className="grid gap-3">
-                          {shippingMethods.map((method) => {
-                            const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
-                            const productsSubtotal = calculateProductsSubtotal(editedProducts, numDays);
-                            const validation = validateShippingMethod(method, productsSubtotal);
-                            const isSelected = selectedShippingMethod?.id === method.id;
-
-                            return (
-                              <div
-                                key={method.id}
-                                className={`border rounded-lg p-3 cursor-pointer transition-colors ${isSelected
-                                  ? 'border-primary bg-primary/5'
-                                  : validation.isValid
-                                    ? 'border-border hover:border-primary/50'
-                                    : 'border-border bg-muted/50 cursor-not-allowed opacity-60'
-                                  }`}
-                                onClick={() => validation.isValid && handleShippingMethodSelect(method)}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-primary bg-primary' : 'border-muted-foreground'
-                                      }`}>
-                                      {isSelected && <CheckCircle className="h-3 w-3 text-primary-foreground" />}
-                                    </div>
-                                    <div>
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="font-medium">{method.name}</span>
-                                        <Badge variant="outline" className="text-xs px-2 py-0.5">
-                                          {getShippingTypeLabel(method.shipping_type)}
-                                        </Badge>
-                                        {method.metadata?.custom && (
-                                          <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                                            <Settings className="h-3 w-3 mr-1" />
-                                            Personalizado
-                                          </Badge>
-                                        )}
-                                        <span className="text-sm font-semibold text-green-600">
-                                          {formatShippingCost(method.cost)}
-                                        </span>
-                                      </div>
-                                      {method.description && (
-                                        <p className="text-sm text-muted-foreground">{method.description}</p>
-                                      )}
-                                      <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-                                        <span>📅 Entrega: {formatDeliveryTime(method.estimated_days_min, method.estimated_days_max)}</span>
-                                        {method.requires_address && (
-                                          <span>📍 Requiere dirección</span>
-                                        )}
-                                        {method.requires_phone && (
-                                          <span>📞 Requiere teléfono</span>
-                                        )}
-                                      </div>
-                                      {(method.min_amount || method.max_amount) && (
-                                        <div className="text-xs text-blue-600 mt-1">
-                                          {method.min_amount && `Mín: ${formatShippingCost(method.min_amount)}`}
-                                          {method.min_amount && method.max_amount && ' • '}
-                                          {method.max_amount && `Máx: ${formatShippingCost(method.max_amount)}`}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                {!validation.isValid && validation.message && (
-                                  <div className="mt-2 text-xs text-destructive">
-                                    {validation.message}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                          {shippingMethods.length === 0 && !shippingLoading && (
-                            <div className="text-sm text-muted-foreground text-center py-4">
-                              No hay métodos de delivery disponibles
-                            </div>
-                          )}
-
-                          {/* Indicador de fuente de métodos */}
-                          {shippingMethodsSource && (
-                            <div className={`text-xs p-2 rounded mt-2 ${shippingMethodsSource === 'database'
-                              ? 'bg-green-50 text-green-700 border border-green-200'
-                              : 'bg-yellow-50 text-yellow-700 border border-yellow-200'
-                              }`}>
-                              {shippingMethodsSource === 'database' ? (
-                                <>✅ Métodos cargados desde base de datos ({shippingMethods.length} disponibles)</>
-                              ) : (
-                                <>⚠️ Usando métodos de respaldo (base de datos no disponible)</>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Botón para agregar envío customizado */}
-                          <div className="mt-4 pt-3 border-t border-gray-200">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowCustomShippingForm(true)}
-                              className="w-full flex items-center gap-2 text-blue-600 border-blue-300 hover:bg-blue-50"
-                            >
-                              <Plus className="h-4 w-4" />
-                              Crear Delivery Personalizado
-                            </Button>
-                          </div>
-
-                          {/* Formulario de envío customizado */}
-                          {showCustomShippingForm && (
-                            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                              <h5 className="font-medium text-sm mb-3 flex items-center gap-2">
-                                <Settings className="h-4 w-4" />
-                                Crear Delivery Personalizado
-                              </h5>
-
-                              <div className="space-y-3">
-                                <div>
-                                  <Label htmlFor="customShippingName" className="text-xs font-medium">
-                                    Nombre del delivery *
-                                  </Label>
-                                  <Input
-                                    id="customShippingName"
-                                    type="text"
-                                    placeholder="Ej: Delivery Express Personalizado"
-                                    value={customShippingData.name}
-                                    onChange={(e) => setCustomShippingData(prev => ({ ...prev, name: e.target.value }))}
-                                    className="mt-1"
-                                  />
-                                </div>
-
-                                <div>
-                                  <Label htmlFor="customShippingDescription" className="text-xs font-medium">
-                                    Descripción
-                                  </Label>
-                                  <Input
-                                    id="customShippingDescription"
-                                    type="text"
-                                    placeholder="Descripción del método de delivery"
-                                    value={customShippingData.description}
-                                    onChange={(e) => setCustomShippingData(prev => ({ ...prev, description: e.target.value }))}
-                                    className="mt-1"
-                                  />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3">
-                                  <div>
-                                    <Label htmlFor="customShippingCost" className="text-xs font-medium">
-                                      Costo *
-                                    </Label>
-                                    <Input
-                                      id="customShippingCost"
-                                      type="number"
-                                      placeholder="0"
-                                      value={customShippingData.cost}
-                                      onChange={(e) => setCustomShippingData(prev => ({ ...prev, cost: e.target.value }))}
-                                      className="mt-1"
-                                    />
-                                  </div>
-
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                      <Label htmlFor="customShippingMinDays" className="text-xs font-medium">
-                                        Días mín.
-                                      </Label>
-                                      <Input
-                                        id="customShippingMinDays"
-                                        type="number"
-                                        min="1"
-                                        value={customShippingData.estimated_days_min}
-                                        onChange={(e) => setCustomShippingData(prev => ({ ...prev, estimated_days_min: e.target.value }))}
-                                        className="mt-1"
-                                      />
-                                    </div>
-
-                                    <div>
-                                      <Label htmlFor="customShippingMaxDays" className="text-xs font-medium">
-                                        Días máx.
-                                      </Label>
-                                      <Input
-                                        id="customShippingMaxDays"
-                                        type="number"
-                                        min="1"
-                                        value={customShippingData.estimated_days_max}
-                                        onChange={(e) => setCustomShippingData(prev => ({ ...prev, estimated_days_max: e.target.value }))}
-                                        className="mt-1"
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="flex gap-2 pt-2">
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    onClick={handleCustomShippingSubmit}
-                                    className="flex-1"
-                                  >
-                                    Crear Delivery
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={handleCustomShippingCancel}
-                                    className="flex-1"
-                                  >
-                                    Cancelar
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* R-06: conductor del despacho, guardado aparte en shipping_usage. */}
-                      {orderData?.id && <OrderDriverField orderId={orderData.id} />}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                // Display shipping cost (read-only)
-                parseFloat(String(orderData.shipping_total ?? 0)) > 0 && (
-                  <div className="flex justify-between items-center bg-blue-50 p-3 rounded-lg border border-blue-200">
-                    <div className="flex items-center gap-2">
-                      <span className="text-blue-700">🚚 Costo de Delivery:</span>
-                    </div>
-                    <span className="font-medium text-blue-600">
-                      +${parseFloat(String(orderData.shipping_total ?? 0)).toLocaleString('es-CL')}
-                    </span>
-                  </div>
-                )
-              )}
-
-              {/* Subtotal Calculado (productos + envío - cupón) */}
-              {(() => {
-                const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
-                const shipping = parseFloat(editedShipping || '0');
-
-                if (isEditingFinancials) {
-                  const calculations = updateAllCalculations(
-                    editedProducts,
-                    numDays,
-                    shipping,
-                    couponDiscountAmount,
-                    applyIva
-                  );
-                  return (
-                    <div className="flex justify-between items-center bg-blue-50 p-2 rounded">
-                      <span className="text-blue-700 font-medium">Subtotal Calculado:</span>
-                      <span className="font-medium text-blue-700">
-                        ${calculations.calculated_subtotal.toLocaleString('es-CL')}
-                      </span>
-                    </div>
-                  );
-                } else {
-                  // En modo lectura, mostrar el subtotal calculado original
-                  return orderData.calculated_subtotal ? (
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Subtotal Calculado:</span>
-                      <span className="font-medium">
-                        ${parseFloat(orderData.calculated_subtotal.toString()).toLocaleString('es-CL')}
-                      </span>
-                    </div>
-                  ) : null;
-                }
-              })()}
-
-              {/* IVA Toggle Checkbox - Only visible when editing */}
-              {isEditingFinancials && (
-                <div className="flex items-center justify-between gap-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="apply-iva-order"
-                      checked={applyIva}
-                      onCheckedChange={(checked) => setApplyIva(checked === true)}
-                    />
-                    <Label
-                      htmlFor="apply-iva-order"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      Incluir IVA (19%)
-                    </Label>
-                  </div>
-                </div>
-              )}
-
-              {/* IVA */}
-              {(() => {
-                const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
-                const shipping = parseFloat(editedShipping || '0');
-
-                if (isEditingFinancials) {
-                  const calculations = updateAllCalculations(
-                    editedProducts,
-                    numDays,
-                    shipping,
-                    couponDiscountAmount,
-                    applyIva
-                  );
-                  return calculations.calculated_iva > 0;
-                } else {
-                  return parseFloat(String(orderData.calculated_iva ?? 0)) > 0;
-                }
-              })() && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">IVA (19%):</span>
-                    <span className="font-medium">
-                      ${(() => {
-                        if (isEditingFinancials) {
-                          const numDays = parseInt(orderData.num_jornadas?.toString() || '1');
-                          const shipping = parseFloat(editedShipping || '0');
-                          const calculations = updateAllCalculations(
-                            editedProducts,
-                            numDays,
-                            shipping,
-                            couponDiscountAmount,
-                            applyIva
-                          );
-                          return calculations.calculated_iva.toLocaleString('es-CL');
-                        } else {
-                          return parseFloat(orderData.calculated_iva?.toString() || '0').toLocaleString('es-CL');
-                        }
-                      })()}
-                    </span>
-                  </div>
-                )}
-
-              {/* Separator */}
-              <div className="border-t border-gray-200 my-3"></div>
-
-              {/* Final Total */}
-              <div className="flex justify-between items-center font-bold text-lg bg-gray-50 p-3 rounded-lg">
-                <span className="text-gray-900">💵 Total Final:</span>
-                <span className="text-green-600 text-xl">
-                  ${(isEditingFinancials
-                    ? calculateUpdatedTotal()
-                    : parseFloat(String(orderData.calculated_total ?? 0)) || 0
-                  ).toLocaleString('es-CL')}
-                </span>
-              </div>
-
-
-
-              {/* Currency Information */}
-              <div className="text-xs text-muted-foreground text-center pt-2 border-t">
-                💱 Moneda: {orderData.currency || 'CLP'} |
-                📅 Última actualización: {formatBusinessDateTimeFull(orderData.date_modified)}</div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-
-      {/* Warranty Photos Section */}
-      <WarrantyImageUpload
-        orderId={orderData?.id || null}
-        currentImages={warrantyPhotos}
-        onImagesUpdate={handleWarrantyPhotosUpdate}
-      />
-
-      {/* Admin Communications Section */}
-      <AdminCommunications
-        orderId={orderData?.id || 0}
-        customerInfo={{
-          id: orderData?.customer_id?.toString() || '',
-          name: `${orderData?.billing_first_name || ''} ${orderData?.billing_last_name || ''}`.trim(),
-          email: orderData?.billing_email || ''
-        }}
-        adminInfo={{
-          id: sessionData?.user?.id || 'admin',
-          name: sessionData?.user?.name || 'Administrador',
-          email: sessionData?.user?.email || 'admin@rental.com'
-        }}
-      />
     </div>
   );
 }

@@ -306,9 +306,9 @@ function FinRow({
 }: {
   label: ReactNode;
   value: ReactNode;
-  className?: string;
-  labelClassName?: string;
-  valueClassName?: string;
+  className?: string | undefined;
+  labelClassName?: string | undefined;
+  valueClassName?: string | undefined;
 }) {
   return (
     <div
