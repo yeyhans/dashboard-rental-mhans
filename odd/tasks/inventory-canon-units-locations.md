@@ -33,9 +33,13 @@ check-in/check-out/relocation.
 - [x] T2 Dashboard services: unit update/archive/bulk create, locations CRUD, relocation, counts; tests.
       Route: delegated (workflow worker).
 - [ ] T3 Dashboard UI: product list Stock/Disp/Arriendo + KPIs, product detail "Inventario" tab per canon.
-- [ ] T4 Ops: ported validations + services + write APIs (role-gated), SSE inventory feed.
-- [ ] T5 Ops UI: 2D plan editor + 3D warehouse with units by location; button check-in/out/relocate.
-- [ ] T6 Integration verification (tests/builds both repos), commits per work unit.
+      PARTIAL, committed 8329a56: KPIs, detail tab, bulk dialog and /inventory/ubicaciones done; list table columns
+      not wired (ProductsDashboard.tsx outside surface); per-location unit counts not served.
+- [x] T4 Ops: ported validations + services + write APIs (role-gated), SSE inventory feed.
+      Ops commit cec760a (mariohans-3d-ops feat/ops-bodega). Route: delegated.
+- [x] T5 Ops UI: 2D plan editor + 3D warehouse with units by location; button check-in/out/relocate.
+      Ops commit 9181ea3. Route: delegated.
+- [x] T6 Integration verification (tests/builds both repos), commits per work unit. Route: delegated (verifier).
 - [ ] T7 (later) Unit assignment at Confirmada→Preparación (order_asset_assignments).
 
 ## Progress / evidence
@@ -91,8 +95,49 @@ check-in/check-out/relocation.
 - GREEN: `pnpm test` 2990 passed, 7 failed (OrdersDashboard.sourceAssertions, CRLF checkout `core.autocrlf=true`);
   `pnpm build` complete.
 
+### T4 + T5 ops (2026-10-14) — see `mariohans-3d-ops/odd/tasks/mariohans-3d-ops.md` (T7a, T7b)
+- T4 cec760a: ported rules (inventoryRules/*), services, write APIs (movements, relocate, orders advance,
+  locations CRUD), role gates, Origin check, 503 INVENTORY_UNAVAILABLE without 0021, SSE `inventory` snapshot.
+  RED observed for the 4 bodega/checkIn/checkInReception/businessDay ports; inherited work not re-observed.
+- T5 9181ea3: /bodega workspace (order queue, 2D plan, lazy 3D, scan bar, optimistic moves with 409 rollback,
+  admin location editor). RED/GREEN observed per helper, store and UI suite.
+
+### T6 verification (2026-10-14)
+- Dashboard `pnpm test` (run 1, concurrent with the ops suite + build): 2986 passed, 11 failed = 7
+  OrdersDashboard.sourceAssertions (CRLF checkout, `core.autocrlf=true`) + 4 in `src/pages/api/orders/__tests__`
+  (create-status, create-warning, ...). Those 4 pass in isolation (`vitest run src/pages/api/orders`: 118/118) and
+  in a clean full re-run, so they are load-related flakes, not inventory code; not fixed.
+- Dashboard `pnpm test` (run 2, alone): 2990 passed, 7 failed (only the CRLF-caused OrdersDashboard.sourceAssertions).
+- Dashboard `pnpm build`: Complete.
+- Ops `pnpm test`: 56 files, 637 passed. `pnpm build`: Complete (Vite chunk-size warning, three/R3F).
+  `pnpm exec tsc --noEmit -p .`: 0 errors.
+- Port consistency: all 11 ops files with a "Ported from dashboard" header (assetMovements, assetTag, bodega,
+  bodegaScan, businessDay, checkIn, checkInReception, inventoryUnits, movementTypes, operatorOrderStatus,
+  warehouseLocations) diff to 0 lines against dashboard HEAD after ignoring the header, imports and whitespace;
+  the 0239e92-tagged sources are unchanged since 0239e92. orderStatusCompat's LEGACY_TO_V12 map matches
+  `src/lib/orderStatus.ts` entry for entry.
+- Role matrix: same in both apps. Operator can look up assets/record movements/read locations/relocate/advance
+  orders forward; locations create/edit/delete is admin and super_admin only. Ops also refuses cross-origin
+  mutations (403). Error codes line up: 409 CONFLICT (stale row_version / PT409), 400 VALIDATION, 404 NOT_FOUND.
+- 0021 down reverses up: drops view, asset_relocations (+trigger fn), sync/bump triggers, restores the 5-value
+  condition CHECK (refuses while `blocked` rows exist), drops location_id/row_version/wear and incident_type, drops
+  warehouse_locations (its triggers and seed row go with it) and the 3 helper functions; none of these objects
+  exist in earlier migrations. Static review only; no runtime rehearsal.
+- Hygiene: no edits to mhans-50 files in `git diff 46a5c92..HEAD` (67 files); no `variant="canon"` added in either
+  repo; secret-pattern grep over both diffs found nothing; no remote ref contains any of the new commits (dashboard
+  branch has no upstream; the ops repo has no remote).
+- Ops demo smoke: an existing `astro dev` (PID 38996) already held port 4445, so my `pnpm dev` exited with
+  "already running" and the checks hit that server (same repo, demo mode, no Supabase env): `/health` 200
+  `{"ok":true}`; `/api/inventory/warehouse` 200 with the demo tree (dev-only DEV_DEMO_USER bypass, by design);
+  `/bodega` 200. chrome-devtools at 1280x800: plan, rug, shelves and count badges render; 0 console errors/warnings;
+  requests were /bodega 200 and /api/stream 200. Visual nit: the S-E2 count badge is half-covered by the S-P1 spot.
+
 ## Next step
+- Production ship (parent; user decided dashboard `main` is the target, `consolidado-web-2027` no longer
+  integrates): cherry-pick only 0239e92, fcf01e5, 8329a56 (+ this docs commit) onto origin/main 224350b in an LF
+  checkout; full `pnpm test` + `pnpm build` there; backup + dry-run + apply 0021 on production as supabase_admin;
+  push main; deploy ops (cec760a, 9181ea3).
 - Authorize editing `src/components/ProductsDashboard.tsx` to swap its Disp./Arriendo placeholders for
   `ProductUnitCountCells` (plus a Stock column) using `useProductUnitCounts`.
-- Add a service/API for unit counts per location (outside T3 surface) and pass it to `/inventory/ubicaciones`.
-- T4 ops.
+- Add a service/API for unit counts per location and pass it to `/inventory/ubicaciones`.
+- Ops: badge overlap S-E2/S-P1 in the 2D plan; no unit create/edit API or UI ('manage_units' unused).
