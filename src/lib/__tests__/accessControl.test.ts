@@ -177,3 +177,31 @@ describe('error copy', () => {
     expect(FORBIDDEN_ROLE_ERROR).toBe('Permisos insuficientes para esta operación');
   });
 });
+
+describe('operator access to the 0021 inventory endpoints', () => {
+  it('lets an operator relocate a unit (POST only, numeric id only)', () => {
+    expect(resolveAccess('operator', '/api/inventory/assets/12/relocate', 'POST')).toBe('allow');
+    expect(resolveAccess('operator', '/api/inventory/assets/12/relocate', 'GET')).toBe('forbidden');
+    expect(resolveAccess('operator', '/api/inventory/assets/abc/relocate', 'POST')).toBe('forbidden');
+  });
+
+  it('lets an operator read the warehouse locations but not change them', () => {
+    expect(resolveAccess('operator', '/api/inventory/locations', 'GET')).toBe('allow');
+    expect(resolveAccess('operator', '/api/inventory/locations?include_inactive=1', 'GET')).toBe('allow');
+    expect(resolveAccess('operator', '/api/inventory/locations', 'POST')).toBe('forbidden');
+    expect(resolveAccess('operator', '/api/inventory/locations/abc', 'PUT')).toBe('forbidden');
+    expect(resolveAccess('operator', '/api/inventory/locations/abc', 'DELETE')).toBe('forbidden');
+  });
+
+  it('keeps unit editing, archiving, bulk intake and counts admin-only', () => {
+    expect(resolveAccess('operator', '/api/inventory/assets/12', 'PUT')).toBe('forbidden');
+    expect(resolveAccess('operator', '/api/inventory/assets/12/archive', 'POST')).toBe('forbidden');
+    expect(resolveAccess('operator', '/api/inventory/products/3/units', 'POST')).toBe('forbidden');
+    expect(resolveAccess('operator', '/api/inventory/products/3/units', 'GET')).toBe('forbidden');
+    expect(resolveAccess('operator', '/api/inventory/counts', 'GET')).toBe('forbidden');
+  });
+
+  it('still lets an operator record movements', () => {
+    expect(resolveAccess('operator', '/api/inventory/movements', 'POST')).toBe('allow');
+  });
+});

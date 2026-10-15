@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CHECKOUT_ORDER_ERRORS, MOVEMENT_TRANSITION_ERRORS } from '../../../../lib/assetMovements';
+import { CHECKOUT_ORDER_ERRORS, INCIDENT_ERRORS, MOVEMENT_TRANSITION_ERRORS } from '../../../../lib/assetMovements';
 
 /**
  * T-026 gap 1/4. See `assetMovementService.test.ts` for the transition-rule coverage; this suite
@@ -231,5 +231,41 @@ describe('GET /api/inventory/movements — feed', () => {
     const response = await GET({ request: getRequest(), ...admin } as never);
     expect(response.status).toBe(500);
     expect((await response.json()).error).toBe('Error al consultar los movimientos');
+  });
+});
+
+describe('POST /api/inventory/movements incident_type (0021)', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('forwards incident_type to the service', async () => {
+    recordMovement.mockResolvedValue({ id: 2 });
+    const request = postRequest({ asset_id: 1, order_id: 10, direction: 'checkin', incident_type: 'missing_part' });
+    const { POST } = await import('../movements');
+
+    await POST({ request, ...admin } as never);
+
+    expect(recordMovement).toHaveBeenCalledWith(expect.objectContaining({ incident_type: 'missing_part' }));
+  });
+
+  it('sends null when there is no incident', async () => {
+    recordMovement.mockResolvedValue({ id: 2 });
+    const request = postRequest({ asset_id: 1, order_id: 10, direction: 'checkin', incident_type: '' });
+    const { POST } = await import('../movements');
+
+    await POST({ request, ...admin } as never);
+
+    expect(recordMovement).toHaveBeenCalledWith(expect.objectContaining({ incident_type: null }));
+  });
+
+  it('maps the incident validation errors to 400', async () => {
+    recordMovement.mockRejectedValue(new Error(INCIDENT_ERRORS.CHECKOUT_INCIDENT));
+    const request = postRequest({ asset_id: 1, order_id: 10, direction: 'checkout', incident_type: 'moisture' });
+    const { POST } = await import('../movements');
+
+    const response = await POST({ request, ...admin } as never);
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe(INCIDENT_ERRORS.CHECKOUT_INCIDENT);
   });
 });

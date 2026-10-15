@@ -1,9 +1,10 @@
 import type { APIRoute } from 'astro';
-import { CHECKOUT_ORDER_ERRORS, MOVEMENT_TRANSITION_ERRORS } from '../../../lib/assetMovements';
+import { CHECKOUT_ORDER_ERRORS, INCIDENT_ERRORS, MOVEMENT_TRANSITION_ERRORS } from '../../../lib/assetMovements';
 import { parseInstant } from '../../../lib/movementsFeed';
 import { withAuth } from '../../../middleware/auth';
 import { AssetMovementService, FEED_DEFAULT_LIMIT, FEED_MAX_LIMIT } from '../../../services/assetMovementService';
 import { isMovementDirection, type MovementDirection } from '../../../types/assetMovements';
+import type { IncidentType } from '../../../types/inventory';
 
 // Asset movements (T-026 gap 1/4, Check-In audit trail). Admin-only, same posture as
 // `/api/inventory/assets`: `asset_movements` has no grant beyond `service_role` (see the
@@ -21,6 +22,8 @@ const CLIENT_ERRORS: Array<{ match: string; status: number }> = [
   { match: MOVEMENT_TRANSITION_ERRORS.NO_OPEN_CHECKOUT, status: 409 },
   { match: CHECKOUT_ORDER_ERRORS.NOT_CONFIRMED, status: 409 },
   { match: CHECKOUT_ORDER_ERRORS.ORDER_NOT_FOUND, status: 404 },
+  { match: INCIDENT_ERRORS.CHECKOUT_INCIDENT, status: 400 },
+  { match: INCIDENT_ERRORS.INVALID, status: 400 },
   { match: 'Dirección inválida', status: 400 },
   { match: 'Debes indicar un equipo válido', status: 400 },
   { match: 'Debes indicar una orden válida', status: 400 },
@@ -56,6 +59,8 @@ export const POST: APIRoute = withAuth(async ({ request, locals }) => {
   }
 
   const conditionNotes = typeof body.condition_notes === 'string' ? body.condition_notes.trim() : '';
+  // 0021: optional incident on a checkin; the service validates the value and the direction.
+  const incidentType = typeof body.incident_type === 'string' && body.incident_type.trim() ? body.incident_type.trim() : null;
 
   // The acting admin is resolved server-side from `withAuth`, never trusted from the request body
   // (see 0006's migration header, R1-002: this is the whole reason `checked_by_admin_id` exists).
@@ -69,6 +74,7 @@ export const POST: APIRoute = withAuth(async ({ request, locals }) => {
       direction: body.direction as MovementDirection,
       condition_notes: conditionNotes || null,
       checked_by_admin_id: checkedByAdminId,
+      incident_type: incidentType as IncidentType | null,
     });
 
     return json({ success: true, data: movement }, 201);

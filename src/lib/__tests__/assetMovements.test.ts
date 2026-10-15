@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  INCIDENT_ERRORS,
   MOVEMENT_TRANSITION_ERRORS,
   availabilityFromMovements,
   hasOpenCheckout,
+  validateIncidentType,
   validateMovementTransition,
 } from '../assetMovements';
 import type { AssetMovementLike } from '../../types/assetMovements';
+import { INCIDENT_TYPES } from '../../types/inventory';
 
 function movement(assetId: number, direction: 'checkout' | 'checkin', checkedAt: string): AssetMovementLike {
   return { asset_id: assetId, direction, checked_at: checkedAt };
@@ -107,5 +110,26 @@ describe('availabilityFromMovements', () => {
     const result = availabilityFromMovements([1, 2], movements);
     expect(result.outstandingUnits).toBe(0);
     expect(result.availableUnits).toBe(2);
+  });
+});
+
+describe('validateIncidentType (0021)', () => {
+  it('accepts no incident on either direction', () => {
+    expect(validateIncidentType('checkout', null)).toEqual({ valid: true });
+    expect(validateIncidentType('checkin', undefined)).toEqual({ valid: true });
+  });
+
+  it('accepts every check-in canon incident on a checkin', () => {
+    for (const incident of INCIDENT_TYPES) {
+      expect(validateIncidentType('checkin', incident)).toEqual({ valid: true });
+    }
+  });
+
+  it('refuses an incident on a checkout: damage is recorded when the unit comes back', () => {
+    expect(validateIncidentType('checkout', 'moisture')).toEqual({ valid: false, error: INCIDENT_ERRORS.CHECKOUT_INCIDENT });
+  });
+
+  it('refuses a value outside the CHECK list', () => {
+    expect(validateIncidentType('checkin', 'fire')).toEqual({ valid: false, error: INCIDENT_ERRORS.INVALID });
   });
 });

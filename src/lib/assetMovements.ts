@@ -12,6 +12,7 @@
  */
 
 import type { AssetMovementLike, MovementDirection } from '../types/assetMovements';
+import { INCIDENT_TYPES } from '../types/inventory';
 
 /**
  * Single source of truth for the transition-rejection messages (R3-103, review R3 on
@@ -128,4 +129,22 @@ export function availabilityFromMovements(
     availableUnits: totalUnits - outstandingUnits,
     outstandingAssetIds,
   };
+}
+
+/**
+ * `asset_movements.incident_type` (0021). Damage is recorded when a unit comes back, so only a
+ * checkin may carry one; the values are the check-in canon's list, pinned by the migration CHECK.
+ */
+export const INCIDENT_ERRORS = {
+  CHECKOUT_INCIDENT: 'Solo puedes registrar una incidencia al hacer check-in',
+  INVALID: 'Tipo de incidencia inválido',
+} as const;
+
+export function validateIncidentType(direction: MovementDirection, incident: unknown): MovementTransitionResult {
+  if (incident === null || incident === undefined) return { valid: true };
+  if (typeof incident !== 'string' || !(INCIDENT_TYPES as readonly string[]).includes(incident)) {
+    return { valid: false, error: INCIDENT_ERRORS.INVALID };
+  }
+  if (direction !== 'checkin') return { valid: false, error: INCIDENT_ERRORS.CHECKOUT_INCIDENT };
+  return { valid: true };
 }

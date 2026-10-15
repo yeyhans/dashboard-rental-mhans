@@ -132,3 +132,193 @@ export interface IntakeProduct {
   market_value_clp: number | null;
   used_value_clp: number | null;
 }
+
+// ================================================================================================
+// BEGIN SHARED INVENTORY CONTRACT (migration 0021) — copied verbatim by mariohans-3d-ops.
+// Self-contained on purpose: no imports. Stored values are English tokens mirroring the CHECK
+// constraints in `supabase/migrations/0021_warehouse_units_locations.sql` (asserted by its test);
+// Spanish labels are UI-only and follow canon RC2.1.3 (Catálogo de Equipos, Check-In).
+// ================================================================================================
+
+/**
+ * Stored condition of a unit (0021 adds `blocked`). Availability is NOT a condition: a unit with
+ * an open checkout is "En arriendo" whatever its condition, derived from `asset_current_state`.
+ */
+export const UNIT_CONDITIONS = [
+  'operational',
+  'maintenance',
+  'cleaning',
+  'damaged',
+  'blocked',
+  'retired',
+] as const;
+
+export type UnitCondition = (typeof UNIT_CONDITIONS)[number];
+
+export const UNIT_CONDITION_LABELS_ES: Record<UnitCondition, string> = {
+  operational: 'Disponible',
+  maintenance: 'Mantención',
+  cleaning: 'Limpieza',
+  damaged: 'Dañado',
+  blocked: 'Bloqueado',
+  retired: 'Archivado',
+};
+
+/** Label for the derived state (open checkout). Never stored. */
+export const UNIT_IN_RENTAL_LABEL_ES = 'En arriendo';
+
+/** Display status of a unit: its condition, or `in_rental` when it has an open checkout. */
+export type UnitDisplayStatus = UnitCondition | 'in_rental';
+
+export const UNIT_WEARS = ['new', 'used'] as const;
+
+export type UnitWear = (typeof UNIT_WEARS)[number];
+
+export const WEAR_LABELS_ES: Record<UnitWear, string> = {
+  new: 'Nuevo',
+  used: 'Usado',
+};
+
+export const LOCATION_KINDS = ['shelf', 'level', 'box', 'floor', 'rug'] as const;
+
+export type LocationKind = (typeof LOCATION_KINDS)[number];
+
+export const LOCATION_KIND_LABELS_ES: Record<LocationKind, string> = {
+  shelf: 'Estante',
+  level: 'Nivel',
+  box: 'Caja',
+  floor: 'Piso',
+  rug: 'Alfombra',
+};
+
+/** Wall of the 5x5 m room; `C` is the center (the rug). */
+export const WALLS = ['N', 'E', 'S', 'W', 'C'] as const;
+
+export type Wall = (typeof WALLS)[number];
+
+export const WALL_LABELS_ES: Record<Wall, string> = {
+  N: 'Muro norte',
+  E: 'Muro este',
+  S: 'Muro sur',
+  W: 'Muro oeste',
+  C: 'Centro',
+};
+
+/** Same pattern as the `warehouse_locations.code` CHECK: N-E2, N-E2-L3, S-CJ4, C-ALF. */
+export const LOCATION_CODE_PATTERN = /^[NESWC]-[A-Z0-9]+(-[A-Z0-9]+)*$/;
+
+/** Room size in meters; positions are measured from the top-left corner. */
+export const WAREHOUSE_ROOM_SIZE_M = 5;
+
+export const ROTATIONS_DEG = [0, 90, 180, 270] as const;
+
+export type RotationDeg = (typeof ROTATIONS_DEG)[number];
+
+/**
+ * One row of `warehouse_locations`. Hierarchy: level -> shelf; box -> shelf | level | floor | rug
+ * or no parent; shelf/floor/rug are roots. numeric(5,2) columns arrive as numbers from PostgREST.
+ */
+export interface WarehouseLocation {
+  id: string;
+  code: string;
+  name: string;
+  kind: LocationKind;
+  parent_id: string | null;
+  wall: Wall | null;
+  pos_x: number | null;
+  pos_y: number | null;
+  width: number | null;
+  depth: number | null;
+  height: number | null;
+  level_index: number | null;
+  rotation_deg: RotationDeg;
+  is_active: boolean;
+  /** Optimistic concurrency: send the version you read; the DB bumps it on every update. */
+  row_version: number;
+  created_at: string;
+  updated_at: string;
+  /** `admin_users.user_id` (auth uuid) of the last editor. */
+  updated_by: string | null;
+}
+
+export const RELOCATION_SOURCES = ['dashboard', 'ops'] as const;
+
+export type RelocationSource = (typeof RELOCATION_SOURCES)[number];
+
+/**
+ * One row of `asset_relocations` (append-only). Inserting a row performs the move; the DB raises
+ * SQLSTATE `PT409` (HTTP 409) when the unit is no longer at `from_location_id`.
+ */
+export interface AssetRelocation {
+  id: number;
+  asset_id: number;
+  from_location_id: string | null;
+  to_location_id: string;
+  /** `admin_users.user_id` (auth uuid). */
+  moved_by_admin_id: string | null;
+  moved_at: string;
+  source: RelocationSource;
+  notes: string | null;
+}
+
+/** SQLSTATE raised by the relocation trigger on a stale `from_location_id`. */
+export const RELOCATION_CONFLICT_SQLSTATE = 'PT409';
+
+export const INCIDENT_TYPES = [
+  'physical_damage',
+  'missing_part',
+  'moisture',
+  'electrical_failure',
+  'cosmetic_wear',
+  'not_returned',
+  'other',
+] as const;
+
+export type IncidentType = (typeof INCIDENT_TYPES)[number];
+
+export const INCIDENT_LABELS_ES: Record<IncidentType, string> = {
+  physical_damage: 'Daño físico visible',
+  missing_part: 'Pieza o accesorio faltante',
+  moisture: 'Daño por humedad',
+  electrical_failure: 'Falla eléctrica',
+  cosmetic_wear: 'Rayón o desgaste estético',
+  not_returned: 'No devuelto',
+  other: 'Otro',
+};
+
+/**
+ * One row of the `product_unit_counts` view. Buckets are exclusive for non-retired units:
+ * total = available + in_rental + maintenance + damaged + blocked. `maintenance` includes cleaning.
+ */
+export interface ProductUnitCounts {
+  product_id: number;
+  total: number;
+  available: number;
+  in_rental: number;
+  maintenance: number;
+  damaged: number;
+  blocked: number;
+  retired: number;
+}
+
+/** A `serialised_assets` row with the 0021 columns. */
+export interface InventoryUnit {
+  id: number;
+  product_id: number;
+  asset_tag: string;
+  serial_number: string;
+  condition: UnitCondition;
+  wear: UnitWear;
+  /** Derived "CODE · Name" when `location_id` is set; free text otherwise (legacy). */
+  location: string;
+  location_id: string | null;
+  kit_code: string | null;
+  notes: string | null;
+  row_version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ================================================================================================
+// END SHARED INVENTORY CONTRACT
+// ================================================================================================
