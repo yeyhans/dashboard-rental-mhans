@@ -233,6 +233,44 @@ export class AssetMovementService {
   }
 
   /**
+   * Asset tags of the units still checked out to one order (a checkout no checkin has closed).
+   * The status routes ask before closing an order or sending it back from the rental.
+   *
+   * Fails soft on purpose: it guards a status change, it is not the change. If the inventory
+   * tables are missing (0004/0006 not applied) or the query fails, it logs and returns `[]`, so
+   * the guard steps aside instead of blocking every status change.
+   */
+  static async listOpenCheckoutsForOrder(orderId: number): Promise<string[]> {
+    try {
+      const client = this.ensureSupabaseAdmin();
+      const { data, error } = await client
+        .from('asset_movements')
+        .select('asset_id, serialised_assets (asset_tag)')
+        .eq('order_id', orderId)
+        .eq('direction', 'checkout')
+        .is('closed_by_movement_id', null);
+
+      if (error) {
+        console.error('[AssetMovementService] No se pudieron leer las salidas abiertas de la orden:', {
+          orderId,
+          error,
+        });
+        return [];
+      }
+
+      return ((data as Array<{ asset_id: number; serialised_assets?: { asset_tag?: string | null } | null }>) || []).map(
+        (row) => row.serialised_assets?.asset_tag || `Unidad #${row.asset_id}`
+      );
+    } catch (error) {
+      console.error('[AssetMovementService] No se pudieron leer las salidas abiertas de la orden:', {
+        orderId,
+        error,
+      });
+      return [];
+    }
+  }
+
+  /**
    * The central feed: recent movements with everything the admin's table shows, plus the KPIs.
    * Filters are applied server-side (`since`/`until` on `checked_at`, `direction`, operator);
    * the KPIs are NOT filtered — "units out now" is a fact about the whole garage, not about the

@@ -373,7 +373,9 @@ describe("OrderLifecycleService.finalizeReturn — email (R-09c)", () => {
     expect(lifecycle).toHaveBeenCalledWith(
       expect.objectContaining({ id: 7, status: "completed" }),
       "completed",
-      { previousStatus: "in-rental" },
+      // `in-rental -> completed` skips `return` for the machine, so the close asks for the email
+      // explicitly; otherwise it would read as an admin jump and stay silent.
+      { previousStatus: "in-rental", notify: true },
     );
     expect(result.warning).toContain("Correo no enviado.");
   });

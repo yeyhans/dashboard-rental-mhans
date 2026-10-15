@@ -1,6 +1,11 @@
 import type { APIRoute } from "astro";
 import { canonicalStatus } from "../../../../lib/orderStatus";
-import { checkStatusChange } from "../../../../lib/orderTransitionGate";
+import {
+  checkStatusChange,
+  openCheckoutsRejection,
+  parseStatusChangeOptions,
+  requiresOpenCheckoutCheck,
+} from "../../../../lib/orderTransitionGate";
 import {
   isMissingColumnError,
   OrderService,
@@ -15,6 +20,25 @@ import { withAuth } from "../../../../middleware/auth";
 /** Several non-fatal problems in one save are all reported, never overwritten (H-2/H-3). */
 function appendWarning(current: string | undefined, next: string): string {
   return current ? `${current} ${next}` : next;
+}
+
+/**
+ * Asset tags still checked out to the order. Loaded lazily and fail-soft, like the status route:
+ * the guard must never take the edit down with it.
+ */
+async function listOpenCheckouts(orderId: number): Promise<string[]> {
+  try {
+    const { AssetMovementService } = await import(
+      "../../../../services/assetMovementService"
+    );
+    return await AssetMovementService.listOpenCheckoutsForOrder(orderId);
+  } catch (error) {
+    console.error(
+      "[PUT /api/orders/update/:id] No se pudieron revisar las unidades sin devolver:",
+      { orderId, error },
+    );
+    return [];
+  }
 }
 
 export const PUT: APIRoute = withAuth(
@@ -64,6 +88,13 @@ export const PUT: APIRoute = withAuth(
       // is a no-op for the machine, so the edit form can save other fields untouched. Rows still
       // on the legacy vocabulary are not judged, for the same reason the status route skips them.
       const isStatusChange = Boolean(newStatus) && newStatus !== previousStatus;
+      const statusOptions = parseStatusChangeOptions(updateData);
+      if (isStatusChange && "error" in statusOptions) {
+        return new Response(
+          JSON.stringify({ success: false, error: statusOptions.error }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
       if (isStatusChange) {
         const rejection = checkStatusChange({
           from: previousStatus,
@@ -83,6 +114,24 @@ export const PUT: APIRoute = withAuth(
             },
           );
         }
+
+        // Same open-checkout confirmation as the status route.
+        if (
+          !("error" in statusOptions) &&
+          !statusOptions.acknowledgeOpenCheckouts &&
+          requiresOpenCheckoutCheck(previousStatus, newStatus)
+        ) {
+          const assetTags = await listOpenCheckouts(Number(orderId));
+          if (assetTags.length > 0) {
+            return new Response(
+              JSON.stringify(openCheckoutsRejection(assetTags)),
+              {
+                status: 409,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          }
+        }
       }
 
       // Validate required fields and sanitize data
@@ -90,6 +139,15 @@ export const PUT: APIRoute = withAuth(
 
       // Basic order fields
       if (updateData.status) sanitizedData.status = updateData.status;
+      // The admin's cancel reason (migration 0003), only when this edit cancels the order.
+      if (
+        isStatusChange &&
+        newStatus === "cancelled" &&
+        !("error" in statusOptions) &&
+        statusOptions.reason
+      ) {
+        sanitizedData.cancellation_reason = statusOptions.reason;
+      }
       if (updateData.customer_note !== undefined)
         sanitizedData.customer_note = updateData.customer_note;
       if (updateData.payment_method)
@@ -278,7 +336,12 @@ export const PUT: APIRoute = withAuth(
         const lifecycle = await OrderLifecycleService.onStatusChanged(
           updatedOrder,
           String(newStatus),
-          { previousStatus },
+          {
+            previousStatus,
+            ...(!("error" in statusOptions) && statusOptions.notify
+              ? { notify: true }
+              : {}),
+          },
         );
         if (lifecycle.warning) {
           warning = appendWarning(warning, lifecycle.warning);

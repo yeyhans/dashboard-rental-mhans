@@ -84,10 +84,11 @@ describe("PUT /api/orders/[id]/status lifecycle hook", () => {
   });
 
   it("does not call the lifecycle hook when the status change is rejected", async () => {
+    // Admins may jump since 2026-10-14; re-sending the current status is still rejected.
     getOrderById.mockResolvedValue({ id: 123, status: "request" });
     const { PUT } = await import("../status");
 
-    const response = await PUT(context("in-rental"));
+    const response = await PUT(context("request"));
 
     expect(response.status).toBe(409);
     expect(onStatusChanged).not.toHaveBeenCalled();

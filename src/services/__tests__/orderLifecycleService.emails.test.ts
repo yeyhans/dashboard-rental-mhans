@@ -168,3 +168,65 @@ describe("OrderLifecycleService.onStatusChanged — guard and budget (H-4)", () 
     expect(options.budgetMs).toBe(LIFECYCLE_BUDGET_MS - 20_000);
   });
 });
+
+/**
+ * Admin status jump (2026-10-14). A jump — a change `canTransition` would reject — sends the
+ * target status email only when the admin ticked "Notificar al cliente". Sequential changes keep
+ * sending as before, whatever `notify` says.
+ */
+describe("OrderLifecycleService.onStatusChanged — jumps", () => {
+  it.each([
+    ["request", "completed"],
+    ["completed", "request"],
+    ["in-rental", "evaluation"],
+  ])("%s -> %s sends nothing without notify", async (from, to) => {
+    await OrderLifecycleService.onStatusChanged(ORDER, to, {
+      previousStatus: from,
+    });
+    expect(sendForOrder).not.toHaveBeenCalled();
+  });
+
+  it("does not send when notify is false", async () => {
+    await OrderLifecycleService.onStatusChanged(ORDER, "completed", {
+      previousStatus: "request",
+      notify: false,
+    });
+    expect(sendForOrder).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["request", "completed", "pedido-completado"],
+    ["cancelled", "request", "solicitud-recibida"],
+    ["completed", "cancelled", "equipos-no-disponibles"],
+  ])("%s -> %s sends %s when notify is true", async (from, to, key) => {
+    await OrderLifecycleService.onStatusChanged(ORDER, to, {
+      previousStatus: from,
+      notify: true,
+    });
+    expect(sendForOrder).toHaveBeenCalledTimes(1);
+    expect(sendForOrder.mock.calls[0]![0]).toBe(key);
+  });
+
+  it("keeps sending on a sequential change even with notify false", async () => {
+    await OrderLifecycleService.onStatusChanged(ORDER, "evaluation", {
+      previousStatus: "request",
+      notify: false,
+    });
+    expect(sendForOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it("still generates the missing contract on a jump into in-rental without notify", async () => {
+    const generate = vi
+      .spyOn(OrderLifecycleService, "generateRentalContract")
+      .mockResolvedValue("https://f/nuevo.pdf");
+
+    await OrderLifecycleService.onStatusChanged(
+      { ...ORDER, new_pdf_processing_url: null },
+      "in-rental",
+      { previousStatus: "request" },
+    );
+
+    expect(generate).toHaveBeenCalledWith(7);
+    expect(sendForOrder).not.toHaveBeenCalled();
+  });
+});
