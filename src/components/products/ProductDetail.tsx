@@ -101,7 +101,7 @@ export function ProductDetail({ product, categories, onSave, accessToken }: Prod
     setSelectedCategoryIds(categoryIds);
     setUpdatedProduct(prev => ({
       ...prev,
-      categories_ids: JSON.stringify(categoryIds)
+      categories_ids: categoryIds
     }));
   };
 
