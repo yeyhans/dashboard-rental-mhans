@@ -62,6 +62,8 @@ import {
   saveCatalogViewMode,
   type CatalogViewMode,
 } from "../lib/catalogViewPreference";
+import { ProductUnitCountCells } from "./products/ProductUnitCountCells";
+import { useProductUnitCounts } from "./products/useProductUnitCounts";
 
 // Helper function to format currency with thousands separator
 const formatCurrency = (value: string | number) => {
@@ -120,6 +122,13 @@ const ProductsDashboard = ({
     setViewMode(mode);
     saveCatalogViewMode(mode);
   };
+  // T3 (0021): Stock | Disp. | Arriendo | Inventario from real units. `unitCounts` stays null
+  // until loaded or when the counts endpoint fails, and the cells then keep the placeholder.
+  const { counts: unitCounts } = useProductUnitCounts(
+    allProducts.map((product) => product.id),
+    accessToken,
+  );
+
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: "ascending" | "descending";
@@ -583,9 +592,9 @@ const ProductsDashboard = ({
 
     // Desktop view - Table layout (list view, canon 05b: Equipo/Ubicación/Stock/Disp./Arriendo/
     // Precio-día. Slug and Categorías moved out of the table — still visible in the detail/edit
-    // page. Ubicación/Disp./Arriendo render the explicit placeholder: `products` has no location
-    // column and there is no serialised-unit table to derive a per-row available/rented split
-    // from (see `catalogProductColumns.ts`).
+    // page. Ubicación renders the explicit placeholder: `products` has no location column.
+    // Stock/Disp./Arriendo/Inventario come from the serialised units (0021) through
+    // `ProductUnitCountCells`, which falls back to the same placeholder without counts.
     return (
       <div className="rounded-md border overflow-hidden">
         <Table>
@@ -613,10 +622,16 @@ const ProductsDashboard = ({
                 Estado <SortIndicator columnKey="stock_status" />
               </TableHead>
               <TableHead className="text-center text-foreground font-medium text-xs">
+                Stock
+              </TableHead>
+              <TableHead className="text-center text-foreground font-medium text-xs">
                 Disp.
               </TableHead>
               <TableHead className="text-center text-foreground font-medium text-xs">
                 Arriendo
+              </TableHead>
+              <TableHead className="text-foreground font-medium text-xs">
+                Inventario
               </TableHead>
               <TableHead
                 className="text-foreground font-medium text-xs text-right cursor-pointer"
@@ -685,12 +700,9 @@ const ProductsDashboard = ({
                     status={product.stock_status || "outofstock"}
                   />
                 </TableCell>
-                <TableCell className="text-center text-2xs text-muted-foreground p-2">
-                  {CATALOG_UNAVAILABLE_COLUMN_VALUE}
-                </TableCell>
-                <TableCell className="text-center text-2xs text-muted-foreground p-2">
-                  {CATALOG_UNAVAILABLE_COLUMN_VALUE}
-                </TableCell>
+                <ProductUnitCountCells
+                  counts={unitCounts?.get(product.id)}
+                />
                 <TableCell className="text-foreground text-right font-bold text-sm p-2">
                   ${formatCurrency(product.price || 0)}
                 </TableCell>

@@ -30,10 +30,13 @@ const ICON = "h-3.5 w-3.5";
 /* ------------------------------------------------------------------------------------------ */
 
 export function OrderActionsCard({
+  statusActions,
   primary,
   secondary,
   note,
 }: {
+  /** Quick status actions (`OrderStatusQuickActions`), shown first. */
+  statusActions?: ReactNode;
   primary?: {
     label: string;
     icon?: ReactNode;
@@ -49,6 +52,7 @@ export function OrderActionsCard({
       icon={<ArrowRight className={ICON} aria-hidden="true" />}
       bodyClassName="p-3"
     >
+      {statusActions}
       {primary && (
         <button
           type="button"

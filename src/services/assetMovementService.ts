@@ -2,6 +2,7 @@ import {
   CHECKOUT_ORDER_ERRORS,
   MOVEMENT_TRANSITION_ERRORS,
   validateCheckoutOrderStatus,
+  validateIncidentType,
   validateMovementTransition,
 } from '../lib/assetMovements';
 import { isOverdueRow, kpis, overdueOrderIds, startOfBusinessDay, type MovementsKpis } from '../lib/movementsFeed';
@@ -13,6 +14,10 @@ import {
   type AssetMovementInput,
   type MovementDirection,
 } from '../types/assetMovements';
+import type { IncidentType } from '../types/inventory';
+
+/** `AssetMovementInput` plus the 0021 incident column, accepted on checkin only. */
+export type RecordMovementInput = AssetMovementInput & { incident_type?: IncidentType | null };
 
 /** Postgres unique-violation error code. */
 const UNIQUE_VIOLATION = '23505';
@@ -141,7 +146,7 @@ export class AssetMovementService {
    * (`asset_movements_one_open_checkout_idx`) is the actual guard against that race, and the
    * `catch` below maps its 23505 violation to the same message (R3-102b).
    */
-  static async recordMovement(input: AssetMovementInput): Promise<AssetMovement> {
+  static async recordMovement(input: RecordMovementInput): Promise<AssetMovement> {
     if (!isMovementDirection(input.direction)) {
       throw new Error('Dirección inválida. Debe ser "checkout" o "checkin"');
     }
@@ -150,6 +155,10 @@ export class AssetMovementService {
     }
     if (!Number.isInteger(input.order_id) || input.order_id <= 0) {
       throw new Error('Debes indicar una orden válida');
+    }
+    const incident = validateIncidentType(input.direction, input.incident_type);
+    if (!incident.valid) {
+      throw new Error(incident.error);
     }
 
     if (input.direction === 'checkout') {
@@ -171,6 +180,8 @@ export class AssetMovementService {
         direction: input.direction,
         condition_notes: input.condition_notes ?? null,
         checked_by_admin_id: input.checked_by_admin_id ?? null,
+        // Only sent when present: a write without an incident keeps working before 0021 lands.
+        ...(input.incident_type ? { incident_type: input.incident_type } : {}),
       })
       .select()
       .single();
@@ -219,6 +230,44 @@ export class AssetMovementService {
     }
 
     return (data as AssetMovement[]) || [];
+  }
+
+  /**
+   * Asset tags of the units still checked out to one order (a checkout no checkin has closed).
+   * The status routes ask before closing an order or sending it back from the rental.
+   *
+   * Fails soft on purpose: it guards a status change, it is not the change. If the inventory
+   * tables are missing (0004/0006 not applied) or the query fails, it logs and returns `[]`, so
+   * the guard steps aside instead of blocking every status change.
+   */
+  static async listOpenCheckoutsForOrder(orderId: number): Promise<string[]> {
+    try {
+      const client = this.ensureSupabaseAdmin();
+      const { data, error } = await client
+        .from('asset_movements')
+        .select('asset_id, serialised_assets (asset_tag)')
+        .eq('order_id', orderId)
+        .eq('direction', 'checkout')
+        .is('closed_by_movement_id', null);
+
+      if (error) {
+        console.error('[AssetMovementService] No se pudieron leer las salidas abiertas de la orden:', {
+          orderId,
+          error,
+        });
+        return [];
+      }
+
+      return ((data as Array<{ asset_id: number; serialised_assets?: { asset_tag?: string | null } | null }>) || []).map(
+        (row) => row.serialised_assets?.asset_tag || `Unidad #${row.asset_id}`
+      );
+    } catch (error) {
+      console.error('[AssetMovementService] No se pudieron leer las salidas abiertas de la orden:', {
+        orderId,
+        error,
+      });
+      return [];
+    }
   }
 
   /**

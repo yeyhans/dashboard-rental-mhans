@@ -219,28 +219,36 @@ describe('PUT /api/orders/[id]/status — transiciones', () => {
     expect(updateOrderStatus).toHaveBeenCalledWith(123, 'in-rental');
   });
 
-  it('refuses to skip a stage, naming the only legal next one', async () => {
+  // Owner decision 2026-10-14 (`odd/tasks/admin-status-jump.md`): admin and super_admin may jump
+  // to any status. The skip/backwards/reopen rejections now only apply to other roles
+  // (`orderTransitionGate.test.ts`).
+  it('lets an admin skip a stage', async () => {
     asAdmin();
     getOrderById.mockResolvedValue({ id: 123, status: 'confirmed' });
+    updateOrderStatus.mockResolvedValue({ id: 123, status: 'in-rental' });
     const { PUT } = await import('../status');
 
     const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'in-rental' } }) as never);
-    const payload = await response.json();
 
-    expect(response.status).toBe(409);
-    expect(payload.error).toContain('Preparación');
-    expect(updateOrderStatus).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(updateOrderStatus).toHaveBeenCalledWith(123, 'in-rental');
   });
 
-  it('refuses to move backwards', async () => {
+  it('lets an admin move backwards once the open checkouts are acknowledged', async () => {
     asAdmin();
     getOrderById.mockResolvedValue({ id: 123, status: 'in-rental' });
+    updateOrderStatus.mockResolvedValue({ id: 123, status: 'preparation' });
     const { PUT } = await import('../status');
 
-    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'preparation' } }) as never);
+    const response = await PUT(
+      context({
+        cookie: 'sb-access-token=valid-jwt',
+        body: { status: 'preparation', acknowledge_open_checkouts: true },
+      }) as never,
+    );
 
-    expect(response.status).toBe(409);
-    expect(updateOrderStatus).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(updateOrderStatus).toHaveBeenCalledWith(123, 'preparation');
   });
 
   it('allows cancelling from a non-terminal stage', async () => {
@@ -254,14 +262,26 @@ describe('PUT /api/orders/[id]/status — transiciones', () => {
     expect(response.status).toBe(200);
   });
 
-  it('refuses to reopen a completed order', async () => {
+  it('lets an admin reopen a completed order', async () => {
     asAdmin();
     getOrderById.mockResolvedValue({ id: 123, status: 'completed' });
+    updateOrderStatus.mockResolvedValue({ id: 123, status: 'return' });
     const { PUT } = await import('../status');
 
     const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'return' } }) as never);
 
+    expect(response.status).toBe(200);
+  });
+
+  it('rejects re-sending the current status', async () => {
+    asAdmin();
+    getOrderById.mockResolvedValue({ id: 123, status: 'completed' });
+    const { PUT } = await import('../status');
+
+    const response = await PUT(context({ cookie: 'sb-access-token=valid-jwt', body: { status: 'completed' } }) as never);
+
     expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('SAME_STATUS');
     expect(updateOrderStatus).not.toHaveBeenCalled();
   });
 

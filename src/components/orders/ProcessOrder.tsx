@@ -40,6 +40,8 @@ import { OrderPipeline } from './detail/OrderPipeline';
 import { OrderItemsTable } from './detail/OrderItemsTable';
 import { BudgetVersionList } from './detail/BudgetVersionList';
 import { OrderActionsCard, OrderClientCard, OrderDatesCard, OrderFinancialCard, OrderNoteBlock, OrderPaymentCard } from './detail/OrderSideCards';
+import { OrderStatusQuickActions, type StatusChangeOutcome, type StatusChangeRequest } from './OrderStatusQuickActions';
+import { executeStatusChange } from './statusChangeFlow';
 
 // Above the server-side budget (20 s email hop + 12 s worker) so the server's own error wins.
 const SAVE_ORDER_TIMEOUT_MS = 45_000;
@@ -1610,66 +1612,56 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
   };
 
   // Function to handle order status changes
-  const handleStatusChange = async (newStatus: string, reason?: string) => {
+  const handleStatusChange = async (request: StatusChangeRequest): Promise<StatusChangeOutcome> => {
     if (!orderData?.id) {
       toast.error('ID de orden no disponible');
-      return;
+      return { ok: false, error: 'ID de orden no disponible' };
     }
 
     const oldStatus = orderData.status || 'unknown';
+    const { status: newStatus, reason } = request;
 
-    try {
-      // Antes esto solo notificaba: el comentario decía "aquí iría la lógica para actualizar el
-      // estado" y el toast anunciaba un cambio que nunca ocurría. Al recargar, el admin veía el
-      // estado anterior y volvía a intentarlo. El endpoint valida además la transición contra la
-      // cadena del canónico, así que un salto ilegal se rechaza con un mensaje en español.
-      const response = await fetch(`/api/orders/${orderData.id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, reason }),
-      });
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'No se pudo actualizar el estado de la orden');
-      }
-
-      await notifyStatusChange(
+    // Antes esto solo notificaba: el comentario decía "aquí iría la lógica para actualizar el
+    // estado" y el toast anunciaba un cambio que nunca ocurría. Al recargar, el admin veía el
+    // estado anterior y volvía a intentarlo. El endpoint valida además la transición contra la
+    // cadena del canónico, así que un salto ilegal se rechaza con un mensaje en español.
+    // A failure after the route committed (chat note) is a warning, never a failed change.
+    const execution = await executeStatusChange(oldStatus, request, {
+      send: async (body) => {
+        const response = await fetch(`/api/orders/${orderData.id}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        return { httpStatus: response.status, body: await response.json().catch(() => null) };
+      },
+      postChatNote: () => notifyStatusChange(
         oldStatus,
         newStatus,
         reason,
         `Cambio realizado desde el panel administrativo por ${sessionData?.user?.name || 'Administrador'}`
-      );
+      ),
+      onUnexpectedError: (stage, error) => console.error('[ProcessOrder] Error al cambiar el estado de la orden:', {
+        orderId: orderData.id, oldStatus, newStatus, stage, error,
+      }),
+    });
+    const { outcome } = execution;
 
-      toast.success(`Estado cambiado de ${statusLabel(oldStatus)} a ${statusLabel(newStatus)}`);
-
-      // Recargar la página para mostrar el nuevo estado
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
-
-    } catch (error) {
-      console.error('[ProcessOrder] Error al cambiar el estado de la orden:', {
-        orderId: orderData.id, oldStatus, newStatus, error,
-      });
-      toast.error(error instanceof Error ? error.message : 'Error al cambiar el estado de la orden');
+    if (!outcome.ok) {
+      // Units still out are a question for the admin (the quick actions ask it), not an error.
+      if (outcome.code !== 'OPEN_CHECKOUTS') toast.error(outcome.error);
+      return outcome;
     }
-  };
 
-  // Function to mark order as completed
-  const handleMarkAsCompleted = async () => {
-    if (confirm('¿Estás seguro de que quieres marcar esta orden como completada?')) {
-      await handleStatusChange('completed', 'Orden completada manualmente por el administrador');
-    }
-  };
+    toast.success(`Estado cambiado de ${statusLabel(oldStatus)} a ${statusLabel(newStatus)}`);
+    if (execution.warning) toast.warning(execution.warning);
+    if (execution.followUpError) toast.warning(execution.followUpError);
 
-  // Function to mark order as failed
-  const handleMarkAsFailed = async () => {
-    const reason = prompt('Ingresa el motivo por el cual la orden falló:');
-    if (reason) {
-      // `failed` sale del CHECK con 0003; la salida terminal por fallo es `cancelled`.
-      await handleStatusChange('cancelled', reason);
-    }
+    // Recargar la página para mostrar el nuevo estado
+    setTimeout(() => {
+      window.location.reload();
+    }, 1500);
+    return outcome;
   };
 
   // Manual email handlers
@@ -2747,12 +2739,19 @@ function ProcessOrder({ order, sessionData, allProducts, allShippingMethods }: {
 
         <aside className="flex min-w-0 flex-col gap-[14px] min-[1025px]:sticky min-[1025px]:top-5">
           <OrderActionsCard
+            statusActions={
+              <OrderStatusQuickActions
+                currentStatus={orderData.status}
+                role={sessionData?.user?.role ?? null}
+                onChangeStatus={handleStatusChange}
+              />
+            }
             primary={{
               label: 'Enviar correo al cliente',
               icon: <Send className="h-4 w-4" aria-hidden="true" />,
               onClick: () => setShowEmailModal(true),
             }}
-            note="Puedes adjuntar al correo el presupuesto y el contrato generados. El estado del pedido se cambia desde Editar pedido."
+            note="Puedes adjuntar al correo el presupuesto y el contrato generados."
           />
 
           <OrderClientCard

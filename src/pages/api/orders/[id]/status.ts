@@ -1,5 +1,10 @@
 import type { APIRoute } from "astro";
-import { checkStatusChange } from "../../../../lib/orderTransitionGate";
+import {
+  checkStatusChange,
+  openCheckoutsRejection,
+  parseStatusChangeOptions,
+  requiresOpenCheckoutCheck,
+} from "../../../../lib/orderTransitionGate";
 import { withAuth } from "../../../../middleware/auth";
 import { OrderService } from "../../../../services/orderService";
 import { OrderLifecycleService } from "../../../../services/orderLifecycleService";
@@ -20,6 +25,25 @@ function json(body: unknown, status: number) {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+/**
+ * Asset tags still checked out to the order. The inventory service is loaded lazily and any
+ * failure reads as "nothing out": this guard must never take a status change down with it.
+ */
+async function listOpenCheckouts(orderId: number): Promise<string[]> {
+  try {
+    const { AssetMovementService } = await import(
+      "../../../../services/assetMovementService"
+    );
+    return await AssetMovementService.listOpenCheckoutsForOrder(orderId);
+  } catch (error) {
+    console.error(
+      "[PUT /api/orders/[id]/status] No se pudieron revisar las unidades sin devolver:",
+      { orderId, error },
+    );
+    return [];
+  }
 }
 
 /**
@@ -51,6 +75,11 @@ export const PUT: APIRoute = withAuth(async (context) => {
       },
       400,
     );
+  }
+
+  const options = parseStatusChangeOptions(body);
+  if ("error" in options) {
+    return json({ success: false, error: options.error }, 400);
   }
 
   // Máquina de estados (Área 01 §5 `TRANSICIONES_VALIDAS`). La validación de vocabulario de arriba
@@ -91,11 +120,28 @@ export const PUT: APIRoute = withAuth(async (context) => {
     );
   }
 
+  // Closing the order, or sending it back from the rental, while serialised units are still out
+  // leaves them marked "out" against an order that no longer expects them: ask first.
+  if (
+    !options.acknowledgeOpenCheckouts &&
+    requiresOpenCheckoutCheck(current.status, body.status)
+  ) {
+    const assetTags = await listOpenCheckouts(orderId);
+    if (assetTags.length > 0) {
+      return json(openCheckoutsRejection(assetTags), 409);
+    }
+  }
+
   let order;
   try {
-    // `reason` sigue sin persistirse a propósito: el parámetro `notes` de updateOrderStatus
-    // escribe en `customer_note`, que pertenece al cliente, no al admin.
-    order = await OrderService.updateOrderStatus(orderId, body.status);
+    // `reason` only lands when cancelling, as `cancellation_reason`. The `notes` parameter of
+    // updateOrderStatus writes `customer_note`, which belongs to the customer, not the admin.
+    order =
+      body.status === "cancelled" && options.reason
+        ? await OrderService.updateOrderStatus(orderId, body.status, undefined, {
+            cancellationReason: options.reason,
+          })
+        : await OrderService.updateOrderStatus(orderId, body.status);
   } catch (error) {
     console.error("[PUT /api/orders/[id]/status] Error:", {
       orderId,
@@ -112,10 +158,14 @@ export const PUT: APIRoute = withAuth(async (context) => {
   // R-14: side effects of the new stage (contract on `in-rental`). The status is already saved,
   // so a failure here only adds a warning; it never turns the change into an error.
   // R-09c: `previousStatus` lets the lifecycle send the one customer email of this transition.
+  // An admin jump only emails the customer when the admin ticked "Notificar al cliente".
   const lifecycle = await OrderLifecycleService.onStatusChanged(
     order,
     body.status,
-    { previousStatus: current.status },
+    {
+      previousStatus: current.status,
+      ...(options.notify ? { notify: true } : {}),
+    },
   );
 
   return json(
