@@ -34,3 +34,6 @@ supabase/migrations/_raw/
 
 # Local PDF render output (scripts/render-pdf-fixtures.ts)
 tmp/
+
+# Local CodeGraph index (never commit)
+.codegraph/
