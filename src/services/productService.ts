@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../lib/supabase";
 import type { Database } from "../types/database";
+import { toPlainText } from "../lib/plainText";
 
 type Product = Database["public"]["Tables"]["products"]["Row"];
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
@@ -104,6 +105,24 @@ export class ProductService {
   }
 
   /**
+   * `short_description` is plain text everywhere (the client site renders it as text), so any
+   * HTML an API caller sends is reduced to text before it reaches the database. An empty result
+   * is stored as null. Payloads without the field are returned unchanged.
+   */
+  private static normalizeShortDescription<
+    T extends { short_description?: string | null },
+  >(payload: T): T {
+    if (
+      !("short_description" in payload) ||
+      payload.short_description == null
+    ) {
+      return payload;
+    }
+    const plain = toPlainText(payload.short_description);
+    return { ...payload, short_description: plain === "" ? null : plain };
+  }
+
+  /**
    * Crear nuevo producto
    */
   static async createProduct(productData: ProductInsert): Promise<Product> {
@@ -111,7 +130,7 @@ export class ProductService {
       const client = this.ensureSupabaseAdmin();
       const { data, error } = await client
         .from("products")
-        .insert([productData])
+        .insert([this.normalizeShortDescription(productData)])
         .select()
         .single();
 
@@ -137,7 +156,7 @@ export class ProductService {
       const client = this.ensureSupabaseAdmin();
       const { data, error } = await client
         .from("products")
-        .update(updates)
+        .update(this.normalizeShortDescription(updates))
         .eq("id", productId)
         .select()
         .single();

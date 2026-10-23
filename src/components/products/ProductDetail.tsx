@@ -30,8 +30,20 @@ import type { ProductCategory } from "../../types/product";
 import { CategorySelector } from "./CategorySelector";
 import { ProductImageUpload } from "./ProductImageUpload";
 import { ProductInventoryTab } from "../inventory/units/ProductInventoryTab";
+import { toPlainText } from "../../lib/plainText";
 
 type Product = Database["public"]["Tables"]["products"]["Row"];
+
+/**
+ * Edit state for a product. `short_description` is plain text, so legacy HTML values are shown
+ * (and saved back) as clean text.
+ */
+function toEditableProduct(product: Product): Partial<Product> {
+  return {
+    ...product,
+    short_description: toPlainText(product.short_description),
+  };
+}
 
 interface ProductDetailProps {
   product: Product;
@@ -47,9 +59,9 @@ export function ProductDetail({
   accessToken,
 }: ProductDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [updatedProduct, setUpdatedProduct] = useState<Partial<Product>>({
-    ...product,
-  });
+  const [updatedProduct, setUpdatedProduct] = useState<Partial<Product>>(() =>
+    toEditableProduct(product),
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
@@ -200,7 +212,7 @@ export function ProductDetail({
 
   const toggleEditMode = () => {
     if (isEditing) {
-      setUpdatedProduct({ ...product });
+      setUpdatedProduct(toEditableProduct(product));
     }
     setIsEditing(!isEditing);
   };
@@ -417,13 +429,14 @@ export function ProductDetail({
 
                   <div className="space-y-2">
                     <Label htmlFor="short_description">Descripción corta</Label>
-                    <RichTextEditor
+                    <Textarea
+                      id="short_description"
+                      rows={3}
                       value={updatedProduct.short_description || ""}
-                      onChange={(html) =>
-                        handleInputChange("short_description", html)
+                      onChange={(e) =>
+                        handleInputChange("short_description", e.target.value)
                       }
                       placeholder="Descripción breve del producto"
-                      minHeight="80px"
                     />
                   </div>
 
@@ -851,12 +864,9 @@ export function ProductDetail({
                           <Label className="text-sm font-medium text-muted-foreground">
                             Descripción corta
                           </Label>
-                          <div
-                            className="prose prose-sm max-w-none mt-1 text-foreground prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground [&_p]:my-1 [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_a]:text-primary [&_a]:underline"
-                            dangerouslySetInnerHTML={{
-                              __html: sanitizeHtml(product.short_description),
-                            }}
-                          />
+                          <p className="mt-1 text-sm text-foreground">
+                            {toPlainText(product.short_description)}
+                          </p>
                         </div>
                       )}
 

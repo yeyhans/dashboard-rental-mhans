@@ -461,11 +461,14 @@ const ProductForm = ({
 
           <div>
             <Label htmlFor="short_description">Descripción Corta</Label>
-            <RichTextEditor
+            <Textarea
+              id="short_description"
+              rows={3}
               value={formData.short_description}
-              onChange={(html) => handleInputChange("short_description", html)}
+              onChange={(e) =>
+                handleInputChange("short_description", e.target.value)
+              }
               placeholder="Descripción breve del producto..."
-              minHeight="80px"
             />
           </div>
 
