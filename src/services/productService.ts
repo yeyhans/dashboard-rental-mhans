@@ -1,9 +1,10 @@
-import { supabaseAdmin } from '../lib/supabase';
-import type { Database } from '../types/database';
+import { supabaseAdmin } from "../lib/supabase";
+import type { Database } from "../types/database";
+import { toPlainText } from "../lib/plainText";
 
-type Product = Database['public']['Tables']['products']['Row'];
-type ProductInsert = Database['public']['Tables']['products']['Insert'];
-type ProductUpdate = Database['public']['Tables']['products']['Update'];
+type Product = Database["public"]["Tables"]["products"]["Row"];
+type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
+type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
 
 export class ProductService {
   /**
@@ -11,7 +12,7 @@ export class ProductService {
    */
   private static ensureSupabaseAdmin() {
     if (!supabaseAdmin) {
-      throw new Error('Supabase admin client not available');
+      throw new Error("Supabase admin client not available");
     }
     return supabaseAdmin;
   }
@@ -23,16 +24,16 @@ export class ProductService {
     try {
       const client = this.ensureSupabaseAdmin();
       const offset = (page - 1) * limit;
-      
+
       let query = client
-        .from('products')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false });
+        .from("products")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false });
 
-
-
-      const { data, error, count } = await query
-        .range(offset, offset + limit - 1);
+      const { data, error, count } = await query.range(
+        offset,
+        offset + limit - 1,
+      );
 
       if (error) {
         throw error;
@@ -43,10 +44,10 @@ export class ProductService {
         total: count || 0,
         page,
         limit,
-        totalPages: Math.ceil((count || 0) / limit)
+        totalPages: Math.ceil((count || 0) / limit),
       };
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error("Error fetching products:", error);
       throw error;
     }
   }
@@ -58,13 +59,13 @@ export class ProductService {
     try {
       const client = this.ensureSupabaseAdmin();
       const { data, error } = await client
-        .from('products')
-        .select('*')
-        .eq('id', productId)
+        .from("products")
+        .select("*")
+        .eq("id", productId)
         .single();
 
       if (error) {
-        if (error.code === 'PGRST116') {
+        if (error.code === "PGRST116") {
           return null;
         }
         throw error;
@@ -72,7 +73,7 @@ export class ProductService {
 
       return data;
     } catch (error) {
-      console.error('Error fetching product by ID:', error);
+      console.error("Error fetching product by ID:", error);
       throw error;
     }
   }
@@ -84,13 +85,13 @@ export class ProductService {
     try {
       const client = this.ensureSupabaseAdmin();
       const { data, error } = await client
-        .from('products')
-        .select('*')
-        .eq('slug', slug)
+        .from("products")
+        .select("*")
+        .eq("slug", slug)
         .single();
 
       if (error) {
-        if (error.code === 'PGRST116') {
+        if (error.code === "PGRST116") {
           return null;
         }
         throw error;
@@ -98,9 +99,27 @@ export class ProductService {
 
       return data;
     } catch (error) {
-      console.error('Error fetching product by slug:', error);
+      console.error("Error fetching product by slug:", error);
       throw error;
     }
+  }
+
+  /**
+   * `short_description` is plain text everywhere (the client site renders it as text), so any
+   * HTML an API caller sends is reduced to text before it reaches the database. An empty result
+   * is stored as null. Payloads without the field are returned unchanged.
+   */
+  private static normalizeShortDescription<
+    T extends { short_description?: string | null },
+  >(payload: T): T {
+    if (
+      !("short_description" in payload) ||
+      payload.short_description == null
+    ) {
+      return payload;
+    }
+    const plain = toPlainText(payload.short_description);
+    return { ...payload, short_description: plain === "" ? null : plain };
   }
 
   /**
@@ -110,8 +129,8 @@ export class ProductService {
     try {
       const client = this.ensureSupabaseAdmin();
       const { data, error } = await client
-        .from('products')
-        .insert([productData])
+        .from("products")
+        .insert([this.normalizeShortDescription(productData)])
         .select()
         .single();
 
@@ -121,7 +140,7 @@ export class ProductService {
 
       return data;
     } catch (error) {
-      console.error('Error creating product:', error);
+      console.error("Error creating product:", error);
       throw error;
     }
   }
@@ -129,13 +148,16 @@ export class ProductService {
   /**
    * Actualizar producto
    */
-  static async updateProduct(productId: number, updates: ProductUpdate): Promise<Product> {
+  static async updateProduct(
+    productId: number,
+    updates: ProductUpdate,
+  ): Promise<Product> {
     try {
       const client = this.ensureSupabaseAdmin();
       const { data, error } = await client
-        .from('products')
-        .update(updates)
-        .eq('id', productId)
+        .from("products")
+        .update(this.normalizeShortDescription(updates))
+        .eq("id", productId)
         .select()
         .single();
 
@@ -145,7 +167,7 @@ export class ProductService {
 
       return data;
     } catch (error) {
-      console.error('Error updating product:', error);
+      console.error("Error updating product:", error);
       throw error;
     }
   }
@@ -157,9 +179,9 @@ export class ProductService {
     try {
       const client = this.ensureSupabaseAdmin();
       const { error } = await client
-        .from('products')
+        .from("products")
         .delete()
-        .eq('id', productId);
+        .eq("id", productId);
 
       if (error) {
         throw error;
@@ -167,7 +189,7 @@ export class ProductService {
 
       return true;
     } catch (error) {
-      console.error('Error deleting product:', error);
+      console.error("Error deleting product:", error);
       throw error;
     }
   }
@@ -179,10 +201,10 @@ export class ProductService {
     try {
       const client = this.ensureSupabaseAdmin();
       const { data, error, count } = await client
-        .from('products')
-        .select('*', { count: 'exact' })
-        .eq('status', 'publish')
-        .order('name', { ascending: true });
+        .from("products")
+        .select("*", { count: "exact" })
+        .eq("status", "publish")
+        .order("name", { ascending: true });
 
       if (error) {
         throw error;
@@ -190,10 +212,10 @@ export class ProductService {
 
       return {
         products: data,
-        total: count || 0
+        total: count || 0,
       };
     } catch (error) {
-      console.error('Error fetching all active products:', error);
+      console.error("Error fetching all active products:", error);
       throw error;
     }
   }
@@ -201,28 +223,36 @@ export class ProductService {
   /**
    * Buscar productos
    */
-  static async searchProducts(searchTerm: string, page: number = 1, limit: number = 1000, categoryId?: number) {
+  static async searchProducts(
+    searchTerm: string,
+    page: number = 1,
+    limit: number = 1000,
+    categoryId?: number,
+  ) {
     try {
       const offset = (page - 1) * limit;
-      
+
       const client = this.ensureSupabaseAdmin();
-      let query = client
-        .from('products')
-        .select('*', { count: 'exact' })
+      let query = client.from("products").select("*", { count: "exact" });
 
       // Add search filter if searchTerm is provided
       if (searchTerm && searchTerm.trim()) {
-        const sanitizedTerm = searchTerm.replace(/[%_\\]/g, '\\$&').trim().slice(0, 200);
-        query = query.or(`name.ilike.%${sanitizedTerm}%,description.ilike.%${sanitizedTerm}%,short_description.ilike.%${sanitizedTerm}%,sku.ilike.%${sanitizedTerm}%`);
+        const sanitizedTerm = searchTerm
+          .replace(/[%_\\]/g, "\\$&")
+          .trim()
+          .slice(0, 200);
+        query = query.or(
+          `name.ilike.%${sanitizedTerm}%,description.ilike.%${sanitizedTerm}%,short_description.ilike.%${sanitizedTerm}%,sku.ilike.%${sanitizedTerm}%`,
+        );
       }
 
       // Add category filter if categoryId is provided
       if (categoryId) {
-        query = query.contains('categories_ids', [categoryId.toString()]);
+        query = query.contains("categories_ids", [categoryId.toString()]);
       }
 
       const { data, error, count } = await query
-        .order('name', { ascending: true })
+        .order("name", { ascending: true })
         .range(offset, offset + limit - 1);
 
       if (error) {
@@ -236,10 +266,10 @@ export class ProductService {
         limit,
         totalPages: Math.ceil((count || 0) / limit),
         searchTerm,
-        categoryId
+        categoryId,
       };
     } catch (error) {
-      console.error('Error searching products:', error);
+      console.error("Error searching products:", error);
       throw error;
     }
   }
@@ -247,17 +277,21 @@ export class ProductService {
   /**
    * Obtener productos por categoría
    */
-  static async getProductsByCategory(categoryId: number, page: number = 1, limit: number = 1000) {
+  static async getProductsByCategory(
+    categoryId: number,
+    page: number = 1,
+    limit: number = 1000,
+  ) {
     try {
       const client = this.ensureSupabaseAdmin();
       const offset = (page - 1) * limit;
-      
+
       const { data, error, count } = await client
-        .from('products')
-        .select('*', { count: 'exact' })
-        .contains('categories_ids', [categoryId.toString()])
-        .eq('status', 'publish')
-        .order('name', { ascending: true })
+        .from("products")
+        .select("*", { count: "exact" })
+        .contains("categories_ids", [categoryId.toString()])
+        .eq("status", "publish")
+        .order("name", { ascending: true })
         .range(offset, offset + limit - 1);
 
       if (error) {
@@ -270,10 +304,10 @@ export class ProductService {
         page,
         limit,
         totalPages: Math.ceil((count || 0) / limit),
-        categoryId
+        categoryId,
       };
     } catch (error) {
-      console.error('Error fetching products by category:', error);
+      console.error("Error fetching products by category:", error);
       throw error;
     }
   }
@@ -285,11 +319,11 @@ export class ProductService {
     try {
       const client = this.ensureSupabaseAdmin();
       const { data, error, count } = await client
-        .from('products')
-        .select('*', { count: 'exact' })
-        .eq('featured', true)
-        .eq('status', 'publish')
-        .order('created_at', { ascending: false })
+        .from("products")
+        .select("*", { count: "exact" })
+        .eq("featured", true)
+        .eq("status", "publish")
+        .order("created_at", { ascending: false })
         .limit(limit);
 
       if (error) {
@@ -301,10 +335,10 @@ export class ProductService {
         total: count || 0,
         page: 1,
         limit,
-        totalPages: 1
+        totalPages: 1,
       };
     } catch (error) {
-      console.error('Error fetching featured products:', error);
+      console.error("Error fetching featured products:", error);
       throw error;
     }
   }
@@ -312,24 +346,27 @@ export class ProductService {
   /**
    * Actualizar stock de producto
    */
-  static async updateProductStock(productId: number, quantity: number): Promise<Product> {
+  static async updateProductStock(
+    productId: number,
+    quantity: number,
+  ): Promise<Product> {
     try {
       const client = this.ensureSupabaseAdmin();
       const product = await this.getProductById(productId);
       if (!product) {
-        throw new Error('Producto no encontrado');
+        throw new Error("Producto no encontrado");
       }
 
       // Note: The current schema doesn't have stock_quantity field, using stock_status only
-      const stockStatus = quantity > 0 ? 'instock' : 'outofstock';
+      const stockStatus = quantity > 0 ? "instock" : "outofstock";
 
       const { data, error } = await client
-        .from('products')
-        .update({ 
+        .from("products")
+        .update({
           stock_status: stockStatus,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', productId)
+        .eq("id", productId)
         .select()
         .single();
 
@@ -339,7 +376,7 @@ export class ProductService {
 
       return data;
     } catch (error) {
-      console.error('Error updating product stock:', error);
+      console.error("Error updating product stock:", error);
       throw error;
     }
   }
@@ -352,33 +389,33 @@ export class ProductService {
       const client = this.ensureSupabaseAdmin();
       // Total de productos
       const { count: totalProducts, error: totalError } = await client
-        .from('products')
-        .select('*', { count: 'exact', head: true });
+        .from("products")
+        .select("*", { count: "exact", head: true });
 
       if (totalError) throw totalError;
 
       // Productos activos
       const { count: activeProducts, error: activeError } = await client
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'publish');
+        .from("products")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "publish");
 
       if (activeError) throw activeError;
 
       // Productos sin stock
       const { count: outOfStock, error: stockError } = await client
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-        .eq('stock_status', 'outofstock');
+        .from("products")
+        .select("*", { count: "exact", head: true })
+        .eq("stock_status", "outofstock");
 
       if (stockError) throw stockError;
 
       // Productos destacados
       const { count: featuredProducts, error: featuredError } = await client
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-        .eq('featured', true)
-        .eq('status', 'publish');
+        .from("products")
+        .select("*", { count: "exact", head: true })
+        .eq("featured", true)
+        .eq("status", "publish");
 
       if (featuredError) throw featuredError;
 
@@ -388,10 +425,15 @@ export class ProductService {
         outOfStock: outOfStock || 0,
         featuredProducts: featuredProducts || 0,
         inactiveProducts: (totalProducts || 0) - (activeProducts || 0),
-        stockAvailabilityRate: totalProducts ? (((totalProducts || 0) - (outOfStock || 0)) / totalProducts * 100).toFixed(1) : '0'
+        stockAvailabilityRate: totalProducts
+          ? (
+              (((totalProducts || 0) - (outOfStock || 0)) / totalProducts) *
+              100
+            ).toFixed(1)
+          : "0",
       };
     } catch (error) {
-      console.error('Error fetching product stats:', error);
+      console.error("Error fetching product stats:", error);
       throw error;
     }
   }
@@ -403,7 +445,7 @@ export class ProductService {
     try {
       const originalProduct = await this.getProductById(productId);
       if (!originalProduct) {
-        throw new Error('Producto no encontrado');
+        throw new Error("Producto no encontrado");
       }
 
       const duplicateData: ProductInsert = {
@@ -414,21 +456,21 @@ export class ProductService {
         sku: originalProduct.sku ? `${originalProduct.sku}-copy` : null,
         price: originalProduct.price,
         sale_price: originalProduct.sale_price,
-        stock_status: 'outofstock',
+        stock_status: "outofstock",
         dimensions_length: originalProduct.dimensions_length,
         dimensions_width: originalProduct.dimensions_width,
         dimensions_height: originalProduct.dimensions_height,
         categories_ids: originalProduct.categories_ids,
         images: originalProduct.images,
-        status: 'draft', // Inactivo por defecto
+        status: "draft", // Inactivo por defecto
         featured: false,
         brands: originalProduct.brands,
-        tags: originalProduct.tags
+        tags: originalProduct.tags,
       };
 
       return await this.createProduct(duplicateData);
     } catch (error) {
-      console.error('Error duplicating product:', error);
+      console.error("Error duplicating product:", error);
       throw error;
     }
   }
@@ -436,25 +478,28 @@ export class ProductService {
   /**
    * Actualizar stock de producto
    */
-  static async updateStock(productId: number, stockQuantity: number): Promise<Product> {
+  static async updateStock(
+    productId: number,
+    stockQuantity: number,
+  ): Promise<Product> {
     try {
       const client = this.ensureSupabaseAdmin();
       const updates: ProductUpdate = {
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
 
       // Actualizar estado basado en stock
       if (stockQuantity <= 0) {
-        updates.stock_status = 'outofstock';
+        updates.stock_status = "outofstock";
       } else {
-        updates.stock_status = 'instock';
+        updates.stock_status = "instock";
       }
 
       const { data, error } = await client
-        .from('products')
+        .from("products")
         .update(updates)
-        .eq('id', productId)
-        .select('*')
+        .eq("id", productId)
+        .select("*")
         .single();
 
       if (error) {
@@ -463,7 +508,7 @@ export class ProductService {
 
       return data;
     } catch (error) {
-      console.error('Error updating product stock:', error);
+      console.error("Error updating product stock:", error);
       throw error;
     }
   }
