@@ -1,11 +1,25 @@
 import type { KeyboardEvent, ReactNode } from "react";
-import { Archive, ArrowRightLeft, PackagePlus, Plus, Printer } from "lucide-react";
+import {
+  Archive,
+  ArrowRightLeft,
+  PackagePlus,
+  Plus,
+  Printer,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { InventoryUnitView } from "../../../services/serialisedAssetService";
-import { UNIT_CONDITION_LABELS_ES, UNIT_WEARS, WEAR_LABELS_ES } from "../../../types/inventory";
+import {
+  UNIT_CONDITION_LABELS_ES,
+  UNIT_WEARS,
+  WEAR_LABELS_ES,
+} from "../../../types/inventory";
 import { UnitStatusPill } from "../canon/UnitStatusPill";
 import { CANON_TONE_TEXT, unitStatusTone } from "../canon/unitStatus";
-import { EDITABLE_CONDITIONS, type EditableCondition, type UnitChanges } from "./unitEdits";
+import {
+  EDITABLE_CONDITIONS,
+  type EditableCondition,
+  type UnitChanges,
+} from "./unitEdits";
 import { indentedLabel, type LocationOption } from "./locationOptions";
 
 export interface UnitsTableProps {
@@ -21,7 +35,6 @@ export interface UnitsTableProps {
   onRequestRelocate: (unit: InventoryUnitView) => void;
   onArchive: (unit: InventoryUnitView) => void;
   onAddUnit: () => void;
-  onAddMany: () => void;
   labelsHref: string;
 }
 
@@ -34,7 +47,8 @@ const GHOST_BUTTON =
   "inline-flex items-center gap-1.5 rounded-[6px] border border-[#EAEAEA] bg-white px-3 py-2 text-[12px] text-[#666666] hover:text-[#111111] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#111111]";
 
 const ordinal = (index: number) => String(index + 1).padStart(3, "0");
-const unitsWord = (n: number) => (n === 1 ? "1 unidad registrada" : `${n} unidades registradas`);
+const unitsWord = (n: number) =>
+  n === 1 ? "1 unidad registrada" : `${n} unidades registradas`;
 
 /** Enter commits a text cell the same way leaving it does. */
 function blurOnEnter(event: KeyboardEvent<HTMLInputElement>) {
@@ -58,7 +72,8 @@ function SerialInput({ unit, isBusy, props }: CellProps) {
       disabled={isBusy}
       onKeyDown={blurOnEnter}
       onBlur={(event) => {
-        if (event.currentTarget.value !== unit.serial_number) props.onCommit(unit, { serial_number: event.currentTarget.value });
+        if (event.currentTarget.value !== unit.serial_number)
+          props.onCommit(unit, { serial_number: event.currentTarget.value });
       }}
     />
   );
@@ -72,7 +87,11 @@ function WearSelect({ unit, isBusy, props }: CellProps) {
       defaultValue={unit.wear}
       aria-label={`Condición de ${unit.asset_tag}`}
       disabled={isBusy}
-      onChange={(event) => props.onCommit(unit, { wear: event.currentTarget.value as InventoryUnitView["wear"] })}
+      onChange={(event) =>
+        props.onCommit(unit, {
+          wear: event.currentTarget.value as InventoryUnitView["wear"],
+        })
+      }
     >
       {UNIT_WEARS.map((wear) => (
         <option key={wear} value={wear}>
@@ -90,7 +109,10 @@ function StatusCell({ unit, isBusy, props }: CellProps) {
       <div className="flex flex-col items-start gap-1">
         <UnitStatusPill status="in_rental" />
         {unit.open_order_id !== null && (
-          <a href={`/orders/${unit.open_order_id}`} className="font-mono text-[11px] text-[#666666] underline-offset-2 hover:underline">
+          <a
+            href={`/orders/${unit.open_order_id}`}
+            className="font-mono text-[11px] text-[#666666] underline-offset-2 hover:underline"
+          >
             Pedido #{unit.open_order_id}
           </a>
         )}
@@ -100,11 +122,19 @@ function StatusCell({ unit, isBusy, props }: CellProps) {
   return (
     <select
       key={`cond-${unit.id}-${unit.row_version}-${props.formKey ?? 0}`}
-      className={cn(INPUT, "font-medium", CANON_TONE_TEXT[unitStatusTone(unit.status)])}
+      className={cn(
+        INPUT,
+        "font-medium",
+        CANON_TONE_TEXT[unitStatusTone(unit.status)],
+      )}
       defaultValue={unit.condition}
       aria-label={`Estado de ${unit.asset_tag}`}
       disabled={isBusy}
-      onChange={(event) => props.onCommit(unit, { condition: event.currentTarget.value as EditableCondition })}
+      onChange={(event) =>
+        props.onCommit(unit, {
+          condition: event.currentTarget.value as EditableCondition,
+        })
+      }
     >
       {EDITABLE_CONDITIONS.map((condition) => (
         <option key={condition} value={condition}>
@@ -117,7 +147,9 @@ function StatusCell({ unit, isBusy, props }: CellProps) {
 
 /** Picking a location relocates the unit (audited move); legacy text shows until the first move. */
 function LocationSelect({ unit, isBusy, props }: CellProps) {
-  const known = unit.location_id !== null && props.locationOptions.some((option) => option.id === unit.location_id);
+  const known =
+    unit.location_id !== null &&
+    props.locationOptions.some((option) => option.id === unit.location_id);
   return (
     <select
       key={`loc-${unit.id}-${unit.row_version}-${props.formKey ?? 0}`}
@@ -131,11 +163,17 @@ function LocationSelect({ unit, isBusy, props }: CellProps) {
       }}
     >
       {unit.location_id === null && (
-        <option value="">{unit.location.trim() ? `${unit.location} (texto anterior)` : "Sin ubicación"}</option>
+        <option value="">
+          {unit.location.trim()
+            ? `${unit.location} (texto anterior)`
+            : "Sin ubicación"}
+        </option>
       )}
       {unit.location_id !== null && !known && (
         <option value={unit.location_id}>
-          {unit.location_detail ? `${unit.location_detail.code} · ${unit.location_detail.name}` : unit.location}
+          {unit.location_detail
+            ? `${unit.location_detail.code} · ${unit.location_detail.name}`
+            : unit.location}
         </option>
       )}
       {props.locationOptions.map((option) => (
@@ -158,7 +196,8 @@ function NotesInput({ unit, isBusy, props }: CellProps) {
       disabled={isBusy}
       onKeyDown={blurOnEnter}
       onBlur={(event) => {
-        if (event.currentTarget.value !== (unit.notes ?? "")) props.onCommit(unit, { notes: event.currentTarget.value });
+        if (event.currentTarget.value !== (unit.notes ?? ""))
+          props.onCommit(unit, { notes: event.currentTarget.value });
       }}
     />
   );
@@ -181,7 +220,11 @@ function RowActions({ unit, isBusy, props }: CellProps) {
         type="button"
         className={ICON_BUTTON}
         aria-label={`Archivar ${unit.asset_tag}`}
-        title={unit.status === "in_rental" ? "No puedes archivar una unidad en arriendo" : "Archivar"}
+        title={
+          unit.status === "in_rental"
+            ? "No puedes archivar una unidad en arriendo"
+            : "Archivar"
+        }
         disabled={isBusy || unit.status === "in_rental"}
         onClick={() => props.onArchive(unit)}
       >
@@ -191,7 +234,13 @@ function RowActions({ unit, isBusy, props }: CellProps) {
   );
 }
 
-function FooterActions({ props, children }: { props: UnitsTableProps; children?: ReactNode }) {
+function FooterActions({
+  props,
+  children,
+}: {
+  props: UnitsTableProps;
+  children?: ReactNode;
+}) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       {children}
@@ -199,19 +248,16 @@ function FooterActions({ props, children }: { props: UnitsTableProps; children?:
         <Printer aria-hidden="true" className="h-3.5 w-3.5" />
         Imprimir etiquetas
       </a>
-      <button type="button" className={GHOST_BUTTON} onClick={props.onAddMany}>
-        <PackagePlus aria-hidden="true" className="h-3.5 w-3.5" />
-        Agregar varias
-      </button>
       <button type="button" className={GHOST_BUTTON} onClick={props.onAddUnit}>
         <Plus aria-hidden="true" className="h-3.5 w-3.5" />
-        Agregar unidad
+        Agregar unidades
       </button>
     </div>
   );
 }
 
-const HEAD_CELL = "px-3.5 py-2.5 text-left font-mono text-[10px] font-normal uppercase tracking-[0.06em] text-[#707070]";
+const HEAD_CELL =
+  "px-3.5 py-2.5 text-left font-mono text-[10px] font-normal uppercase tracking-[0.06em] text-[#707070]";
 const BODY_CELL = "px-3.5 py-[9px] align-middle";
 
 /** Canon RC2.1.3 ficha › Inventario: `.unit-table` on desktop, `.unit-cards` on mobile. */
@@ -221,22 +267,21 @@ export function UnitsTable(props: UnitsTableProps) {
   if (units.length === 0) {
     return (
       <div className="rounded-[8px] border border-[#EAEAEA] bg-white px-5 py-12 text-center">
-        <p className="mb-1 text-[13px] font-medium text-[#111111]">Este equipo aún no tiene unidades registradas</p>
+        <p className="mb-1 text-[13px] font-medium text-[#111111]">
+          Este equipo aún no tiene unidades registradas
+        </p>
         <p className="mb-5 text-[12px] text-[#666666]">
-          Agrega la primera unidad para controlar su número de serie, estado y ubicación en bodega.
+          Agrega la primera unidad para controlar su número de serie, estado y
+          ubicación en bodega.
         </p>
         <div className="flex flex-wrap justify-center gap-2">
-          <button type="button" className={GHOST_BUTTON} onClick={props.onAddMany}>
-            <PackagePlus aria-hidden="true" className="h-3.5 w-3.5" />
-            Agregar varias
-          </button>
           <button
             type="button"
             className="inline-flex items-center gap-1.5 rounded-[6px] bg-[#111111] px-4 py-2 text-[12.5px] font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#111111]"
             onClick={props.onAddUnit}
           >
             <Plus aria-hidden="true" className="h-3.5 w-3.5" />
-            Agregar unidad
+            Agregar unidades
           </button>
         </div>
       </div>
@@ -251,13 +296,27 @@ export function UnitsTable(props: UnitsTableProps) {
           <table className="w-full min-w-[920px] border-collapse text-[12.5px]">
             <thead className="border-b border-[#EAEAEA] bg-[#F7F7F6]">
               <tr>
-                <th scope="col" className={cn(HEAD_CELL, "w-12")}>#</th>
-                <th scope="col" className={HEAD_CELL}>Código</th>
-                <th scope="col" className={HEAD_CELL}>N° de serie</th>
-                <th scope="col" className={HEAD_CELL}>Condición</th>
-                <th scope="col" className={HEAD_CELL}>Estado</th>
-                <th scope="col" className={HEAD_CELL}>Ubicación</th>
-                <th scope="col" className={HEAD_CELL}>Observaciones</th>
+                <th scope="col" className={cn(HEAD_CELL, "w-12")}>
+                  #
+                </th>
+                <th scope="col" className={HEAD_CELL}>
+                  Código
+                </th>
+                <th scope="col" className={HEAD_CELL}>
+                  N° de serie
+                </th>
+                <th scope="col" className={HEAD_CELL}>
+                  Condición
+                </th>
+                <th scope="col" className={HEAD_CELL}>
+                  Estado
+                </th>
+                <th scope="col" className={HEAD_CELL}>
+                  Ubicación
+                </th>
+                <th scope="col" className={HEAD_CELL}>
+                  Observaciones
+                </th>
                 <th scope="col" className={HEAD_CELL}>
                   <span className="sr-only">Acciones</span>
                 </th>
@@ -268,9 +327,25 @@ export function UnitsTable(props: UnitsTableProps) {
                 const isBusy = props.busyIds.has(unit.id);
                 const cell = { unit, isBusy, props };
                 return (
-                  <tr key={unit.id} aria-busy={isBusy || undefined} className={cn("border-b border-[#F0F0EF] last:border-b-0", isBusy && "opacity-60")}>
-                    <td className={cn(BODY_CELL, "text-[12px] text-[#707070]")}>{ordinal(index)}</td>
-                    <td className={cn(BODY_CELL, "whitespace-nowrap font-mono text-[12px] font-medium text-[#111111]")}>{unit.asset_tag}</td>
+                  <tr
+                    key={unit.id}
+                    aria-busy={isBusy || undefined}
+                    className={cn(
+                      "border-b border-[#F0F0EF] last:border-b-0",
+                      isBusy && "opacity-60",
+                    )}
+                  >
+                    <td className={cn(BODY_CELL, "text-[12px] text-[#707070]")}>
+                      {ordinal(index)}
+                    </td>
+                    <td
+                      className={cn(
+                        BODY_CELL,
+                        "whitespace-nowrap font-mono text-[12px] font-medium text-[#111111]",
+                      )}
+                    >
+                      {unit.asset_tag}
+                    </td>
                     <td className={cn(BODY_CELL, "min-w-[150px]")}>
                       <SerialInput {...cell} />
                     </td>
@@ -296,7 +371,9 @@ export function UnitsTable(props: UnitsTableProps) {
           </table>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#EAEAEA] bg-[#F7F7F6] px-4 py-3">
-          <span className="text-[12px] text-[#666666]">{unitsWord(units.length)}</span>
+          <span className="text-[12px] text-[#666666]">
+            {unitsWord(units.length)}
+          </span>
           <FooterActions props={props} />
         </div>
       </div>
@@ -307,11 +384,22 @@ export function UnitsTable(props: UnitsTableProps) {
           const isBusy = props.busyIds.has(unit.id);
           const cell = { unit, isBusy, props };
           return (
-            <div key={unit.id} aria-busy={isBusy || undefined} className={cn("rounded-[8px] border border-[#EAEAEA] bg-white px-3.5 py-3", isBusy && "opacity-60")}>
+            <div
+              key={unit.id}
+              aria-busy={isBusy || undefined}
+              className={cn(
+                "rounded-[8px] border border-[#EAEAEA] bg-white px-3.5 py-3",
+                isBusy && "opacity-60",
+              )}
+            >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <span className="font-mono text-[12px] font-semibold text-[#111111]">Unidad {ordinal(index)}</span>
-                  <span className="ml-2 font-mono text-[11px] text-[#666666]">{unit.asset_tag}</span>
+                  <span className="font-mono text-[12px] font-semibold text-[#111111]">
+                    Unidad {ordinal(index)}
+                  </span>
+                  <span className="ml-2 font-mono text-[11px] text-[#666666]">
+                    {unit.asset_tag}
+                  </span>
                 </div>
                 <RowActions {...cell} />
               </div>
@@ -328,7 +416,9 @@ export function UnitsTable(props: UnitsTableProps) {
           );
         })}
         <div className="flex flex-col gap-2 pt-1">
-          <span className="text-[12px] text-[#666666]">{unitsWord(units.length)}</span>
+          <span className="text-[12px] text-[#666666]">
+            {unitsWord(units.length)}
+          </span>
           <FooterActions props={props} />
         </div>
       </div>
