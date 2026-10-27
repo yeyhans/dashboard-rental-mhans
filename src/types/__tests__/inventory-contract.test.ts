@@ -103,7 +103,8 @@ function sharedBlock(source: string): string {
   );
   if (begin < 0 || end < 0)
     throw new Error("shared contract markers not found");
-  return lines.slice(begin - 1, end + 2).join("\n");
+  // Only the contract body is compared: the BEGIN/END comment lines name the copy and may differ.
+  return lines.slice(begin + 1, end).join("\n");
 }
 
 /** The SQL with `--` line comments stripped, so assertions read code and not prose. */
