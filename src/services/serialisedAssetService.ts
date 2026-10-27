@@ -16,6 +16,7 @@ import {
   planBulkUnits,
   sanitizeUnitPatch,
   serialKey,
+  type UnitPatch,
 } from '../lib/inventoryUnits';
 import { LOCATION_ERRORS, describeLocation } from '../lib/warehouseLocations';
 import { quantityDiscrepancy, totalValueClp } from '../lib/productValuation';
@@ -57,7 +58,7 @@ const ASSET_COLUMNS =
 
 /** Every `serialised_assets` column the 0021 unit screens read (InventoryUnit). */
 const UNIT_COLUMNS =
-  'id, product_id, asset_tag, serial_number, condition, wear, location, location_id, kit_code, notes, row_version, created_at, updated_at';
+  'id, product_id, asset_tag, serial_number, condition, wear, location, location_id, kit_code, notes, acquisition_cost, purchase_date, market_price, row_version, created_at, updated_at';
 
 /** Postgres unique-violation error code. */
 const UNIQUE_VIOLATION = '23505';
@@ -89,6 +90,64 @@ const ASSET_TAG_UNIQUE_INDEX = 'serialised_assets_asset_tag_key';
 
 /** Name of the case-insensitive UNIQUE index on `serial_number` (0004). */
 const SERIAL_UNIQUE_INDEX = 'serialised_assets_serial_number_lower_key';
+
+export const VALUATION_ERRORS = {
+  ACQUISITION_COST: 'El costo de adquisición debe ser un número no negativo',
+  MARKET_PRICE: 'El precio de mercado debe ser un número no negativo',
+  PURCHASE_DATE: 'La fecha de compra debe tener formato AAAA-MM-DD y ser una fecha real',
+  PURCHASE_DATE_FUTURE: 'La fecha de compra no puede ser futura',
+} as const;
+
+/** The 0023 valuation columns of a unit; `null` clears the value. */
+export interface ValuationPatch {
+  acquisition_cost?: number | null;
+  purchase_date?: string | null;
+  market_price?: number | null;
+}
+
+/** Input of `createUnit`; valuation and serial are optional. */
+export interface UnitCreateInput extends BulkUnitDefaults, ValuationPatch {
+  product_id: number;
+  serial_number?: string;
+}
+
+function sanitizeAmount(value: unknown, message: string): number | null {
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new InventoryError(message, 400);
+  }
+  return value;
+}
+
+function sanitizePurchaseDate(value: unknown): string | null {
+  if (value === null) return null;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new InventoryError(VALUATION_ERRORS.PURCHASE_DATE, 400);
+  }
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new InventoryError(VALUATION_ERRORS.PURCHASE_DATE, 400);
+  }
+  // Compared as ISO strings against today in UTC (Chile is behind UTC, so local "today" is never ahead).
+  if (value > new Date().toISOString().slice(0, 10)) {
+    throw new InventoryError(VALUATION_ERRORS.PURCHASE_DATE_FUTURE, 400);
+  }
+  return value;
+}
+
+/** Whitelists and validates the 0023 valuation fields of an edit. Throws a 400 `InventoryError`. */
+export function sanitizeValuationPatch(raw: unknown): ValuationPatch {
+  const input = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const patch: ValuationPatch = {};
+  if ('acquisition_cost' in input) {
+    patch.acquisition_cost = sanitizeAmount(input.acquisition_cost, VALUATION_ERRORS.ACQUISITION_COST);
+  }
+  if ('purchase_date' in input) patch.purchase_date = sanitizePurchaseDate(input.purchase_date);
+  if ('market_price' in input) {
+    patch.market_price = sanitizeAmount(input.market_price, VALUATION_ERRORS.MARKET_PRICE);
+  }
+  return patch;
+}
 
 export class SerialisedAssetService {
   private static ensureSupabaseAdmin() {
@@ -447,7 +506,7 @@ export class SerialisedAssetService {
   static async updateAsset(id: number, rawPatch: unknown, expectedRowVersion: number): Promise<InventoryUnit> {
     if (!Number.isInteger(id) || id <= 0) throw new InventoryError(UNIT_ERRORS.INVALID_ID, 400);
     if (!isValidRowVersion(expectedRowVersion)) throw new InventoryError(UNIT_ERRORS.ROW_VERSION_REQUIRED, 400);
-    const patch = sanitizeUnitPatch(rawPatch);
+    const patch = this.sanitizeEditPatch(rawPatch);
 
     const { data, error } = await this.untypedClient()
       .from('serialised_assets')
@@ -469,6 +528,58 @@ export class SerialisedAssetService {
 
     console.log('[SerialisedAssetService] Unidad actualizada:', { id, fields: Object.keys(patch) });
     return data as InventoryUnit;
+  }
+
+  /**
+   * The edit whitelist: the identity/state fields of `sanitizeUnitPatch` plus the valuation fields
+   * of 0023. A valuation-only patch is valid; an empty one is still `EMPTY_PATCH`.
+   */
+  private static sanitizeEditPatch(rawPatch: unknown): UnitPatch & ValuationPatch {
+    const valuation = sanitizeValuationPatch(rawPatch);
+    let base: UnitPatch = {};
+    try {
+      base = sanitizeUnitPatch(rawPatch);
+    } catch (error) {
+      const onlyValuation =
+        Object.keys(valuation).length > 0 &&
+        error instanceof InventoryError &&
+        error.message === UNIT_ERRORS.EMPTY_PATCH;
+      if (!onlyValuation) throw error;
+    }
+    return { ...base, ...valuation };
+  }
+
+  /**
+   * Registers ONE unit and returns it with its definitive `row_version`. The tag is assigned by
+   * `bulkCreateAssets` (count = 1); a given serial or valuation is applied right after under the
+   * row_version just issued. All input is validated before the first write, so the only failure
+   * left in the second step is a duplicate serial (409), which leaves the unit with its
+   * auto-generated serial.
+   */
+  static async createUnit(input: UnitCreateInput): Promise<InventoryUnit> {
+    const extra = this.sanitizeCreateExtras(input);
+    const created = await this.bulkCreateAssets(input.product_id, 1, {
+      condition: input.condition,
+      wear: input.wear,
+      location_id: input.location_id,
+      location: input.location,
+      kit_code: input.kit_code,
+      notes: input.notes,
+    });
+    const unit = created[0];
+    if (!unit) throw new Error('No se pudo registrar la unidad');
+    if (Object.keys(extra).length === 0) return unit;
+    return this.updateAsset(unit.id, extra, unit.row_version);
+  }
+
+  private static sanitizeCreateExtras(input: UnitCreateInput): UnitPatch & ValuationPatch {
+    const extra: Record<string, unknown> = {};
+    if (input.serial_number !== undefined) extra.serial_number = input.serial_number;
+    for (const key of ['acquisition_cost', 'purchase_date', 'market_price'] as const) {
+      if (input[key] !== undefined) extra[key] = input[key];
+    }
+    if (Object.keys(extra).length === 0) return {};
+    return this.sanitizeEditPatch(extra);
   }
 
   /**

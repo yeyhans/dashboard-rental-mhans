@@ -134,7 +134,7 @@ export interface IntakeProduct {
 }
 
 // ================================================================================================
-// BEGIN SHARED INVENTORY CONTRACT (migration 0021) — copied verbatim by mariohans-3d-ops.
+// BEGIN SHARED INVENTORY CONTRACT (migrations 0021 and 0023) — copied verbatim by mariohans-3d-ops.
 // Self-contained on purpose: no imports. Stored values are English tokens mirroring the CHECK
 // constraints in `supabase/migrations/0021_warehouse_units_locations.sql` (asserted by its test);
 // Spanish labels are UI-only and follow canon RC2.1.3 (Catálogo de Equipos, Check-In).
@@ -301,7 +301,7 @@ export interface ProductUnitCounts {
   retired: number;
 }
 
-/** A `serialised_assets` row with the 0021 columns. */
+/** A `serialised_assets` row with the 0021 and 0023 columns. */
 export interface InventoryUnit {
   id: number;
   product_id: number;
@@ -314,6 +314,12 @@ export interface InventoryUnit {
   location_id: string | null;
   kit_code: string | null;
   notes: string | null;
+  /** Costo de adquisición de esta unidad, en CLP. */
+  acquisition_cost: number | null;
+  /** Fecha de compra de la unidad (ISO 8601). */
+  purchase_date: string | null;
+  /** Precio de mercado de la unidad, en CLP. Semilla desde products.market_value_clp. */
+  market_price: number | null;
   row_version: number;
   created_at: string;
   updated_at: string;
