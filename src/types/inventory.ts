@@ -1,4 +1,4 @@
-import type { QuantityDiscrepancy } from '../lib/productValuation';
+import type { QuantityDiscrepancy } from "../lib/productValuation";
 
 /**
  * Serialised inventory (M6). Types live here rather than in `src/types/database.ts` because that
@@ -14,21 +14,21 @@ import type { QuantityDiscrepancy } from '../lib/productValuation';
  * belongs to the availability capability, which ships separately.
  */
 export const ASSET_CONDITIONS = [
-  'operational',
-  'maintenance',
-  'cleaning',
-  'damaged',
-  'retired',
+  "operational",
+  "maintenance",
+  "cleaning",
+  "damaged",
+  "retired",
 ] as const;
 
 export type AssetCondition = (typeof ASSET_CONDITIONS)[number];
 
 export const ASSET_CONDITION_LABELS: Record<AssetCondition, string> = {
-  operational: 'Operativo',
-  maintenance: 'En mantención',
-  cleaning: 'En limpieza',
-  damaged: 'Dañado',
-  retired: 'Fuera de servicio',
+  operational: "Operativo",
+  maintenance: "En mantención",
+  cleaning: "En limpieza",
+  damaged: "Dañado",
+  retired: "Fuera de servicio",
 };
 
 export interface SerialisedAsset {
@@ -61,17 +61,24 @@ export interface SerialisedAssetInput {
 }
 
 /** The five fields the migration-volume audit found missing across the catalogue. */
-export const AUDITED_PRODUCT_FIELDS = ['sku', 'brands', 'type', 'status', 'stock_status'] as const;
+export const AUDITED_PRODUCT_FIELDS = [
+  "sku",
+  "brands",
+  "type",
+  "status",
+  "stock_status",
+] as const;
 
 export type AuditedProductField = (typeof AUDITED_PRODUCT_FIELDS)[number];
 
-export const AUDITED_PRODUCT_FIELD_LABELS: Record<AuditedProductField, string> = {
-  sku: 'SKU',
-  brands: 'Marca',
-  type: 'Tipo',
-  status: 'Estado',
-  stock_status: 'Stock',
-};
+export const AUDITED_PRODUCT_FIELD_LABELS: Record<AuditedProductField, string> =
+  {
+    sku: "SKU",
+    brands: "Marca",
+    type: "Tipo",
+    status: "Estado",
+    stock_status: "Stock",
+  };
 
 /**
  * One row of the data-quality list. A product lands here for either of two findings: an audited
@@ -145,63 +152,69 @@ export interface IntakeProduct {
  * an open checkout is "En arriendo" whatever its condition, derived from `asset_current_state`.
  */
 export const UNIT_CONDITIONS = [
-  'operational',
-  'maintenance',
-  'cleaning',
-  'damaged',
-  'blocked',
-  'retired',
+  "operational",
+  "maintenance",
+  "cleaning",
+  "damaged",
+  "blocked",
+  "retired",
 ] as const;
 
 export type UnitCondition = (typeof UNIT_CONDITIONS)[number];
 
 export const UNIT_CONDITION_LABELS_ES: Record<UnitCondition, string> = {
-  operational: 'Disponible',
-  maintenance: 'Mantención',
-  cleaning: 'Limpieza',
-  damaged: 'Dañado',
-  blocked: 'Bloqueado',
-  retired: 'Archivado',
+  operational: "Disponible",
+  maintenance: "Mantención",
+  cleaning: "Limpieza",
+  damaged: "Dañado",
+  blocked: "Bloqueado",
+  retired: "Archivado",
 };
 
 /** Label for the derived state (open checkout). Never stored. */
-export const UNIT_IN_RENTAL_LABEL_ES = 'En arriendo';
+export const UNIT_IN_RENTAL_LABEL_ES = "En arriendo";
 
 /** Display status of a unit: its condition, or `in_rental` when it has an open checkout. */
-export type UnitDisplayStatus = UnitCondition | 'in_rental';
+export type UnitDisplayStatus = UnitCondition | "in_rental";
 
-export const UNIT_WEARS = ['new', 'used'] as const;
+export const UNIT_WEARS = ["new", "used"] as const;
 
 export type UnitWear = (typeof UNIT_WEARS)[number];
 
 export const WEAR_LABELS_ES: Record<UnitWear, string> = {
-  new: 'Nuevo',
-  used: 'Usado',
+  new: "Nuevo",
+  used: "Usado",
 };
 
-export const LOCATION_KINDS = ['shelf', 'level', 'box', 'floor', 'rug'] as const;
+export const LOCATION_KINDS = [
+  "shelf",
+  "level",
+  "box",
+  "floor",
+  "rug",
+] as const;
 
 export type LocationKind = (typeof LOCATION_KINDS)[number];
 
 export const LOCATION_KIND_LABELS_ES: Record<LocationKind, string> = {
-  shelf: 'Estante',
-  level: 'Nivel',
-  box: 'Caja',
-  floor: 'Piso',
-  rug: 'Alfombra',
+  shelf: "Estante",
+  level: "Nivel",
+  box: "Caja",
+  floor: "Piso",
+  rug: "Alfombra",
 };
 
 /** Wall of the 5x5 m room; `C` is the center (the rug). */
-export const WALLS = ['N', 'E', 'S', 'W', 'C'] as const;
+export const WALLS = ["N", "E", "S", "W", "C"] as const;
 
 export type Wall = (typeof WALLS)[number];
 
 export const WALL_LABELS_ES: Record<Wall, string> = {
-  N: 'Muro norte',
-  E: 'Muro este',
-  S: 'Muro sur',
-  W: 'Muro oeste',
-  C: 'Centro',
+  N: "Muro norte",
+  E: "Muro este",
+  S: "Muro sur",
+  W: "Muro oeste",
+  C: "Centro",
 };
 
 /** Same pattern as the `warehouse_locations.code` CHECK: N-E2, N-E2-L3, S-CJ4, C-ALF. */
@@ -241,7 +254,7 @@ export interface WarehouseLocation {
   updated_by: string | null;
 }
 
-export const RELOCATION_SOURCES = ['dashboard', 'ops'] as const;
+export const RELOCATION_SOURCES = ["dashboard", "ops", "mcp"] as const;
 
 export type RelocationSource = (typeof RELOCATION_SOURCES)[number];
 
@@ -262,28 +275,28 @@ export interface AssetRelocation {
 }
 
 /** SQLSTATE raised by the relocation trigger on a stale `from_location_id`. */
-export const RELOCATION_CONFLICT_SQLSTATE = 'PT409';
+export const RELOCATION_CONFLICT_SQLSTATE = "PT409";
 
 export const INCIDENT_TYPES = [
-  'physical_damage',
-  'missing_part',
-  'moisture',
-  'electrical_failure',
-  'cosmetic_wear',
-  'not_returned',
-  'other',
+  "physical_damage",
+  "missing_part",
+  "moisture",
+  "electrical_failure",
+  "cosmetic_wear",
+  "not_returned",
+  "other",
 ] as const;
 
 export type IncidentType = (typeof INCIDENT_TYPES)[number];
 
 export const INCIDENT_LABELS_ES: Record<IncidentType, string> = {
-  physical_damage: 'Daño físico visible',
-  missing_part: 'Pieza o accesorio faltante',
-  moisture: 'Daño por humedad',
-  electrical_failure: 'Falla eléctrica',
-  cosmetic_wear: 'Rayón o desgaste estético',
-  not_returned: 'No devuelto',
-  other: 'Otro',
+  physical_damage: "Daño físico visible",
+  missing_part: "Pieza o accesorio faltante",
+  moisture: "Daño por humedad",
+  electrical_failure: "Falla eléctrica",
+  cosmetic_wear: "Rayón o desgaste estético",
+  not_returned: "No devuelto",
+  other: "Otro",
 };
 
 /**
