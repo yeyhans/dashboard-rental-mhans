@@ -3,6 +3,7 @@ import "../styles/globals.css";
 import { getServerAdmin } from "../lib/supabase";
 import {
   ArrowLeftRight,
+  MapPin,
   Bell,
   Boxes,
   ChevronLeft,
@@ -82,6 +83,7 @@ const NAV_SUBLINKS: Record<string, ReadonlyArray<{ label: string; href: string; 
     { label: 'Categorias', href: '/products/categories', icon: Grid3X3 },
     { label: 'Inventario', href: '/inventory', icon: Boxes },
     { label: 'Movimientos', href: '/inventory/movements', icon: ArrowLeftRight },
+    { label: 'Ubicaciones', href: '/inventory/ubicaciones', icon: MapPin },
   ],
   '/finance': [
     { label: 'Pagos', href: '/payments-table', icon: CreditCard },
