@@ -49,6 +49,9 @@ const EXEMPT: Record<string, Partial<Record<string, Exemption>>> = {
   "/api/external/create-user.ts": { POST: "apiKey" },
   "/api/external/generate-budget-pdf.ts": { POST: "apiKey" },
   "/api/external/generate-contract-pdf.ts": { POST: "apiKey" },
+  "/api/external/inventory/units/[id].ts": { PUT: "apiKey" },
+  "/api/external/inventory/units/index.ts": { POST: "apiKey" },
+  "/api/external/products/[id]/description.ts": { PUT: "apiKey" },
   "/api/external/site-settings.ts": { GET: "apiKey" },
   "/api/external/update-user.ts": { POST: "apiKey" },
 
@@ -80,10 +83,22 @@ const EXEMPT: Record<string, Partial<Record<string, Exemption>>> = {
   "/api/coupons/debug.ts": { GET: "devOnly" },
 };
 
+/**
+ * The MCP key check must run before the body is read: a route that touches the request first and
+ * checks the key later could still do work for an unauthenticated caller.
+ */
+function mcpKeyCheckedBeforeBody(source: string): boolean {
+  const guard = source.indexOf("validateMcpApiKey(");
+  if (guard < 0) return false;
+  const body = source.search(/request\.(json|text|formData|arrayBuffer)\(/);
+  return body < 0 || guard < body;
+}
+
 const EVIDENCE: Record<Exemption, (source: string) => boolean> = {
   apiKey: (s) =>
     /isFrontendApiKeyOrAdmin\(|validateFrontendApiKey\(/.test(s) ||
-    (/HERMES_API_SECRET/.test(s) && /secretsMatch\(/.test(s)),
+    (/HERMES_API_SECRET/.test(s) && /secretsMatch\(/.test(s)) ||
+    mcpKeyCheckedBeforeBody(s),
   cron: (s) => /CRON_SECRET/.test(s) && /constantTimeEqual\(/.test(s),
   authFlow: () => true,
   public: (s) => !/user_profiles|billing_|customer_/.test(s),

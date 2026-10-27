@@ -26,6 +26,22 @@ export function validateFrontendApiKey(request: Request): boolean {
   return constantTimeEqual(providedSecret, expectedSecret);
 }
 
+/**
+ * Service-to-service auth for the MCP server (`/api/external/products|inventory/*`).
+ * Dedicated `MCP_API_SECRET`: it never falls back to FRONTEND_API_SECRET (shared with the public
+ * frontend) nor HERMES_API_SECRET. Unset secret means nobody passes.
+ */
+export function validateMcpApiKey(request: Request): boolean {
+  const expectedSecret = import.meta.env.MCP_API_SECRET;
+  const providedSecret = request.headers.get("X-API-Key");
+
+  if (!expectedSecret || !providedSecret) {
+    return false;
+  }
+
+  return constantTimeEqual(providedSecret, expectedSecret);
+}
+
 export function unauthorizedResponse(headers: HeadersInit = {}): Response {
   return new Response(
     JSON.stringify({ success: false, error: "No autorizado" }),

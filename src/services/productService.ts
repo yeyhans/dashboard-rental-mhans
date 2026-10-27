@@ -173,6 +173,44 @@ export class ProductService {
   }
 
   /**
+   * Updates only the descriptions of a product (MCP write surface). `short_description` goes
+   * through `normalizeShortDescription` (plain text); `description` is trimmed. Returns null when
+   * the product does not exist.
+   */
+  static async updateDescription(
+    productId: number,
+    fields: { short_description?: string | null; description?: string | null },
+  ): Promise<Product | null> {
+    const client = this.ensureSupabaseAdmin();
+    const update: ProductUpdate = {};
+    if (fields.short_description !== undefined) {
+      update.short_description = fields.short_description;
+    }
+    if (fields.description !== undefined) {
+      update.description =
+        fields.description === null ? null : fields.description.trim();
+    }
+
+    const { data, error } = await client
+      .from("products")
+      .update(this.normalizeShortDescription(update))
+      .eq("id", productId)
+      .select()
+      .single();
+
+    if (error) {
+      if ((error as { code?: string }).code === "PGRST116") return null;
+      console.error("[ProductService] Error al actualizar la descripción:", {
+        productId,
+        error,
+      });
+      throw error;
+    }
+
+    return data;
+  }
+
+  /**
    * Eliminar producto
    */
   static async deleteProduct(productId: number): Promise<boolean> {
