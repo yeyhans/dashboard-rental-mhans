@@ -176,6 +176,18 @@ function sanitizePurchaseDate(value: unknown): string | null {
   return value;
 }
 
+/**
+ * The caller's own serial for a single unit, trimmed; `null` when none was given. Only one unit can
+ * carry it, so a multi-unit request with a serial is a programming error and fails loudly.
+ */
+function sanitizeSerialOverride(value: unknown, count: number): string | null {
+  if (value === undefined) return null;
+  if (count !== 1) throw new Error("serial_number solo aplica a una unidad");
+  const serial = typeof value === "string" ? value.trim() : "";
+  if (!serial) throw new InventoryError(SERIAL_ERROR, 400);
+  return serial;
+}
+
 /** The valuation fields actually present in `source`; absent keys stay absent so the DB default applies. */
 function pickValuation(source: ValuationPatch): ValuationPatch {
   const picked: ValuationPatch = {};
@@ -830,6 +842,10 @@ export class SerialisedAssetService {
     // checked, so an absent field keeps the database default.
     planBulkUnits({ highestTag: null, count, serialPrefix: prefix });
     const valuation = sanitizeValuationPatch(pickValuation(defaults));
+    const serialOverride = sanitizeSerialOverride(
+      defaults.serial_number,
+      count,
+    );
 
     const client = this.untypedClient();
 
@@ -892,9 +908,31 @@ export class SerialisedAssetService {
         serialKey(row.serial_number),
       ),
     );
-    const collisions = plan
-      .filter((unit) => taken.has(serialKey(unit.serial_number)))
-      .map((unit) => unit.serial_number);
+    // A caller's own serial is stored instead of the generated one, so only that one is checked.
+    const collisions = serialOverride
+      ? [serialOverride].filter((serial) => taken.has(serialKey(serial)))
+      : plan
+          .filter((unit) => taken.has(serialKey(unit.serial_number)))
+          .map((unit) => unit.serial_number);
+    if (serialOverride && !collisions.length) {
+      const { data: sameSerial, error: overrideError } = await client
+        .from("serialised_assets")
+        .select("serial_number")
+        .ilike("serial_number", serialOverride.replace(/([\\%_])/g, "\\$1"));
+      if (overrideError) {
+        console.error(
+          "[SerialisedAssetService] Error al verificar el número de serie:",
+          { productId, error: overrideError },
+        );
+        throw overrideError;
+      }
+      const sameKey = (
+        (sameSerial as Array<{ serial_number: string }>) || []
+      ).some(
+        (row) => serialKey(row.serial_number) === serialKey(serialOverride),
+      );
+      if (sameKey) collisions.push(serialOverride);
+    }
     if (collisions.length > 0) {
       throw new InventoryError(
         `${UNIT_ERRORS.BULK_SERIAL_TAKEN}: ${collisions.join(", ")}`,
@@ -910,15 +948,12 @@ export class SerialisedAssetService {
       typeof defaults.notes === "string" && defaults.notes.trim()
         ? defaults.notes.trim()
         : null;
-    if (defaults.serial_number !== undefined && count !== 1) {
-      throw new Error("serial_number solo aplica a una unidad");
-    }
     // A unit's own serial and valuation travel in the same INSERT as its row, so a failure can never
     // leave a half-registered unit behind. A duplicate serial trips the case-insensitive UNIQUE index.
     const rows = plan.map((unit) => ({
       product_id: productId,
       asset_tag: unit.asset_tag,
-      serial_number: defaults.serial_number ?? unit.serial_number,
+      serial_number: serialOverride ?? unit.serial_number,
       condition,
       wear,
       location: locationLabel,

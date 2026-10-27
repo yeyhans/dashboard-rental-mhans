@@ -59,6 +59,7 @@ describe("SerialisedAssetService.createUnit", () => {
       "serialised_assets",
       { data: null, error: null },
       { data: [], error: null },
+      { data: [], error: null },
       { data: [{ ...unitRow, row_version: 1 }], error: null },
     );
 
@@ -70,7 +71,10 @@ describe("SerialisedAssetService.createUnit", () => {
     });
 
     const builders = db.buildersFor("serialised_assets");
-    const [insert] = callArgs(builders[2], "insert");
+    const insertBuilder = builders.find(
+      (b) => callArgs(b, "insert") !== undefined,
+    );
+    const [insert] = callArgs(insertBuilder!, "insert");
     expect(insert[0]).toMatchObject({
       serial_number: "SN-REAL",
       acquisition_cost: 900000,
@@ -170,6 +174,42 @@ describe("SerialisedAssetService review hardening", () => {
       SERIAL_ERROR,
     );
     expect(db.from).not.toHaveBeenCalled();
+  });
+
+  it("validates a caller serial on the bulk path before any write", async () => {
+    await expectInventoryError(
+      SerialisedAssetService.bulkCreateAssets(42, 1, {
+        location: "x",
+        serial_number: "   ",
+      }),
+      400,
+      SERIAL_ERROR,
+    );
+    expect(db.from).not.toHaveBeenCalled();
+  });
+
+  it("checks the caller's own serial for duplicates, not only the generated ones", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    db.queue("products", { data: { id: 42 }, error: null });
+    db.queue(
+      "serialised_assets",
+      { data: null, error: null },
+      { data: [], error: null },
+      { data: [{ serial_number: "sn-real " }], error: null },
+    );
+
+    await expectInventoryError(
+      SerialisedAssetService.bulkCreateAssets(42, 1, {
+        location: "x",
+        serial_number: " SN-REAL",
+      }),
+      409,
+      `${UNIT_ERRORS.BULK_SERIAL_TAKEN}: SN-REAL`,
+    );
+    const builders = db.buildersFor("serialised_assets");
+    expect(builders.some((b) => callArgs(b, "insert") !== undefined)).toBe(
+      false,
+    );
   });
 
   it("validates valuation fields on the bulk path too, before any write", async () => {
