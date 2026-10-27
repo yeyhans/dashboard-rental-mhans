@@ -51,6 +51,12 @@ const EXEMPT: Record<string, Partial<Record<string, Exemption>>> = {
   "/api/external/generate-contract-pdf.ts": { POST: "apiKey" },
   "/api/external/inventory/units/[id].ts": { PUT: "apiKey" },
   "/api/external/inventory/units/index.ts": { POST: "apiKey" },
+  "/api/external/inventory/units/[id]/relocate.ts": { POST: "apiKey" },
+  "/api/external/warehouse/locations/index.ts": {
+    GET: "apiKey",
+    POST: "apiKey",
+  },
+  "/api/external/warehouse/locations/[id].ts": { PUT: "apiKey" },
   "/api/external/products/[id]/description.ts": { PUT: "apiKey" },
   "/api/external/site-settings.ts": { GET: "apiKey" },
   "/api/external/update-user.ts": { POST: "apiKey" },
