@@ -83,12 +83,22 @@ const EXEMPT: Record<string, Partial<Record<string, Exemption>>> = {
   "/api/coupons/debug.ts": { GET: "devOnly" },
 };
 
+/**
+ * The MCP key check must run before the body is read: a route that touches the request first and
+ * checks the key later could still do work for an unauthenticated caller.
+ */
+function mcpKeyCheckedBeforeBody(source: string): boolean {
+  const guard = source.indexOf("validateMcpApiKey(");
+  if (guard < 0) return false;
+  const body = source.search(/request\.(json|text|formData|arrayBuffer)\(/);
+  return body < 0 || guard < body;
+}
+
 const EVIDENCE: Record<Exemption, (source: string) => boolean> = {
   apiKey: (s) =>
-    /isFrontendApiKeyOrAdmin\(|validateFrontendApiKey\(|validateMcpApiKey\(/.test(
-      s,
-    ) ||
-    (/HERMES_API_SECRET/.test(s) && /secretsMatch\(/.test(s)),
+    /isFrontendApiKeyOrAdmin\(|validateFrontendApiKey\(/.test(s) ||
+    (/HERMES_API_SECRET/.test(s) && /secretsMatch\(/.test(s)) ||
+    mcpKeyCheckedBeforeBody(s),
   cron: (s) => /CRON_SECRET/.test(s) && /constantTimeEqual\(/.test(s),
   authFlow: () => true,
   public: (s) => !/user_profiles|billing_|customer_/.test(s),
