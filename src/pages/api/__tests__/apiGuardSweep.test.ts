@@ -49,6 +49,9 @@ const EXEMPT: Record<string, Partial<Record<string, Exemption>>> = {
   "/api/external/create-user.ts": { POST: "apiKey" },
   "/api/external/generate-budget-pdf.ts": { POST: "apiKey" },
   "/api/external/generate-contract-pdf.ts": { POST: "apiKey" },
+  "/api/external/inventory/units/[id].ts": { PUT: "apiKey" },
+  "/api/external/inventory/units/index.ts": { POST: "apiKey" },
+  "/api/external/products/[id]/description.ts": { PUT: "apiKey" },
   "/api/external/site-settings.ts": { GET: "apiKey" },
   "/api/external/update-user.ts": { POST: "apiKey" },
 
@@ -82,7 +85,9 @@ const EXEMPT: Record<string, Partial<Record<string, Exemption>>> = {
 
 const EVIDENCE: Record<Exemption, (source: string) => boolean> = {
   apiKey: (s) =>
-    /isFrontendApiKeyOrAdmin\(|validateFrontendApiKey\(/.test(s) ||
+    /isFrontendApiKeyOrAdmin\(|validateFrontendApiKey\(|validateMcpApiKey\(/.test(
+      s,
+    ) ||
     (/HERMES_API_SECRET/.test(s) && /secretsMatch\(/.test(s)),
   cron: (s) => /CRON_SECRET/.test(s) && /constantTimeEqual\(/.test(s),
   authFlow: () => true,
