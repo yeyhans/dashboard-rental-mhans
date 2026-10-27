@@ -101,6 +101,9 @@ const SERIAL_UNIQUE_INDEX = "serialised_assets_serial_number_lower_key";
 export const SERIAL_ERROR =
   "El número de serie debe ser texto y no puede estar vacío";
 
+export const SINGLE_UNIT_SERIAL_ERROR =
+  "El número de serie solo puede enviarse con una unidad";
+
 export const VALUATION_ERRORS = {
   ACQUISITION_COST: "El costo de adquisición debe ser un número no negativo",
   MARKET_PRICE: "El precio de mercado debe ser un número no negativo",
@@ -182,7 +185,7 @@ function sanitizePurchaseDate(value: unknown): string | null {
  */
 function sanitizeSerialOverride(value: unknown, count: number): string | null {
   if (value === undefined) return null;
-  if (count !== 1) throw new Error("serial_number solo aplica a una unidad");
+  if (count !== 1) throw new InventoryError(SINGLE_UNIT_SERIAL_ERROR, 400);
   const serial = typeof value === "string" ? value.trim() : "";
   if (!serial) throw new InventoryError(SERIAL_ERROR, 400);
   return serial;
@@ -918,7 +921,12 @@ export class SerialisedAssetService {
       const { data: sameSerial, error: overrideError } = await client
         .from("serialised_assets")
         .select("serial_number")
-        .ilike("serial_number", serialOverride.replace(/([\\%_])/g, "\\$1"));
+        // Contains-match: the unique index compares lower(btrim(...)), so a padded stored serial must be
+        // found here too. The exact key is confirmed in JS below.
+        .ilike(
+          "serial_number",
+          `%${serialOverride.replace(/([\\%_])/g, "\\$1")}%`,
+        );
       if (overrideError) {
         console.error(
           "[SerialisedAssetService] Error al verificar el número de serie:",

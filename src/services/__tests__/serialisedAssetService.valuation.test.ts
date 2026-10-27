@@ -8,9 +8,12 @@ vi.mock("../../lib/supabase", async () => {
   return { supabaseAdmin: sharedDouble.client };
 });
 
-const { SerialisedAssetService, SERIAL_ERROR, VALUATION_ERRORS } = await import(
-  "../serialisedAssetService"
-);
+const {
+  SerialisedAssetService,
+  SERIAL_ERROR,
+  SINGLE_UNIT_SERIAL_ERROR,
+  VALUATION_ERRORS,
+} = await import("../serialisedAssetService");
 
 const unitRow = {
   id: 5,
@@ -210,6 +213,23 @@ describe("SerialisedAssetService review hardening", () => {
     expect(builders.some((b) => callArgs(b, "insert") !== undefined)).toBe(
       false,
     );
+    // Contains-match, so a stored serial padded with spaces is still found (the index compares btrim).
+    expect(allCallArgs(builders[2], "ilike")).toContainEqual([
+      "serial_number",
+      "%SN-REAL%",
+    ]);
+  });
+
+  it("answers a serial sent with more than one unit as a 400, not a server error", async () => {
+    await expectInventoryError(
+      SerialisedAssetService.bulkCreateAssets(42, 2, {
+        location: "x",
+        serial_number: "SN-1",
+      }),
+      400,
+      SINGLE_UNIT_SERIAL_ERROR,
+    );
+    expect(db.from).not.toHaveBeenCalled();
   });
 
   it("validates valuation fields on the bulk path too, before any write", async () => {
