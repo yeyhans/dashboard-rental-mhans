@@ -8,7 +8,7 @@ vi.mock("../../lib/supabase", async () => {
   return { supabaseAdmin: sharedDouble.client };
 });
 
-const { SerialisedAssetService, VALUATION_ERRORS } = await import(
+const { SerialisedAssetService, SERIAL_ERROR, VALUATION_ERRORS } = await import(
   "../serialisedAssetService"
 );
 
@@ -140,6 +140,46 @@ describe("SerialisedAssetService.createUnit", () => {
       }),
       400,
       VALUATION_ERRORS.MARKET_PRICE,
+    );
+    expect(db.from).not.toHaveBeenCalled();
+  });
+});
+
+describe("SerialisedAssetService review hardening", () => {
+  it("rejects an empty or whitespace-only serial before any write", async () => {
+    await expectInventoryError(
+      SerialisedAssetService.createUnit({
+        product_id: 42,
+        location: "x",
+        serial_number: "   ",
+      }),
+      400,
+      SERIAL_ERROR,
+    );
+    expect(db.from).not.toHaveBeenCalled();
+  });
+
+  it("rejects a serial that is not text before any write", async () => {
+    await expectInventoryError(
+      SerialisedAssetService.createUnit({
+        product_id: 42,
+        location: "x",
+        serial_number: 123 as unknown as string,
+      }),
+      400,
+      SERIAL_ERROR,
+    );
+    expect(db.from).not.toHaveBeenCalled();
+  });
+
+  it("validates valuation fields on the bulk path too, before any write", async () => {
+    await expectInventoryError(
+      SerialisedAssetService.bulkCreateAssets(42, 1, {
+        location: "x",
+        acquisition_cost: -1,
+      }),
+      400,
+      VALUATION_ERRORS.ACQUISITION_COST,
     );
     expect(db.from).not.toHaveBeenCalled();
   });

@@ -98,6 +98,9 @@ const ASSET_TAG_UNIQUE_INDEX = "serialised_assets_asset_tag_key";
 /** Name of the case-insensitive UNIQUE index on `serial_number` (0004). */
 const SERIAL_UNIQUE_INDEX = "serialised_assets_serial_number_lower_key";
 
+export const SERIAL_ERROR =
+  "El número de serie debe ser texto y no puede estar vacío";
+
 export const VALUATION_ERRORS = {
   ACQUISITION_COST: "El costo de adquisición debe ser un número no negativo",
   MARKET_PRICE: "El precio de mercado debe ser un número no negativo",
@@ -710,8 +713,14 @@ export class SerialisedAssetService {
     input: UnitCreateInput,
   ): UnitPatch & ValuationPatch {
     const extra: Record<string, unknown> = {};
-    if (input.serial_number !== undefined)
-      extra.serial_number = input.serial_number;
+    if (input.serial_number !== undefined) {
+      const serial =
+        typeof input.serial_number === "string"
+          ? input.serial_number.trim()
+          : "";
+      if (!serial) throw new InventoryError(SERIAL_ERROR, 400);
+      extra.serial_number = serial;
+    }
     for (const key of [
       "acquisition_cost",
       "purchase_date",
@@ -817,8 +826,10 @@ export class SerialisedAssetService {
       typeof defaults.location === "string" ? defaults.location.trim() : "";
     if (!locationId && !freeText)
       throw new InventoryError(UNIT_ERRORS.LOCATION_REQUIRED, 400);
-    // Validates the count before any query.
+    // Validates the count and the valuation before any query. Only fields actually present are
+    // checked, so an absent field keeps the database default.
     planBulkUnits({ highestTag: null, count, serialPrefix: prefix });
+    const valuation = sanitizeValuationPatch(pickValuation(defaults));
 
     const client = this.untypedClient();
 
@@ -904,7 +915,6 @@ export class SerialisedAssetService {
     }
     // A unit's own serial and valuation travel in the same INSERT as its row, so a failure can never
     // leave a half-registered unit behind. A duplicate serial trips the case-insensitive UNIQUE index.
-    const valuation = pickValuation(defaults);
     const rows = plan.map((unit) => ({
       product_id: productId,
       asset_tag: unit.asset_tag,
