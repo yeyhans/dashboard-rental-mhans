@@ -52,7 +52,7 @@ afterEach(() => {
 });
 
 describe("SerialisedAssetService.createUnit", () => {
-  it("inserts one unit, then applies serial and valuation under the issued row_version", async () => {
+  it("writes the unit, its serial and its valuation in one insert, with no follow-up update", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     db.queue("products", { data: { id: 42 }, error: null });
     db.queue(
@@ -60,7 +60,6 @@ describe("SerialisedAssetService.createUnit", () => {
       { data: null, error: null },
       { data: [], error: null },
       { data: [{ ...unitRow, row_version: 1 }], error: null },
-      { data: { ...unitRow, row_version: 2 }, error: null },
     );
 
     const unit = await SerialisedAssetService.createUnit({
@@ -71,15 +70,65 @@ describe("SerialisedAssetService.createUnit", () => {
     });
 
     const builders = db.buildersFor("serialised_assets");
-    const update = builders[builders.length - 1];
-    expect(callArgs(update, "update")).toEqual([
-      { serial_number: "SN-REAL", acquisition_cost: 900000 },
-    ]);
-    expect(allCallArgs(update, "eq")).toEqual([
-      ["id", 5],
-      ["row_version", 1],
-    ]);
-    expect(unit.row_version).toBe(2);
+    const [insert] = callArgs(builders[2], "insert");
+    expect(insert[0]).toMatchObject({
+      serial_number: "SN-REAL",
+      acquisition_cost: 900000,
+    });
+    expect(builders.some((b) => callArgs(b, "update") !== undefined)).toBe(
+      false,
+    );
+    expect(unit.row_version).toBe(1);
+  });
+
+  it("rejects amounts beyond the numeric(12,2) column or with sub-cent precision", async () => {
+    await expectInventoryError(
+      SerialisedAssetService.createUnit({
+        product_id: 42,
+        location: "x",
+        market_price: 1e10,
+      }),
+      400,
+      VALUATION_ERRORS.MARKET_PRICE,
+    );
+    await expectInventoryError(
+      SerialisedAssetService.createUnit({
+        product_id: 42,
+        location: "x",
+        acquisition_cost: 0.001,
+      }),
+      400,
+      VALUATION_ERRORS.ACQUISITION_COST,
+    );
+    expect(db.from).not.toHaveBeenCalled();
+  });
+
+  it("judges 'future' by the Chile calendar date, not the UTC date", async () => {
+    vi.useFakeTimers();
+    try {
+      // 2026-10-27 02:30 UTC is still 2026-10-26 in Santiago (UTC-3 in October).
+      vi.setSystemTime(new Date("2026-10-27T02:30:00Z"));
+      await expectInventoryError(
+        SerialisedAssetService.updateAsset(
+          5,
+          { purchase_date: "2026-10-27" },
+          4,
+        ),
+        400,
+        VALUATION_ERRORS.PURCHASE_DATE_FUTURE,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects purchase dates before 1900 (Postgres year 0000 is not a date)", async () => {
+    await expectInventoryError(
+      SerialisedAssetService.updateAsset(5, { purchase_date: "0000-01-01" }, 4),
+      400,
+      VALUATION_ERRORS.PURCHASE_DATE,
+    );
+    expect(db.from).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid valuation before any write", async () => {
