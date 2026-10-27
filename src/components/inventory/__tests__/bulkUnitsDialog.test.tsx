@@ -36,6 +36,12 @@ describe("BulkUnitsFields (flujo único de inventario)", () => {
     expect(initialBulkUnitsValues().count).toBe("1");
   });
 
+  it("returns fresh values on every call, so closing the dialog resets it without sharing state", () => {
+    const first = initialBulkUnitsValues();
+    first.count = "9";
+    expect(initialBulkUnitsValues().count).toBe("1");
+  });
+
   it("keeps the serial prefix out of the way, inside advanced options", () => {
     const html = renderToStaticMarkup(
       <BulkUnitsFields
@@ -124,6 +130,19 @@ describe("summarizeBulkUnits (resumen antes de guardar)", () => {
       options,
     );
     expect(text).toContain("Se creará 1 unidad de Canon R5");
+  });
+
+  it("asks for a valid quantity instead of summarising an impossible one", () => {
+    for (const count of ["", "0", "2.5", "-1", "60"]) {
+      const text = summarizeBulkUnits(
+        { ...initialBulkUnitsValues(), count, location_id: "loc-1" },
+        "Canon R5",
+        options,
+      );
+      expect(text, `count=${count}`).toBe(
+        "Revisa la cantidad: entre 1 y 50 unidades por vez.",
+      );
+    }
   });
 
   it("falls back to the typed location when there is no map location", () => {

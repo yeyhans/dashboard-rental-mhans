@@ -94,9 +94,10 @@ export function summarizeBulkUnits(
   productName: string,
   locationOptions: LocationOption[],
 ): string {
-  const count = Number(values.count.trim());
-  if (!Number.isInteger(count) || count < 1)
-    return "Revisa la cantidad antes de guardar.";
+  const raw = values.count.trim();
+  const count = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  if (!Number.isInteger(count) || count < 1 || count > BULK_MAX_UNITS)
+    return `Revisa la cantidad: entre 1 y ${BULK_MAX_UNITS} unidades por vez.`;
   const noun =
     count === 1 ? "Se creará 1 unidad" : `Se crearán ${count} unidades`;
   const where = chosenLocation(values, locationOptions);
@@ -274,6 +275,13 @@ export function BulkUnitsDialog({
     if (open) setErrors({});
   }, [open]);
 
+  // Closing (Cancelar, Escape, la X) discards the draft: the next opening starts from the defaults.
+  const closeDialog = () => {
+    setValues(initialBulkUnitsValues());
+    setErrors({});
+    onOpenChange(false);
+  };
+
   const handleChange = (field: keyof BulkUnitsFormValues, value: string) => {
     setValues((prev) => ({ ...prev, [field]: value }) as BulkUnitsFormValues);
     setErrors((prev) => ({ ...prev, [field]: undefined }));
@@ -301,7 +309,9 @@ export function BulkUnitsDialog({
   return (
     <Dialog
       open={open}
-      onOpenChange={(next) => !isSubmitting && onOpenChange(next)}
+      onOpenChange={(next) =>
+        !isSubmitting && (next ? onOpenChange(true) : closeDialog())
+      }
     >
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
@@ -332,7 +342,7 @@ export function BulkUnitsDialog({
               type="button"
               variant="outline"
               disabled={isSubmitting}
-              onClick={() => onOpenChange(false)}
+              onClick={closeDialog}
             >
               Cancelar
             </Button>
